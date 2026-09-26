@@ -460,7 +460,7 @@ def probe(*, venues: Sequence[str] = ("okx", "gate", "binance"),
 
 def _main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(
-        description="R20 公共行情流只读探测（不常驻、不下单）")
+        description="ASTRA 公共行情流只读探测（不常驻、不下单）")
     parser.add_argument("--probe", action="store_true", help="连接三所公共流收若干秒")
     parser.add_argument("--seconds", type=float, default=10.0)
     parser.add_argument("--symbol", default="BTC-USDT-SWAP")

@@ -22,11 +22,11 @@ from unittest.mock import Mock, patch
 from fastapi import FastAPI, Header, HTTPException, Request
 from httpx import ASGITransport, AsyncClient
 from pydantic import BaseModel, Field
-from r20_backend.admin_auth import AdminAuthStore
+from astra_backend.admin_auth import AdminAuthStore
 from scripts import evolution_shield as shield
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / 'r20_backend' / 'app.py'
+SOURCE = ROOT / 'astra_backend' / 'app.py'
 SAFE = '【合理经验】4H多头回踩均线支撑时开多'
 OPERATIONS = ('add', 'delete', 'replace', 'toggle', 'rollback')
 
@@ -93,7 +93,7 @@ class MemoryRouteTests(unittest.IsolatedAsyncioTestCase):
         return p.read_bytes(), p.stat().st_mtime_ns, p.stat().st_ino
 
     async def get_view(self):
-        response = await self.client.get('/api/v1/admin/memory', headers={'X-R20-Session': self.token})
+        response = await self.client.get('/api/v1/admin/memory', headers={'X-Astra-Session': self.token})
         self.assertEqual(response.status_code, 200, response.text)
         self.assertIn('no-store', response.headers['cache-control'])
         return response.json()
@@ -114,7 +114,7 @@ class MemoryRouteTests(unittest.IsolatedAsyncioTestCase):
             else:
                 params['expected_version'] = version
         return await self.client.request(method, url, json=body, params=params,
-                                         headers={'X-R20-Session': self.token} if token else {})
+                                         headers={'X-Astra-Session': self.token} if token else {})
 
     async def test_empty_get_is_pure_and_does_not_fallback(self):
         shield.STRUCTURED_MEMORY_FILE.write_text('[]')
@@ -137,7 +137,7 @@ class MemoryRouteTests(unittest.IsolatedAsyncioTestCase):
         # Auth may update last_seen_at in the temporary DB; pure read means memory.
 
     async def test_get_rejects_anonymous_and_invalid_session(self):
-        for headers in ({}, {'X-R20-Session': 'invalid'}):
+        for headers in ({}, {'X-Astra-Session': 'invalid'}):
             response = await self.client.get('/api/v1/admin/memory', headers=headers)
             self.assertEqual(response.status_code, 401)
 

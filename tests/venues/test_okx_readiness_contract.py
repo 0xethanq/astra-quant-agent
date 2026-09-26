@@ -7,13 +7,13 @@ from pathlib import Path
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
-import r20_backend.app as api
-import r20_backend.config as config
-import r20_backend.okx_trade_service as trade
-import r20_gateway.secrets as secrets
+import astra_backend.app as api
+import astra_backend.config as config
+import astra_backend.okx_trade_service as trade
+import astra_gateway.secrets as secrets
 import scripts.okx_runtime as runtime
 import scripts.okx_rest as rest
-from r20_backend.admin_auth import AdminAuthStore
+from astra_backend.admin_auth import AdminAuthStore
 from tests.config_sandbox import isolate_config
 
 
@@ -30,7 +30,7 @@ class OKXReadinessContractTests(unittest.TestCase):
         self.patch(api, 'audit_record', lambda *args, **kwargs: None)
         self.patch(trade, '_INTENTS', {})
         self.patch(runtime, '_FROZEN_ENVIRONMENT', None)
-        clean_env = patch.dict(os.environ, {'R20_MANUAL_CLOSE_ENABLED': '1'}, clear=True)
+        clean_env = patch.dict(os.environ, {'ASTRA_MANUAL_CLOSE_ENABLED': '1'}, clear=True)
         clean_env.start()
         self.addCleanup(clean_env.stop)
         settings_before = vars(config.settings).copy()
@@ -47,7 +47,7 @@ class OKXReadinessContractTests(unittest.TestCase):
         result = self.client.post('/api/v1/admin/auth/login', json={
             'username': 'admin', 'password': 'FakeAdminPassword123'})
         self.assertEqual(result.status_code, 200, result.text)
-        self.headers = {'X-R20-Session': result.json()['session_token']}
+        self.headers = {'X-Astra-Session': result.json()['session_token']}
 
     def patch(self, module, name, value=None, **kwargs):
         if isinstance(module, str):
@@ -81,7 +81,7 @@ class OKXReadinessContractTests(unittest.TestCase):
                      ({**self.trio('OKX_' + mode.upper()), **self.trio('OKX')}, True)]
             for keys, ready in cases:
                 with self.subTest(mode=mode, keys=list(keys)):
-                    self.configure({'R20_OKX_ENV': mode, **keys})
+                    self.configure({'ASTRA_OKX_ENV': mode, **keys})
                     selected = runtime.selected_environment()
                     state = self.readiness()
                     self.assertEqual(selected.configured, ready)
@@ -95,7 +95,7 @@ class OKXReadinessContractTests(unittest.TestCase):
         for mode in ('demo', 'live'):
             for keys in ({}, {**self.trio('OKX'), f'OKX_{mode.upper()}_SECRET_KEY': 'partial'}):
                 with self.subTest(mode=mode, partial=bool(keys)):
-                    self.configure({'R20_OKX_ENV': mode, **keys})
+                    self.configure({'ASTRA_OKX_ENV': mode, **keys})
                     token = 'fake-close-intent-token-1234567890'
                     intent = {'sentinel': 'must remain untouched'}
                     trade._INTENTS[token] = intent
@@ -113,7 +113,7 @@ class OKXReadinessContractTests(unittest.TestCase):
     def test_partial_group_never_borrows_legacy_fields(self):
         for mode in ('demo', 'live'):
             for field in ('API_KEY', 'SECRET_KEY', 'PASSPHRASE'):
-                values = {'R20_OKX_ENV': mode, **self.trio('OKX'),
+                values = {'ASTRA_OKX_ENV': mode, **self.trio('OKX'),
                           f'OKX_{mode.upper()}_{field}': 'partial'}
                 selected = runtime.selected_environment(values)
                 self.assertFalse(selected.configured)
@@ -122,22 +122,22 @@ class OKXReadinessContractTests(unittest.TestCase):
 
     def test_no_cached_readiness_after_group_or_secret_change(self):
         keys = self.trio('OKX_DEMO')
-        self.configure({'R20_OKX_ENV': 'demo', **keys})
+        self.configure({'ASTRA_OKX_ENV': 'demo', **keys})
         ready = self.readiness()
         self.assertTrue(ready['mode_configured'])
         # Same API key and fingerprint, but secret removed: must immediately block.
-        self.configure({'R20_OKX_ENV': 'demo', **keys, 'OKX_DEMO_SECRET_KEY': ''})
+        self.configure({'ASTRA_OKX_ENV': 'demo', **keys, 'OKX_DEMO_SECRET_KEY': ''})
         missing = self.readiness()
         self.assertEqual(ready['fingerprint'], missing['fingerprint'])
         self.assertFalse(missing['mode_configured'])
-        self.configure({'R20_OKX_ENV': 'live', **self.trio('OKX_LIVE', 'NEW')})
+        self.configure({'ASTRA_OKX_ENV': 'live', **self.trio('OKX_LIVE', 'NEW')})
         self.assertEqual(self.readiness()['environment'], 'live')
-        self.configure({'R20_OKX_ENV': 'live', **self.trio('OKX', 'LEGACY')})
+        self.configure({'ASTRA_OKX_ENV': 'live', **self.trio('OKX', 'LEGACY')})
         self.assertTrue(self.readiness()['mode_configured'])
 
     def test_frozen_group_wins_over_changed_configuration(self):
-        frozen = runtime.freeze_environment({'R20_OKX_ENV': 'demo', **self.trio('OKX')})
-        self.configure({'R20_OKX_ENV': 'live'})
+        frozen = runtime.freeze_environment({'ASTRA_OKX_ENV': 'demo', **self.trio('OKX')})
+        self.configure({'ASTRA_OKX_ENV': 'live'})
         state = self.readiness()
         self.assertEqual(state['environment'], frozen.mode)
         self.assertEqual(state['mode_configured'], frozen.configured)

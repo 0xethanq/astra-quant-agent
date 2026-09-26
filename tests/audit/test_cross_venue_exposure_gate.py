@@ -2,11 +2,11 @@
 
 ## 真事故：一个名叫"跨所"、实际只算一所的活闸门
 
-`r20_backend/execution_router.py` 里敞口闸门的 `positions_reader` 一直是
+`astra_backend/execution_router.py` 里敞口闸门的 `positions_reader` 一直是
 `ad.positions()` —— **只读被下单的那一个场所**。而闸门文档写的是
 "跨所**同向名义额合计**超限则拒开"。
 
-关键：这**不是死代码**。`.env` 里 `R20_MAX_TOTAL_EXPOSURE_USDT=3000.0` 是真的配了的
+关键：这**不是死代码**。`.env` 里 `ASTRA_MAX_TOTAL_EXPOSURE_USDT=3000.0` 是真的配了的
 （`scripts/risk_constants.py` 在 cron/手动路径下显式加载 `.env`；本机实测
 `TOTAL_EXPOSURE_CAP == 3000.0`）。三所平权后，每所各自只算自己那份 ⇒
 **合计上限最多可被突破到 3 倍**（如 binance 2500U + gate 2500U 各自"没超 3000U"）。
@@ -28,7 +28,7 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from r20_backend.execution.risk_gates import check_total_exposure  # noqa: E402
+from astra_backend.execution.risk_gates import check_total_exposure  # noqa: E402
 
 
 _READ_SCOPE = None
@@ -40,7 +40,7 @@ def setUpModule():
     —— 有意的线上守卫。
 
     只读、不改；声明在此把「依赖线上配置内容」从**静默**变成**可审计**
-    （未声明时 `R20_TESTS_STRICT_READS=1` 会报错）。
+    （未声明时 `ASTRA_TESTS_STRICT_READS=1` 会报错）。
     """
     global _READ_SCOPE
     from tests import allow_real_data_reads
@@ -124,10 +124,10 @@ class VenueSelectionTest(unittest.TestCase):
         实测形状：读未配凭证的所抛 `ExchangeCapabilityError` ⇒ 若按 fail-closed
         处理，**所有**单都被拒。正确语义：本部署不在这里交易 ⇒ 不计入，但留痕。
         """
-        from r20_backend import execution_router as er
-        with patch("r20_backend.exchanges.registry.registered_venues",
+        from astra_backend import execution_router as er
+        with patch("astra_backend.exchanges.registry.registered_venues",
                    lambda: ["okx", "binance", "gate"]), \
-             patch("r20_backend.exchanges.registry.venue_credentials",
+             patch("astra_backend.exchanges.registry.venue_credentials",
                    lambda v, e=None: ("", "") if v == "binance" else ("k", "s")):
             counted, skipped = er._exposure_venues("gate", "demo")
         self.assertEqual(counted, ["gate", "okx"])
@@ -136,20 +136,20 @@ class VenueSelectionTest(unittest.TestCase):
     def test_okx_is_included_even_though_execution_open_is_false(self):
         """⚠️ 本刀实测的第二处坑：OKX 直签链路 ⇒ `execution_open("okx")` 恒 False，
         但它持仓最多。按开闸判会把 OKX **整个漏掉** ⇒ 判据必须是凭证而非开闸。"""
-        from r20_backend import execution_router as er
-        with patch("r20_backend.exchanges.registry.registered_venues",
+        from astra_backend import execution_router as er
+        with patch("astra_backend.exchanges.registry.registered_venues",
                    lambda: ["okx", "binance", "gate"]), \
-             patch("r20_backend.exchanges.registry.execution_open",
+             patch("astra_backend.exchanges.registry.execution_open",
                    lambda v, e=None: False), \
-             patch("r20_backend.exchanges.registry.venue_credentials",
+             patch("astra_backend.exchanges.registry.venue_credentials",
                    lambda v, e=None: ("k", "s")):
             counted, _ = er._exposure_venues("gate", "demo")
         self.assertIn("okx", counted,
                       "OKX 走直签链路、execution_open 恒 False，但必须在跨所统计内")
 
     def test_entering_venue_is_always_counted(self):
-        from r20_backend import execution_router as er
-        with patch("r20_backend.exchanges.registry.registered_venues", lambda: []):
+        from astra_backend import execution_router as er
+        with patch("astra_backend.exchanges.registry.registered_venues", lambda: []):
             counted, skipped = er._exposure_venues("gate", "demo")
         self.assertEqual(counted, ["gate"], "本次场所恒计入（哪怕枚举失败）")
         self.assertEqual(skipped, [])
@@ -165,7 +165,7 @@ class ProductionEnvGuardTest(unittest.TestCase):
         cap = None
         for line in env_file.read_text(encoding="utf-8").splitlines():
             line = line.strip()
-            if line.startswith("R20_MAX_TOTAL_EXPOSURE_USDT="):
+            if line.startswith("ASTRA_MAX_TOTAL_EXPOSURE_USDT="):
                 try:
                     cap = float(line.split("=", 1)[1].strip().strip('"').strip("'"))
                 except ValueError:
@@ -173,9 +173,9 @@ class ProductionEnvGuardTest(unittest.TestCase):
         if cap in (None, 0.0):
             self.skipTest("生产未启用敞口上限 → 本闸门停用")
         # 生产**已启用**上限 ⇒ 必须确认闸门真的是"跨所"口径，否则上限形同虚设。
-        src = (ROOT / "r20_backend" / "execution_router.py").read_text(encoding="utf-8")
+        src = (ROOT / "astra_backend" / "execution_router.py").read_text(encoding="utf-8")
         self.assertIn("_exposure_venues(", src,
-                      f"生产 .env 已配置 R20_MAX_TOTAL_EXPOSURE_USDT={cap} —— "
+                      f"生产 .env 已配置 ASTRA_MAX_TOTAL_EXPOSURE_USDT={cap} —— "
                       "敞口闸门处于**生效**状态，必须是跨所口径（否则上限最多被突破到 N 倍）")
         self.assertIn("registered_venues", src, "跨所场所必须注册表驱动，不得硬编码")
 
@@ -184,7 +184,7 @@ class RealCoverageTest(unittest.TestCase):
     """只读核验：真实部署下这个"跨"到底跨到哪几所（环境相关，缺配置即跳过）。"""
 
     def test_counted_venues_are_reported_for_reals(self):
-        from r20_backend import execution_router as er
+        from astra_backend import execution_router as er
         counted, skipped = er._exposure_venues("gate", "demo")
         self.assertIn("gate", counted)
         for v in skipped:

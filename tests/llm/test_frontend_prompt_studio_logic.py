@@ -110,14 +110,14 @@ try {
     m.appendVariableSlot('x{{KK}}y', 'K'),
   ];
   out.importName = [
-    m.deriveImportName('r20-strategy-alpha.json'),
+    m.deriveImportName('astra-strategy-alpha.json'),
     m.deriveImportName('alpha.JSON'),
     m.deriveImportName('alpha.json'),
-    m.deriveImportName('r20-strategy-我的方案.json'),
+    m.deriveImportName('astra-strategy-我的方案.json'),
     m.deriveImportName(''),
     m.deriveImportName(null),
     m.deriveImportName('a.json.json'),
-    m.deriveImportName('r20-strategy-.json'),
+    m.deriveImportName('astra-strategy-.json'),
   ];
   process.stdout.write(JSON.stringify(out));
 } catch (e) {
@@ -281,8 +281,8 @@ class InvariantRulesTest(unittest.TestCase):
     def test_import_prefix_strip_is_case_sensitive_on_prefix_only(self):
         body = _fn_body(MODULE.read_text(encoding="utf-8"), "deriveImportName")
         self.assertIn(r"/\.json$/i", body, ".json 剥除大小写不敏感")
-        self.assertNotIn(r"/^r20-strategy-/i", body,
-                         "前缀 `r20-strategy-` 是**大小写敏感**的，不得悄悄加 i")
+        self.assertNotIn(r"/^astra-strategy-/i", body,
+                         "前缀 `astra-strategy-` 是**大小写敏感**的，不得悄悄加 i")
 
 
 # --------------------------------------------------- node oracle 对表

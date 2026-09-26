@@ -13,7 +13,7 @@
 import unittest
 from unittest.mock import patch
 
-import r20_backend.dashboard_cache as dc
+import astra_backend.dashboard_cache as dc
 import scripts.okx_rest as okx_rest
 
 

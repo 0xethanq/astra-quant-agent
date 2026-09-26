@@ -11,7 +11,7 @@
  * | `compileWorkingModules` | 编译「渲染后 Prompt」：过滤 → trim → `\n\n` 连接 |
  * | `buildTemplatePreview` | 编译「模板视图」：带回卷标头的另一种排版 |
  * | `computeInsertTarget` | 一键插变量时**钳到合法下标** |
- * | `deriveImportName` | 从文件名推默认方案名（剥 `.json` 与 `r20-strategy-`） |
+ * | `deriveImportName` | 从文件名推默认方案名（剥 `.json` 与 `astra-strategy-`） |
  *
  * ## 五处易错点（均原样保留）
  *
@@ -118,7 +118,7 @@ export function appendVariableSlot(content: unknown, key: string): { content: st
   return { content: cur ? `${cur.trim()}\n\n${tag}` : tag, duplicate: false, tag }
 }
 
-/** 从导入文件名推默认方案名：剥 `.json`（大小写不敏感）与 `r20-strategy-` 前缀。 */
+/** 从导入文件名推默认方案名：剥 `.json`（大小写不敏感）与 `astra-strategy-` 前缀。 */
 export function deriveImportName(fileName: unknown): string {
-  return String(fileName || '').replace(/\.json$/i, '').replace(/^r20-strategy-/, '')
+  return String(fileName || '').replace(/\.json$/i, '').replace(/^astra-strategy-/, '')
 }

@@ -6,7 +6,7 @@
 
 | 语义 | 口径 |
 |---|---|
-| ★ **失败必须可见** | 任一源读不到 ⇒ `r20_metrics_source_ok{source="…"} 0`（**不**让整页 500，也**不**静默全绿）；`required` 标签区分必需源与可选源 |
+| ★ **失败必须可见** | 任一源读不到 ⇒ `astra_metrics_source_ok{source="…"} 0`（**不**让整页 500，也**不**静默全绿）；`required` 标签区分必需源与可选源 |
 | ★ **不可判定 ≠ 0** | 行情流无 tick ⇒ **不发** `tick_age`；watchdog 未开闸 ⇒ **不发** `watchdog_errors`；孤儿腿读不到 ⇒ 只发 `readable 0`、**计数为 None 不发**；风控键取不到 ⇒ **跳过不补 0** |
 | ★ **只输出有限数** | `NaN`/`Inf`/非数值一律降级为 `None` ⇒ 整条样本不发（部分抓取器遇 NaN 会丢整次抓取）|
 | ★ **每族 HELP/TYPE 只一次** | 同 metric name 出现第二条 `# HELP` 会让 Prometheus **丢弃整次抓取** ⇒ 先按族聚合再逐族输出（多标的/多场所时尤其要验）|
@@ -24,7 +24,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from r20_backend import metrics as M
+from astra_backend import metrics as M
 
 
 class HelperTests(unittest.TestCase):
@@ -55,7 +55,7 @@ class HelperTests(unittest.TestCase):
 
 class CollectTests(unittest.TestCase):
     def setUp(self):
-        self.tmp = Path(tempfile.mkdtemp(prefix="r20-metrics-"))
+        self.tmp = Path(tempfile.mkdtemp(prefix="astra-metrics-"))
         self.addCleanup(shutil.rmtree, self.tmp, True)
 
     def _write(self, name, text):
@@ -199,7 +199,7 @@ class CollectTests(unittest.TestCase):
 
 class BuildSnapshotTests(unittest.TestCase):
     def setUp(self):
-        self.tmp = Path(tempfile.mkdtemp(prefix="r20-metrics-build-"))
+        self.tmp = Path(tempfile.mkdtemp(prefix="astra-metrics-build-"))
         self.addCleanup(shutil.rmtree, self.tmp, True)
 
     def test_injected_sources_are_marked_ok_and_time_is_injectable(self):
@@ -218,10 +218,10 @@ class BuildSnapshotTests(unittest.TestCase):
 
     def test_missing_sources_are_marked_not_ok_instead_of_crashing(self):
         with mock.patch.dict(sys.modules, {
-                "r20_backend.dependencies": None,
-                "r20_gateway.publisher": None,
-                "r20_gateway.store": None,
-                "r20_backend.dashboard_cache": None}):
+                "astra_backend.dependencies": None,
+                "astra_gateway.publisher": None,
+                "astra_gateway.store": None,
+                "astra_backend.dashboard_cache": None}):
             snap = M.build_snapshot(data_dir=self.tmp, risk_limits=None)
         self.assertFalse(snap["sources"]["venue_health"])
         self.assertFalse(snap["sources"]["model_calls"])
@@ -249,8 +249,8 @@ class BuildSnapshotTests(unittest.TestCase):
         self.assertFalse(snap["sources"]["cycle_disclosure"])
 
     def test_model_calls_source_reads_the_gateway_store(self):
-        import r20_gateway.publisher as PUB
-        import r20_gateway.store as STORE
+        import astra_gateway.publisher as PUB
+        import astra_gateway.store as STORE
         gateway_store = mock.Mock(return_value="STORE")
         with mock.patch.object(PUB, "DB_PATH", "dbpath"), \
                 mock.patch.object(STORE, "GatewayStore", gateway_store), \
@@ -266,7 +266,7 @@ class BuildSnapshotTests(unittest.TestCase):
         self.assertEqual(snap["model_stats"], {"total_calls": 1})
 
     def test_protection_orphans_read_from_the_dashboard_cache_in_memory(self):
-        import r20_backend.dashboard_cache as dash
+        import astra_backend.dashboard_cache as dash
         cache = {"positions": [
             {"venue": "okx", "protectionOrphans": {
                 "readable": True, "attributed": [1], "unattributed": [],
@@ -291,30 +291,30 @@ class RenderBasicsTests(unittest.TestCase):
 
     def test_up_is_always_present_and_output_ends_with_one_newline(self):
         text = M.render_prometheus(self._snap())
-        self.assertIn("r20_up 1", text)
+        self.assertIn("astra_up 1", text)
         self.assertTrue(text.endswith("\n"))
         self.assertFalse(text.endswith("\n\n"))
 
     def test_source_ok_carries_the_required_label(self):
         text = M.render_prometheus(self._snap(sources={"venue_health": True,
                                                        "market_stream": False}))
-        self.assertIn('r20_metrics_source_ok{source="venue_health",required="1"} 1', text)
-        self.assertIn('r20_metrics_source_ok{source="market_stream",required="0"} 0', text)
+        self.assertIn('astra_metrics_source_ok{source="venue_health",required="1"} 1', text)
+        self.assertIn('astra_metrics_source_ok{source="market_stream",required="0"} 0', text)
 
     def test_help_and_type_are_emitted_once_per_family(self):
         text = M.render_prometheus(self._snap(risk_limits={"max_leverage": 5.0,
                                                            "min_leverage": 1.0,
                                                            "time_stop_hours": 12.0}))
-        self.assertEqual(text.count("# HELP r20_risk_limit "), 1,
+        self.assertEqual(text.count("# HELP astra_risk_limit "), 1,
                          "同名第二条 HELP 会让 Prometheus 丢弃整次抓取")
-        self.assertEqual(text.count("# TYPE r20_risk_limit "), 1)
-        self.assertIn('r20_risk_limit{name="max_leverage"} 5', text)
-        self.assertIn('r20_risk_limit{name="min_leverage"} 1', text)
+        self.assertEqual(text.count("# TYPE astra_risk_limit "), 1)
+        self.assertIn('astra_risk_limit{name="max_leverage"} 5', text)
+        self.assertIn('astra_risk_limit{name="min_leverage"} 1', text)
 
     def test_non_finite_samples_are_dropped_entirely(self):
         text = M.render_prometheus(self._snap(model_stats={
             "total_calls": 5, "avg_duration_ms": float("inf")}))
-        self.assertIn("r20_model_calls_total 5", text)
+        self.assertIn("astra_model_calls_total 5", text)
         self.assertNotIn("duration", text)
         self.assertNotIn("inf", text)
 
@@ -334,25 +334,25 @@ class RenderVenueAndModelTests(RenderBasicsTests):
             "venues": {"okx": {"ok": ["BTC", "ETH"], "failed": {"X": 1},
                                "avg_ms": 12.5, "testnet": True},
                        "bad": "not-a-dict"}}))
-        self.assertIn("r20_venue_health_updated_timestamp_seconds 1", text)
-        self.assertIn('r20_venue_instruments_ok{venue="okx"} 2', text)
-        self.assertIn('r20_venue_instruments_failed{venue="okx"} 1', text)
-        self.assertIn('r20_venue_latency_avg_ms{venue="okx"} 12.5', text)
-        self.assertIn('r20_venue_testnet{venue="okx"} 1', text)
+        self.assertIn("astra_venue_health_updated_timestamp_seconds 1", text)
+        self.assertIn('astra_venue_instruments_ok{venue="okx"} 2', text)
+        self.assertIn('astra_venue_instruments_failed{venue="okx"} 1', text)
+        self.assertIn('astra_venue_latency_avg_ms{venue="okx"} 12.5', text)
+        self.assertIn('astra_venue_testnet{venue="okx"} 1', text)
         self.assertNotIn('venue="bad"', text, "非 dict 的场所行必须跳过")
 
     def test_unparsable_updated_utc_omits_the_timestamp_family(self):
         text = M.render_prometheus(self._snap(venue_health={"updated_utc": "??"}))
-        self.assertNotIn("r20_venue_health_updated_timestamp_seconds", text)
+        self.assertNotIn("astra_venue_health_updated_timestamp_seconds", text)
 
     def test_model_counters_are_typed_as_counters(self):
         text = M.render_prometheus(self._snap(model_stats={
             "total_calls": 10, "successful_calls": 9, "avg_duration_ms": 83.5,
             "total_tokens": 1234}))
-        self.assertIn("# TYPE r20_model_calls_total counter", text)
-        self.assertIn("r20_model_calls_successful_total 9", text)
-        self.assertIn("r20_model_call_duration_ms_avg 83.5", text)
-        self.assertIn("r20_model_tokens_total 1234", text)
+        self.assertIn("# TYPE astra_model_calls_total counter", text)
+        self.assertIn("astra_model_calls_successful_total 9", text)
+        self.assertIn("astra_model_call_duration_ms_avg 83.5", text)
+        self.assertIn("astra_model_tokens_total 1234", text)
 
 
 class RenderMarketDataTests(RenderBasicsTests):
@@ -366,18 +366,18 @@ class RenderMarketDataTests(RenderBasicsTests):
                 "last_success_ms": {"ws": 900_000.0},
                 "failures": {"by_kind": {"ws": 2}},
             }))
-        self.assertIn("r20_market_data_snapshot_age_seconds 10", text)
-        self.assertIn('r20_market_data_calls_total{kind="ws"} 4', text)
-        self.assertIn('r20_market_data_call_failures_total{kind="ws"} 1', text)
-        self.assertIn('r20_market_data_latency_p50_seconds{kind="ws"} 0.083347', text)
-        self.assertIn('r20_market_data_latency_p95_seconds{kind="ws"} 0.2', text)
-        self.assertIn('r20_market_data_last_success_age_seconds{kind="ws"} 100', text)
-        self.assertIn('r20_market_data_failures_reported_total{kind="ws"} 2', text)
+        self.assertIn("astra_market_data_snapshot_age_seconds 10", text)
+        self.assertIn('astra_market_data_calls_total{kind="ws"} 4', text)
+        self.assertIn('astra_market_data_call_failures_total{kind="ws"} 1', text)
+        self.assertIn('astra_market_data_latency_p50_seconds{kind="ws"} 0.083347', text)
+        self.assertIn('astra_market_data_latency_p95_seconds{kind="ws"} 0.2', text)
+        self.assertIn('astra_market_data_last_success_age_seconds{kind="ws"} 100', text)
+        self.assertIn('astra_market_data_failures_reported_total{kind="ws"} 2', text)
 
     def test_negative_age_is_clamped_to_zero(self):
         text = M.render_prometheus(self._snap(generated_at=1000.0,
                                               market_data_health={"written_at_ms": 2_000_000.0}))
-        self.assertIn("r20_market_data_snapshot_age_seconds 0", text,
+        self.assertIn("astra_market_data_snapshot_age_seconds 0", text,
                       "时钟回拨造成的负年龄不得外泄")
 
 
@@ -388,11 +388,11 @@ class RenderStreamAndDisclosureTests(RenderBasicsTests):
                 "okx": {"frames": 10, "ticks": 8, "parse_errors": 1, "errors": 2,
                         "tick_age_s": 3.5},
                 "gate": {"frames": 1, "ticks": 0, "parse_errors": 0, "errors": 0}}}))
-        self.assertIn("r20_market_stream_snapshot_age_seconds 5", text)
-        self.assertIn('r20_market_stream_ticks_total{venue="okx"} 8', text)
-        self.assertIn('r20_market_stream_parse_errors_total{venue="okx"} 1', text)
-        self.assertIn('r20_market_stream_tick_age_seconds{venue="okx"} 3.5', text)
-        self.assertNotIn('r20_market_stream_tick_age_seconds{venue="gate"}', text,
+        self.assertIn("astra_market_stream_snapshot_age_seconds 5", text)
+        self.assertIn('astra_market_stream_ticks_total{venue="okx"} 8', text)
+        self.assertIn('astra_market_stream_parse_errors_total{venue="okx"} 1', text)
+        self.assertIn('astra_market_stream_tick_age_seconds{venue="okx"} 3.5', text)
+        self.assertNotIn('astra_market_stream_tick_age_seconds{venue="gate"}', text,
                          "从未收到 tick ⇒ 不发该序列（0 会被读成刚刚有数据）")
 
     def test_cycle_disclosure_gates_watchdog_error_counters(self):
@@ -400,24 +400,24 @@ class RenderStreamAndDisclosureTests(RenderBasicsTests):
             "written_at_ms": 999_000.0, "broken_venue_count": 2,
             "shape_violation_count": 1, "entries_blocked": True,
             "watchdog_enabled": False, "watchdog_errors": 5, "watchdog_critical": 3}))
-        self.assertIn("r20_cycle_disclosure_snapshot_age_seconds 1", text)
-        self.assertIn("r20_cycle_disclosure_broken_venues 2", text)
-        self.assertIn("r20_cycle_disclosure_shape_violations 1", text)
-        self.assertIn("r20_cycle_disclosure_entries_blocked 1", text)
-        self.assertIn("r20_cycle_disclosure_watchdog_enabled 0", text)
+        self.assertIn("astra_cycle_disclosure_snapshot_age_seconds 1", text)
+        self.assertIn("astra_cycle_disclosure_broken_venues 2", text)
+        self.assertIn("astra_cycle_disclosure_shape_violations 1", text)
+        self.assertIn("astra_cycle_disclosure_entries_blocked 1", text)
+        self.assertIn("astra_cycle_disclosure_watchdog_enabled 0", text)
         self.assertNotIn("watchdog_errors", text,
                          "巡检没开闸 ⇒ 不发错误计数（没跑 ≠ 跑了没问题）")
 
     def test_cycle_disclosure_emits_watchdog_errors_when_enabled(self):
         text = M.render_prometheus(self._snap(cycle_disclosure={
             "watchdog_enabled": True, "watchdog_errors": 0, "watchdog_critical": 0}))
-        self.assertIn("r20_cycle_disclosure_watchdog_enabled 1", text)
-        self.assertIn("r20_cycle_disclosure_watchdog_errors 0", text)
-        self.assertIn("r20_cycle_disclosure_watchdog_critical 0", text)
+        self.assertIn("astra_cycle_disclosure_watchdog_enabled 1", text)
+        self.assertIn("astra_cycle_disclosure_watchdog_errors 0", text)
+        self.assertIn("astra_cycle_disclosure_watchdog_critical 0", text)
 
     def test_empty_cycle_disclosure_emits_nothing(self):
         text = M.render_prometheus(self._snap(cycle_disclosure={}))
-        self.assertNotIn("r20_cycle_disclosure", text)
+        self.assertNotIn("astra_cycle_disclosure", text)
 
 
 class RenderOrphanTests(RenderBasicsTests):
@@ -425,31 +425,31 @@ class RenderOrphanTests(RenderBasicsTests):
         text = M.render_prometheus(self._snap(protection_orphans={
             "okx": {"readable": False, "candidates": None,
                     "side_mismatch": None, "foreign": None}}))
-        self.assertIn('r20_protection_orphans_readable{venue="okx"} 0', text)
-        self.assertNotIn("r20_protection_orphan_candidates", text)
-        self.assertNotIn("r20_protection_side_mismatch_legs", text)
+        self.assertIn('astra_protection_orphans_readable{venue="okx"} 0', text)
+        self.assertNotIn("astra_protection_orphan_candidates", text)
+        self.assertNotIn("astra_protection_side_mismatch_legs", text)
 
     def test_readable_venue_publishes_all_distinct_families(self):
         text = M.render_prometheus(self._snap(protection_orphans={"okx": {
             "readable": True, "candidates": 2, "unattributed": 1,
             "side_mismatch": 3, "size_mismatch": 4, "foreign": 5, "unparsed": 6,
             "ledger_evidence": True}}))
-        for line in ('r20_protection_orphans_readable{venue="okx"} 1',
-                     'r20_protection_orphan_candidates{venue="okx"} 2',
-                     'r20_protection_orphan_unattributed{venue="okx"} 1',
-                     'r20_protection_side_mismatch_legs{venue="okx"} 3',
-                     'r20_protection_size_mismatch_legs{venue="okx"} 4',
-                     'r20_protection_foreign_legs{venue="okx"} 5',
-                     'r20_protection_unparsed_legs{venue="okx"} 6',
-                     'r20_protection_orphans_ledger_evidence{venue="okx"} 1'):
+        for line in ('astra_protection_orphans_readable{venue="okx"} 1',
+                     'astra_protection_orphan_candidates{venue="okx"} 2',
+                     'astra_protection_orphan_unattributed{venue="okx"} 1',
+                     'astra_protection_side_mismatch_legs{venue="okx"} 3',
+                     'astra_protection_size_mismatch_legs{venue="okx"} 4',
+                     'astra_protection_foreign_legs{venue="okx"} 5',
+                     'astra_protection_unparsed_legs{venue="okx"} 6',
+                     'astra_protection_orphans_ledger_evidence{venue="okx"} 1'):
             self.assertIn(line, text)
         # 语义不同必须是两个指标名 ⇒ 每族仍只有一条 HELP
-        self.assertEqual(text.count("# HELP r20_protection_side_mismatch_legs "), 1)
-        self.assertEqual(text.count("# HELP r20_protection_size_mismatch_legs "), 1)
+        self.assertEqual(text.count("# HELP astra_protection_side_mismatch_legs "), 1)
+        self.assertEqual(text.count("# HELP astra_protection_size_mismatch_legs "), 1)
 
     def test_non_dict_orphan_rows_are_skipped(self):
         text = M.render_prometheus(self._snap(protection_orphans={"okx": "bad"}))
-        self.assertNotIn("r20_protection_orphans_readable", text)
+        self.assertNotIn("astra_protection_orphans_readable", text)
 
 
 class EndToEndShapeTests(RenderBasicsTests):
@@ -462,13 +462,13 @@ class EndToEndShapeTests(RenderBasicsTests):
                                 now=1.0)
         lines = M.render_prometheus(snap).splitlines()
         self.assertTrue(any(line.startswith("# HELP ") for line in lines))
-        self.assertTrue(any(line.startswith("r20_up ") for line in lines))
+        self.assertTrue(any(line.startswith("astra_up ") for line in lines))
         self.assertTrue(all(line.startswith("#") or line.strip() for line in lines))
         # 每个非注释行都必须是 `name value` 或 `name{labels} value`
         for line in lines:
             if line.startswith("#"):
                 continue
-            self.assertRegex(line, r"^r20_[a-z0-9_]+\{?.*\}? -?[0-9.eE+]+$")
+            self.assertRegex(line, r"^astra_[a-z0-9_]+\{?.*\}? -?[0-9.eE+]+$")
 
 
 if __name__ == "__main__":

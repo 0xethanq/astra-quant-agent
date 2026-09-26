@@ -22,6 +22,7 @@ import sys
 import unittest
 from pathlib import Path
 from unittest import mock
+from tests.extraction.rename_baseline import legacy_rev_path, normalize
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
@@ -34,10 +35,10 @@ SPECS = {"capture_policy_snapshot": (6, 9), "resolve_llm_runtime": (29, 33)}
 
 
 def _baseline_fn() -> ast.FunctionDef:
-    r = subprocess.run(["git", "show", f"{PRE}:scripts/ai_brain_trader.py"],
+    r = subprocess.run(["git", "show", legacy_rev_path(f"{PRE}:scripts/ai_brain_trader.py")],
                        capture_output=True, text=True, cwd=str(ROOT))
     assert r.returncode == 0, f"基线取不到：{r.stderr[:200]}"
-    return next(n for n in ast.parse(r.stdout).body
+    return next(n for n in ast.parse(normalize(r.stdout)).body
                 if isinstance(n, ast.FunctionDef) and n.name == OWNER)
 
 
@@ -168,7 +169,7 @@ class BrainRuntimeVerbatimTest(unittest.TestCase):
         real_import = builtins.__import__
 
         def _bad_import(name, *a, **k):
-            if name in ("policy_snapshot", "r20_backend.policy_snapshot"):
+            if name in ("policy_snapshot", "astra_backend.policy_snapshot"):
                 raise ImportError("boom")
             return real_import(name, *a, **k)
 
@@ -188,7 +189,7 @@ class BrainRuntimeVerbatimTest(unittest.TestCase):
         runtime_cfg = {"model": "m1", "reasoning_effort": "low", "api_format": "anthropic",
                        "base_url": "https://x", "api_key": "k1", "thinking_timeout": 33}
         with mock.patch.dict(os.environ, clean, clear=True), \
-             mock.patch("r20_backend.llm_manager.get_active_llm_runtime",
+             mock.patch("astra_backend.llm_manager.get_active_llm_runtime",
                         return_value=runtime_cfg):
             api_format, api_key, base_url, effort, fn, model_name, timeout = \
                 R.resolve_llm_runtime(api_key="old", base_url="https://old", os=os)
@@ -199,7 +200,7 @@ class BrainRuntimeVerbatimTest(unittest.TestCase):
         # 环境变量优先（`os.environ.get(...) or 运行时值`）—— 这是既有优先级，钉住它
         with mock.patch.dict(os.environ, {**clean, "LLM_MODEL": "env-model",
                                           "LLM_REASONING_EFFORT": "medium"}, clear=True), \
-             mock.patch("r20_backend.llm_manager.get_active_llm_runtime",
+             mock.patch("astra_backend.llm_manager.get_active_llm_runtime",
                         return_value=runtime_cfg):
             _f, _e, _af, effort2, _fn, model2, _t = \
                 R.resolve_llm_runtime(api_key="old", base_url="https://old", os=os)
@@ -208,7 +209,7 @@ class BrainRuntimeVerbatimTest(unittest.TestCase):
 
     def test_resolve_llm_runtime_failure_keeps_defaults_and_nulls_requester(self):
         from scripts.brain import runtime as R
-        with mock.patch("r20_backend.llm_manager.get_active_llm_runtime",
+        with mock.patch("astra_backend.llm_manager.get_active_llm_runtime",
                         side_effect=RuntimeError("boom")):
             api_format, api_key, base_url, effort, fn, model_name, timeout = \
                 R.resolve_llm_runtime(api_key="keepme", base_url="https://keep", os=os)

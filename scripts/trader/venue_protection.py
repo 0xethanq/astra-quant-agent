@@ -38,6 +38,11 @@ import time
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence
 
+try:
+    from scripts.tag_markers import normalize_legacy_markers
+except ImportError:      # scripts/ 在 sys.path 上（双拼写铁律）
+    from tag_markers import normalize_legacy_markers
+
 __all__ = [
     "DEFAULT_RENEW_WITHIN_S",
     "attribute_protective_orders",
@@ -60,9 +65,9 @@ DEFAULT_RENEW_WITHIN_S = 24 * 3600
 DEFAULT_WATCHDOG_DEBOUNCE_S = 30 * 60
 #: 覆盖缺口容忍度（相对持仓量）：小于千分之一视为浮点噪音，不修
 DEFAULT_TOLERANCE_RATIO = 0.001
-#: 判定"这条腿属于本系统"的文本标记（与云端棘轮同一套：Gate `t-r20sl*`、Binance 类型名）
-OUR_SL_MARKERS = ("r20sl", "stop")
-OUR_TP_MARKERS = ("r20tp", "take_profit")
+#: 判定"这条腿属于本系统"的文本标记（与云端棘轮同一套：Gate `t-astrasl*`、Binance 类型名）
+OUR_SL_MARKERS = ("astrasl", "stop")
+OUR_TP_MARKERS = ("astratp", "take_profit")
 
 
 def _as_float(value: Any) -> Optional[float]:
@@ -76,7 +81,7 @@ def _as_float(value: Any) -> Optional[float]:
 def _row_text(row: Dict[str, Any]) -> str:
     """把交易所行里所有可能带标签的文本拼起来（与云端棘轮同一口径）。
 
-    Gate 把标签放在 `initial.text`（`t-r20sl…`），Binance 把类型放在 `type`/`raw.orderType`。
+    Gate 把标签放在 `initial.text`（`t-astrasl…`），Binance 把类型放在 `type`/`raw.orderType`。
     """
     order = row.get("order") if isinstance(row.get("order"), dict) else {}
     initial = row.get("initial") if isinstance(row.get("initial"), dict) else {}
@@ -87,20 +92,22 @@ def _row_text(row: Dict[str, Any]) -> str:
         raw.get("type"), row.get("algoType"),
         # 第一百七十五刀：**客户端订单号**（Binance `clientAlgoId`/`clientOrderId` 等）——
         # 补"标签存在但扫描器看不见"这个洞。⚠️ 如实说明：真机上 Binance 的 `clientAlgoId`
-        # 目前是交易所给的**随机串**（实测 20/20 不含 `r20`）⇒ 本行**不会**让当下的 Binance
+        # 目前是交易所给的**随机串**（实测 20/20 不含 `astra`）⇒ 本行**不会**让当下的 Binance
         # 腿变得可归因；给 Binance 腿打标签是**写入侧**的事，已登记（会改下单参数，需拍板）。
         row.get("clientAlgoId"), raw.get("clientAlgoId"),
         row.get("clientOrderId"), raw.get("clientOrderId"),
     ]
-    return " ".join(str(p) for p in parts if p).lower()
+    # ⚠️ 在这里归一旧归属标记：这是全部标记判定（`_leg_kind`、棘轮、孤儿清理）
+    #    唯一的文本来源，改一处即可让改名前后落在交易所上的腿都被认出来。
+    return normalize_legacy_markers(" ".join(str(p) for p in parts if p).lower())
 
 
 def _leg_kind(row: Dict[str, Any]) -> Optional[str]:
     """`"sl"` / `"tp"` / None（None = 不是本系统的保护腿）。"""
     text = _row_text(row)
-    if "r20sl" in text:
+    if "astrasl" in text:
         return "sl"
-    if "r20tp" in text:
+    if "astratp" in text:
         return "tp"
     # 没有我们的标签时，只认明确的类型名（Binance STOP_MARKET / TAKE_PROFIT_MARKET）
     if "take_profit" in text:
@@ -200,7 +207,7 @@ def leg_base(row: Dict[str, Any]) -> str:
         text = str(candidate or "").strip()
         if text:
             # 第一百八十五刀：不再自己拼一遍归一 —— 委派给唯一实现（见 `_base_of`）。
-            from r20_backend.exchanges.base import canonical_base
+            from astra_backend.exchanges.base import canonical_base
             return canonical_base(text)
     return ""
 
@@ -240,12 +247,12 @@ def _to_seconds(value: Optional[float]) -> Optional[float]:
     用 1e9 当分界会把"秒"误判成"毫秒"、把时间除以 1000（本模块第一版就这么错过，
     结果"还剩 7 天"被算成"已过期"）。
 
-    第一百八十八刀：判据与换算**只有一处实现**（`r20_backend.time_utils` 的
+    第一百八十八刀：判据与换算**只有一处实现**（`astra_backend.time_utils` 的
     `EPOCH_MS_THRESHOLD` / `to_seconds` / `to_millis`）；本函数与
     `dashboard_payload/multi_venue.py` 都已改为委派（此前四处各写一遍）。
     """
-    # 第一百八十八刀：分界与换算**只有一处实现**（`r20_backend.time_utils`），此处委派。
-    from r20_backend.time_utils import to_seconds
+    # 第一百八十八刀：分界与换算**只有一处实现**（`astra_backend.time_utils`），此处委派。
+    from astra_backend.time_utils import to_seconds
     return to_seconds(value)
 
 
@@ -275,7 +282,7 @@ def _expiry(row: Dict[str, Any]) -> tuple:
     if exp is not None:
         if exp <= 0:
             return None, "never"
-        from r20_backend.time_utils import EPOCH_MS_THRESHOLD
+        from astra_backend.time_utils import EPOCH_MS_THRESHOLD
         if exp >= EPOCH_MS_THRESHOLD:  # 绝对时间戳（毫秒）；分界取自唯一实现
             return exp / 1000.0, "absolute"
         if exp > 1e9:                  # 绝对时间戳（秒）
@@ -378,14 +385,14 @@ def _base_of(symbol: Any) -> str:
     """从合约/合成 id 里取**币种**（第一百八十刀引入，第一百八十五刀改为**委派**）。
 
     为什么委派：本仓"任意写法 → 裸币种"的语义**已经有唯一实现**
-    （`r20_backend.exchanges.base.canonical_base`，面板/因子/符号归一都在用；
+    （`astra_backend.exchanges.base.canonical_base`，面板/因子/符号归一都在用；
     `scripts/ai_brain_trader.py` 也早就在 import 它）。本函数此前又写了一份，于是两者在
     `GATE:BTC_USDT`（前缀）与 `BTC_USDC`（非 USDT 计价）上**给出不同答案** ——
     同一语义写两遍必然漂移，这里改为直接调用那一处。
 
     惰性导入：避免后端包在 import 期反向拉起本模块（本模块被面板导入）。
     """
-    from r20_backend.exchanges.base import canonical_base
+    from astra_backend.exchanges.base import canonical_base
     return canonical_base(str(symbol or ""))
 
 
@@ -426,7 +433,7 @@ def scan_protective_orders(rows: Optional[Sequence[Dict[str, Any]]], *,
                            require_symbol_match: bool = False) -> Dict[str, Any]:
     """纯判定：给一批交易所保护单行，回答"覆盖够不够、哪些腿要续期"。
 
-    - 只统计**本系统**的腿（`r20sl`/`r20tp` 标签或明确类型名）；
+    - 只统计**本系统**的腿（`astrasl`/`astratp` 标签或明确类型名）；
     - 只统计方向正确（平仓方向）且 live 的腿；
     - `symbol` 默认不参与过滤（调用方通常已按合约查询）；`require_symbol_match=True`
       时才要求行内合约串包含币种，供"一次拉全量"的调用方使用。
@@ -671,7 +678,7 @@ def attribute_protective_orders(positions: Optional[Sequence[Dict[str, Any]]],
     为什么必须做（2026-09-20 实盘实测）：Binance 账户 13 张腿里只有 2 张对得上唯一活动仓
     （UNI 82 张），另有 2 张是 UNI 的**旧量**（51/55，来自更早的仓）、3 张可归因孤儿
     （ARB/XRP/ETH，台账有同向同量已平记录）、6 张**归属不可判定**（ETH 0.537 / SOL 10.45…）。
-    Gate 侧 3 张腿则全部带我们的 `t-r20sl/t-r20tp` 标签、`auto_size=close_*`（整仓平，无张数）。
+    Gate 侧 3 张腿则全部带我们的 `t-astrasl/t-astratp` 标签、`auto_size=close_*`（整仓平，无张数）。
 
     危害（判据，不是"要不要撤"）：
     1. **虚假安全感**：`scan_protective_orders` 按币种+平仓方向+数量算覆盖 ⇒ 给新仓算覆盖时，
@@ -683,7 +690,7 @@ def attribute_protective_orders(positions: Optional[Sequence[Dict[str, Any]]],
 
     | evidence | 含义 | 可否自动清理 |
     |---|---|---|
-    | `tag` | 带本系统标签（Gate `t-r20sl/t-r20tp`）⇒ **可证明**是我们的 | ✅ |
+    | `tag` | 带本系统标签（Gate `t-astrasl/t-astratp`）⇒ **可证明**是我们的 | ✅ |
     | `ledger` | 无标签，但台账有**同向同量**记录 ⇒ 高度可能 | ✅ |
     | `None` | 两者都没有 ⇒ **归属不可判定** | ❌ 绝不自动撤（可能是用户手单） |
 
@@ -759,7 +766,7 @@ def attribute_protective_orders(positions: Optional[Sequence[Dict[str, Any]]],
         full_close = _is_full_close(row)
         size = abs(_as_float(_leg_size(row)) or 0.0)
         leg_side = _leg_position_side(row)
-        tagged = ("r20sl" in _row_text(row)) or ("r20tp" in _row_text(row))
+        tagged = ("astrasl" in _row_text(row)) or ("astratp" in _row_text(row))
         entry = {"symbol": base, "kind": kind, "protects": leg_side,
                  "size": size, "full_close": bool(full_close),
                  "trigger_price": _trigger_price(row),
@@ -822,7 +829,7 @@ def select_legs_to_cancel_after_close(closed_position: Optional[Dict[str, Any]],
     ## 只撤"能证明是这一笔的"，其余一律不碰
 
     - `matched`：腿保护的就是刚平掉的那个仓（张数相符，或 `auto_size` 整仓平）⇒ 撤；
-    - `orphan_attributed` 且证据 `tag`（Gate `t-r20sl/t-r20tp`）⇒ **可证明是我们的** ⇒ 撤；
+    - `orphan_attributed` 且证据 `tag`（Gate `t-astrasl/t-astratp`）⇒ **可证明是我们的** ⇒ 撤；
     - `size_mismatch` / `side_mismatch`：**同一合约上属于别的仓**的历史腿 ——
       平掉 A 仓不等于 B 仓的腿该撤，故**只报告不撤**（留给归属审计）；
     - `orphan_unattributed` / `unparsed` / `foreign`：**绝不撤**（可能是用户手单）。
@@ -1027,7 +1034,7 @@ def audit_cross_venue_protection(xv_positions_by_venue: Optional[Dict[str, Any]]
     """对**已冻结的**跨所持仓快照做一遍保护巡检（每周期调用一次）。
 
     `dry_run=True` 时**只判定、不写单**：回答"如果开闸，这一轮会做哪些动作"
-    —— 这是运营在打开 `R20_VENUE_PROTECTION_WATCHDOG` 之前的预演视图，
+    —— 这是运营在打开 `ASTRA_VENUE_PROTECTION_WATCHDOG` 之前的预演视图，
     也是线上排障时唯一安全的取证方式。
 
     返回 `{venues, actions, critical, errors, skipped, would, dry_run}`：

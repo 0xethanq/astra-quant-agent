@@ -102,7 +102,7 @@ class _Ad:
         return self._attach if self._attach is not None else {"sl": "new-sl"}
 
 
-def _sl_row(oid, text="t-r20sl1"):
+def _sl_row(oid, text="t-astrasl1"):
     return {"id": oid, "type": "STOP", "initial": {"text": text}}
 
 

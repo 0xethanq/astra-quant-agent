@@ -11,7 +11,7 @@
 | `scripts/self_improvement_engine.py` | 125 |
 
 两份此刻**完全相同**，所以不是当下的 bug；但它是一条**必然漂移**的复制：
-两处都从 `r20_backend.llm_manager` 取「当前激活模型」再回落到环境变量，
+两处都从 `astra_backend.llm_manager` 取「当前激活模型」再回落到环境变量，
 任何一处改了回落顺序或加了新环境变量，另一处不会跟着改 ——
 两个进程就会用**不同的凭据**说话。
 
@@ -19,15 +19,15 @@
 「孪生漂移…等于闸装了死副本。现从模块导入同一实现，双进程单一事实源」），
 本刀按同一思路消除这一处。
 
-## ⚠️ 为什么落在 `scripts/` 而不是 `r20_backend/llm/`
+## ⚠️ 为什么落在 `scripts/` 而不是 `astra_backend/llm/`
 
-我第一版写成 `r20_backend/llm/credentials.py`，被
+我第一版写成 `astra_backend/llm/credentials.py`，被
 `tests/test_llm_seam_discipline.py::test_core_modules_do_not_import_facade`
 **当场拒绝**：
 
-    credentials.py:67 from r20_backend.llm_manager import ...
+    credentials.py:67 from astra_backend.llm_manager import ...
 
-该闸的铁律是「`r20_backend/llm/` 下的核心模块不得反向 import 门面
+该闸的铁律是「`astra_backend/llm/` 下的核心模块不得反向 import 门面
 `llm_manager`（会成环；应为薄壳注入）」。而本函数的**业务本身**就是
 「先问 `llm_manager.get_active_llm_runtime()`」—— 天然违反该铁律。
 
@@ -66,26 +66,26 @@ class FallbackOrderTest(unittest.TestCase):
     """⚠️ 三条回落分支的顺序是**业务语义**。"""
 
     def test_runtime_active_model_wins(self):
-        with patch("r20_backend.llm_manager.get_active_llm_runtime",
+        with patch("astra_backend.llm_manager.get_active_llm_runtime",
                    return_value={"base_url": "https://runtime/v1", "api_key": "RT"}):
             self.assertEqual(get_cpa_client_config(_Settings()),
                              ("https://runtime/v1", "RT"))
 
     def test_runtime_exception_falls_back_to_standalone(self):
-        with patch("r20_backend.llm_manager.get_active_llm_runtime",
+        with patch("astra_backend.llm_manager.get_active_llm_runtime",
                    side_effect=RuntimeError("config store down")):
             self.assertEqual(get_cpa_client_config(_Settings()),
                              ("https://standalone/v1", "STANDALONE_KEY"))
 
     def test_runtime_without_base_url_falls_back(self):
         """⚠️ 激活模型存在但 `base_url` 为空 → 必须继续回落，不能返回空地址。"""
-        with patch("r20_backend.llm_manager.get_active_llm_runtime",
+        with patch("astra_backend.llm_manager.get_active_llm_runtime",
                    return_value={"base_url": "", "api_key": "RT"}):
             self.assertEqual(get_cpa_client_config(_Settings()),
                              ("https://standalone/v1", "STANDALONE_KEY"))
 
     def test_env_fallback_when_nothing_else(self):
-        with patch("r20_backend.llm_manager.get_active_llm_runtime",
+        with patch("astra_backend.llm_manager.get_active_llm_runtime",
                    side_effect=RuntimeError("x")), \
              patch.dict(os.environ, {"LLM_BASE_URL": "https://env/v1",
                                      "LLM_API_KEY": "ENVKEY"}, clear=False):
@@ -93,7 +93,7 @@ class FallbackOrderTest(unittest.TestCase):
                              ("https://env/v1", "ENVKEY"))
 
     def test_openai_aliases_are_second_choice(self):
-        with patch("r20_backend.llm_manager.get_active_llm_runtime",
+        with patch("astra_backend.llm_manager.get_active_llm_runtime",
                    side_effect=RuntimeError("x")), \
              patch.dict(os.environ, {"OPENAI_BASE_URL": "https://openai/v1",
                                      "OPENAI_API_KEY": "OK"}, clear=False), \
@@ -105,7 +105,7 @@ class FallbackOrderTest(unittest.TestCase):
                                  ("https://openai/v1", "OK"))
 
     def test_llm_env_beats_openai_env(self):
-        with patch("r20_backend.llm_manager.get_active_llm_runtime",
+        with patch("astra_backend.llm_manager.get_active_llm_runtime",
                    side_effect=RuntimeError("x")), \
              patch.dict(os.environ, {"LLM_BASE_URL": "https://llm/v1",
                                      "OPENAI_BASE_URL": "https://openai/v1",
@@ -114,20 +114,20 @@ class FallbackOrderTest(unittest.TestCase):
             self.assertEqual(get_cpa_client_config(None), ("https://llm/v1", "A"))
 
     def test_hardcoded_openai_default_is_last_resort(self):
-        with patch("r20_backend.llm_manager.get_active_llm_runtime",
+        with patch("astra_backend.llm_manager.get_active_llm_runtime",
                    side_effect=RuntimeError("x")), \
              patch.dict(os.environ, {}, clear=True):
             self.assertEqual(get_cpa_client_config(None),
                              ("https://api.openai.com/v1", ""))
 
     def test_missing_api_key_yields_empty_string_not_none(self):
-        with patch("r20_backend.llm_manager.get_active_llm_runtime",
+        with patch("astra_backend.llm_manager.get_active_llm_runtime",
                    return_value={"base_url": "https://runtime/v1"}):
             _, key = get_cpa_client_config(None)
             self.assertEqual(key, "")
 
     def test_returns_tuple_of_two_str(self):
-        with patch("r20_backend.llm_manager.get_active_llm_runtime",
+        with patch("astra_backend.llm_manager.get_active_llm_runtime",
                    return_value={"base_url": "https://runtime/v1", "api_key": "K"}):
             out = get_cpa_client_config(None)
         self.assertIsInstance(out, tuple)
@@ -137,7 +137,7 @@ class FallbackOrderTest(unittest.TestCase):
 
     def test_exception_is_swallowed_by_design(self):
         """⚠️ 异常被静默吞掉是**有意**的：后台配置库不可用不应让交易进程起不来。"""
-        with patch("r20_backend.llm_manager.get_active_llm_runtime",
+        with patch("astra_backend.llm_manager.get_active_llm_runtime",
                    side_effect=RuntimeError("boom")), \
              patch.dict(os.environ, {"LLM_BASE_URL": "https://env/v1",
                                      "LLM_API_KEY": "K"}, clear=True):
@@ -168,7 +168,7 @@ class FacadeInjectionTest(unittest.TestCase):
             llm_base_url = "https://patched/v1"
             llm_api_key = "PATCHED"
 
-        with patch("r20_backend.llm_manager.get_active_llm_runtime",
+        with patch("astra_backend.llm_manager.get_active_llm_runtime",
                    side_effect=RuntimeError("x")):
             with patch.object(abt, "standalone_settings", S()):
                 self.assertEqual(abt.get_cpa_client_config(), ("https://patched/v1", "PATCHED"))
@@ -180,7 +180,7 @@ class FacadeInjectionTest(unittest.TestCase):
         import ai_brain_trader as abt
         import self_improvement_engine as sie
 
-        with patch("r20_backend.llm_manager.get_active_llm_runtime",
+        with patch("astra_backend.llm_manager.get_active_llm_runtime",
                    side_effect=RuntimeError("x")), \
              patch.dict(os.environ, {"LLM_BASE_URL": "https://env/v1",
                                      "LLM_API_KEY": "K"}, clear=True):
@@ -198,12 +198,12 @@ class FacadeInjectionTest(unittest.TestCase):
 
 
 class PlacementTest(unittest.TestCase):
-    """⚠️ 本刀踩过的坑：共享模块**不能**放进 `r20_backend/llm/`。"""
+    """⚠️ 本刀踩过的坑：共享模块**不能**放进 `astra_backend/llm/`。"""
 
     def test_shared_module_lives_in_scripts(self):
         self.assertTrue(MODULE.exists())
-        self.assertFalse((ROOT / "r20_backend" / "llm" / "credentials.py").exists(),
-                         "共享模块不得放回 r20_backend/llm/（会违反接缝铁律）")
+        self.assertFalse((ROOT / "astra_backend" / "llm" / "credentials.py").exists(),
+                         "共享模块不得放回 astra_backend/llm/（会违反接缝铁律）")
 
     def test_seam_gate_still_green(self):
         """直接跑那道拒绝了我第一版落点的闸。"""
@@ -218,7 +218,7 @@ class PlacementTest(unittest.TestCase):
     def test_shared_module_has_no_top_level_llm_manager_import(self):
         """`llm_manager` 的 import 必须在**函数内**（延迟到调用时）。
 
-        模块顶层 import 会在 `scripts/` 与 `r20_backend/` 之间制造
+        模块顶层 import 会在 `scripts/` 与 `astra_backend/` 之间制造
         import 期耦合 —— 本仓大量脚本正是靠延迟导入才可独立运行。
         """
         tree = ast.parse(MODULE.read_text(encoding="utf-8"))

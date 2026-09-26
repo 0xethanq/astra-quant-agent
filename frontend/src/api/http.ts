@@ -42,7 +42,7 @@ export async function http<T = any>(path: string, options: RequestInit = {}): Pr
       ...options,
       headers: {
         'Content-Type': 'application/json',
-        ...(auth.token ? { 'X-R20-Session': auth.token } : {}),
+        ...(auth.token ? { 'X-Astra-Session': auth.token } : {}),
         ...(options.headers || {}),
       },
     });

@@ -10,7 +10,7 @@
  *        → **产品信息面板**（kv 行 + 仓库入口）
  *        → **组件版本面板**（行式清单）
  *        → **安全更新面板**（FF-ONLY 徽章 + 4 项 git 遥测 + 动作 + 结果 / git 输出日志面板）
- *        → 确认弹窗改用 BaseDialog（逐字短语 `UPDATE R20` 门禁不变）
+ *        → 确认弹窗改用 BaseDialog（逐字短语 `UPDATE ASTRA` 门禁不变）
  *
  * ⚠️ 修复：`useResource` 的文档声明 `immediate` 默认 true，实现只在传入真值时取数，
  *    本页此前**从不自动加载**；且 onError 只 console.error，页面无任何提示。
@@ -19,7 +19,7 @@
  * 后端契约（逐字未改）：
  *   GET  /api/v1/admin/about
  *   POST /api/v1/admin/update/check
- *   POST /api/v1/admin/update        { confirmation: 'UPDATE R20' }
+ *   POST /api/v1/admin/update        { confirmation: 'UPDATE ASTRA' }
  *
  * ⚠️ 展示层保留的既有语义：
  *   git 失败会回 HTTP 200 + `error` 字段（审计①#8），故 `res.error` 必须走红分支，
@@ -81,11 +81,11 @@ function openUpdateModal() {
 }
 
 const { run: executeUpdate, busy: updateRunning } = useAsyncAction(async () => {
-  if (confirmPhrase.value.trim().toUpperCase() !== 'UPDATE R20') return
+  if (confirmPhrase.value.trim().toUpperCase() !== 'UPDATE ASTRA') return
   updateResult.value = null
   const res = await api<any>('/api/v1/admin/update', {
     method: 'POST',
-    body: JSON.stringify({ confirmation: 'UPDATE R20' }),
+    body: JSON.stringify({ confirmation: 'UPDATE ASTRA' }),
   })
   showConfirmModal.value = false
   updateResult.value = {
@@ -101,7 +101,7 @@ const { run: executeUpdate, busy: updateRunning } = useAsyncAction(async () => {
   await load()
 }, { onError: (e) => { updateResult.value = { error: e.message } } })
 
-const phaseOk = computed(() => confirmPhrase.value.trim().toUpperCase() === 'UPDATE R20');
+const phaseOk = computed(() => confirmPhrase.value.trim().toUpperCase() === 'UPDATE ASTRA');
 
 /** 注册通道：后端 `/api/v1/admin/about` 的 `channels`（链接与 OKX 经纪商 code 都来自接口）。
  *  顺序固定为 OKX → Gate → Binance，缺失项由后端省略时优雅跳过。 */
@@ -400,7 +400,7 @@ const bandFacts = computed(() => {
       <div class="ab-confirm">
         <p class="ab-confirm-text">
           {{ t('admin.about.confirmPrefix') }}
-          <code class="ab-confirm-phrase">UPDATE R20</code>{{ t('admin.about.confirmSuffix') }}
+          <code class="ab-confirm-phrase">UPDATE ASTRA</code>{{ t('admin.about.confirmSuffix') }}
         </p>
         <input
           v-model="confirmPhrase"

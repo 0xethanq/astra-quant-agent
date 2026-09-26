@@ -1,10 +1,10 @@
 """
-R20 物理拦截插件规范
+ASTRA 物理拦截插件规范
 ====================
 id: 03_adx_volatility_filter
 name: 1H ADX 趋势强度门禁
 version: 1.0.0
-author: R20 Official
+author: ASTRA Official
 description: 过滤无序震荡垃圾市。当 1H ADX < 18 时严禁开仓，杜绝在猴市横盘中过度交易损耗手续费。
 tags: 震荡过滤, ADX, 官方预设
 """

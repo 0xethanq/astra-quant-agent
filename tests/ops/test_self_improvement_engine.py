@@ -6,7 +6,7 @@
 |---|---|
 | ★ **写盘要么成功要么不留痕** | `atomic_write_json` 走同目录 `mkstemp` → `fsync` → `os.replace`；**任何失败都在 `finally` 里清掉临时文件**（磁盘上不留 `.evolution-*.tmp`）|
 | ★ **单飞锁** | `single_evolution_cycle` 用 `flock(LOCK_EX\\|LOCK_NB)`：抢不到就**记一条日志并返回 `None`**（不是抛错、更不是排队）；正常路径必须在 `finally` 里解锁 |
-| ★ **日志目标调用时解析** | `_log_file()` 每次读 `R20_SELF_IMPROVEMENT_LOG` —— 否则测试漏 patch 一次 `LOG_FILE` 就直接写生产 `logs/self_improvement.log`。写日志失败一律吞掉（**日志不许影响复盘**）|
+| ★ **日志目标调用时解析** | `_log_file()` 每次读 `ASTRA_SELF_IMPROVEMENT_LOG` —— 否则测试漏 patch 一次 `LOG_FILE` 就直接写生产 `logs/self_improvement.log`。写日志失败一律吞掉（**日志不许影响复盘**）|
 | ★ **门面薄壳必须读"门面全局"** | `get_cpa_client_config()` 把 `standalone_settings` **在调用时**取出来传给实现 —— 子模块若在 import 期绑定读到的是陈旧副本（本模块注释点名的既有接缝）|
 | ★ **回退选模先同网关** | 模型池可能横跨多域名，先把配置**打桩打掉**再读真实配置没有任何意义；死域上的席位回退过去也是 400/504 ⇒ 优先同 `base_url` 的健康成员，其次异域名 |
 | ★ **快照 join 的四条铁律** | ①方向必须一致（拒空头快照当多头成因）；②允许 `[-6h, +20min]` 的首巡检窗口；③**开仓 20 分钟之后的快照绝不是因果现场**；④早于 6 小时算过期证据。窗口内**取最接近的** |
@@ -19,7 +19,7 @@
 本模块所有路径常量默认指向**生产 `data/` 与 `logs/`**，故 `_Base.setUp` 把
 `DATA_DIR`/`LEDGER_JSON_FILE`/`REPORT_JSON_FILE`/`AI_MEMORY*`/`EVOLUTION_LAST_PROMPT_FILE`/
 `LOG_FILE`/`EVOLUTION_LOCK_FILE` **全部**改写到临时目录，并把
-`R20_SELF_IMPROVEMENT_LOG` 也钉到临时路径；`init_llm_config` 等外部依赖逐个打桩。
+`ASTRA_SELF_IMPROVEMENT_LOG` 也钉到临时路径；`init_llm_config` 等外部依赖逐个打桩。
 """
 
 import datetime
@@ -86,7 +86,7 @@ class _Base(unittest.TestCase):
         ):
             self._start(mock.patch.object(SIE, name, value))
         self._start(mock.patch.dict(os.environ,
-                                    {"R20_SELF_IMPROVEMENT_LOG": self.log_path}))
+                                    {"ASTRA_SELF_IMPROVEMENT_LOG": self.log_path}))
         self._start(mock.patch.object(SIE, "TARGET_INSTRUMENTS", ["BTC", "ETH"]))
 
     def _log(self) -> str:
@@ -240,13 +240,13 @@ class LogFileTests(_Base):
         self.assertEqual(SIE._log_file(), self.log_path)
 
     def test_it_falls_back_to_the_module_constant(self):
-        with mock.patch.dict(os.environ, {"R20_SELF_IMPROVEMENT_LOG": ""}):
+        with mock.patch.dict(os.environ, {"ASTRA_SELF_IMPROVEMENT_LOG": ""}):
             self.assertEqual(SIE._log_file(), SIE.LOG_FILE)
 
     def test_it_resolves_at_call_time(self):
         """调用时解析 ⇒ 测试中途改常量也能生效（审计卫生的落点）。"""
         with mock.patch.object(SIE, "LOG_FILE", "/tmp/other.log"):
-            with mock.patch.dict(os.environ, {"R20_SELF_IMPROVEMENT_LOG": ""}):
+            with mock.patch.dict(os.environ, {"ASTRA_SELF_IMPROVEMENT_LOG": ""}):
                 self.assertEqual(SIE._log_file(), "/tmp/other.log")
 
 
@@ -286,7 +286,7 @@ class LogMsgTests(_Base):
         blocker = Path(self.tmp.name) / "blocker"
         blocker.write_text("我是个文件，不是目录", encoding="utf-8")
         with mock.patch.dict(os.environ,
-                             {"R20_SELF_IMPROVEMENT_LOG": str(blocker / "x.log")}):
+                             {"ASTRA_SELF_IMPROVEMENT_LOG": str(blocker / "x.log")}):
             self.assertIsNone(SIE.log_msg("写不进去"))
 
 
@@ -322,7 +322,7 @@ class GetCpaClientConfigTests(unittest.TestCase):
 
 class EvolutionFallbackModelTests(_Base):
     def _config(self, **kw):
-        return mock.patch("r20_backend.llm_manager.init_llm_config",
+        return mock.patch("astra_backend.llm_manager.init_llm_config",
                           return_value=kw).start()
 
     def setUp(self):
@@ -376,7 +376,7 @@ class EvolutionFallbackModelTests(_Base):
         self.assertIsNone(SIE.evolution_fallback_model())
 
     def test_a_resolution_failure_is_logged_and_yields_none(self):
-        mock.patch("r20_backend.llm_manager.init_llm_config",
+        mock.patch("astra_backend.llm_manager.init_llm_config",
                    side_effect=RuntimeError("配置读不到")).start()
         self.assertIsNone(SIE.evolution_fallback_model())
         self.assertIn("复盘回退模型解析失败", self._log())
@@ -793,7 +793,7 @@ _DROP = _Drop()
 class LoadClosedTradesTests(_Base):
     def setUp(self):
         super().setUp()
-        self._start(mock.patch.dict(os.environ, {"R20_EVOLUTION_START_TIME": ""},
+        self._start(mock.patch.dict(os.environ, {"ASTRA_EVOLUTION_START_TIME": ""},
                                     clear=False))
 
     def _ledger(self, *trades):
@@ -881,7 +881,7 @@ class LoadClosedTradesTests(_Base):
 
     def test_the_env_variable_is_honoured(self):
         self._ledger(_trade(close_time="2026-09-20 10:00:00"))
-        with mock.patch.dict(os.environ, {"R20_EVOLUTION_START_TIME": "2026-09-21 00:00:00"}):
+        with mock.patch.dict(os.environ, {"ASTRA_EVOLUTION_START_TIME": "2026-09-21 00:00:00"}):
             self.assertEqual(SIE.load_closed_trades(), [])
 
     def test_the_account_state_file_supplies_the_start_time(self):
@@ -1091,14 +1091,14 @@ class CallLlmEvolutionReviewTests(_Base):
         self._start(mock.patch.dict(os.environ, {"LLM_MODEL": "", "LLM_REASONING_EFFORT": ""}))
 
     def _llm(self, runtime=None, execute=None, runtime_error=None, execute_error=None):
-        patcher = mock.patch("r20_backend.llm_manager.get_active_llm_runtime")
+        patcher = mock.patch("astra_backend.llm_manager.get_active_llm_runtime")
         getter = patcher.start()
         self.addCleanup(patcher.stop)
         if runtime_error is not None:
             getter.side_effect = runtime_error
         else:
             getter.return_value = runtime or {}
-        ex = mock.patch("r20_backend.llm_manager.execute_llm_request").start()
+        ex = mock.patch("astra_backend.llm_manager.execute_llm_request").start()
         self.addCleanup(mock.patch.stopall)
         if execute_error is not None:
             ex.side_effect = execute_error      # 传实例只会被"返回"，必须用 side_effect
@@ -1162,7 +1162,7 @@ class CallLlmEvolutionReviewTests(_Base):
                                       return_value=_Resp({
                                           "choices": [{"message": {
                                               "content": json.dumps({"b": 2})}}]})))
-        patcher = mock.patch("r20_backend.llm_manager.get_active_llm_runtime",
+        patcher = mock.patch("astra_backend.llm_manager.get_active_llm_runtime",
                              side_effect=RuntimeError("没有激活模型"))
         patcher.start()
         self.addCleanup(patcher.stop)
@@ -1172,7 +1172,7 @@ class CallLlmEvolutionReviewTests(_Base):
         urlopen = self._start(mock.patch.object(
             SIE.urllib.request, "urlopen",
             return_value=_Resp({"choices": [{"message": {"content": "{}"}}]})))
-        patcher = mock.patch("r20_backend.llm_manager.get_active_llm_runtime",
+        patcher = mock.patch("astra_backend.llm_manager.get_active_llm_runtime",
                              side_effect=RuntimeError("x"))
         patcher.start()
         self.addCleanup(patcher.stop)
@@ -1188,7 +1188,7 @@ class CallLlmEvolutionReviewTests(_Base):
         urlopen = self._start(mock.patch.object(
             SIE.urllib.request, "urlopen",
             return_value=_Resp({"choices": [{"message": {"content": "{}"}}]})))
-        patcher = mock.patch("r20_backend.llm_manager.get_active_llm_runtime",
+        patcher = mock.patch("astra_backend.llm_manager.get_active_llm_runtime",
                              side_effect=RuntimeError("x"))
         patcher.start()
         self.addCleanup(patcher.stop)
@@ -1200,7 +1200,7 @@ class CallLlmEvolutionReviewTests(_Base):
         urlopen = self._start(mock.patch.object(
             SIE.urllib.request, "urlopen",
             return_value=_Resp({"choices": [{"message": {"content": "{}"}}]})))
-        patcher = mock.patch("r20_backend.llm_manager.get_active_llm_runtime",
+        patcher = mock.patch("astra_backend.llm_manager.get_active_llm_runtime",
                              side_effect=RuntimeError("x"))
         patcher.start()
         self.addCleanup(mock.patch.stopall)
@@ -1248,17 +1248,17 @@ class CallLlmEvolutionReviewTests(_Base):
 
 class ModuleImportFallbackTests(_Base):
     def test_the_config_import_fallback_keeps_the_module_importable(self):
-        """第 28-30 行：拿不到 `r20_backend.config` 时 `standalone_settings = None`。
+        """第 28-30 行：拿不到 `astra_backend.config` 时 `standalone_settings = None`。
 
         ⚠️ 活模块里这条分支早已越过（config 一定导得到），故用"把源码在**隔离命名空间**
         里再 exec 一遍"来触发 —— `__file__` 传真实路径，覆盖率仍归属本文件；
-        `sys.modules["r20_backend.config"] = None` 会让那次 import 直接 `ImportError`。
+        `sys.modules["astra_backend.config"] = None` 会让那次 import 直接 `ImportError`。
         活模块对象**完全不受影响**。
         """
         source = Path(SIE.__file__).read_text(encoding="utf-8")
         namespace = {"__name__": "scripts.self_improvement_engine",
                      "__file__": str(SIE.__file__), "__package__": "scripts"}
-        with mock.patch.dict(sys.modules, {"r20_backend.config": None}):
+        with mock.patch.dict(sys.modules, {"astra_backend.config": None}):
             exec(compile(source, str(SIE.__file__), "exec"), namespace)  # noqa: S102
         self.assertIsNone(namespace["standalone_settings"])
         self.assertIn("TARGET_INSTRUMENTS", namespace)

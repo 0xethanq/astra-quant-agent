@@ -18,7 +18,7 @@ Docker 自己的健康检查看不出这种死法（只影响 `docker ps` 的显
 
 用户**可以合法关停交易**，那时账本/情绪/决策这些周期产物本就不更新 —— 拿它们当
 存活判据会造成**误杀循环**（把好好的 worker 反复杀掉重启）。心跳只反映
-"调度循环还在转"，与交易开关无关（见 `r20_gateway/worker.py::write_heartbeat`）。
+"调度循环还在转"，与交易开关无关（见 `astra_gateway/worker.py::write_heartbeat`）。
 
 ## 退出码
 
@@ -32,7 +32,7 @@ Docker 自己的健康检查看不出这种死法（只影响 `docker ps` 的显
 用法::
 
     python3 scripts/gateway_liveness.py                 # 默认路径与 90s 窗口
-    python3 scripts/gateway_liveness.py --timeout 120 --heartbeat /app/data/.r20_gateway_heartbeat
+    python3 scripts/gateway_liveness.py --timeout 120 --heartbeat /app/data/.astra_gateway_heartbeat
 """
 from __future__ import annotations
 
@@ -44,11 +44,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-#: 默认心跳文件（与 `r20_gateway/worker.py::HEARTBEAT_FILE` 同址）。
-DEFAULT_HEARTBEAT = ROOT / "data" / ".r20_gateway_heartbeat"
+#: 默认心跳文件（与 `astra_gateway/worker.py::HEARTBEAT_FILE` 同址）。
+DEFAULT_HEARTBEAT = ROOT / "data" / ".astra_gateway_heartbeat"
 
-#: 进程判据：worker 的命令行里必含这段（`python3 -m r20_gateway.worker`）。
-WORKER_CMD_FRAGMENT = "-m r20_gateway.worker"
+#: 进程判据：worker 的命令行里必含这段（`python3 -m astra_gateway.worker`）。
+WORKER_CMD_FRAGMENT = "-m astra_gateway.worker"
 
 #: 心跳容忍窗口（秒）。worker 主循环空闲时约 1 秒一轮，`scheduler.tick()` 把作业提交
 #: 线程池后立即返回（交易子进程另有 `spec.timeout_seconds` 兜底），故 90s 停更即为真卡死。
@@ -102,10 +102,10 @@ def evaluate(*, heartbeat: Path = DEFAULT_HEARTBEAT, timeout: int = DEFAULT_TIME
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="R20 网关存活判据（退出码即语义）")
+    parser = argparse.ArgumentParser(description="ASTRA 网关存活判据（退出码即语义）")
     parser.add_argument("--heartbeat", default=str(DEFAULT_HEARTBEAT))
     parser.add_argument("--timeout", type=int,
-                        default=int(os.getenv("R20_GATEWAY_LIVENESS_TIMEOUT_SECONDS",
+                        default=int(os.getenv("ASTRA_GATEWAY_LIVENESS_TIMEOUT_SECONDS",
                                               DEFAULT_TIMEOUT_SECONDS)))
     parser.add_argument("--fragment", default=WORKER_CMD_FRAGMENT)
     args = parser.parse_args(argv)

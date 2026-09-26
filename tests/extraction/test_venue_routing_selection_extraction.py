@@ -1,8 +1,8 @@
-"""`r20_backend/venue_routing/selection.py`（阶段 4·B3 第四十三刀）回归。
+"""`astra_backend/venue_routing/selection.py`（阶段 4·B3 第四十三刀）回归。
 
 ## 抽了什么
 
-`r20_backend/venue_router.py` 里**「选所质量」**域（141 行）：
+`astra_backend/venue_router.py` 里**「选所质量」**域（141 行）：
 
 | 成员 | 原位置 | 作用 |
 |---|---|---|
@@ -25,7 +25,7 @@
 
 ```
 ImportError: cannot import name '_parse_iso_utc' from partially initialized
-module 'r20_backend.venue_router' (most likely due to a circular import)
+module 'astra_backend.venue_router' (most likely due to a circular import)
 ```
 
 因为门面顶部要 `from .venue_routing.selection import _hard_filters`，
@@ -49,12 +49,12 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-MODULE = ROOT / "r20_backend" / "venue_routing" / "selection.py"
-FACADE = ROOT / "r20_backend" / "venue_router.py"
+MODULE = ROOT / "astra_backend" / "venue_routing" / "selection.py"
+FACADE = ROOT / "astra_backend" / "venue_router.py"
 
-from r20_backend.exchanges import listing as listing_mod  # noqa: E402
-from r20_backend.venue_router import RouterConfig  # noqa: E402
-from r20_backend.venue_routing.selection import (  # noqa: E402
+from astra_backend.exchanges import listing as listing_mod  # noqa: E402
+from astra_backend.venue_router import RouterConfig  # noqa: E402
+from astra_backend.venue_routing.selection import (  # noqa: E402
     _balanced_pick,
     _hard_filters,
     _parse_iso_utc,
@@ -121,7 +121,7 @@ class ParseIsoTest(unittest.TestCase):
 
 class HardFilterTest(unittest.TestCase):
     def _run(self, sig=None, cand=None, budget=None, now=NOW_EPOCH, listing=None):
-        with patch("r20_backend.venue_routing.selection.listing.ensure_contract_listed",
+        with patch("astra_backend.venue_routing.selection.listing.ensure_contract_listed",
                    side_effect=listing or _ok_listing):
             return _hard_filters(sig or _sig(), cand or _cand(),
                                  RouterConfig(), budget, now)
@@ -341,14 +341,14 @@ class ScoreTest(unittest.TestCase):
 
 class FacadeWiringTest(unittest.TestCase):
     def test_facade_reexports_every_moved_name(self):
-        import r20_backend.venue_router as vr
+        import astra_backend.venue_router as vr
         for name in ("_hard_filters", "_balanced_pick", "_score", "_parse_iso_utc",
                      "_LISTING_FAILOPEN_MARK"):
             self.assertTrue(hasattr(vr, name), f"门面丢了 {name}")
 
     def test_facade_identity_matches_module(self):
-        import r20_backend.venue_router as vr
-        import r20_backend.venue_routing.selection as sel
+        import astra_backend.venue_router as vr
+        import astra_backend.venue_routing.selection as sel
         self.assertIs(vr._hard_filters, sel._hard_filters)
         self.assertIs(vr._balanced_pick, sel._balanced_pick)
 
@@ -358,12 +358,12 @@ class FacadeWiringTest(unittest.TestCase):
         for name in ("def split_allocation", "def _apply_hysteresis",
                      "def route_signal"):
             self.assertNotIn(name, src, f"{name} 不该在 selection 里")
-        import r20_backend.venue_router as vr
+        import astra_backend.venue_router as vr
         for name in ("split_allocation", "_apply_hysteresis", "route_signal"):
             self.assertTrue(hasattr(vr, name))
 
     def test_public_api_unchanged(self):
-        import r20_backend.venue_router as vr
+        import astra_backend.venue_router as vr
         for name in ("RouteDecision", "RouterConfig", "route_signal", "split_allocation"):
             self.assertTrue(hasattr(vr, name))
 

@@ -1,4 +1,4 @@
-"""大模型故障转移事件读取（`r20_backend/llm/failover.py`）残余分支收口测试 —— 第 365 刀。
+"""大模型故障转移事件读取（`astra_backend/llm/failover.py`）残余分支收口测试 —— 第 365 刀。
 
 本模块 23 行，负责大模型故障转移历史日志读取、限额截断与格式自愈：
 - 文件缺失或格式损坏容错（`events_file` 不存在或坏 JSON 时安全返回空列表 `[]`）。
@@ -9,12 +9,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from r20_backend.llm.failover import recent_failover_events
+from astra_backend.llm.failover import recent_failover_events
 
 
 class LLMFailoverTailsTests(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(prefix="r20_llm_failover_tails_")
+        self.tmp = tempfile.TemporaryDirectory(prefix="astra_llm_failover_tails_")
         self.addCleanup(self.tmp.cleanup)
         self.tmp_path = Path(self.tmp.name)
 

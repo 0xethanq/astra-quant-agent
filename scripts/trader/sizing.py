@@ -50,8 +50,8 @@ def size_for_decision(*, ai_margin, ai_lever, price, ct_val, step_sz, base_sz,
 
     参数全部入参：
     - `quantize_size` / `max_size_within_margin` 由调用点注入 —— 它们是
-      `r20_backend.execution.sizing` 里的共享函数，测试会 `patch.object` 门面，
-      import 期绑定会绕过这些接缝（`r20_backend/README.md` §5）。
+      `astra_backend.execution.sizing` 里的共享函数，测试会 `patch.object` 门面，
+      import 期绑定会绕过这些接缝（`astra_backend/README.md` §5）。
     - `base_sz` 是自适应基准仓位（门面里的 `f["sz"]`）。
     - `actual_sz` 是当前值（门面里的 `actual_sz`）；块未生效时原样返回。
     """

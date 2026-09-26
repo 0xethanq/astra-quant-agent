@@ -15,7 +15,7 @@
 import unittest
 from unittest.mock import patch
 
-from r20_backend.execution.circuit_breaker import ledger_today_stats
+from astra_backend.execution.circuit_breaker import ledger_today_stats
 
 DAY = "2026-09-21"
 
@@ -29,7 +29,7 @@ def _row(**over):
 
 class LedgerTodayStatsTest(unittest.TestCase):
     def setUp(self):
-        self.p = patch("r20_backend.execution.circuit_breaker.beijing_day",
+        self.p = patch("astra_backend.execution.circuit_breaker.beijing_day",
                        side_effect=lambda ct: ct)
         self.p.start()
         self.addCleanup(self.p.stop)

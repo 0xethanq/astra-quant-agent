@@ -1,9 +1,9 @@
-# R20 代码结构优化总结（阶段 4 收口）
+# ASTRA 代码结构优化总结（阶段 4 收口）
 
 > 分支：`refactor/phase4-frontend-modernization`　收口日期：2026-09-15（Asia/Shanghai）
 > 完整逐刀记录：`plan_local/records/structure-01..05.md`（本地 gitignore）
 > —— 2026-09-22 起该记录**已分片为 5 片**，原单文件
-> `plan_local/R20_STRUCTURE_OPTIMIZATION_20260914.md` 已删除（内容全部迁入分片）。
+> `plan_local/ASTRA_STRUCTURE_OPTIMIZATION_20260914.md` 已删除（内容全部迁入分片）。
 > **全量逐刀索引**（含每刀落在哪个文件）见 `plan_local/records/index.tsv`，
 > 导航总入口 `plan_local/README.md`。
 > 本文件是**对外的收口说明**：量化结果、问题清单状态、目录约定、后续维护须知。
@@ -34,15 +34,15 @@
 | 文件 | 前 | 后 | 说明 |
 |---|---:|---:|---|
 | `scripts/ai_factor_trader.py` | 3565 | 1108 | 最大函数 1021 行级 → 142 行 |
-| `r20_backend/dashboard_cache.py` | 2047 | 533 | `update_cache_cycle` **1021 → 185 行**（全仓最大单函数） |
-| `r20_backend/llm_manager.py` | 2105 | 281 | 最大函数 19 行 |
-| `r20_backend/council_manager.py` | 1194 | 416 | 最大函数 66 行 |
-| `r20_backend/policy_snapshot.py` | 1101 | 295 | 最大函数 61 行 |
-| `r20_backend/llm/store.py` | 997 | 883 | |
+| `astra_backend/dashboard_cache.py` | 2047 | 533 | `update_cache_cycle` **1021 → 185 行**（全仓最大单函数） |
+| `astra_backend/llm_manager.py` | 2105 | 281 | 最大函数 19 行 |
+| `astra_backend/council_manager.py` | 1194 | 416 | 最大函数 66 行 |
+| `astra_backend/policy_snapshot.py` | 1101 | 295 | 最大函数 61 行 |
+| `astra_backend/llm/store.py` | 997 | 883 | |
 | `scripts/ai_brain_trader.py` | 748 | 953 | 期间含功能新增 |
 | `scripts/sync_full_ledger.py` | 715 | 690 | |
 | `scripts/self_improvement_engine.py` | 752 | 738 | |
-| `r20_backend/exchanges/binance.py` | 638 | 604 | |
+| `astra_backend/exchanges/binance.py` | 638 | 604 | |
 | `frontend/src/views/admin/LlmPage.vue` | 1762 | **39** | 拆为组件 + `useLlmConfig` 等 composable |
 | `frontend/src/components/dashboard/ChartWorkstation.vue` | 1285 | 902 | 叠加层计算拆到 `chartLiveLevels.ts` |
 | `frontend/src/locales/legacy/` | 648（100% 死键） | **已删除** | |
@@ -51,12 +51,12 @@
 
 | 编号 | 问题 | 状态 |
 |---|---|---|
-| B1 | 双路由层：`r20_backend/dashboard_cache.py` 影子 handler 永不执行 | ✅ 已修 |
+| B1 | 双路由层：`astra_backend/dashboard_cache.py` 影子 handler 永不执行 | ✅ 已修 |
 | B2 | `update_cache_cycle` 1021 行单函数 | ✅ 已拆（现 185 行，载荷字节基准回归） |
 | B3 | 实盘交易员单文件 3565 行 | ✅ 已拆（现 1108 行，`scripts/trader/` 27 模块） |
-| B4 | LLM 管理器三段混住 | ✅ 薄壳 + 核心抽离（现 281 行，`r20_backend/llm/` 12 模块） |
-| B5 | 委员会配置与辩论引擎混住 | ✅ 已拆（现 416 行，`r20_backend/council/` 6 模块） |
-| B6 | 策略快照三域混住 | ✅ 已拆（现 295 行，`r20_backend/policy/` 8 模块） |
+| B4 | LLM 管理器三段混住 | ✅ 薄壳 + 核心抽离（现 281 行，`astra_backend/llm/` 12 模块） |
+| B5 | 委员会配置与辩论引擎混住 | ✅ 已拆（现 416 行，`astra_backend/council/` 6 模块） |
+| B6 | 策略快照三域混住 | ✅ 已拆（现 295 行，`astra_backend/policy/` 8 模块） |
 | B7 | 后端根与 `scripts/` 扁平无分组 | ✅ 已按域建目录（见 §5） |
 | B8 | 单 router 承载 30+ 端点 | ✅ 已拆（`routers/strategy/` 5 模块、`routers/gateway/` 6 模块） |
 | F1 | `DataTable.vue` 只有 1 页用 | ✅ 现 **10** 处使用 |
@@ -76,13 +76,13 @@
 | `scripts/brain/` | 10 | AI 大脑决策链路 | 同上 |
 | `scripts/ledger/` | 5 | 台账行构建/清理/通知 | 同上 |
 | `scripts/evolution/` | 5 | 自进化上下文、解析、报告载荷 | 同上 |
-| `r20_backend/dashboard_payload/` | 21 | 看板载荷按数据域装配 | `r20_backend/README.md` + 模块表 |
-| `r20_backend/routers/strategy/` `gateway/` | 5 / 6 | 超大 router 按域拆分（URL/方法/处理器名/ tags 一字未改） | 同上 |
-| `r20_backend/council/` | 6 | 委员会配置 + 辩论引擎 | 同上 |
-| `r20_backend/policy/` | 8 | 策略快照生成/归档/恢复 | 同上 |
-| `r20_backend/llm/` | 12 | LLM 配置存储 / 能力探测 / 传输派发 | 同上 |
-| `r20_backend/exchanges/` | 14 | 三所适配器 + 订单/签名/诊断 | 同上 |
-| `r20_backend/execution/` | 6 | 执行闸门与路由 | 同上 |
+| `astra_backend/dashboard_payload/` | 21 | 看板载荷按数据域装配 | `astra_backend/README.md` + 模块表 |
+| `astra_backend/routers/strategy/` `gateway/` | 5 / 6 | 超大 router 按域拆分（URL/方法/处理器名/ tags 一字未改） | 同上 |
+| `astra_backend/council/` | 6 | 委员会配置 + 辩论引擎 | 同上 |
+| `astra_backend/policy/` | 8 | 策略快照生成/归档/恢复 | 同上 |
+| `astra_backend/llm/` | 12 | LLM 配置存储 / 能力探测 / 传输派发 | 同上 |
+| `astra_backend/exchanges/` | 14 | 三所适配器 + 订单/签名/诊断 | 同上 |
+| `astra_backend/execution/` | 6 | 执行闸门与路由 | 同上 |
 | `frontend/src/components/dashboard/` | — | 图表与叠加层（计算逻辑出表为 `.ts`） | `frontend/README.md`、`components/admin/README.md` |
 
 > `docs/BEIJING_TIME_CONTRACT.md`、`docs/exchange_support_matrix.md` 为既有契约文档，未改动。
@@ -116,13 +116,13 @@
 - `scripts/sync_full_ledger.py` 690（`build_lifecycle_ledger` 191）：剩余段落多为 IO 编排，
   或受设计边界 pin 约束（`_pos_id_seen` 跨行状态、官方平仓行构建）。
 - `scripts/self_improvement_engine.py` 738（`run_self_evolution` 149）：剩余为 LLM 调用与落盘编排。
-- `r20_backend/exchanges/binance.py` 604（`positions`/`fetch_ticker` 各 28、`place_order` 51）：
+- `astra_backend/exchanges/binance.py` 604（`positions`/`fetch_ticker` 各 28、`place_order` 51）：
   属响应字段映射，抽取收益已不明显。
 - 前端 F2 剩余样板、F7 收尾。
 
 ## 8. 未决事项（需人工拍板）
 
-- **API 服务重启**：`uvicorn r20_backend.app:app`（PID 328199，未带 `--reload`）仍在跑旧代码；
+- **API 服务重启**：`uvicorn astra_backend.app:app`（PID 328199，未带 `--reload`）仍在跑旧代码；
   `routers/` 拆分（阶段 4 前期）需重启后生效 —— 未擅自重启，等你决定窗口。
 - **自进化复验**：14:00 调度器的自进化复盘结果由你复查（已从代理待办中移除）。
 

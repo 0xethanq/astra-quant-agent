@@ -1375,7 +1375,7 @@ onMounted(() => { loadAll(); loadMx(); loadChannels() })
 }
 .sc-radio.is-on {
   border-left-color: var(--ds-color-brand);
-  background-color: var(--r20-brand-bg);
+  background-color: var(--astra-brand-bg);
 }
 .sc-radio input {
   margin-top: 2px;

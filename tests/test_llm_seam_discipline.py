@@ -2,12 +2,12 @@
 
 ## 背景：为什么需要这道闸
 
-阶段 2 把 `r20_backend/llm_manager.py` 从 2105 行拆成「门面薄壳 + 9 个核心模块」。
+阶段 2 把 `astra_backend/llm_manager.py` 从 2105 行拆成「门面薄壳 + 9 个核心模块」。
 薄壳能成立的唯一前提是**测试注入接缝**：测试用
 
     llm_manager.LLM_CONFIG_FILE = tmp          # 直接赋值
     patch.object(llm, "LLM_CONFIG_FILE", tmp)  # 或 patch
-    patch("r20_backend.llm_manager.init_llm_config", return_value=cfg)
+    patch("astra_backend.llm_manager.init_llm_config", return_value=cfg)
 
 来把配置读写重定向到沙箱。这些注入**只对「在门面模块命名空间里解析该名字」的代码生效**。
 
@@ -41,12 +41,12 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import r20_backend.llm_manager as lm  # noqa: E402
+import astra_backend.llm_manager as lm  # noqa: E402
 
-LLM_DIR = ROOT / "r20_backend" / "llm"
+LLM_DIR = ROOT / "astra_backend" / "llm"
 PROD_CONFIG = ROOT / "data" / "llm_models.json"
 
-# 门面必须继续导出的名字（来自全仓 `from r20_backend.llm_manager import X`
+# 门面必须继续导出的名字（来自全仓 `from astra_backend.llm_manager import X`
 # 与 `llm_manager.X` 属性访问的实测清单）
 PUBLIC_SURFACE = [
     # 常量
@@ -83,7 +83,7 @@ def setUpModule():
     —— 不读生产就无法证明这一点，属有意的线上守卫。
 
     只读、不改；声明在此是为了把「依赖线上配置内容」从**静默**变成**可审计**
-    （守卫见 `tests/__init__.py`；`R20_TESTS_STRICT_READS=1` 下未声明的读会报错）。
+    （守卫见 `tests/__init__.py`；`ASTRA_TESTS_STRICT_READS=1` 下未声明的读会报错）。
     """
     global _READ_SCOPE
     from tests import allow_real_data_reads
@@ -118,7 +118,7 @@ def _make_config(active_model_id: str = "m1") -> dict:
 
 class SeamDisciplineTests(unittest.TestCase):
     def setUp(self):
-        self._tmp = tempfile.TemporaryDirectory(prefix="r20-llm-seam-")
+        self._tmp = tempfile.TemporaryDirectory(prefix="astra-llm-seam-")
         self.addCleanup(self._tmp.cleanup)
         self.tmp = Path(self._tmp.name)
         self.cfg_file = self.tmp / "llm_models.json"
@@ -168,7 +168,7 @@ class SeamDisciplineTests(unittest.TestCase):
                                                        "api_path": "/patched-path"}]}],
                 "models": [{"id": "patched", "provider_id": "pp", "base_url": "https://x/v1",
                             "api_key": "k", "api_path": "/patched-path"}]}
-        with patch("r20_backend.llm_manager.init_llm_config", return_value=fake):
+        with patch("astra_backend.llm_manager.init_llm_config", return_value=fake):
             self.assertEqual(lm.load_llm_config().get("version"), "9.9",
                              "load_llm_config 未走补丁的 init_llm_config")
             self.assertEqual(lm.get_active_llm_runtime().get("model"), "patched",
@@ -185,9 +185,9 @@ class SeamDisciplineTests(unittest.TestCase):
             seen["called"] = True
             return {"model": "seam-probe-model", "base_url": "http://127.0.0.1:9/v1",
                     "api_key": "k", "api_format": "openai_chat", "reasoning_effort": "high"}
-        with patch("r20_backend.llm_manager.get_active_llm_runtime", side_effect=fake_runtime), \
-             patch("r20_backend.llm_manager.resolve_model_runtime", return_value=None), \
-             patch("r20_backend.llm_manager.init_llm_config",
+        with patch("astra_backend.llm_manager.get_active_llm_runtime", side_effect=fake_runtime), \
+             patch("astra_backend.llm_manager.resolve_model_runtime", return_value=None), \
+             patch("astra_backend.llm_manager.init_llm_config",
                    return_value={"request_attempts": 1, "fallback_model_ids": [], "models": []}):
             with self.assertRaises(Exception) as ctx:
                 lm.execute_llm_request([{"role": "user", "content": "hi"}], timeout=3.0)
@@ -201,17 +201,17 @@ class SeamDisciplineTests(unittest.TestCase):
         for path in sorted(LLM_DIR.glob("*.py")):
             tree = ast.parse(path.read_text(encoding="utf-8"))
             for node in ast.walk(tree):
-                # import r20_backend.llm_manager [as X]
+                # import astra_backend.llm_manager [as X]
                 if isinstance(node, ast.Import):
                     for a in node.names:
-                        if a.name == "r20_backend.llm_manager":
+                        if a.name == "astra_backend.llm_manager":
                             offenders.append(f"{path.name}:{node.lineno} import {a.name}")
                 elif isinstance(node, ast.ImportFrom):
-                    # from r20_backend.llm_manager import X
+                    # from astra_backend.llm_manager import X
                     if node.module and "llm_manager" in node.module:
                         offenders.append(f"{path.name}:{node.lineno} from {node.module} import ...")
-                    # from r20_backend import llm_manager   ← 初版漏掉这一形态（负向验证抓到）
-                    elif node.module in ("r20_backend", "..", "."):
+                    # from astra_backend import llm_manager   ← 初版漏掉这一形态（负向验证抓到）
+                    elif node.module in ("astra_backend", "..", "."):
                         for a in node.names:
                             if a.name == "llm_manager":
                                 offenders.append(
@@ -223,7 +223,7 @@ class SeamDisciplineTests(unittest.TestCase):
     def test_record_failover_event_stays_in_facade_and_is_self_contained(self):
         """tests/core/test_beijing_time_producers.py 的 isolated() 按 AST 从本文件取同名函数，
         且用裸名注入 FAILOVER_EVENTS_FILE / _atomic_write_json / _BJ。"""
-        source = (ROOT / "r20_backend" / "llm_manager.py").read_text(encoding="utf-8")
+        source = (ROOT / "astra_backend" / "llm_manager.py").read_text(encoding="utf-8")
         tree = ast.parse(source)
         names = {n.name for n in tree.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
         self.assertIn("record_failover_event", names, "record_failover_event 已不在 llm_manager.py")
@@ -234,7 +234,7 @@ class SeamDisciplineTests(unittest.TestCase):
 
     def test_save_llm_config_keeps_file_lock_anchor(self):
         """tests/audit/test_audit_config_p4_cleanup.py 断言本文件含该字符串（配置写互斥）。"""
-        source = (ROOT / "r20_backend" / "llm_manager.py").read_text(encoding="utf-8")
+        source = (ROOT / "astra_backend" / "llm_manager.py").read_text(encoding="utf-8")
         self.assertIn("with file_lock(LLM_CONFIG_FILE):", source)
 
 

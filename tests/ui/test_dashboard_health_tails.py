@@ -1,4 +1,4 @@
-"""看板健康度与记忆渲染（`r20_backend/dashboard_payload/health.py`）残余分支收口测试 —— 第 348 刀。
+"""看板健康度与记忆渲染（`astra_backend/dashboard_payload/health.py`）残余分支收口测试 —— 第 348 刀。
 
 本模块 178 行，负责心法渲染、记忆新鲜度标注、AI 决策健康度与跨所协调数据装配：
 - 心法降级读取（`load_trading_memory_md`）：渲染异常降级、传统 Markdown 读取与读取失败自愈；
@@ -15,7 +15,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from r20_backend.dashboard_payload.health import (
+from astra_backend.dashboard_payload.health import (
     _load_cross_venue_data,
     _memory_freshness_note,
     build_ai_health,
@@ -25,7 +25,7 @@ from r20_backend.dashboard_payload.health import (
 
 class DashboardHealthTailsTests(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(prefix="r20_dashboard_health_tails_")
+        self.tmp = tempfile.TemporaryDirectory(prefix="astra_dashboard_health_tails_")
         self.addCleanup(self.tmp.cleanup)
         self.tmp_path = Path(self.tmp.name)
         self.mem_file = self.tmp_path / "trading_memory.md"

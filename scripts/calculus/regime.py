@@ -12,7 +12,7 @@ from __future__ import annotations
 import math
 from typing import Any, Dict, List, Sequence
 
-from r20_backend.math_utils import safe_float as _shared_safe_float
+from astra_backend.math_utils import safe_float as _shared_safe_float
 
 try:
     from scripts.calculus.primitives import _finite
@@ -55,7 +55,7 @@ _REGIME_PRESET_MAP = {
 
 
 def _safe_float(val: Any, default: float = 0.0) -> float:
-    """薄壳：转调单一事实源（`r20_backend.math_utils.safe_float`，第一百五十刀）。
+    """薄壳：转调单一事实源（`astra_backend.math_utils.safe_float`，第一百五十刀）。
 
     私有名保留在本模块（调用点按局部名引用）。语义与原内联实现逐条等价：
     `math.isfinite(f)` 与 `f == f and abs(f) != inf` 同判；`None` 提前返回同判。

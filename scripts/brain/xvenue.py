@@ -7,7 +7,7 @@
 
 | 函数 | 作用 |
 |---|---|
-| `_xvenue_enabled` | 总开关（`R20_XVENUE_PROMPT`） |
+| `_xvenue_enabled` | 总开关（`ASTRA_XVENUE_PROMPT`） |
 | `_xv_record` | 场所级取数健康度累计（内存） |
 | `_xv_flush_health` | 健康度 + 逐币跨所快照落盘 `venue_health.json` |
 | `_get_xvenue_adapter` | 适配器获取（**测试的既定 mock 缝**） |
@@ -28,7 +28,7 @@
 | `venue_health_file` | `tests/venues/test_xvenue_prompt.py` 3 处 `patch.object(abt, "VENUE_HEALTH_FILE", …)` |
 | `health`（`_XV_HEALTH` 字典） | `tests/venues/test_xvenue_prompt.py:120` **直接断言** `abt._XV_HEALTH` —— 状态必须留在门面，由门面传入 |
 
-**通例**（同 `r20_backend/README.md` §5）：`pin_baseline_risk_env()` 的重载名单
+**通例**（同 `astra_backend/README.md` §5）：`pin_baseline_risk_env()` 的重载名单
 只有 `risk_constants` / `ai_factor_trader` / `ai_brain_trader`，**不含子模块** ——
 凡是在 import 期绑定的门面名，门面重载后就不再是同一个对象。
 
@@ -47,7 +47,7 @@ from typing import Any, Dict, List, Optional
 
 
 def _xvenue_enabled() -> bool:
-    return str(os.environ.get("R20_XVENUE_PROMPT", "1")).strip().lower() not in ("0", "off", "false")
+    return str(os.environ.get("ASTRA_XVENUE_PROMPT", "1")).strip().lower() not in ("0", "off", "false")
 
 
 # 跨所分歧自动标注阈值（US-003，依据 2026-09-09 价值研究实测：
@@ -92,7 +92,7 @@ def _xv_flush_health(packages: List[Dict[str, Any]], *, health, safe_float,
             from scripts.okx_runtime import current_environment
             okx_testnet = bool(current_environment().simulated)
         except Exception:
-            okx_testnet = str(os.environ.get("R20_OKX_ENV", "demo")).lower() == "demo"
+            okx_testnet = str(os.environ.get("ASTRA_OKX_ENV", "demo")).lower() == "demo"
         venues = {
             "okx": {
                 "ok": okx_ok,
@@ -110,7 +110,7 @@ def _xv_flush_health(packages: List[Dict[str, Any]], *, health, safe_float,
                 "failed": failed,
                 "latency_ms": v["latency"],
                 "avg_ms": round(sum(v["latency"].values()) / len(v["latency"])) if v["latency"] else 0,
-                "testnet": str(os.environ.get(f"R20_{venue.upper()}_TESTNET", "0")) == "1",
+                "testnet": str(os.environ.get(f"ASTRA_{venue.upper()}_TESTNET", "0")) == "1",
             }
         symbols: Dict[str, Any] = {}
         try:  # 逐币跨所快照（US-007 前端消费源）——纯附加，异常不影响健康度落盘
@@ -154,7 +154,7 @@ def _xv_flush_health(packages: List[Dict[str, Any]], *, health, safe_float,
 
 def _get_xvenue_adapter(venue: str):
     # 测试与故障注入缝：mock 此函数即可完全离线
-    from r20_backend.exchanges import get_adapter
+    from astra_backend.exchanges import get_adapter
     return get_adapter(venue)
 
 

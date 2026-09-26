@@ -30,7 +30,7 @@ def _pair(open_px, low, close):
 
 class BlackSwanSentinelFailClosedTest(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(prefix="r20-sentinel-")
+        self.tmp = tempfile.TemporaryDirectory(prefix="astra-sentinel-")
         self.addCleanup(self.tmp.cleanup)
         self.news = Path(self.tmp.name) / "news.json"
 

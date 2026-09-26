@@ -1,4 +1,4 @@
-"""策略指纹引擎：**身份只认身份字段、易变字段不进标识、恢复核对只核对"承诺过的"**（第 302 刀，开新面 r20_backend/policy/fingerprints.py）。
+"""策略指纹引擎：**身份只认身份字段、易变字段不进标识、恢复核对只核对"承诺过的"**（第 302 刀，开新面 astra_backend/policy/fingerprints.py）。
 
 这个模块是 B6 拆分里唯一**零直接测试引用**的（全仓 224 个模块扫描的结果），
 却承担着最关键的一件事：**把「策略身份」压成一个 16 位整包标识**，用于
@@ -32,7 +32,7 @@ if str(ROOT) not in sys.path:
 if str(ROOT / "scripts") not in sys.path:
     sys.path.insert(0, str(ROOT / "scripts"))
 
-from r20_backend.policy.fingerprints import (  # noqa: E402
+from astra_backend.policy.fingerprints import (  # noqa: E402
     _canon_council_config,
     _canon_evolution_memory,
     _canon_prompt_config,
@@ -358,7 +358,7 @@ class ExtractInterceptorsTests(unittest.TestCase):
         self.assertEqual(first["plugins_hash"], second["plugins_hash"])
 
     def test_lists_plugins_when_not_given(self):
-        import r20_backend.interceptor_manager as im
+        import astra_backend.interceptor_manager as im
         with patch.object(im, "list_plugins",
                           lambda create_if_missing=False: [{"filename": "a.py",
                                                             "enabled": True,
@@ -368,7 +368,7 @@ class ExtractInterceptorsTests(unittest.TestCase):
         self.assertEqual(fp["enabled_plugins"], ["a.py"])
 
     def test_list_failure_yields_empty_pipeline(self):
-        import r20_backend.interceptor_manager as im
+        import astra_backend.interceptor_manager as im
         with patch.object(im, "list_plugins", side_effect=OSError("no dir")):
             fp = extract_interceptors_fingerprint(Path("/nonexistent"),
                                                   plugins_dir=self.plugins_dir)
@@ -432,7 +432,7 @@ class ExtractCouncilTests(unittest.TestCase):
         self.assertEqual(fp["active_roles"], ["y"])
 
     def test_loads_config_when_not_given(self):
-        import r20_backend.council_manager as cm
+        import astra_backend.council_manager as cm
         with patch.object(cm, "load_council_config",
                           lambda: {"enabled": True, "roles": {"r": {"enabled": True}}}):
             fp = extract_council_fingerprint()
@@ -440,7 +440,7 @@ class ExtractCouncilTests(unittest.TestCase):
         self.assertEqual(fp["active_roles"], ["r"])
 
     def test_load_failure_yields_documented_default(self):
-        import r20_backend.council_manager as cm
+        import astra_backend.council_manager as cm
         with patch.object(cm, "load_council_config", side_effect=OSError("no config")):
             fp = extract_council_fingerprint()
         self.assertFalse(fp["enabled"])

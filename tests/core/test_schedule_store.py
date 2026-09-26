@@ -19,7 +19,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from r20_backend import schedule_store as SS
+from astra_backend import schedule_store as SS
 
 
 class _Base(unittest.TestCase):
@@ -29,7 +29,7 @@ class _Base(unittest.TestCase):
         return started
 
     def setUp(self):
-        self.tmp = Path(tempfile.mkdtemp(prefix="r20-sched-"))
+        self.tmp = Path(tempfile.mkdtemp(prefix="astra-sched-"))
         self.addCleanup(shutil.rmtree, self.tmp, True)
         self.file = self.tmp / "data" / "notification_schedule.json"
         self._start(mock.patch.object(SS, "SCHEDULE_FILE", self.file))

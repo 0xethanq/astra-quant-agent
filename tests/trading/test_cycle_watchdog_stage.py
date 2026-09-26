@@ -60,7 +60,7 @@ class _Audit:
 
 class WatchdogStageTest(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(prefix="r20-wd-stage-")
+        self.tmp = tempfile.TemporaryDirectory(prefix="astra-wd-stage-")
         self.addCleanup(self.tmp.cleanup)
         self.state = Path(self.tmp.name) / "watchdog.json"
         self.actions = []
@@ -70,7 +70,7 @@ class WatchdogStageTest(unittest.TestCase):
         params = dict(xv_positions_by_venue={"gate": [{"inst_id": "BTC_USDT"}]},
                       executed_actions=self.actions, venue_registry=object(),
                       current_environment=lambda: type("E", (), {"mode": "demo"})(),
-                      R20_VENUE_PROTECTION_WATCHDOG=True, audit_cross_venue_protection=audit)
+                      ASTRA_VENUE_PROTECTION_WATCHDOG=True, audit_cross_venue_protection=audit)
         params.update(kw)
         with redirect_stdout(self.printed):
             return venue_protection_watchdog_stage(**params)
@@ -78,7 +78,7 @@ class WatchdogStageTest(unittest.TestCase):
     # ── 闸门与前置 ────────────────────────────────────────────────────
     def test_gate_off_is_zero_work(self):
         audit = _Audit(would=[GAP])
-        out = self._run(audit, R20_VENUE_PROTECTION_WATCHDOG=False)
+        out = self._run(audit, ASTRA_VENUE_PROTECTION_WATCHDOG=False)
         self.assertIsNone(out)
         self.assertEqual(audit.calls, [], "总闸没开 ⇒ 零网络零写单（不许偷偷判定）")
         self.assertEqual(self.actions, [])

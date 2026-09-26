@@ -33,8 +33,8 @@ for _p in (str(ROOT), str(ROOT / "scripts")):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-import r20_backend.council_manager as council_manager  # noqa: E402
-import r20_backend.file_locks as file_locks  # noqa: E402
+import astra_backend.council_manager as council_manager  # noqa: E402
+import astra_backend.file_locks as file_locks  # noqa: E402
 from scripts.brain import dispatch  # noqa: E402
 
 
@@ -193,7 +193,7 @@ class CouncilDisabledTests(_Harness, unittest.TestCase):
         self.assertEqual(calls, [])
 
     def test_unreachable_council_module_degrades_to_off(self):
-        with patch.dict(sys.modules, {"r20_backend.council_manager": None}):
+        with patch.dict(sys.modules, {"astra_backend.council_manager": None}):
             out = self._run()
         self.assertEqual(out["kw"]["council_status"]["ran"], False)
 

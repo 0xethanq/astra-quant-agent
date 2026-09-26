@@ -1,4 +1,4 @@
-# R20 观测栈（Prometheus + Grafana）—— 可观测性 Phase 1 消费侧
+# ASTRA 观测栈（Prometheus + Grafana）—— 可观测性 Phase 1 消费侧
 #
 # 配套文件：
 #   · `prometheus.yml`       抓取配置（指标端点走管理员鉴权）
@@ -11,15 +11,15 @@
 services:
   prometheus:
     image: prom/prometheus:v2.53.0
-    container_name: r20-prometheus
+    container_name: astra-prometheus
     restart: unless-stopped
     ports:
       - "127.0.0.1:9090:9090"
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./alerts.yml:/etc/prometheus/alerts.yml:ro
-      # 令牌文件（内容 = 后端 R20_ADMIN_TOKEN）。宿主机上 `chmod 600`，绝不入库。
-      - ${R20_METRICS_TOKEN_FILE:-./metrics_token}:/etc/r20/metrics_token:ro
+      # 令牌文件（内容 = 后端 ASTRA_ADMIN_TOKEN）。宿主机上 `chmod 600`，绝不入库。
+      - ${ASTRA_METRICS_TOKEN_FILE:-./metrics_token}:/etc/astra/metrics_token:ro
       - prometheus-data:/prometheus
     extra_hosts:
       # 让容器能抓到宿主机上的后端（Linux 需要这一行；Docker Desktop 自带 host.docker.internal）
@@ -31,7 +31,7 @@ services:
 
   grafana:
     image: grafana/grafana:11.1.0
-    container_name: r20-grafana
+    container_name: astra-grafana
     restart: unless-stopped
     depends_on:
       - prometheus
@@ -39,12 +39,12 @@ services:
       - "127.0.0.1:3000:3000"
     environment:
       # 默认口令仅用于本机首登，务必改掉（这里刻意不写死真实口令）
-      GF_SECURITY_ADMIN_USER: ${R20_GRAFANA_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${R20_GRAFANA_PASSWORD:-changeme-on-first-login}
+      GF_SECURITY_ADMIN_USER: ${ASTRA_GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${ASTRA_GRAFANA_PASSWORD:-changeme-on-first-login}
       GF_USERS_ALLOW_SIGN_UP: "false"
     volumes:
       # 面板 JSON 与 provider.yml **分开放**：Grafana 会解析 provider 目录下的每个文件
-      - ./grafana-dashboard.json:/var/lib/grafana/dashboards/r20.json:ro
+      - ./grafana-dashboard.json:/var/lib/grafana/dashboards/astra.json:ro
       - ./grafana-dashboards.yml:/etc/grafana/provisioning/dashboards/provider.yml:ro
       - ./grafana-datasource.yml:/etc/grafana/provisioning/datasources/prometheus.yml:ro
       - grafana-data:/var/lib/grafana

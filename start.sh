@@ -52,4 +52,4 @@ fi
 
 # 5. Start Backend Engine
 echo "✨ Launching AstraQuant on http://0.0.0.0:8080 ..."
-exec python3 -m uvicorn r20_backend.app:app --host 0.0.0.0 --port 8080
+exec python3 -m uvicorn astra_backend.app:app --host 0.0.0.0 --port 8080

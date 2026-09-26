@@ -17,8 +17,8 @@ import inspect
 import unittest
 from unittest.mock import patch
 
-import r20_backend.exchanges.okx as okx_mod
-from r20_backend.exchanges.okx import OKXAdapter, interpret_position_mode
+import astra_backend.exchanges.okx as okx_mod
+from astra_backend.exchanges.okx import OKXAdapter, interpret_position_mode
 
 
 class InterpretPositionModeTest(unittest.TestCase):

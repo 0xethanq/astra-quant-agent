@@ -1,6 +1,6 @@
 """载荷瘦身：**省略必须显式留痕，缺失不得代填**（第二百四十刀）。
 
-`r20_backend/dashboard_payload/slim.py` 是**纯函数**（不改入参、不读文件、不碰全局）。
+`astra_backend/dashboard_payload/slim.py` 是**纯函数**（不改入参、不读文件、不碰全局）。
 
 | 语义 | 口径 |
 |---|---|
@@ -24,8 +24,8 @@
 import copy
 import unittest
 
-from r20_backend.dashboard_payload import slim as S
-from r20_backend.dashboard_payload.ledger_view import LEDGER_TRADES_MAX
+from astra_backend.dashboard_payload import slim as S
+from astra_backend.dashboard_payload.ledger_view import LEDGER_TRADES_MAX
 
 
 def _history(n, prompt=None):

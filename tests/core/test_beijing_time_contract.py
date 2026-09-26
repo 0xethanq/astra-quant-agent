@@ -1,7 +1,7 @@
 """Timezone regression checks: no trading, real network, or production data writes.
 
 TZ-independent by construction: every expectation is a fixed input -> fixed output
-pair; production parsing anchors on r20_backend.time_utils.BJ_TZ (fixed +08:00),
+pair; production parsing anchors on astra_backend.time_utils.BJ_TZ (fixed +08:00),
 never on the host timezone.
 """
 import sys
@@ -17,7 +17,7 @@ for _p in (str(ROOT), str(ROOT / "scripts")):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-from r20_backend.time_utils import parse_beijing, beijing_day, beijing_text
+from astra_backend.time_utils import parse_beijing, beijing_day, beijing_text
 
 
 class BeijingTimeContractTests(unittest.TestCase):
@@ -51,7 +51,7 @@ class BeijingTimeContractTests(unittest.TestCase):
         self.assertEqual(beijing_text(0), '1970-01-01 08:00:00')
 
     def test_gateway_legacy_and_utc_last_run_normalization(self):
-        from r20_gateway.scheduler import GatewayScheduler
+        from astra_gateway.scheduler import GatewayScheduler
         from unittest.mock import Mock
         scheduler = GatewayScheduler(Mock())
         try:

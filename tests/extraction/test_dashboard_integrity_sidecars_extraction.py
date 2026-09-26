@@ -1,4 +1,4 @@
-"""`r20_backend/dashboard_payload/integrity_sidecars.py`（B3 第二十七刀）回归。
+"""`astra_backend/dashboard_payload/integrity_sidecars.py`（B3 第二十七刀）回归。
 
 ## 这个测试在守什么
 
@@ -30,7 +30,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from r20_backend.dashboard_payload.integrity_sidecars import (
+from astra_backend.dashboard_payload.integrity_sidecars import (
     AI_CONSECUTIVE_FAILURE_THRESHOLD,
     LEDGER_STALE_SECONDS,
     REASON_TRUNCATE,
@@ -40,7 +40,7 @@ from r20_backend.dashboard_payload.integrity_sidecars import (
 )
 
 ROOT = Path(__file__).resolve().parents[2]
-MODULE = ROOT / "r20_backend" / "dashboard_payload" / "integrity_sidecars.py"
+MODULE = ROOT / "astra_backend" / "dashboard_payload" / "integrity_sidecars.py"
 
 BJ = datetime.timezone(datetime.timedelta(hours=8))
 
@@ -379,7 +379,7 @@ class OrderTest(_TmpDir):
 
 
 class WiringTest(unittest.TestCase):
-    APP = ROOT / "r20_backend" / "dashboard_cache.py"
+    APP = ROOT / "astra_backend" / "dashboard_cache.py"
 
     def test_impl_in_submodule_not_facade(self):
         app_src = self.APP.read_text(encoding="utf-8")
@@ -415,9 +415,9 @@ class WiringTest(unittest.TestCase):
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 for a in node.names:
-                    self.assertFalse(a.name.startswith("r20_backend.dashboard_cache"))
+                    self.assertFalse(a.name.startswith("astra_backend.dashboard_cache"))
             elif isinstance(node, ast.ImportFrom):
-                self.assertFalse((node.module or "").startswith("r20_backend.dashboard_cache"))
+                self.assertFalse((node.module or "").startswith("astra_backend.dashboard_cache"))
 
     def test_constants_are_named_not_magic(self):
         """2700 / 2 / 120 三个魔数须具名 —— 它们是行为契约的一部分。"""

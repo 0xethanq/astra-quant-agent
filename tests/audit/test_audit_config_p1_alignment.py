@@ -35,7 +35,7 @@ def setUpModule():
     本文件把**线上**提示词库抄进沙箱，核对线上布局与契约对齐 —— 有意的线上守卫。
 
     只读、不改；声明在此是为了把「依赖线上配置内容」从**静默**变成**可审计**
-    （守卫见 `tests/__init__.py`；`R20_TESTS_STRICT_READS=1` 下未声明的读会报错）。
+    （守卫见 `tests/__init__.py`；`ASTRA_TESTS_STRICT_READS=1` 下未声明的读会报错）。
     """
     global _READ_SCOPE
     from tests import allow_real_data_reads
@@ -59,12 +59,12 @@ class _SandboxBase(unittest.TestCase):
         # 路由走 `from scripts.ai_brain_trader import ...`（与顶层 ai_brain_trader 是
         # 两个模块实例）→ 两个实例都必须先导入，隔离才会同时改到它们的 data/ 路径。
         import scripts.ai_brain_trader  # noqa: F401
-        import r20_backend.app  # noqa: F401（连带 routers/dependencies：覆盖层路径也在其中）
-        import r20_backend.settings_store  # noqa: F401
+        import astra_backend.app  # noqa: F401（连带 routers/dependencies：覆盖层路径也在其中）
+        import astra_backend.settings_store  # noqa: F401
         from tests.config_sandbox import isolate_config
         self.root = isolate_config(self)
-        import r20_backend.settings_store as settings_store
-        self.temp = tempfile.TemporaryDirectory(prefix="r20-b2-")
+        import astra_backend.settings_store as settings_store
+        self.temp = tempfile.TemporaryDirectory(prefix="astra-b2-")
         self.addCleanup(self.temp.cleanup)
         self.env_file = Path(self.temp.name) / ".env"
         self.env_file.write_text("", encoding="utf-8")
@@ -121,36 +121,36 @@ class PromptRiskBudgetAlignmentTests(_SandboxBase):
     def test_all_20_knobs_are_visible_to_the_model(self):
         """覆盖扫描：全部旋钮（含此前完全不可见的 5 个）都必须在小节里露面。
 
-        批4 P2-1 新增第 20 个旋钮 R20_MAX_TOTAL_EXPOSURE_USDT（跨所同向敞口上限），
+        批4 P2-1 新增第 20 个旋钮 ASTRA_MAX_TOTAL_EXPOSURE_USDT（跨所同向敞口上限），
         它此前只在 MANAGED_KEYS 里、零消费者；现在执行层真拒绝且提示词同源披露。"""
         text = self.brain.build_risk_budget_text(4989.41)
         required = {
-            "R20_MAX_MARGIN_EQUITY_RATIO": "强信号单笔保证金上限",
-            "R20_RISK_PER_TRADE_RATIO": "单笔最大可承受亏损",
-            "R20_MAX_SAME_DIRECTION_POSITIONS": "全系统同向持仓上限",
-            "R20_MAX_CONCURRENT_POSITIONS": "全系统并发持仓上限",
-            "R20_PORTFOLIO_RISK_BUDGET_USDT": "组合风险总预算",
-            "R20_SINGLE_ASSET_EQUITY_RATIO": f"可用余额 {self.rc.SINGLE_ASSET_EQUITY_RATIO:.0%}",
-            "R20_MAX_SINGLE_ASSET_MARGIN_USDT": f"{self.rc.MAX_SINGLE_ASSET_MARGIN:g} 绝对封顶",
-            "R20_MAX_LEVERAGE": f"{self.rc.MAX_LEVERAGE:g}x",
-            "R20_MIN_LEVERAGE": f"{self.rc.MIN_LEVERAGE:g}x",
-            "R20_MIN_RISK_REWARD": f"{self.rc.MIN_RISK_REWARD_RATIO:.1f}",
-            "R20_MIN_ENTRY_CONFIDENCE": f"{self.rc.MIN_ENTRY_CONFIDENCE:g}%",
-            "R20_MAX_DAILY_LOSS_USDT": f"{self.rc.MAX_DAILY_LOSS_USDT:g} 绝对封顶",
-            "R20_DAILY_LOSS_EQUITY_RATIO": f"可用余额 {self.rc.DAILY_LOSS_EQUITY_RATIO:.0%}",
-            "R20_TIME_STOP_HOURS": f"{self.rc.TIME_STOP_HOURS:g} 小时",
-            "R20_TIME_STOP_ATR_BAND": f"±{self.rc.TIME_STOP_ATR_BAND:.0%} ATR",
-            "R20_STOP_COOLDOWN_MINUTES": f"{self.rc.STOP_COOLDOWN_MINUTES} 分钟",
-            "R20_MAX_SCALE_IN_COUNT": "金字塔加仓",
-            "R20_MIN_SCALE_IN_PROFIT_RATIO": f"{self.rc.MIN_SCALE_IN_PROFIT_RATIO:.1%}",
-            "R20_MIN_SCALE_IN_CONFIDENCE": f"{self.rc.MIN_SCALE_IN_CONFIDENCE:g}%",
-            "R20_MAX_TOTAL_EXPOSURE_USDT": "跨所同向敞口上限",
-            "R20_SCALE_OUT_ENABLED": "分批止盈机制",
-            "R20_SCALE_OUT_RATIO": f"{self.rc.SCALE_OUT_RATIO:.0%}",
-            "R20_SCALE_OUT_TRIGGER_ATR": f"{self.rc.SCALE_OUT_TRIGGER_ATR:g}x ATR",
-            "R20_MAX_RISK_REWARD": f"上限 {self.rc.MAX_RISK_REWARD_RATIO:.1f}",
-            "R20_STOP_LOSS_ATR_MULT": f"基准止损 {self.rc.STOP_LOSS_ATR_MULT:g}x 1H ATR",
-            "R20_MAX_TAKE_PROFIT_ATR": f"最大止盈宽度 ≤ {self.rc.MAX_TAKE_PROFIT_ATR:g}x 1H ATR",
+            "ASTRA_MAX_MARGIN_EQUITY_RATIO": "强信号单笔保证金上限",
+            "ASTRA_RISK_PER_TRADE_RATIO": "单笔最大可承受亏损",
+            "ASTRA_MAX_SAME_DIRECTION_POSITIONS": "全系统同向持仓上限",
+            "ASTRA_MAX_CONCURRENT_POSITIONS": "全系统并发持仓上限",
+            "ASTRA_PORTFOLIO_RISK_BUDGET_USDT": "组合风险总预算",
+            "ASTRA_SINGLE_ASSET_EQUITY_RATIO": f"可用余额 {self.rc.SINGLE_ASSET_EQUITY_RATIO:.0%}",
+            "ASTRA_MAX_SINGLE_ASSET_MARGIN_USDT": f"{self.rc.MAX_SINGLE_ASSET_MARGIN:g} 绝对封顶",
+            "ASTRA_MAX_LEVERAGE": f"{self.rc.MAX_LEVERAGE:g}x",
+            "ASTRA_MIN_LEVERAGE": f"{self.rc.MIN_LEVERAGE:g}x",
+            "ASTRA_MIN_RISK_REWARD": f"{self.rc.MIN_RISK_REWARD_RATIO:.1f}",
+            "ASTRA_MIN_ENTRY_CONFIDENCE": f"{self.rc.MIN_ENTRY_CONFIDENCE:g}%",
+            "ASTRA_MAX_DAILY_LOSS_USDT": f"{self.rc.MAX_DAILY_LOSS_USDT:g} 绝对封顶",
+            "ASTRA_DAILY_LOSS_EQUITY_RATIO": f"可用余额 {self.rc.DAILY_LOSS_EQUITY_RATIO:.0%}",
+            "ASTRA_TIME_STOP_HOURS": f"{self.rc.TIME_STOP_HOURS:g} 小时",
+            "ASTRA_TIME_STOP_ATR_BAND": f"±{self.rc.TIME_STOP_ATR_BAND:.0%} ATR",
+            "ASTRA_STOP_COOLDOWN_MINUTES": f"{self.rc.STOP_COOLDOWN_MINUTES} 分钟",
+            "ASTRA_MAX_SCALE_IN_COUNT": "金字塔加仓",
+            "ASTRA_MIN_SCALE_IN_PROFIT_RATIO": f"{self.rc.MIN_SCALE_IN_PROFIT_RATIO:.1%}",
+            "ASTRA_MIN_SCALE_IN_CONFIDENCE": f"{self.rc.MIN_SCALE_IN_CONFIDENCE:g}%",
+            "ASTRA_MAX_TOTAL_EXPOSURE_USDT": "跨所同向敞口上限",
+            "ASTRA_SCALE_OUT_ENABLED": "分批止盈机制",
+            "ASTRA_SCALE_OUT_RATIO": f"{self.rc.SCALE_OUT_RATIO:.0%}",
+            "ASTRA_SCALE_OUT_TRIGGER_ATR": f"{self.rc.SCALE_OUT_TRIGGER_ATR:g}x ATR",
+            "ASTRA_MAX_RISK_REWARD": f"上限 {self.rc.MAX_RISK_REWARD_RATIO:.1f}",
+            "ASTRA_STOP_LOSS_ATR_MULT": f"基准止损 {self.rc.STOP_LOSS_ATR_MULT:g}x 1H ATR",
+            "ASTRA_MAX_TAKE_PROFIT_ATR": f"最大止盈宽度 ≤ {self.rc.MAX_TAKE_PROFIT_ATR:g}x 1H ATR",
         }
         self.assertEqual(set(required), set(self.rc.RISK_ENV_KEYS),
                          f"覆盖表必须覆盖全部 {len(self.rc.RISK_ENV_KEYS)} 个旋钮")
@@ -166,7 +166,7 @@ class PromptRiskBudgetAlignmentTests(_SandboxBase):
         """
         import inspect
         import ai_factor_trader as trader
-        from r20_backend.execution import sizing
+        from astra_backend.execution import sizing
         for name in ("effective_daily_loss_limit", "effective_single_asset_margin"):
             rc_fn = getattr(self.rc, name)
             self.assertTrue(rc_fn.__module__.endswith("risk_constants"), rc_fn.__module__)
@@ -185,7 +185,7 @@ class PromptRiskBudgetAlignmentTests(_SandboxBase):
         trader_src = combined("scripts/ai_factor_trader.py", pkg_name="trader")
         self.assertNotIn("def effective_daily_loss_limit", trader_src,
                          "本地拷贝复活 → 又是两份 min() 公式漂移之源")
-        sizing_src = (ROOT / "r20_backend" / "execution" / "sizing.py").read_text(encoding="utf-8")
+        sizing_src = (ROOT / "astra_backend" / "execution" / "sizing.py").read_text(encoding="utf-8")
         self.assertNotIn("def effective_daily_loss_limit", sizing_src)
 
         # 批6：两个导入名必须是同一个模块对象（曾经是两个各自读一次 .env 的实例）
@@ -335,7 +335,7 @@ class AdminOverrideReachesModelTests(_SandboxBase):
     def test_admin_api_effective_prompt_uses_same_path(self):
         """接口返回的 effective_prompt 必须等于推演时用的那条（否则 UI 在骗人）。"""
         # 第九十六刀：`prompt_override` 现住 strategy/prompts.py ⇒ patch/调用都指向它
-        from r20_backend.routers.strategy import prompts as strategy_prompts
+        from astra_backend.routers.strategy import prompts as strategy_prompts
         with patch.object(strategy_prompts, "require_admin_header", lambda *a, **k: {"username": "t"}), \
              patch.object(strategy_prompts, "refresh_settings", lambda: None):
             payload = strategy_prompts.prompt_override(None, None)
@@ -346,17 +346,17 @@ class AdminOverrideReachesModelTests(_SandboxBase):
 
 
 class PortfolioBudgetHonestyTests(_SandboxBase):
-    """P1-6：`R20_PORTFOLIO_RISK_BUDGET_USDT=0` = 引擎不封顶 → UI 不得编出 4800 的总闸。"""
+    """P1-6：`ASTRA_PORTFOLIO_RISK_BUDGET_USDT=0` = 引擎不封顶 → UI 不得编出 4800 的总闸。"""
 
     @classmethod
     def setUpClass(cls):
-        # 同 test_venue_accounts_endpoint：r20_backend.dashboard_cache 导入即点火 2s 后台线程（真调 OKX）
+        # 同 test_venue_accounts_endpoint：astra_backend.dashboard_cache 导入即点火 2s 后台线程（真调 OKX）
         # → 本类期间钉死循环体。
         # ⚠️ 第一百二十五刀：**必须还原**。此前不还原 ⇒ 整个测试进程里
         # `dashboard_cache.update_cache_cycle` 都是 no-op，任何真调它的用例
         # （如 `tests/ui/test_protection_gap_reaches_data_health.py`）只会拿到空
         # `CACHE_DATA`（整包跑 KeyError('data_health')、单跑通过 —— 实测踩到）。
-        import r20_backend.dashboard_cache as dashboard_app
+        import astra_backend.dashboard_cache as dashboard_app
         dashboard_app.stop_dashboard_background_worker()
         cls._orig_update_cache_cycle = dashboard_app.update_cache_cycle
         dashboard_app.update_cache_cycle = lambda *a, **k: None
@@ -369,10 +369,10 @@ class PortfolioBudgetHonestyTests(_SandboxBase):
 
     def setUp(self):
         super().setUp()
-        self._saved = os.environ.pop("R20_PORTFOLIO_RISK_BUDGET_USDT", None)
+        self._saved = os.environ.pop("ASTRA_PORTFOLIO_RISK_BUDGET_USDT", None)
         # 预留层管理器会缓存首个（沙箱）SQLite 路径，前序测试清理临时目录后连接即失效
         # （全量套件里报 "unable to open database file"）→ 本类只测预算口径，直接打桩。
-        import r20_backend.risk_reservation as reservation
+        import astra_backend.risk_reservation as reservation
         stub = type("_Mgr", (), {
             "gross_exposure": lambda self, env: 0.0,
             "total_reserved_by_venue": lambda self, env: {},
@@ -382,13 +382,13 @@ class PortfolioBudgetHonestyTests(_SandboxBase):
 
     def tearDown(self):
         if self._saved is None:
-            os.environ.pop("R20_PORTFOLIO_RISK_BUDGET_USDT", None)
+            os.environ.pop("ASTRA_PORTFOLIO_RISK_BUDGET_USDT", None)
         else:
-            os.environ["R20_PORTFOLIO_RISK_BUDGET_USDT"] = self._saved
+            os.environ["ASTRA_PORTFOLIO_RISK_BUDGET_USDT"] = self._saved
         super().tearDown()
 
     def test_unconfigured_budget_reports_null_not_fabricated(self):
-        os.environ.pop("R20_PORTFOLIO_RISK_BUDGET_USDT", None)
+        os.environ.pop("ASTRA_PORTFOLIO_RISK_BUDGET_USDT", None)
         row = self.dashboard._load_portfolio_risk_data()
         self.assertEqual(row.get("status"), "ok", f"预算行读取失败：{row.get('error')}")
         self.assertEqual(row["budget_mode"], "uncapped")
@@ -400,13 +400,13 @@ class PortfolioBudgetHonestyTests(_SandboxBase):
         self.assertIn("reference_cap_usdt", row)
 
     def test_zero_budget_is_uncapped_too(self):
-        os.environ["R20_PORTFOLIO_RISK_BUDGET_USDT"] = "0"
+        os.environ["ASTRA_PORTFOLIO_RISK_BUDGET_USDT"] = "0"
         row = self.dashboard._load_portfolio_risk_data()
         self.assertEqual(row["budget_mode"], "uncapped")
         self.assertIsNone(row["total_budget_usdt"])
 
     def test_configured_budget_is_reported_truthfully(self):
-        os.environ["R20_PORTFOLIO_RISK_BUDGET_USDT"] = "4800"
+        os.environ["ASTRA_PORTFOLIO_RISK_BUDGET_USDT"] = "4800"
         row = self.dashboard._load_portfolio_risk_data()
         self.assertEqual(row["budget_mode"], "configured")
         self.assertEqual(row["total_budget_usdt"], 4800.0)

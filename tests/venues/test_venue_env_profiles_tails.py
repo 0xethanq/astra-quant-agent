@@ -1,4 +1,4 @@
-"""多所环境档与候选域探测（`r20_backend/exchanges/env_profiles.py`）残余分支收口测试 —— 第 347 刀。
+"""多所环境档与候选域探测（`astra_backend/exchanges/env_profiles.py`）残余分支收口测试 —— 第 347 刀。
 
 本模块 208 行，是多所平权环境档（live|demo|testnet|sandbox）与多域网络探测核心：
 - 场所可用环境枚举（`environments_of`）：查询场所支持的完整环境档；
@@ -13,7 +13,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from r20_backend.exchanges.env_profiles import (
+from astra_backend.exchanges.env_profiles import (
     _load_persisted,
     _persist,
     _probe_candidate,
@@ -23,13 +23,13 @@ from r20_backend.exchanges.env_profiles import (
 
 class VenueEnvProfilesTailsTests(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(prefix="r20_env_profiles_tails_")
+        self.tmp = tempfile.TemporaryDirectory(prefix="astra_env_profiles_tails_")
         self.addCleanup(self.tmp.cleanup)
         self.tmp_path = Path(self.tmp.name)
         self.test_profile_file = self.tmp_path / "pinned_venue_endpoints.json"
 
         # 严防测试向生产 data/pinned_venue_endpoints.json 写入
-        p = patch("r20_backend.exchanges.env_profiles.PROFILE_FILE", self.test_profile_file)
+        p = patch("astra_backend.exchanges.env_profiles.PROFILE_FILE", self.test_profile_file)
         p.start()
         self.addCleanup(p.stop)
 
@@ -49,7 +49,7 @@ class VenueEnvProfilesTailsTests(unittest.TestCase):
     # -------------------------------------------------------------------------
     # 2. 候选域网络探测 (_probe_candidate)
     # -------------------------------------------------------------------------
-    @patch("r20_backend.exchanges.env_profiles.urlopen")
+    @patch("astra_backend.exchanges.env_profiles.urlopen")
     def test_probe_candidate_success_200(self, mock_urlopen):
         # 状态码 200 返回毫秒延迟整数 (lines 115-125)
         mock_resp = MagicMock()
@@ -63,7 +63,7 @@ class VenueEnvProfilesTailsTests(unittest.TestCase):
         self.assertIsInstance(latency, int)
         self.assertGreaterEqual(latency, 1)
 
-    @patch("r20_backend.exchanges.env_profiles.urlopen")
+    @patch("astra_backend.exchanges.env_profiles.urlopen")
     def test_probe_candidate_non_200_returns_none(self, mock_urlopen):
         # 状态码非 200 返回 None (lines 122-123)
         mock_resp = MagicMock()
@@ -74,7 +74,7 @@ class VenueEnvProfilesTailsTests(unittest.TestCase):
 
         self.assertIsNone(_probe_candidate("https://api.gateio.ws"))
 
-    @patch("r20_backend.exchanges.env_profiles.urlopen")
+    @patch("astra_backend.exchanges.env_profiles.urlopen")
     def test_probe_candidate_exception_returns_none(self, mock_urlopen):
         # 网络异常/超时返回 None (line 127)
         mock_urlopen.side_effect = TimeoutError("DNS probe timeout")

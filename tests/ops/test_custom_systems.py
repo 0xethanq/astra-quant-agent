@@ -10,10 +10,10 @@ from pathlib import Path
 from unittest.mock import patch
 
 import scripts.prompt_library as prompts
-import r20_backend.backup_store as backups
+import astra_backend.backup_store as backups
 import scripts.backup_runtime as runtime
-from r20_gateway.scheduler import GatewayScheduler, backup_job_specs
-from r20_gateway.store import GatewayStore
+from astra_gateway.scheduler import GatewayScheduler, backup_job_specs
+from astra_gateway.store import GatewayStore
 
 BJ = timezone(timedelta(hours=8))
 
@@ -98,30 +98,30 @@ class BackupJobV2Tests(unittest.TestCase):
         source = Path(self.temp.name) / "sample.tar.gz"
         source.write_bytes(b"backup")
         with patch.dict(os.environ, {}, clear=False):
-            os.environ.pop("R20_TEST_BACKUP_KEY", None)
+            os.environ.pop("ASTRA_TEST_BACKUP_KEY", None)
             with self.assertRaises(RuntimeError):
-                runtime.encrypt_archive(source, "R20_TEST_BACKUP_KEY")
+                runtime.encrypt_archive(source, "ASTRA_TEST_BACKUP_KEY")
 
     def test_aes_gcm_round_trip_and_wrong_key_fails(self):
         source = Path(self.temp.name) / "sample.tar.gz"
         with tarfile.open(source, "w:gz") as archive:
             payload = Path(self.temp.name) / "hello.txt"; payload.write_text("hello")
             archive.add(payload, arcname="data/hello.txt")
-        with patch.dict(os.environ, {"R20_TEST_BACKUP_KEY": "correct-secret-value-123", "R20_WRONG_KEY": "wrong-secret-value-456"}):
-            encrypted = runtime.encrypt_archive(source, "R20_TEST_BACKUP_KEY")
-            verification = runtime.verify_archive(encrypted, runtime.calculate_sha256(encrypted), "R20_TEST_BACKUP_KEY")
+        with patch.dict(os.environ, {"ASTRA_TEST_BACKUP_KEY": "correct-secret-value-123", "ASTRA_WRONG_KEY": "wrong-secret-value-456"}):
+            encrypted = runtime.encrypt_archive(source, "ASTRA_TEST_BACKUP_KEY")
+            verification = runtime.verify_archive(encrypted, runtime.calculate_sha256(encrypted), "ASTRA_TEST_BACKUP_KEY")
             self.assertTrue(verification["valid"])
             self.assertEqual(verification["roots"], ["data"])
             with self.assertRaises(Exception):
-                runtime.verify_archive(encrypted, "", "R20_WRONG_KEY")
+                runtime.verify_archive(encrypted, "", "ASTRA_WRONG_KEY")
 
     def test_archive_excludes_admin_database(self):
         root = Path(self.temp.name) / "root"
         (root / "data").mkdir(parents=True)
         (root / "data" / "public.json").write_text("ok")
-        (root / "data" / "r20_admin.db").write_text("secret")
-        (root / "data" / "r20_backup_secrets.enc").write_text("ciphertext")
-        (root / "data" / ".r20_backup_secret_key").write_text("key")
+        (root / "data" / "astra_admin.db").write_text("secret")
+        (root / "data" / "astra_backup_secrets.enc").write_text("ciphertext")
+        (root / "data" / ".astra_backup_secret_key").write_text("key")
         old_root, old_backups = runtime.ROOT, runtime.BACKUPS
         runtime.ROOT, runtime.BACKUPS = root, root / "backups"
         try:
@@ -131,26 +131,26 @@ class BackupJobV2Tests(unittest.TestCase):
             with tarfile.open(archive) as handle:
                 names = handle.getnames()
             self.assertIn("data/public.json", names)
-            self.assertNotIn("data/r20_admin.db", names)
+            self.assertNotIn("data/astra_admin.db", names)
             self.assertFalse(any(name.endswith(".enc") or "secret_key" in name for name in names))
         finally:
             runtime.ROOT, runtime.BACKUPS = old_root, old_backups
 
     def test_backup_job_export_import_never_contains_secret_value(self):
         job = backups.list_jobs()[0]
-        job = backups.update_job(job["id"], {"encryption": {"enabled": True, "key_env": "R20_EXPORT_KEY"}})
+        job = backups.update_job(job["id"], {"encryption": {"enabled": True, "key_env": "ASTRA_EXPORT_KEY"}})
         exported = backups.export_job(job["id"])
         self.assertNotIn("secret-value", json.dumps(exported))
         imported = backups.import_job(exported, "导入副本")
         self.assertFalse(imported["enabled"])
-        self.assertEqual(imported["encryption"]["key_env"], "R20_EXPORT_KEY")
+        self.assertEqual(imported["encryption"]["key_env"], "ASTRA_EXPORT_KEY")
 
     def test_gateway_builds_one_spec_per_enabled_backup_job(self):
         first = backups.list_jobs()[0]
         backups.update_job(first["id"], {"schedule_times": ["02:00", "14:30"]})
         second = backups.create_job("第二任务")
         backups.update_job(second["id"], {"enabled": True, "schedule_times": ["03:15"]})
-        with patch("r20_gateway.scheduler.list_backup_jobs", side_effect=backups.list_jobs):
+        with patch("astra_gateway.scheduler.list_backup_jobs", side_effect=backups.list_jobs):
             specs = backup_job_specs()
         self.assertEqual(len(specs), 2)
         self.assertIn("14:30", specs[0].default_times)

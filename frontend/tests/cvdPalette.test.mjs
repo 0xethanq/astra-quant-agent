@@ -4,8 +4,8 @@
  * ## 为什么值得单独建一条闸
  *
  * `useTheme()` 里的 `setCvd()` 往 `<html>` 打 `data-cvd="true"`，`tokens.css` 的
- * `:root[data-cvd='true']` 换掉 6 个 `--r20-up… / --r20-down…`。而全站 188 处用的是
- * **旧名** `var(--up)` / `var(--down)` —— 它们靠一句别名 `--up: var(--r20-up)` 才跟得上。
+ * `:root[data-cvd='true']` 换掉 6 个 `--astra-up… / --astra-down…`。而全站 188 处用的是
+ * **旧名** `var(--up)` / `var(--down)` —— 它们靠一句别名 `--up: var(--astra-up)` 才跟得上。
  * **这句别名一断（比如有人把 `--up` 改成字面量颜色），色觉辅助就会静默失效**：
  * 开关还能点、`data-cvd` 也照打，但颜色一个都不变。这种「看起来在工作」的失效最难发现，
  * 批 103 之前没有任何判据盯着它。
@@ -18,8 +18,8 @@
  *
  * ## 判据做四件事
  *
- * 1. `--up/--down/--warn` 系列必须仍然**别名**到 `--r20-*`（机制不可断）；
- * 2. `--r20-up… / --r20-down…` 在基准调色板里定义了几个，CVD 块就得覆盖几个（不许半覆盖）；
+ * 1. `--up/--down/--warn` 系列必须仍然**别名**到 `--astra-*`（机制不可断）；
+ * 2. `--astra-up… / --astra-down…` 在基准调色板里定义了几个，CVD 块就得覆盖几个（不许半覆盖）；
  * 3. CVD 模式下「跌」与「警告」、「涨」与「警告」的 ΔE 必须 ≥ 25；
  * 4. CVD 的涨/跌色作为**图形**对卡片底色 ≥ 3:1（WCAG 1.4.11）。
  *
@@ -39,7 +39,7 @@ const TOKENS = path.resolve(import.meta.dirname, '..', 'src', 'styles', 'tokens.
 const CSS = readFileSync(TOKENS, 'utf8');
 
 /** 取某个选择器的声明块。⚠️ 必须**合并同名选择器的所有块**：
- *  基础令牌和 `--up: var(--r20-up)` 那组别名分别在 tokens.css 的两个 `:root { }` 里，
+ *  基础令牌和 `--up: var(--astra-up)` 那组别名分别在 tokens.css 的两个 `:root { }` 里，
  *  只读第一个会得到一堆「找不到」，判据会以看不懂的方式挂掉（第一版就是这样）。 */
 function block(selector) {
   const esc = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -91,17 +91,17 @@ const ROOT = decls(block(':root'));
 const DARK = decls(block(":root[data-theme='dark']"));
 const LIGHT = decls(block(":root[data-theme='light']"));
 
-const DARK_CARD = DARK['--r20-surface-1'] ?? '#151821';
+const DARK_CARD = DARK['--astra-surface-1'] ?? '#151821';
 
-test('语义色必须仍然别名到 --r20-*（别名一断，色觉辅助会静默失效）', () => {
-  // 全站 188 处用的是 var(--up)/var(--down)。它们必须继续指向 --r20-*，
+test('语义色必须仍然别名到 --astra-*（别名一断，色觉辅助会静默失效）', () => {
+  // 全站 188 处用的是 var(--up)/var(--down)。它们必须继续指向 --astra-*，
   // 否则 data-cvd 打上去了、颜色却一个都不变 —— 最难发现的那种坏法。
   for (const [legacy, target] of [
-    ['--up', '--r20-up'],
-    ['--up-bg', '--r20-up-bg'],
-    ['--down', '--r20-down'],
-    ['--down-bg', '--r20-down-bg'],
-    ['--warn', '--r20-warn'],
+    ['--up', '--astra-up'],
+    ['--up-bg', '--astra-up-bg'],
+    ['--down', '--astra-down'],
+    ['--down-bg', '--astra-down-bg'],
+    ['--warn', '--astra-warn'],
   ]) {
     assert.equal(
       ROOT[legacy],
@@ -112,7 +112,7 @@ test('语义色必须仍然别名到 --r20-*（别名一断，色觉辅助会静
 });
 
 test('CVD 调色板必须完整覆盖基准涨跌色（不许半覆盖）', () => {
-  const base = Object.keys(DARK).filter((k) => /^--r20-(up|down|warn)/.test(k));
+  const base = Object.keys(DARK).filter((k) => /^--astra-(up|down|warn)/.test(k));
   assert.ok(base.length >= 6, `基准涨跌令牌太少（${base.length}），测试可能失配`);
   for (const [name, blk] of [['暗色', CVD_DARK], ['浅色', CVD_LIGHT]]) {
     const missing = base.filter((k) => !(k in blk));
@@ -128,9 +128,9 @@ test('CVD 调色板必须完整覆盖基准涨跌色（不许半覆盖）', () =
 test('开了色觉辅助后，「跌」与「警告」仍必须分得开（批 103 修的 ΔE 20.0）', () => {
   const MIN = 25;
   for (const [name, blk] of [['暗色', CVD_DARK], ['浅色', CVD_LIGHT]]) {
-    const down = blk['--r20-down'];
-    const warn = blk['--r20-warn'];
-    const up = blk['--r20-up'];
+    const down = blk['--astra-down'];
+    const warn = blk['--astra-warn'];
+    const up = blk['--astra-up'];
     assert.ok(/^#/.test(down) && /^#/.test(warn), `${name}的 down/warn 必须是纯色值`);
     const dDown = deltaE(down, warn);
     const dUp = deltaE(up, warn);
@@ -158,9 +158,9 @@ test('色觉辅助色作为**文字**落在自己的淡色底上也要达 AA（�
   const over = (tint, bg) => [0, 1, 2].map((i) => tint[i] * tint[3] + bg[i] * (1 - tint[3]));
   const bad = [];
   for (const [key, bgKey, alphaKey] of [
-    ['--r20-up', null, '--r20-up-bg'],
-    ['--r20-down', null, '--r20-down-bg'],
-    ['--r20-warn', null, '--r20-warn-bg'],
+    ['--astra-up', null, '--astra-up-bg'],
+    ['--astra-down', null, '--astra-down-bg'],
+    ['--astra-warn', null, '--astra-warn-bg'],
   ]) {
     const fg = CVD_DARK[key];
     const bgDecl = CVD_DARK[alphaKey];
@@ -188,7 +188,7 @@ test('（记录，不断言）浅色主题的语义色淡底标签目前达不�
   //   CVD   —— 涨 3.46 / 跌 3.97 / 警告 3.86
   // 也就是说：**若将来要接通浅色主题，这套色得整体重算**，不是只补 CVD 那一档。
   // 这里只做存在性检查（值还在），避免哪天被误删后无人知晓这段结论。
-  for (const k of ['--r20-up', '--r20-down', '--r20-warn']) {
+  for (const k of ['--astra-up', '--astra-down', '--astra-warn']) {
     assert.ok(/^#/.test(LIGHT[k]), `浅色主题缺少 ${k}`);
     assert.ok(/^#/.test(CVD_LIGHT[k]), `浅色+CVD 缺少 ${k}`);
   }
@@ -196,7 +196,7 @@ test('（记录，不断言）浅色主题的语义色淡底标签目前达不�
 
 test('色觉辅助下的涨跌色，作为图形也要能看清（WCAG 1.4.11 非文本对比度 ≥3:1）', () => {
   for (const [name, blk, card] of [['暗色', CVD_DARK, DARK_CARD]]) {
-    for (const key of ['--r20-up', '--r20-down']) {
+    for (const key of ['--astra-up', '--astra-down']) {
       const r = contrast(blk[key], card);
       assert.ok(
         r >= 3,

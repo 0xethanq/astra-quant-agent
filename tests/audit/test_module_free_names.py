@@ -22,7 +22,7 @@ r"""全仓"未解析自由名"门（第一百一十九刀）。
 1. `scripts/brain/prompt.py`：`_resolve(name, lambda: NAME)` 是**有意**的接缝写法
    —— 惰性回退只在 `_g` 里没有该名时求值；`tests/llm/test_prompt_rendering_isolated.py`
    按 AST 抽取函数体隔离 exec，故必须容忍"名字只存在于门面"。
-2. `r20_backend/app.py`：那些名字位于 `if False:` 块内，是
+2. `astra_backend/app.py`：那些名字位于 `if False:` 块内，是
    `test_memory_routes_isolated` / `test_prompt_rendering_isolated` 的 **AST 锚点**，
    永不执行。
 
@@ -41,7 +41,7 @@ sys.path.insert(0, str(ROOT / "tests"))
 
 from _free_names_scan import free_names  # noqa: E402
 
-SCAN_ROOTS = ("scripts", "r20_backend", "r20_gateway", "plugins")   # 第 143 刀：dashboard/ 并入 r20_backend
+SCAN_ROOTS = ("scripts", "astra_backend", "astra_gateway", "plugins")   # 第 143 刀：dashboard/ 并入 astra_backend
 
 ALLOWLIST = {
     "scripts/brain/prompt.py": {
@@ -49,7 +49,7 @@ ALLOWLIST = {
         "MAX_SCALE_IN_COUNT", "MIN_LEVERAGE", "MIN_SCALE_IN_CONFIDENCE",
         "NEWS_SENTIMENT_FILE", "__version__", "_sl_atr_mult_for", "_xvenue_prompt_line",
     },
-    "r20_backend/app.py": {"apply_module_layout", "compile_modules", "prof", "sys_mods", "test_market"},
+    "astra_backend/app.py": {"apply_module_layout", "compile_modules", "prof", "sys_mods", "test_market"},
 }
 
 

@@ -37,7 +37,7 @@ SEED = {
 
 class CapabilityDetectionTests(unittest.TestCase):
     def setUp(self):
-        from r20_backend.llm_manager import _detect_capabilities
+        from astra_backend.llm_manager import _detect_capabilities
         self.detect = _detect_capabilities
 
     def test_text_only_family_not_marked_vision(self):
@@ -68,10 +68,10 @@ class LlmCredentialRotationTests(unittest.TestCase):
     def setUp(self):
         from tests.config_sandbox import isolate_config
         isolate_config(self)
-        import r20_backend.llm_manager as lm
-        import r20_backend.settings_store as ss
-        import r20_backend.config as cfg
-        import r20_gateway.secrets as sec
+        import astra_backend.llm_manager as lm
+        import astra_backend.settings_store as ss
+        import astra_backend.config as cfg
+        import astra_gateway.secrets as sec
         self.lm = lm
         self.tmp = tempfile.TemporaryDirectory()
         #  主动式 tripwire（替代旧 stat() 指纹比对）：旧实现比 stat() 含 mtime，
@@ -112,12 +112,12 @@ class LlmCredentialRotationTests(unittest.TestCase):
             else:
                 os.environ[k] = v
         self.lm.LLM_CONFIG_FILE = self._orig[0][0]
-        import r20_backend.settings_store as ss
+        import astra_backend.settings_store as ss
         ss.ENV_FILE = self._orig[1][0]
-        import r20_backend.config as cfg
+        import astra_backend.config as cfg
         cfg.load_dotenv = self._orig_ld
         cfg.load_encrypted_secrets = self._orig_les
-        import r20_gateway.secrets as sec
+        import astra_gateway.secrets as sec
         sec.save_secrets = self._orig_save
         self.tmp.cleanup()
         self.lm._atomic_write_json = self._orig_atomic
@@ -165,8 +165,8 @@ class LlmCredentialRotationTests(unittest.TestCase):
     def test_global_config_sync_updates_active_provider(self):
         """全局设置页改密钥（PUT /admin/config）必须同步到激活模型所属供应商。"""
         from fastapi.testclient import TestClient
-        from r20_backend.admin_auth import AdminAuthStore
-        import r20_backend.app as app_module
+        from astra_backend.admin_auth import AdminAuthStore
+        import astra_backend.app as app_module
         orig_auth = app_module.admin_auth
         app_module.admin_auth = AdminAuthStore(Path(self.tmp.name) / "admin.db")
         app_module.admin_auth.initialize_from_legacy("InitialAdmin123456")
@@ -174,7 +174,7 @@ class LlmCredentialRotationTests(unittest.TestCase):
             client = TestClient(app_module.app)
             login = client.post("/api/v1/admin/auth/login",
                                 json={"username": "admin", "password": "InitialAdmin123456"})
-            headers = {"X-R20-Session": login.json()["session_token"]}
+            headers = {"X-Astra-Session": login.json()["session_token"]}
             res = client.put("/api/v1/admin/config", headers=headers,
                              json={"llm_api_key": "sk-GLOBAL-NEW"})
             self.assertEqual(res.status_code, 200, res.text)

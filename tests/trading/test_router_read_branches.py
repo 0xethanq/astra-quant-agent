@@ -7,7 +7,7 @@
 import unittest
 from unittest.mock import patch
 
-from r20_backend import execution_router as router
+from astra_backend import execution_router as router
 
 
 class ExposureVenueReadBranchTest(unittest.TestCase):
@@ -17,9 +17,9 @@ class ExposureVenueReadBranchTest(unittest.TestCase):
         # ⚠️ 桩必须与真实现**同型**：`venue_credentials` 返回 `(api_key, secret_key)` 二元组，
         # 未配置是 `("", "")`（不是 `{}` —— 用空 dict 做桩会让 `all({})` 恒 True，
         # 于是"没凭证的场所"被误判成"有凭证"，我第一次就踩了这个坑）。
-        with patch("r20_backend.exchanges.registry.registered_venues",
+        with patch("astra_backend.exchanges.registry.registered_venues",
                    lambda: ["okx", "binance", "gate"]), \
-             patch("r20_backend.exchanges.registry.venue_credentials",
+             patch("astra_backend.exchanges.registry.venue_credentials",
                    lambda v, env: ("k", "s") if v == "binance" else ("", "")):
             counted, skipped = router._exposure_venues("okx", "demo")
         self.assertIn("binance", counted, f"凭证齐备的场所必须计入：{counted}")
@@ -29,9 +29,9 @@ class ExposureVenueReadBranchTest(unittest.TestCase):
     def test_credential_read_failure_is_skipped_not_treated_as_absent(self):
         def explode(_v, _env):
             raise RuntimeError("credential boom")
-        with patch("r20_backend.exchanges.registry.registered_venues",
+        with patch("astra_backend.exchanges.registry.registered_venues",
                    lambda: ["binance"]), \
-             patch("r20_backend.exchanges.registry.venue_credentials", explode):
+             patch("astra_backend.exchanges.registry.venue_credentials", explode):
             counted, skipped = router._exposure_venues("okx", "demo")
         self.assertEqual(counted, ["okx"])
         self.assertTrue(any("凭证读取失败" in s for s in skipped),
@@ -40,7 +40,7 @@ class ExposureVenueReadBranchTest(unittest.TestCase):
     def test_enumeration_failure_falls_back_to_this_venue_only(self):
         def explode():
             raise RuntimeError("registry boom")
-        with patch("r20_backend.exchanges.registry.registered_venues", explode):
+        with patch("astra_backend.exchanges.registry.registered_venues", explode):
             counted, skipped = router._exposure_venues("okx", "demo")
         self.assertEqual(counted, ["okx"], "枚举失败 ⇒ 退回只算本次场所")
         self.assertEqual(skipped, [], "退回不等于谎报：这里没有可留痕的场所")

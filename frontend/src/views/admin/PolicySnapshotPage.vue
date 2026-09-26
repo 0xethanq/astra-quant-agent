@@ -625,7 +625,7 @@ onMounted(() => {
 }
 .pol-unit-enter:hover {
   text-decoration: underline;
-  background-color: var(--r20-brand-bg);
+  background-color: var(--astra-brand-bg);
 }
 .pol-unit-note {
   grid-column: 2 / -1;

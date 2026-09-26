@@ -328,8 +328,8 @@ textarea.input {
 }
 .dsh-pill.brand {
   color: var(--brand);
-  border-color: var(--r20-brand-line);
-  background-color: var(--r20-brand-bg);
+  border-color: var(--astra-brand-line);
+  background-color: var(--astra-brand-bg);
 }
 .dsh-pill.active {
   color: var(--ds-color-text-primary);
@@ -348,7 +348,7 @@ textarea.input {
 }
 .dsh-status-dot.active {
   background-color: var(--up);
-  animation: r20-pulse-dot 2s ease-in-out infinite;
+  animation: astra-pulse-dot 2s ease-in-out infinite;
 }
 .dsh-status-dot.warn {
   background-color: var(--warn);
@@ -851,9 +851,9 @@ textarea.input {
     transparent 100%
   );
   background-size: 200% 100%;
-  animation: r20-skeleton 1.6s ease-in-out infinite;
+  animation: astra-skeleton 1.6s ease-in-out infinite;
 }
-@keyframes r20-skeleton {
+@keyframes astra-skeleton {
   from {
     background-position: 180% 0;
   }
@@ -1049,8 +1049,8 @@ kbd {
 /* 徽章补充色调 */
 .badge-accent {
   color: var(--brand);
-  border-color: var(--r20-brand-line);
-  background-color: var(--r20-brand-bg);
+  border-color: var(--astra-brand-line);
+  background-color: var(--astra-brand-bg);
 }
 .badge-info {
   color: var(--info);

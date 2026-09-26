@@ -53,7 +53,7 @@ def pyramiding_gate(*, is_long, f, pos_upl, pos_upl_ratio, pos_avg_px, curr_marg
     """五条加仓门禁；返回 `(allow_entry, is_scale_in)`。
 
     依赖全部入参 —— 门面会被 `pin_baseline_risk_env()` 原地重载，
-    子模块 import 期绑定风控常量会变成过期快照（`r20_backend/README.md` §5）。
+    子模块 import 期绑定风控常量会变成过期快照（`astra_backend/README.md` §5）。
     """
     # 调用方原本在分支入口置 `allow_entry = False` / `is_scale_in = False`；
     # 那段初始化随内联代码一起搬走，这里补回 —— 否则两条 else-if 链都没命中时

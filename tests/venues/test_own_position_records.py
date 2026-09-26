@@ -39,7 +39,7 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from r20_backend.execution import own_records as O  # noqa: E402
+from astra_backend.execution import own_records as O  # noqa: E402
 
 # ── 线上真实台账形状（逐字取自 data/trading_ledger.json，2026-09-20）─────────
 REAL_HOLDING_UNI = {"id": "holding_binance_UNI_空", "inst": "UNI", "venue": "binance",
@@ -185,7 +185,7 @@ class RouterPrecheckIntegrationTest(unittest.TestCase):
         self._read_scope.__enter__()
         self.addCleanup(self._read_scope.__exit__, None, None, None)
 
-        from r20_backend import execution_router
+        from astra_backend import execution_router
         from tests.test_gate_execution_router import _StubAdapter, _decision
         self.router = execution_router
         self.Adapter = _StubAdapter
@@ -213,7 +213,7 @@ class RouterPrecheckIntegrationTest(unittest.TestCase):
         # 复用本仓已校准过风控闸门的决策助手（手搓决策会先撞 risk_gate，测不到预检）
         decision = self._decision(asset="UNI", venue="gate")
         with patch.object(self.router, "OWN_POSITION_LEDGER_FILE", self._ledger_file(rows)), \
-                patch.dict(os.environ, {"R20_MAX_PRICE_CROSS_PCT": "0.05"}, clear=False):
+                patch.dict(os.environ, {"ASTRA_MAX_PRICE_CROSS_PCT": "0.05"}, clear=False):
             return self.router.open_protected_position(decision, adapter=ad, price_ref=79000.0), ad
 
     def test_own_position_is_reported_truthfully_and_still_refused(self):
@@ -239,7 +239,7 @@ class RouterPrecheckIntegrationTest(unittest.TestCase):
         decision = self._decision(asset="UNI", venue="gate")
         with patch.object(self.router, "OWN_POSITION_LEDGER_FILE",
                           os.path.join(self.tmp.name, "absent.json")), \
-                patch.dict(os.environ, {"R20_MAX_PRICE_CROSS_PCT": "0.05"}, clear=False):
+                patch.dict(os.environ, {"ASTRA_MAX_PRICE_CROSS_PCT": "0.05"}, clear=False):
             r = self.router.open_protected_position(
                 decision, adapter=ad, price_ref=79000.0,
                 own_position={"size_signed": 82.0, "side": "long"})

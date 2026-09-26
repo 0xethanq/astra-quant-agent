@@ -5,8 +5,8 @@
  *
  * `SettingsPopover` 里有「色盲友好配色」开关，打开后 `useTheme.applyCvd` 会给
  * `<html>` 打上 `data-cvd="true"`，`tokens.css` 据此把
- * `--r20-up` 从绿 `#48c78e` 换成蓝 `#7aa6ff`、`--r20-down` 从红 `#f07178`
- * 换成橙 `#e8923f`，并同步替换 `--r20-up-bg` / `--r20-up-line` 等成对令牌。
+ * `--astra-up` 从绿 `#48c78e` 换成蓝 `#7aa6ff`、`--astra-down` 从红 `#f07178`
+ * 换成橙 `#e8923f`，并同步替换 `--astra-up-bg` / `--astra-up-line` 等成对令牌。
  *
  * ⚠️ 上行蓝在**批 105** 由 `#6799fe` 提亮为 `#7aa6ff`：全站回归审计抓到
  * `/news` 的「做多」11px 小标签只有 **4.40:1**（AA 要 4.5）—— 语义色除了铺在卡片上，
@@ -25,7 +25,7 @@
  * }
  * ```
  *
- * `rgba(72,199,142)` 与 `--r20-up`（`#48c78e`）**色相完全相同** —— 深色主题下
+ * `rgba(72,199,142)` 与 `--astra-up`（`#48c78e`）**色相完全相同** —— 深色主题下
  * 肉眼看不出区别，所以这个缺陷在默认主题里是隐形的。但开启 CVD 后前景变蓝、
  * 底与边仍是绿，得到「蓝字配绿底」；`--down` 一侧同理得到「橙字配红底」。
  *
@@ -122,8 +122,8 @@ test('CVD 开关必须仍然可达（本闸的前提）', () => {
     'tokens.css 缺少深色 CVD 令牌覆盖块',
   );
   // 值被批 105 调整过（AA 对比度），见文件头 ⚠️；改动前请先读 cvdPalette.test.mjs 的那条判据。
-  assert.match(tokens, /--r20-up:\s*#7aa6ff/, 'CVD 模式未把上行色改为蓝（批 105 提亮后的值）');
-  assert.match(tokens, /--r20-down:\s*#e8923f/, 'CVD 模式未把下行色改为橙');
+  assert.match(tokens, /--astra-up:\s*#7aa6ff/, 'CVD 模式未把上行色改为蓝（批 105 提亮后的值）');
+  assert.match(tokens, /--astra-down:\s*#e8923f/, 'CVD 模式未把下行色改为橙');
 
   const popover = readFileSync(path.join(SRC, 'components/dashboard/SettingsPopover.vue'), 'utf8');
   // ⚠️ 只断言"文件里出现过 toggleCvd"是不够的 —— 导入语句就会满足它。

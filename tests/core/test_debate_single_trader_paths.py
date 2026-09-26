@@ -13,7 +13,7 @@
 import unittest
 from unittest.mock import patch
 
-from r20_backend.council.debate import _call_single_trader
+from astra_backend.council.debate import _call_single_trader
 
 SPEC = {"name": "老张", "prompt": "身份", "temperature": 0.2, "weight": 1.7}
 
@@ -26,14 +26,14 @@ def _resolved():
 
 class SeatOutcomeTest(unittest.TestCase):
     def setUp(self):
-        self.p_render = patch("r20_backend.council.debate._render_seat_prompt",
+        self.p_render = patch("astra_backend.council.debate._render_seat_prompt",
                               return_value="身份")
         self.p_render.start()
         self.addCleanup(self.p_render.stop)
-        self.p_sleep = patch("r20_backend.council.debate.time.sleep")
+        self.p_sleep = patch("astra_backend.council.debate.time.sleep")
         self.sleep_mock = self.p_sleep.start()
         self.addCleanup(self.p_sleep.stop)
-        self.p_runtime = patch("r20_backend.llm_manager.get_active_llm_runtime",
+        self.p_runtime = patch("astra_backend.llm_manager.get_active_llm_runtime",
                                return_value={"model": "M-active"})
         self.p_runtime.start()
         self.addCleanup(self.p_runtime.stop)
@@ -47,7 +47,7 @@ class SeatOutcomeTest(unittest.TestCase):
             if isinstance(out, Exception):
                 raise out
             return out
-        p = patch("r20_backend.llm_manager.execute_llm_request", side_effect=_exec)
+        p = patch("astra_backend.llm_manager.execute_llm_request", side_effect=_exec)
         p.start()
         self.addCleanup(p.stop)
         self.calls = calls

@@ -1,4 +1,4 @@
-"""LLM 通用工具层（`r20_backend/llm/util.py`）残余分支收口测试 —— 第 369 刀。
+"""LLM 通用工具层（`astra_backend/llm/util.py`）残余分支收口测试 —— 第 369 刀。
 
 本模块 44 行，负责 LLM 配置原子落盘与凭据脱敏转接：
 - 异常中断清理与临时文件解绑容错（`_atomic_write_json` 序列化失败时清理临时文件，且 `os.unlink` 异常时静默 pass）。
@@ -10,12 +10,12 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from r20_backend.llm.util import _atomic_write_json, mask_secret
+from astra_backend.llm.util import _atomic_write_json, mask_secret
 
 
 class LLMUtilTailsTests(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(prefix="r20_llm_util_tails_")
+        self.tmp = tempfile.TemporaryDirectory(prefix="astra_llm_util_tails_")
         self.addCleanup(self.tmp.cleanup)
         self.tmp_path = Path(self.tmp.name)
 

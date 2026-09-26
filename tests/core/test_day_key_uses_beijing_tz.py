@@ -12,7 +12,7 @@
 
 全仓 `strftime("%Y-%m-%d")` 共 **6 处**（`scripts/trader/circuit_guard.py`、
 `scripts/sync_web_data.py`×2、`scripts/daily_summary_and_backup.py`、
-`r20_backend/dashboard_cache.py`、`r20_backend/execution/circuit_breaker.py`），
+`astra_backend/dashboard_cache.py`、`astra_backend/execution/circuit_breaker.py`），
 逐处读码：**全部**基于显式 `timezone(timedelta(hours=8))`（本模块相关函数里的
 `tz_bj`/`tz_beijing`）⇒ **今天没有漂移**。既然此刻是对的，就把它钉住，
 而不是等它哪天被改坏。
@@ -35,7 +35,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-SCAN_ROOTS = (ROOT / "scripts", ROOT / "r20_backend", ROOT / "r20_gateway", ROOT / "plugins")
+SCAN_ROOTS = (ROOT / "scripts", ROOT / "astra_backend", ROOT / "astra_gateway", ROOT / "plugins")
 DAY_KEY = "%Y-%m-%d"
 
 

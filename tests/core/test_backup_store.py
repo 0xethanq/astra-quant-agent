@@ -26,7 +26,7 @@ import uuid
 from pathlib import Path
 from unittest import mock
 
-from r20_backend import backup_store as BS
+from astra_backend import backup_store as BS
 
 
 class _StoreBase(unittest.TestCase):
@@ -36,7 +36,7 @@ class _StoreBase(unittest.TestCase):
         return patcher
 
     def setUp(self):
-        self.tmp = Path(tempfile.mkdtemp(prefix="r20-bstore-"))
+        self.tmp = Path(tempfile.mkdtemp(prefix="astra-bstore-"))
         self.addCleanup(shutil.rmtree, self.tmp, True)
         self.config = self.tmp / "data" / "backup_methods.json"
         self._start(mock.patch.object(BS, "CONFIG_FILE", self.config))
@@ -63,7 +63,7 @@ class NormalizeTargetTests(unittest.TestCase):
         self.assertTrue(out["enabled"])
         self.assertEqual(out["credential_ref"], f"backup:{out['id']}")
         self.assertEqual(out["auth_mode"], "native")
-        self.assertEqual(out["remote_path"], "R20_Backups")
+        self.assertEqual(out["remote_path"], "ASTRA_Backups")
         self.assertEqual(out["path"], "backups/local")
         self.assertEqual(out["retention"], 3, "local 目标保留份数上限收敛")
 
@@ -138,7 +138,7 @@ class NormalizeJobTests(unittest.TestCase):
         out = BS._normalize_job({"encryption": {"enabled": True, "key_env": "MY_KEY_1"}})
         self.assertEqual(out["encryption"], {"enabled": True, "key_env": "MY_KEY_1"})
         self.assertEqual(BS._normalize_job({"encryption": "nope"})["encryption"]["key_env"],
-                         "R20_BACKUP_ENCRYPTION_KEY")
+                         "ASTRA_BACKUP_ENCRYPTION_KEY")
         self.assertEqual(BS._normalize_job({"sqlite": "nope"})["sqlite"],
                          {"enabled": False, "retention": 7})
 
@@ -276,7 +276,7 @@ class SaveTests(_StoreBase):
 
 class ValidationTests(unittest.TestCase):
     def test_default_job_is_valid(self):
-        with mock.patch.object(BS, "ROOT", Path(tempfile.mkdtemp(prefix="r20-v-"))):
+        with mock.patch.object(BS, "ROOT", Path(tempfile.mkdtemp(prefix="astra-v-"))):
             out = BS.validate_backup_job(BS._default_job())
         self.assertTrue(out["valid"])
 
@@ -301,7 +301,7 @@ class ValidationTests(unittest.TestCase):
         self.assertIn("加密密钥环境变量名称无效", out["errors"])
 
     def test_local_target_must_stay_inside_backups(self):
-        tmp = Path(tempfile.mkdtemp(prefix="r20-v-"))
+        tmp = Path(tempfile.mkdtemp(prefix="astra-v-"))
         self.addCleanup(shutil.rmtree, tmp, True)
         with mock.patch.object(BS, "ROOT", tmp):
             out = BS.validate_backup_job({
@@ -312,7 +312,7 @@ class ValidationTests(unittest.TestCase):
         self.assertIn("本地目标必须位于项目 backups/ 目录内", out["errors"])
 
     def test_local_retention_below_one_is_an_error(self):
-        tmp = Path(tempfile.mkdtemp(prefix="r20-v-"))
+        tmp = Path(tempfile.mkdtemp(prefix="astra-v-"))
         self.addCleanup(shutil.rmtree, tmp, True)
         with mock.patch.object(BS, "ROOT", tmp):
             out = BS.validate_backup_job({
@@ -323,7 +323,7 @@ class ValidationTests(unittest.TestCase):
 
     def test_non_numeric_local_retention_is_treated_as_zero(self):
         """`validate_backup_job` 可被喂**未归一化**的裸任务 ⇒ 字符串保留份数要能落地成 0。"""
-        tmp = Path(tempfile.mkdtemp(prefix="r20-v-"))
+        tmp = Path(tempfile.mkdtemp(prefix="astra-v-"))
         self.addCleanup(shutil.rmtree, tmp, True)
         with mock.patch.object(BS, "ROOT", tmp):
             out = BS.validate_backup_job({
@@ -349,7 +349,7 @@ class ValidationTests(unittest.TestCase):
                           out["errors"])
 
     def test_endpoint_outbound_validation_errors_are_surfaced(self):
-        with mock.patch("r20_backend.net_security.validate_outbound_url",
+        with mock.patch("astra_backend.net_security.validate_outbound_url",
                         side_effect=ValueError("内网地址被拒绝")):
             out = BS.validate_backup_job({
                 "name": "n", "scope": ["data"], "encryption": {},
@@ -358,7 +358,7 @@ class ValidationTests(unittest.TestCase):
         self.assertTrue(any("Endpoint" in e and "内网" in e for e in out["errors"]), out["errors"])
 
     def test_credentials_are_read_and_missing_fields_named(self):
-        with mock.patch("r20_backend.backup_secrets.load_credentials",
+        with mock.patch("astra_backend.backup_secrets.load_credentials",
                         return_value={"access_key_id": "k"}):
             out = BS.validate_backup_job({
                 "name": "n", "scope": ["data"], "encryption": {},
@@ -367,7 +367,7 @@ class ValidationTests(unittest.TestCase):
         self.assertIn("S3 主 凭证未完整配置：secret_access_key", out["errors"])
 
     def test_credential_lookup_failure_is_not_fatal(self):
-        with mock.patch("r20_backend.backup_secrets.load_credentials",
+        with mock.patch("astra_backend.backup_secrets.load_credentials",
                         side_effect=RuntimeError("密文库坏了")):
             out = BS.validate_backup_job({
                 "name": "n", "scope": ["data"], "encryption": {},
@@ -376,7 +376,7 @@ class ValidationTests(unittest.TestCase):
         self.assertFalse(out["valid"], "读不到凭证 ⇒ 视为缺失（fail-closed），但不崩")
 
     def test_baidu_oauth_requires_three_fields_and_bypy_requires_authorisation(self):
-        with mock.patch("r20_backend.backup_secrets.load_credentials", return_value={}):
+        with mock.patch("astra_backend.backup_secrets.load_credentials", return_value={}):
             oauth = BS.validate_backup_job({
                 "name": "n", "scope": ["data"], "encryption": {},
                 "targets": [{"type": "baidu", "enabled": True, "auth_mode": "oauth",
@@ -385,7 +385,7 @@ class ValidationTests(unittest.TestCase):
                       oauth["errors"])
 
         with mock.patch("pathlib.Path.home", return_value=Path("/nonexistent-home-xyz")), \
-                mock.patch("r20_backend.backup_secrets.load_credentials", return_value={}):
+                mock.patch("astra_backend.backup_secrets.load_credentials", return_value={}):
             bypy = BS.validate_backup_job({
                 "name": "n", "scope": ["data"], "encryption": {},
                 "targets": [{"type": "baidu", "enabled": True, "auth_mode": "bypy",
@@ -410,7 +410,7 @@ class ValidationTests(unittest.TestCase):
     def test_enabled_encryption_without_env_is_a_warning(self):
         out = BS.validate_backup_job({
             "name": "n", "scope": ["data"], "targets": [], "sqlite": {"enabled": True},
-            "encryption": {"enabled": True, "key_env": "R20_TEST_MISSING_KEY"}})
+            "encryption": {"enabled": True, "key_env": "ASTRA_TEST_MISSING_KEY"}})
         self.assertTrue(out["valid"])
         self.assertIn("Fail-Closed", "".join(out["warnings"]))
 
@@ -521,7 +521,7 @@ class ExportImportTests(_StoreBase):
 
     def test_export_strips_identity_state_and_credentials(self):
         out = BS.export_job("src")
-        self.assertEqual(out["format"], "r20-backup-job")
+        self.assertEqual(out["format"], "astra-backup-job")
         self.assertEqual(out["version"], 1)
         job = out["job"]
         self.assertEqual(job["id"], "")
@@ -536,11 +536,11 @@ class ExportImportTests(_StoreBase):
         with self.assertRaises(ValueError):
             BS.export_job("nope")
 
-    def test_import_requires_the_r20_format_marker(self):
-        for payload in ({}, {"format": "other", "job": {}}, {"format": "r20-backup-job"}):
+    def test_import_requires_the_astra_format_marker(self):
+        for payload in ({}, {"format": "other", "job": {}}, {"format": "astra-backup-job"}):
             with self.assertRaises(ValueError) as ctx:
                 BS.import_job(payload)
-            self.assertIn("无效的 R20 灾备任务文件", str(ctx.exception))
+            self.assertIn("无效的 ASTRA 灾备任务文件", str(ctx.exception))
 
     def test_import_reissues_ids_and_disables_the_job(self):
         exported = BS.export_job("src")
@@ -559,11 +559,11 @@ class ExportImportTests(_StoreBase):
         BS.save_backup_config({"jobs": [self._valid_job(id=f"j{i}")
                                         for i in range(BS.MAX_JOBS)]})
         with self.assertRaises(ValueError) as ctx:
-            BS.import_job({"format": "r20-backup-job", "job": BS._default_job()})
+            BS.import_job({"format": "astra-backup-job", "job": BS._default_job()})
         self.assertIn("最多", str(ctx.exception))
 
     def test_import_validates_before_persisting(self):
-        bad = {"format": "r20-backup-job",
+        bad = {"format": "astra-backup-job",
                "job": {"name": "", "scope": [], "targets": [],
                        "sqlite": {"enabled": False}}}
         before = len(BS.list_jobs())

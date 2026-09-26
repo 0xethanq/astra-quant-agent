@@ -1,6 +1,6 @@
 r"""Binance 下单参数构建抽取对拍门（第一百一十二刀）。
 
-`r20_backend/exchanges/binance.py` 里两段 → `r20_backend/exchanges/binance_orders.py`：
+`astra_backend/exchanges/binance.py` 里两段 → `astra_backend/exchanges/binance_orders.py`：
 - `build_order_params(...)`：`place_order` 中段的参数归一化（数量/价格按 `step`/`tick`
   **向下取整**、`LIMIT`/`MARKET` 选择、`newClientOrderId`/`positionSide`/`reduceOnly`）；
 - `apply_protective_qty_policy(...)`：保护单（TP/SL）**数量策略**，两处逐字重复的 6 行合并。
@@ -26,20 +26,21 @@ import unittest
 from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
+from tests.extraction.rename_baseline import legacy_rev_path, normalize
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 PRE = "7658a99"
-FACADE = ROOT / "r20_backend" / "exchanges" / "binance.py"
-MOD = ROOT / "r20_backend" / "exchanges" / "binance_orders.py"
+FACADE = ROOT / "astra_backend" / "exchanges" / "binance.py"
+MOD = ROOT / "astra_backend" / "exchanges" / "binance_orders.py"
 
 
 def _baseline_cls() -> ast.ClassDef:
-    r = subprocess.run(["git", "show", f"{PRE}:r20_backend/exchanges/binance.py"],
+    r = subprocess.run(["git", "show", legacy_rev_path(f"{PRE}:astra_backend/exchanges/binance.py")],
                        capture_output=True, text=True, cwd=str(ROOT))
     assert r.returncode == 0, f"基线取不到：{r.stderr[:200]}"
-    return next(n for n in ast.parse(r.stdout).body
+    return next(n for n in ast.parse(normalize(r.stdout)).body
                 if isinstance(n, ast.ClassDef) and n.name == "BinanceAdapter")
 
 
@@ -173,7 +174,7 @@ class BinanceOrdersExtractionTest(unittest.TestCase):
     # ---------- 行为例：参数构建 ----------
 
     def _build(self, **over):
-        from r20_backend.exchanges.binance_orders import build_order_params
+        from astra_backend.exchanges.binance_orders import build_order_params
         return build_order_params(**_base_kwargs(**over))
 
     def test_market_order_when_no_price(self):
@@ -223,7 +224,7 @@ class BinanceOrdersExtractionTest(unittest.TestCase):
     # ---------- 行为例：保护单数量策略 ----------
 
     def test_qty_policy_with_quantity(self):
-        from r20_backend.exchanges.binance_orders import apply_protective_qty_policy
+        from astra_backend.exchanges.binance_orders import apply_protective_qty_policy
         kw = {"symbol": "BTCUSDT"}
         self.assertIsNone(apply_protective_qty_policy(req_kwargs=kw, qty_str="0.5"))
         self.assertEqual(kw["quantity"], "0.5")
@@ -232,7 +233,7 @@ class BinanceOrdersExtractionTest(unittest.TestCase):
         self.assertEqual(kw["symbol"], "BTCUSDT", "只加策略键，不动其他")
 
     def test_qty_policy_without_quantity_closes_whole_position(self):
-        from r20_backend.exchanges.binance_orders import apply_protective_qty_policy
+        from astra_backend.exchanges.binance_orders import apply_protective_qty_policy
         kw = {}
         apply_protective_qty_policy(req_kwargs=kw, qty_str=None)
         self.assertTrue(kw["close_position"], "未给数量 ⇒ 整仓平")
@@ -259,7 +260,7 @@ class SendProtectiveOrderTest(unittest.TestCase):
     """
 
     def _send(self, trigger, type_="TAKE_PROFIT_MARKET", data=None, qty_str=None):
-        from r20_backend.exchanges.binance_orders import send_protective_order
+        from astra_backend.exchanges.binance_orders import send_protective_order
         sent = []
 
         def build(**kw):

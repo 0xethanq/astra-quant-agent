@@ -32,7 +32,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from r20_backend.execution.sizing import max_size_within_margin, quantize_size
+from astra_backend.execution.sizing import max_size_within_margin, quantize_size
 from scripts.trader import sizing
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -247,8 +247,8 @@ class OrderMattersTest(unittest.TestCase):
         这条测试的价值在于**防止后人误以为这一行在兜底**然后删掉别的守卫 ——
         也防止有人反过来以为"有它在就安全"。
         """
-        from r20_backend.execution.sizing import quantize_size as real_q
-        from r20_backend.execution.sizing import max_size_within_margin as real_m
+        from astra_backend.execution.sizing import quantize_size as real_q
+        from astra_backend.execution.sizing import max_size_within_margin as real_m
         checked = 0
         for base, step, margin, usdt in (
                 (20.0, 4.0, 100.0, 160.0), (20.0, 4.0, 1000.0, 160.0),
@@ -278,7 +278,7 @@ class OrderMattersTest(unittest.TestCase):
 
     def test_real_quantizer_always_yields_grid_aligned_result(self):
         """用**真实** quantizer（生产路径）时，结果必须落在步长网格上。"""
-        from r20_backend.execution.sizing import quantize_size as real_q
+        from astra_backend.execution.sizing import quantize_size as real_q
         for base, step, cap in ((20.0, 4.0, 30.0), (100.0, 3.0, 50.0),
                                 (16.0, 2.0, 9.0), (23.0, 10.0, 33.0)):
             got = sizing.size_for_decision(**_kw(
@@ -333,7 +333,7 @@ class GuardRemovalJustificationTest(unittest.TestCase):
         `quantize_size` 仍返回 0（这是**正确的**：低于交易所最小下单量）。
         所以这里检的是"契约本身"，不是"某些参数下必为正"。
         """
-        from r20_backend.execution.sizing import quantize_size as q
+        from astra_backend.execution.sizing import quantize_size as q
         # 正输入 ⇒ 正输出（在浮点可表示的范围内）
         for raw in (0.5, 1.0, 2.5, 1e3, 1e9):
             for step in (0.001, 1.0, 10.0):

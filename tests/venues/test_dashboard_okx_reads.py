@@ -9,17 +9,17 @@ import json
 import unittest
 from unittest.mock import patch
 
-import r20_backend.dashboard_cache as dashboard
+import astra_backend.dashboard_cache as dashboard
 import scripts.okx_rest as okx_rest
 from scripts.okx_runtime import freeze_environment, unfreeze_environment
 
 DEMO_ENV = {
-    "R20_OKX_ENV": "demo",
+    "ASTRA_OKX_ENV": "demo",
     "OKX_DEMO_API_KEY": "AKDEMO",
     "OKX_DEMO_SECRET_KEY": "SKDEMO",
     "OKX_DEMO_PASSPHRASE": "PPDEMO",
 }
-NO_KEY_ENV = {"R20_OKX_ENV": "demo"}
+NO_KEY_ENV = {"ASTRA_OKX_ENV": "demo"}
 
 
 def _fake_urlopen(rows, record):

@@ -1,4 +1,4 @@
-"""US-003 trades 台账身份迁移测试（全 mock、零网络、零触碰生产 data/r20_quant.db）。
+"""US-003 trades 台账身份迁移测试（全 mock、零网络、零触碰生产 data/astra_quant.db）。
 
 覆盖：幂等 ALTER/重建、unknown_legacy 诚实回填、source_bill_id 回填、
 双环境同 bill_id 共存、跨所同 ID 不互抹、同身份 upsert、迁移日志幂等零 diff。
@@ -43,7 +43,7 @@ def _v1_db(path: str, rows, with_venue: bool = False):
 class LedgerEnvColumnsTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
-        self.db = os.path.join(self.tmp.name, "r20_quant.test.db")
+        self.db = os.path.join(self.tmp.name, "astra_quant.test.db")
         self.ledger_json = os.path.join(self.tmp.name, "trading_ledger.json")
         self.p_db = patch.object(db_manager, "DB_PATH", self.db)
         self.p_js = patch.object(db_manager, "LEDGER_JSON_FILE", self.ledger_json)

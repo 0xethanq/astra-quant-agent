@@ -57,22 +57,22 @@ class ImportFallbackTests(unittest.TestCase):
     """三处模块级兜底：失败时也必须留下**可用**对象，而不是让整模块炸掉。"""
 
     def test_version_falls_back_when_version_module_unavailable(self):
-        with patch.dict(sys.modules, {"r20_backend.version": None}):
+        with patch.dict(sys.modules, {"astra_backend.version": None}):
             ns = _exec_node(_try_at(33))
         self.assertEqual(ns["__version__"], "7.6.0")
 
     def test_debounce_falls_back_to_30_minutes_on_bad_env(self):
         for bad in ("not-a-number", ""):
             with patch.dict(aft.os.environ,
-                            {"R20_VENUE_PROTECTION_WATCHDOG_DEBOUNCE_MIN": bad}):
+                            {"ASTRA_VENUE_PROTECTION_WATCHDOG_DEBOUNCE_MIN": bad}):
                 ns = _exec_node(_try_at(234))
-            self.assertEqual(ns["R20_VENUE_PROTECTION_WATCHDOG_DEBOUNCE_S"], 1800.0, bad)
+            self.assertEqual(ns["ASTRA_VENUE_PROTECTION_WATCHDOG_DEBOUNCE_S"], 1800.0, bad)
 
     def test_debounce_reads_env_when_valid(self):
         with patch.dict(aft.os.environ,
-                        {"R20_VENUE_PROTECTION_WATCHDOG_DEBOUNCE_MIN": "5"}):
+                        {"ASTRA_VENUE_PROTECTION_WATCHDOG_DEBOUNCE_MIN": "5"}):
             ns = _exec_node(_try_at(234))
-        self.assertEqual(ns["R20_VENUE_PROTECTION_WATCHDOG_DEBOUNCE_S"], 300.0)
+        self.assertEqual(ns["ASTRA_VENUE_PROTECTION_WATCHDOG_DEBOUNCE_S"], 300.0)
 
     def test_backend_facade_missing_leaves_six_none_sentinels(self):
         # 六件套缺失时必须是 None 哨兵（调用点据此决定"跳过/降级"），而不是 AttributeError
@@ -107,7 +107,7 @@ class ThinShellInjectionTests(unittest.TestCase):
         self.assertEqual(seen, ["/tmp/sandbox-cooldown.json"])
 
     def test_run_captured_uses_shared_spawn_helper(self):
-        import r20_backend.spawn as spawn
+        import astra_backend.spawn as spawn
         seen = {}
         with patch.object(spawn, "run_script",
                           lambda script, timeout=15, label=None: seen.update(
@@ -116,7 +116,7 @@ class ThinShellInjectionTests(unittest.TestCase):
         self.assertEqual(seen, {"script": "/x/y.py", "timeout": 42, "label": "标签"})
 
     def test_run_captured_auto_widens_sync_full_ledger_timeout(self):
-        import r20_backend.spawn as spawn
+        import astra_backend.spawn as spawn
         seen = {}
         with patch.object(spawn, "run_script",
                           lambda script, timeout=15, label=None: seen.update(
@@ -268,7 +268,7 @@ class ReservationManagerTests(unittest.TestCase):
     """每次取用都新建实例 ⇒ 风控页改预算**热生效**，不必重启进程。"""
 
     def test_positive_budget_is_passed_as_total_limit(self):
-        from r20_backend import risk_reservation
+        from astra_backend import risk_reservation
         seen = {}
         with patch.object(aft, "portfolio_risk_budget_usdt", lambda: 250.0), \
              patch.object(risk_reservation, "get_manager",
@@ -279,7 +279,7 @@ class ReservationManagerTests(unittest.TestCase):
         self.assertEqual(seen["db_path"], risk_reservation.DEFAULT_DB_PATH)
 
     def test_zero_budget_means_no_total_limit(self):
-        from r20_backend import risk_reservation
+        from astra_backend import risk_reservation
         seen = {}
         with patch.object(aft, "portfolio_risk_budget_usdt", lambda: 0.0), \
              patch.object(risk_reservation, "get_manager",
@@ -482,8 +482,8 @@ class ExecutePortfolioTests(unittest.TestCase):
         self._wire()
         self._run()
         wd = self.calls["watchdog"]
-        self.assertEqual(wd["dry_run"], aft.R20_VENUE_PROTECTION_WATCHDOG_DRY_RUN)
-        self.assertEqual(wd["debounce_s"], aft.R20_VENUE_PROTECTION_WATCHDOG_DEBOUNCE_S)
+        self.assertEqual(wd["dry_run"], aft.ASTRA_VENUE_PROTECTION_WATCHDOG_DRY_RUN)
+        self.assertEqual(wd["debounce_s"], aft.ASTRA_VENUE_PROTECTION_WATCHDOG_DEBOUNCE_S)
         self.assertEqual(wd["state_path"], aft.VENUE_PROTECTION_WATCHDOG_STATE_FILE)
         self.assertEqual(wd["ledger_rows"], None)
 
@@ -496,7 +496,7 @@ class ExecutePortfolioTests(unittest.TestCase):
         # ★ `entries_blocked` 在披露里是**持仓阶段重算后**的值（PHASE1[3]=False），
         #   不是 preflight 那个 —— 位置查询比预检更接近事实，后者只是初值
         self.assertIs(disc["entries_blocked"], False)
-        self.assertEqual(disc["watchdog_enabled"], aft.R20_VENUE_PROTECTION_WATCHDOG)
+        self.assertEqual(disc["watchdog_enabled"], aft.ASTRA_VENUE_PROTECTION_WATCHDOG)
 
     def test_lock_skip_prevents_the_whole_cycle(self):
         holder = open(aft.TRADER_LOCK_FILE, "a+", encoding="utf-8")

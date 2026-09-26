@@ -125,7 +125,7 @@ def clean_stale_open_orders(keep_ord_ids: Optional[set] = None,
                 # 发不出去）→ 跳过回收不拦轮（审计#4教训：拿凭证错误拦全链=交易停摆）。
                 _BROKEN_VENUES.add(_v)   # 本轮路由同步摘除其执行资格（见 venue_execution_ready）
                 print(f"[挂单生命周期] CRITICAL {_v.upper()} 凭证无效但执行闸开启——本所生命周期"
-                      f"管理跳过；请修复密钥或关闭 R20_{_v.upper()}_EXECUTION")
+                      f"管理跳过；请修复密钥或关闭 ASTRA_{_v.upper()}_EXECUTION")
                 continue
             # 其余不可核验（网络/未知）：与 OKX 同尺 fail-closed 拦本轮
             return False, f"{_v} 挂单回收不可用: {type(exc).__name__}: {_msg[:120]}"

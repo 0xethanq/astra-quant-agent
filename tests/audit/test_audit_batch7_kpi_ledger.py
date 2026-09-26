@@ -5,7 +5,7 @@
    但 OKX posId 在同标的同方向**多轮往返间复用**（实证：PEPE 06:33→10:31 +7.89
    与 15:37→16:30 -18.18 两条 history 共享 posId 391748010248）→ 合并表撞键，
    第二腿真实亏损被覆盖蒸发。修：id 追加开仓时刻 c_ts + 同键自增序号。
-② 前台单所视野（r20_backend/dashboard_cache.py）：「今日已实现」从 OKX bills 聚合，binance/gate
+② 前台单所视野（astra_backend/dashboard_cache.py）：「今日已实现」从 OKX bills 聚合，binance/gate
    当日平仓（SUI +27.63）永远不可见；而熔断/台账早已三所合并 → 同一句话两个数。
    修：新 ledger_today_stats（与熔断 ledger_daily_closed_pnl 逐字同式）覆盖 KPI，
    bills 退化为台账缺失时的降级兜底；today_stats.source 明示口径。
@@ -33,11 +33,11 @@ for _p in (str(ROOT), str(ROOT / "scripts")):
 import scripts.okx_rest as okx_rest
 import scripts.okx_runtime as okx_runtime
 import scripts.sync_full_ledger as sfl
-from r20_backend.execution.circuit_breaker import (
+from astra_backend.execution.circuit_breaker import (
     ledger_daily_closed_pnl, ledger_today_stats)
 
 DEMO_VALUES = {
-    "R20_OKX_ENV": "demo",
+    "ASTRA_OKX_ENV": "demo",
     "OKX_DEMO_API_KEY": "AKD", "OKX_DEMO_SECRET_KEY": "SKD", "OKX_DEMO_PASSPHRASE": "PPD",
 }
 
@@ -188,13 +188,13 @@ class TestLedgerTodayStats(unittest.TestCase):
 class TestDashboardKpiWiring(unittest.TestCase):
     """③防漂移钉：dashboard 必须走台账口径，且不再有裸 python3/短 timeout。"""
 
-    # 阶段 2·B2：dashboard 的域代码正被逐步拆到 r20_backend/dashboard_payload/。
+    # 阶段 2·B2：dashboard 的域代码正被逐步拆到 astra_backend/dashboard_payload/。
     # 这条锚点钉的是**语义**（dashboard 走台账口径、且不得有裸 python3/短 timeout），
     # 不是"必须写在某一个文件里"—— 故定位方式升级为"该领域的运行时源码集合"：
     # 搬家不再误报，覆盖面反而比原来只看一个文件更广，
     # 负向断言（不许有裸 python3）也随之覆盖到全部已迁出的模块。
-    DASH_DOMAIN = [ROOT / "r20_backend" / "dashboard_cache.py"] + sorted(
-        (ROOT / "r20_backend" / "dashboard_payload").glob("*.py"))
+    DASH_DOMAIN = [ROOT / "astra_backend" / "dashboard_cache.py"] + sorted(
+        (ROOT / "astra_backend" / "dashboard_payload").glob("*.py"))
 
     def test_dashboard_sources_stats_from_ledger(self):
         from tests import source_scan

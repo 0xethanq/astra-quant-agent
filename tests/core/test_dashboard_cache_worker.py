@@ -12,7 +12,7 @@ import threading
 import unittest
 from unittest.mock import MagicMock, patch
 
-import r20_backend.dashboard_cache as dc
+import astra_backend.dashboard_cache as dc
 
 
 class WorkerLoopTest(unittest.TestCase):

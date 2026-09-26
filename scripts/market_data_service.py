@@ -260,19 +260,19 @@ def _alt_venue_order() -> tuple:
 
 
 def _alt_venue_allowed() -> bool:
-    """离线/测试熔断开关：R20_ALT_VENUE_FALLBACK=0 时备源路径完全不发网络请求。"""
+    """离线/测试熔断开关：ASTRA_ALT_VENUE_FALLBACK=0 时备源路径完全不发网络请求。"""
     import os
-    return str(os.environ.get("R20_ALT_VENUE_FALLBACK", "1")).strip().lower() not in ("0", "off", "false")
+    return str(os.environ.get("ASTRA_ALT_VENUE_FALLBACK", "1")).strip().lower() not in ("0", "off", "false")
 
 
 def _get_venue_adapter(venue: str):
-    """懒导入 r20_backend.exchanges（scripts 入口的 sys.path 引导）。"""
+    """懒导入 astra_backend.exchanges（scripts 入口的 sys.path 引导）。"""
     import sys
     from pathlib import Path
     root = str(Path(__file__).resolve().parents[1])
     if root not in sys.path:
         sys.path.insert(0, root)
-    from r20_backend.exchanges import get_adapter
+    from astra_backend.exchanges import get_adapter
     return get_adapter(venue)
 
 

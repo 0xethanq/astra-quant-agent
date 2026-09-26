@@ -9,13 +9,13 @@
 - 判据写**四遍**（本刀实测：`time_utils.parse_beijing`、`multi_venue`、
   `venue_protection` 的函数版与内联版）⇒ 改一处忘三处，迟早漂移。
 
-本刀把唯一实现放进 `r20_backend/time_utils.py`（**无仓内依赖**的中性时间模块，
+本刀把唯一实现放进 `astra_backend/time_utils.py`（**无仓内依赖**的中性时间模块，
 两侧都能 import），其余三处改为委派；并钉住"数值常量 `1e11` 不得出现在别处"。
 
 ## 本门
 
-1. **唯一性**：AST 扫描 `scripts/` + `r20_backend/`，数值常量 `≈1e11` 只允许出现在
-   `r20_backend/time_utils.py`（注释/文档字符串不算 —— 门扫的是**数值常量**）；
+1. **唯一性**：AST 扫描 `scripts/` + `astra_backend/`，数值常量 `≈1e11` 只允许出现在
+   `astra_backend/time_utils.py`（注释/文档字符串不算 —— 门扫的是**数值常量**）；
 2. **委派**：三处原写法必须 import 唯一实现（防有人再内联回去）；
 3. **行为**：秒输入原样、毫秒输入换算、`None` 原样（秒↔毫秒两个方向）；
 4. 非空自检 + 牙齿（分界写错必须被行为用例抓到）。
@@ -28,8 +28,8 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-SCAN_DIRS = ("scripts", "r20_backend", "r20_gateway", "plugins")
-CANONICAL = "r20_backend/time_utils.py"
+SCAN_DIRS = ("scripts", "astra_backend", "astra_gateway", "plugins")
+CANONICAL = "astra_backend/time_utils.py"
 
 
 def _iter_py():
@@ -76,7 +76,7 @@ class EpochUnitConverterTest(unittest.TestCase):
     def test_former_spellings_delegate(self):
         """两处**消费方**必须 import 唯一实现（唯一实现自己不 import 自己）。"""
         for rel in ("scripts/trader/venue_protection.py",
-                    "r20_backend/dashboard_payload/multi_venue.py"):
+                    "astra_backend/dashboard_payload/multi_venue.py"):
             src = (ROOT / rel).read_text(encoding="utf-8")
             self.assertIn("time_utils", src, f"{rel} 没有委派给唯一实现（又写了一份分界）")
             self.assertIn("to_seconds" if "venue_protection" in rel else "to_millis", src,
@@ -85,7 +85,7 @@ class EpochUnitConverterTest(unittest.TestCase):
     def test_conversion_behaviour_both_units(self):
         import sys
         sys.path.insert(0, str(ROOT))
-        from r20_backend.time_utils import to_millis, to_seconds
+        from astra_backend.time_utils import to_millis, to_seconds
         seconds, millis = 1789953468, 1789953467788
         self.assertEqual(to_seconds(seconds), seconds, "秒输入被误除以 1000（会把 7 天算成已过期）")
         self.assertAlmostEqual(to_seconds(millis), millis / 1000.0, places=3)
@@ -98,7 +98,7 @@ class EpochUnitConverterTest(unittest.TestCase):
         """牙齿：分界改成 1e9（本仓真实事故写法）必须被判红。"""
         import sys
         sys.path.insert(0, str(ROOT))
-        from r20_backend import time_utils
+        from astra_backend import time_utils
         original = time_utils.EPOCH_MS_THRESHOLD
         try:
             time_utils.EPOCH_MS_THRESHOLD = 1e9

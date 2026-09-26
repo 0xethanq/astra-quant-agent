@@ -35,7 +35,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-ROOTS = ("scripts", "r20_backend", "plugins")
+ROOTS = ("scripts", "astra_backend", "plugins")
 MIN_FILES = 200
 
 MUTATORS = {"add", "update", "append", "extend", "insert", "setdefault", "add_all", "discard"}

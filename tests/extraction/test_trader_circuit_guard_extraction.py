@@ -20,6 +20,7 @@ import subprocess
 import sys
 import unittest
 from pathlib import Path
+from tests.extraction.rename_baseline import legacy_rev_path, normalize
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
@@ -34,10 +35,11 @@ RENAMES = {
 
 
 def _src(commit: str, rel: str) -> str:
-    r = subprocess.run(["git", "show", f"{commit}:{rel}"],
+    """基线源码，**已归一命名空间**（`r20_*` → `astra_*`）；见 `rename_baseline`。"""
+    r = subprocess.run(["git", "show", legacy_rev_path(f"{commit}:{rel}")],
                        capture_output=True, text=True, cwd=str(ROOT))
     assert r.returncode == 0, f"基线取不到 {commit}:{rel}：{r.stderr[:200]}"
-    return r.stdout
+    return normalize(r.stdout)
 
 
 def _get_func(tree: ast.Module, name: str) -> ast.FunctionDef:
@@ -70,7 +72,7 @@ def _normalize(node: ast.AST) -> str:
 #: file_health STALE 通道兜底，但两个调用方都没有该检查（全仓 grep 只命中那句注释）
 #: ⇒ 补偿不存在。用户拍板 **fail-closed**：不可判定 ⇒ 禁开仓（可见 + 有行为）。
 DELTA_REWRITES = (
-    ("""            from r20_backend.execution.circuit_breaker import (
+    ("""            from astra_backend.execution.circuit_breaker import (
                 _ledger_sync_sidecar_state as _sidecar_state)
             _failed_venues, _sidecar_unknown = _sidecar_state()
             if _sidecar_unknown:

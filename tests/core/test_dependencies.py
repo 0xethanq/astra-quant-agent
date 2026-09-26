@@ -9,7 +9,7 @@ routers 全都经它鉴权），也是 `routers/system.py` 里那个"局部 impo
 | ★ **未配置令牌 = 503，错令牌 = 403** | 两者语义不同（一个是运维没配、一个是攻击者猜错）|
 | ★ **legacy 令牌通道只在"零用户"时开** | `has_users()` 为真时，光凭 admin token **不再能登录**（否则等于留了永久后门）；返回的 legacy 用户角色是 `legacy` |
 | ★ **superadmin 必须显式** | 会话有效但角色不是 `superadmin` ⇒ **403**；无会话 ⇒ **401** |
-| ★ **app 模块可覆盖鉴权** | `r20_backend.app` 上若挂了**不同**的 `require_admin_header`/`require_superadmin`，一律委派给它（并容忍 1 参数旧签名）|
+| ★ **app 模块可覆盖鉴权** | `astra_backend.app` 上若挂了**不同**的 `require_admin_header`/`require_superadmin`，一律委派给它（并容忍 1 参数旧签名）|
 | ★ **损坏 ≠ 缺失（但都不炸）** | `read_json` 两种都返回默认值，但**损坏必须往 stderr 吼 CRITICAL**（旧实现静默 ⇒ 前端把"数据损坏"渲染成"确实没有"）|
 """
 
@@ -25,7 +25,7 @@ from unittest import mock
 
 from fastapi import HTTPException
 
-from r20_backend import dependencies as DEPS
+from astra_backend import dependencies as DEPS
 
 
 class _Base(unittest.TestCase):
@@ -56,21 +56,21 @@ class ModuleConstantTests(unittest.TestCase):
 
 class AppAttrTests(unittest.TestCase):
     def test_missing_app_module_returns_the_default(self):
-        with mock.patch.dict(sys.modules, {"r20_backend.app": None}):
+        with mock.patch.dict(sys.modules, {"astra_backend.app": None}):
             self.assertEqual(DEPS.app_attr("WHATEVER", "fallback"), "fallback")
 
     def test_attribute_present_is_returned(self):
         fake = types.SimpleNamespace(MARKER="value")
-        with mock.patch.dict(sys.modules, {"r20_backend.app": fake}):
+        with mock.patch.dict(sys.modules, {"astra_backend.app": fake}):
             self.assertEqual(DEPS.app_attr("MARKER", "fallback"), "value")
 
     def test_missing_attribute_returns_the_default(self):
-        with mock.patch.dict(sys.modules, {"r20_backend.app": types.SimpleNamespace()}):
+        with mock.patch.dict(sys.modules, {"astra_backend.app": types.SimpleNamespace()}):
             self.assertIsNone(DEPS.app_attr("NOPE"))
             self.assertEqual(DEPS.app_attr("NOPE", 7), 7)
 
     def test_none_default(self):
-        with mock.patch.dict(sys.modules, {"r20_backend.app": None}):
+        with mock.patch.dict(sys.modules, {"astra_backend.app": None}):
             self.assertIsNone(DEPS.app_attr("ANY"))
 
 
@@ -78,15 +78,15 @@ class AuthStoreResolutionTests(unittest.TestCase):
     def test_app_level_store_wins_when_present(self):
         store = mock.Mock()
         fake = types.SimpleNamespace(admin_auth=store)
-        with mock.patch.dict(sys.modules, {"r20_backend.app": fake}):
+        with mock.patch.dict(sys.modules, {"astra_backend.app": fake}):
             self.assertIs(DEPS.get_auth_store(), store)
 
     def test_module_level_store_is_the_fallback(self):
-        with mock.patch.dict(sys.modules, {"r20_backend.app": types.SimpleNamespace()}):
+        with mock.patch.dict(sys.modules, {"astra_backend.app": types.SimpleNamespace()}):
             self.assertIs(DEPS.get_auth_store(), DEPS.admin_auth)
 
     def test_no_app_module_falls_back(self):
-        with mock.patch.dict(sys.modules, {"r20_backend.app": None}):
+        with mock.patch.dict(sys.modules, {"astra_backend.app": None}):
             self.assertIs(DEPS.get_auth_store(), DEPS.admin_auth)
 
 
@@ -96,7 +96,7 @@ class RequireAdminTokenTests(_Base):
         with self.assertRaises(HTTPException) as ctx:
             DEPS.require_admin_token("anything")
         self.assertEqual(ctx.exception.status_code, 503)
-        self.assertIn("R20_SETUP_TOKEN", ctx.exception.detail)
+        self.assertIn("ASTRA_SETUP_TOKEN", ctx.exception.detail)
 
     def test_admin_token_matches(self):
         self._settings(admin_token="secret")
@@ -151,7 +151,7 @@ class CurrentAdminTests(_Base):
         self.store.validate_session.return_value = None
         self.store.has_users.return_value = False
         self._settings(admin_token="boot-token")
-        user = DEPS.current_admin(x_r20_admin_token="boot-token")
+        user = DEPS.current_admin(x_astra_admin_token="boot-token")
         self.assertEqual(user, {"id": 0, "username": "legacy-token",
                                 "role": "legacy", "enabled": 1})
 
@@ -160,7 +160,7 @@ class CurrentAdminTests(_Base):
         self.store.has_users.return_value = True
         self._settings(admin_token="boot-token")
         with self.assertRaises(HTTPException) as ctx:
-            DEPS.current_admin(x_r20_admin_token="boot-token")
+            DEPS.current_admin(x_astra_admin_token="boot-token")
         self.assertEqual(ctx.exception.status_code, 401,
                          "已有用户时，光凭 admin token 不得再登录")
 
@@ -169,13 +169,13 @@ class CurrentAdminTests(_Base):
         self.store.has_users.return_value = False
         self._settings(admin_token="real")
         with self.assertRaises(HTTPException) as ctx:
-            DEPS.current_admin(x_r20_admin_token="wrong")
+            DEPS.current_admin(x_astra_admin_token="wrong")
         self.assertEqual(ctx.exception.status_code, 403)
 
 
 class RequireAdminHeaderTests(_Base):
     def test_no_app_override_delegates_to_current_admin(self):
-        self._start(mock.patch.dict(sys.modules, {"r20_backend.app": None}))
+        self._start(mock.patch.dict(sys.modules, {"astra_backend.app": None}))
         current = self._start(mock.patch.object(DEPS, "current_admin",
                                                 return_value={"id": 5}))
         out = DEPS.require_admin_header("tok", "sess")
@@ -183,7 +183,7 @@ class RequireAdminHeaderTests(_Base):
         self.assertEqual(out, {"id": 5})
 
     def test_non_string_headers_are_dropped_and_the_context_var_is_used(self):
-        self._start(mock.patch.dict(sys.modules, {"r20_backend.app": None}))
+        self._start(mock.patch.dict(sys.modules, {"astra_backend.app": None}))
         current = self._start(mock.patch.object(DEPS, "current_admin",
                                                 return_value={"id": 5}))
         token = DEPS.REQUEST_SESSION.set("ctx-session")
@@ -194,7 +194,7 @@ class RequireAdminHeaderTests(_Base):
     def test_app_override_is_used_when_it_is_a_different_callable(self):
         override = mock.Mock(return_value={"id": 9})
         fake = types.SimpleNamespace(require_admin_header=override)
-        with mock.patch.dict(sys.modules, {"r20_backend.app": fake}):
+        with mock.patch.dict(sys.modules, {"astra_backend.app": fake}):
             out = DEPS.require_admin_header("tok", "sess")
         override.assert_called_once_with("tok", "sess")
         self.assertEqual(out, {"id": 9})
@@ -202,7 +202,7 @@ class RequireAdminHeaderTests(_Base):
     def test_legacy_single_argument_override_falls_back(self):
         override = mock.Mock(side_effect=[TypeError("takes 1 positional argument"), {"id": 9}])
         fake = types.SimpleNamespace(require_admin_header=override)
-        with mock.patch.dict(sys.modules, {"r20_backend.app": fake}):
+        with mock.patch.dict(sys.modules, {"astra_backend.app": fake}):
             out = DEPS.require_admin_header("tok", "sess")
         self.assertEqual(override.call_args_list[1], mock.call("tok"))
         self.assertEqual(out, {"id": 9})
@@ -211,7 +211,7 @@ class RequireAdminHeaderTests(_Base):
         fake = types.SimpleNamespace(require_admin_header=DEPS.require_admin_header)
         current = self._start(mock.patch.object(DEPS, "current_admin",
                                                 return_value={"id": 1}))
-        with mock.patch.dict(sys.modules, {"r20_backend.app": fake}):
+        with mock.patch.dict(sys.modules, {"astra_backend.app": fake}):
             DEPS.require_admin_header("tok", "sess")
         current.assert_called_once_with("sess", "tok")
 
@@ -221,7 +221,7 @@ class RequireSuperadminTests(_Base):
         super().setUp()
         self.store = mock.Mock()
         self._start(mock.patch.object(DEPS, "get_auth_store", return_value=self.store))
-        self._start(mock.patch.dict(sys.modules, {"r20_backend.app": None}))
+        self._start(mock.patch.dict(sys.modules, {"astra_backend.app": None}))
 
     def test_superadmin_passes(self):
         user = {"id": 1, "role": "superadmin"}
@@ -251,7 +251,7 @@ class RequireSuperadminTests(_Base):
     def test_app_override_wins(self):
         override = mock.Mock(return_value={"id": 9, "role": "superadmin"})
         fake = types.SimpleNamespace(require_superadmin=override)
-        with mock.patch.dict(sys.modules, {"r20_backend.app": fake}):
+        with mock.patch.dict(sys.modules, {"astra_backend.app": fake}):
             out = DEPS.require_superadmin("sess")
         override.assert_called_once_with("sess")
         self.assertEqual(out["id"], 9)
@@ -260,7 +260,7 @@ class RequireSuperadminTests(_Base):
 class ReadJsonTests(_Base):
     def setUp(self):
         super().setUp()
-        self.tmp = Path(tempfile.mkdtemp(prefix="r20-deps-"))
+        self.tmp = Path(tempfile.mkdtemp(prefix="astra-deps-"))
         self.addCleanup(shutil.rmtree, self.tmp, True)
         self._start(mock.patch.object(DEPS, "DATA_DIR", self.tmp))
 
@@ -300,7 +300,7 @@ class ReadJsonTests(_Base):
 class ScriptStateTests(_Base):
     def setUp(self):
         super().setUp()
-        self.tmp = Path(tempfile.mkdtemp(prefix="r20-deps-scripts-"))
+        self.tmp = Path(tempfile.mkdtemp(prefix="astra-deps-scripts-"))
         self.addCleanup(shutil.rmtree, self.tmp, True)
         self._start(mock.patch.object(DEPS, "SCRIPTS_DIR", self.tmp))
 

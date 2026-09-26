@@ -7,7 +7,7 @@
 
 import unittest
 
-from r20_backend.exchanges.binance import BinanceAdapter, BinanceAPIError
+from astra_backend.exchanges.binance import BinanceAdapter, BinanceAPIError
 
 
 class _Base(unittest.TestCase):
@@ -72,14 +72,14 @@ class OpenOrdersTest(_Base):
     def test_bad_rows_are_skipped(self):
         self._req([
             "not-a-dict",
-            {"orderId": 7, "clientOrderId": "t-r20e1", "symbol": "BTCUSDT", "side": "BUY",
+            {"orderId": 7, "clientOrderId": "t-astrae1", "symbol": "BTCUSDT", "side": "BUY",
              "type": "LIMIT", "price": "100", "origQty": "1", "executedQty": "0",
              "status": "NEW", "time": 1},
         ])
         out = self.ad.open_orders()
         self.assertEqual(len(out), 1)
         self.assertEqual(out[0]["order_id"], "7", "ID 一律转 str（int64 精度风险）")
-        self.assertEqual(out[0]["client_order_id"], "t-r20e1")
+        self.assertEqual(out[0]["client_order_id"], "t-astrae1")
 
     def test_non_list_response_is_empty(self):
         self._req("html")

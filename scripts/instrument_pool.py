@@ -1,4 +1,4 @@
-"""Shared, validated R20 trading universe configuration."""
+"""Shared, validated ASTRA trading universe configuration."""
 from __future__ import annotations
 import json
 import os
@@ -93,9 +93,9 @@ def derive_instrument_leverage_cap(
         except Exception:
             _RC_MIN, _RC_MAX = 2.0, 5.0
         if min_leverage is None:
-            min_leverage = float(os.getenv("R20_MIN_LEVERAGE", "") or _RC_MIN or 2.0)
+            min_leverage = float(os.getenv("ASTRA_MIN_LEVERAGE", "") or _RC_MIN or 2.0)
         if max_leverage is None:
-            max_leverage = float(os.getenv("R20_MAX_LEVERAGE", "") or _RC_MAX or 5.0)
+            max_leverage = float(os.getenv("ASTRA_MAX_LEVERAGE", "") or _RC_MAX or 5.0)
     lo = max(1.0, float(min_leverage or 2.0))
     hi = max(lo, float(max_leverage or 5.0))
     if tier == "tier_1_bluechip":
@@ -258,8 +258,8 @@ def load_instruments() -> list[dict[str, Any]]:
         from scripts.risk_constants import MIN_LEVERAGE as _RC_MIN, MAX_LEVERAGE as _RC_MAX
     except Exception:
         _RC_MIN, _RC_MAX = 2.0, 5.0
-    _cur_min = float(os.getenv("R20_MIN_LEVERAGE", "") or _RC_MIN or 2.0)
-    _cur_max = float(os.getenv("R20_MAX_LEVERAGE", "") or _RC_MAX or 5.0)
+    _cur_min = float(os.getenv("ASTRA_MIN_LEVERAGE", "") or _RC_MIN or 2.0)
+    _cur_max = float(os.getenv("ASTRA_MAX_LEVERAGE", "") or _RC_MAX or 5.0)
     if _cur_min > _cur_max:
         _cur_min = _cur_max
 
@@ -282,7 +282,7 @@ def load_instruments() -> list[dict[str, Any]]:
 
 def _pool_lock():
     """跨进程互斥（审计 P2-6）：池文件是多进程 RMW 目标（后台路由写、采集脚本写）。
-    优先用 r20_backend.file_locks（可重入、锁文件同目录），后端不在路径时退化为
+    优先用 astra_backend.file_locks（可重入、锁文件同目录），后端不在路径时退化为
     本地 flock —— 绝不在"锁不可用"时静默放行。
 
     兜底实现已移到 `scripts/local_lock.py`（结构优化阶段 4·B3 第四十八刀）——
@@ -290,7 +290,7 @@ def _pool_lock():
     `save_instruments`（嵌套取锁），走兜底分支会同线程自锁挂死。
     """
     try:
-        from r20_backend.file_locks import file_lock
+        from astra_backend.file_locks import file_lock
         return file_lock(POOL_FILE)
     except Exception:
         return local_file_lock(POOL_FILE)
@@ -358,7 +358,7 @@ def _write_json_atomic(path, payload: Any) -> None:
 
 def _run_captured(script, label=None, timeout=45, env=None):
     """审计(2026-09-13)：同解释器子进程 + 非零必吼（旧裸 python3 shell 串=静默死亡）。"""
-    from r20_backend.spawn import run_script
+    from astra_backend.spawn import run_script
     return run_script(script, timeout=timeout, label=label, env=env)
 
 

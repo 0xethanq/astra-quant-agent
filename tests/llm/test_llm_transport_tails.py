@@ -1,4 +1,4 @@
-"""LLM 传输层（`r20_backend/llm/transport.py`）残余分支收口测试 —— 第 338 刀。
+"""LLM 传输层（`astra_backend/llm/transport.py`）残余分支收口测试 —— 第 338 刀。
 
 本模块 342 行，是单次模型调用的请求构建、发送与响应解析核心：
 - 错误分类系统：瞬时故障（_LLMTransientError，支持指数退避与慢故障快速回退）与
@@ -15,7 +15,7 @@ import unittest
 import urllib.error
 from unittest.mock import MagicMock, patch
 
-from r20_backend.llm.transport import (
+from astra_backend.llm.transport import (
     _LLMHardError,
     _LLMTransientError,
     _attempt_llm_call,

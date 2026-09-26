@@ -16,15 +16,15 @@ from unittest import mock
 
 from fastapi import HTTPException
 
-from r20_backend.routers.strategy import council as C
-from r20_backend.schemas import (CouncilApplySuiteRequest, CouncilConfigUpdateRequest,
+from astra_backend.routers.strategy import council as C
+from astra_backend.schemas import (CouncilApplySuiteRequest, CouncilConfigUpdateRequest,
                                  CouncilImportRequest, CouncilResetRoleRequest)
 
 
 class TimeoutSingleSourceTest(unittest.TestCase):
     def test_schema_default_matches_the_engine_default(self):
         """★ 审计 P2-13 的守卫：前后端默认必须**同源**。"""
-        from r20_backend import council_manager as CM
+        from astra_backend import council_manager as CM
         default = CouncilConfigUpdateRequest(enabled=True, roles={}).timeout_seconds
         self.assertEqual(default, CM.DEFAULT_COUNCIL_TIMEOUT,
                          "schema 默认与引擎默认**必须相等**（旧版 60 vs 240 就是事故）")
@@ -55,15 +55,15 @@ class CouncilAdminRoutesTest(unittest.TestCase):
     # ── 读配置 ────────────────────────────────────────────
     def test_get_config_exposes_model_health_and_the_fallback_note(self):
         """★ 审计 P1-4b：把「席位绑定模型是否已登记」摊开给 UI，别让页面照旧宣称多模型。"""
-        with mock.patch("r20_backend.council_manager.load_council_config",
+        with mock.patch("astra_backend.council_manager.load_council_config",
                         return_value={"roles": {"a": {}}}), \
-                mock.patch("r20_backend.council_manager.get_available_presets",
+                mock.patch("astra_backend.council_manager.get_available_presets",
                            return_value=["p1"]), \
-                mock.patch("r20_backend.council_manager.get_preset_suites",
+                mock.patch("astra_backend.council_manager.get_preset_suites",
                            return_value=["s1"]), \
-                mock.patch("r20_backend.council_manager.seat_model_health",
+                mock.patch("astra_backend.council_manager.seat_model_health",
                            return_value={"a": {"registered": False}}):
-            out = C.admin_get_council_config(x_r20_session="t")
+            out = C.admin_get_council_config(x_astra_session="t")
         self.assertEqual(out["available_presets"], ["p1"])
         self.assertEqual(out["available_suites"], ["s1"])
         self.assertEqual(out["model_health"], {"a": {"registered": False}})
@@ -74,9 +74,9 @@ class CouncilAdminRoutesTest(unittest.TestCase):
     def test_update_requires_superadmin_and_saves_the_whitelist(self):
         payload = CouncilConfigUpdateRequest(enabled=True, consensus_mode="cross_examination",
                                              timeout_seconds=300.0, roles={"a": {"name": "甲"}})
-        with mock.patch("r20_backend.council_manager.save_council_config",
+        with mock.patch("astra_backend.council_manager.save_council_config",
                         return_value={"saved": True}) as saver:
-            out = C.admin_update_council_config(payload, x_r20_session="t")
+            out = C.admin_update_council_config(payload, x_astra_session="t")
         self.superadmin.assert_called_once_with("t")
         self.assertEqual(out, {"status": "ok", "config": {"saved": True}})
         sent = saver.call_args.args[0]
@@ -88,10 +88,10 @@ class CouncilAdminRoutesTest(unittest.TestCase):
 
     # ── 套用套件 / 重置角色 ────────────────────────────────
     def test_apply_suite_writes_an_audit_record(self):
-        with mock.patch("r20_backend.council_manager.apply_preset_suite",
+        with mock.patch("astra_backend.council_manager.apply_preset_suite",
                         return_value={"ok": 1}):
             out = C.admin_apply_council_suite(CouncilApplySuiteRequest(suite_id="s1"),
-                                              x_r20_session="t")
+                                              x_astra_session="t")
         self.assertEqual(out["status"], "ok")
         self.assertEqual(out["suite_id"], "s1")
         self.assertEqual(self.audits[0][0][0], "council.suite.apply")
@@ -99,44 +99,44 @@ class CouncilAdminRoutesTest(unittest.TestCase):
         self.assertEqual(self.audits[0][0][2]["actor"], "root")
 
     def test_apply_suite_failure_is_400_not_500(self):
-        with mock.patch("r20_backend.council_manager.apply_preset_suite",
+        with mock.patch("astra_backend.council_manager.apply_preset_suite",
                         side_effect=ValueError("没有这个套件")):
             with self.assertRaises(HTTPException) as ctx:
                 C.admin_apply_council_suite(CouncilApplySuiteRequest(suite_id="x"),
-                                            x_r20_session="t")
+                                            x_astra_session="t")
         self.assertEqual(ctx.exception.status_code, 400)
         self.assertIn("没有这个套件", ctx.exception.detail)
 
     def test_reset_role_writes_audit_and_returns_the_role(self):
-        with mock.patch("r20_backend.council_manager.reset_role_template",
+        with mock.patch("astra_backend.council_manager.reset_role_template",
                         return_value={"roles": {}}):
             out = C.admin_reset_council_role(CouncilResetRoleRequest(role_id="cio"),
-                                             x_r20_session="t")
+                                             x_astra_session="t")
         self.assertEqual(out["role_id"], "cio")
         self.assertEqual(self.audits[0][0][0], "council.role.reset")
 
     # ── 导出 / 导入 ──────────────────────────────────────
     def test_export_is_read_only_and_needs_no_superadmin(self):
-        with mock.patch("r20_backend.council_manager.export_council_config",
+        with mock.patch("astra_backend.council_manager.export_council_config",
                         return_value={"exported": True}) as exporter:
-            out = C.admin_export_council_config(x_r20_session="t")
+            out = C.admin_export_council_config(x_astra_session="t")
         self.assertEqual(out, {"exported": True})
         self.superadmin.assert_not_called()
 
     def test_import_bad_payload_is_400(self):
-        with mock.patch("r20_backend.council_manager.import_council_config",
+        with mock.patch("astra_backend.council_manager.import_council_config",
                         side_effect=ValueError("格式不对")):
             with self.assertRaises(HTTPException) as ctx:
                 C.admin_import_council_config(CouncilImportRequest(payload={}),
-                                              x_r20_session="t")
+                                              x_astra_session="t")
         self.assertEqual(ctx.exception.status_code, 400)
         self.assertIn("格式不对", ctx.exception.detail)
 
     def test_import_success_is_audited_and_spread_into_the_response(self):
-        with mock.patch("r20_backend.council_manager.import_council_config",
+        with mock.patch("astra_backend.council_manager.import_council_config",
                         return_value={"roles_imported": 3, "backup_file": "b.json"}):
             out = C.admin_import_council_config(CouncilImportRequest(payload={"a": 1}),
-                                                x_r20_session="t")
+                                                x_astra_session="t")
         self.assertEqual(out["status"], "ok")
         self.assertEqual(out["roles_imported"], 3, "结果**展开**到顶层")
         self.assertEqual(out["backup_file"], "b.json")
@@ -144,13 +144,13 @@ class CouncilAdminRoutesTest(unittest.TestCase):
 
     def test_update_and_reset_both_require_superadmin(self):
         """★ 权限语义：管理面写操作一律超管，**不能**只当普通管理员放行。"""
-        with mock.patch("r20_backend.council_manager.save_council_config",
+        with mock.patch("astra_backend.council_manager.save_council_config",
                         return_value={}):
             C.admin_update_council_config(CouncilConfigUpdateRequest(enabled=True, roles={}),
-                                          x_r20_session="t")
-        with mock.patch("r20_backend.council_manager.reset_role_template", return_value={}):
+                                          x_astra_session="t")
+        with mock.patch("astra_backend.council_manager.reset_role_template", return_value={}):
             C.admin_reset_council_role(CouncilResetRoleRequest(role_id="a"),
-                                       x_r20_session="t")
+                                       x_astra_session="t")
         self.assertEqual(self.superadmin.call_count, 2)
 
 

@@ -19,7 +19,7 @@ def _load_dotenv() -> dict[str, str]:
             if not line or line.startswith("#") or "=" not in line: continue
             key, value = line.split("=", 1); values[key.strip()] = value.strip().strip('"').strip("'")
     try:
-        from r20_gateway.secrets import load_secrets
+        from astra_gateway.secrets import load_secrets
         values.update(load_secrets())
     except Exception:
         pass
@@ -51,7 +51,7 @@ class OKXEnvironment:
 def selected_environment(values: Mapping[str, str] | None = None) -> OKXEnvironment:
     env = dict(_load_dotenv() if values is None else values)
     legacy_simulated = str(env.get("OKX_IS_SIMULATED", "1")).lower() in {"1", "true", "yes"}
-    mode = str(env.get("R20_OKX_ENV") or ("demo" if legacy_simulated else "live")).lower()
+    mode = str(env.get("ASTRA_OKX_ENV") or ("demo" if legacy_simulated else "live")).lower()
     if mode not in ALLOWED_ENVIRONMENTS: mode = "demo"
     prefix = "OKX_DEMO" if mode == "demo" else "OKX_LIVE"
     # A profile is an atomic credential group. A partially entered profile must

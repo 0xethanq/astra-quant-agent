@@ -4,7 +4,7 @@
 - #11 claim_due 租约老化：崩溃遗留 processing 行过租约可重领（功能实测）
 - #12 job_runs 僵尸 running：启动收编 interrupted（功能实测）
 - ② 重定向拒跳 safe_urlopen：本地 302 实测不跟随（真 socket，零外部网）
-- D cleanup_disk：copytruncate 保 inode（活 fd 续写不丢）、/tmp 清扫限 r20-* 前缀
+- D cleanup_disk：copytruncate 保 inode（活 fd 续写不丢）、/tmp 清扫限 astra-* 前缀
 - D 百度 OAuth：token 参数 POST body（secret 不落 query）
 - D 枚举文案：登录四态对外同话术（批5 已并入 test_admin_auth，此处不重复）
 - ⑤ portfolio_aggregator：eq/avail 门对称（半坏卡不渗聚合）
@@ -38,8 +38,8 @@ for _p in (str(ROOT), str(ROOT / "scripts")):
 
 class TestGatewayJobRuns(unittest.TestCase):
     def test_zombie_running_adopted(self):
-        from r20_gateway.store import GatewayStore
-        db = os.path.join(tempfile.mkdtemp(prefix="r20-b5-jr-"), "gw.sqlite3")
+        from astra_gateway.store import GatewayStore
+        db = os.path.join(tempfile.mkdtemp(prefix="astra-b5-jr-"), "gw.sqlite3")
         store = GatewayStore(Path(db))
         run_id = store.begin_job("trader")            # 模拟 running 中进程被杀
         self.assertEqual(store.job_runs(5)[0]["status"], "running")
@@ -52,9 +52,9 @@ class TestGatewayJobRuns(unittest.TestCase):
 
     def test_claim_lease_aging(self):
         from datetime import datetime, timedelta
-        from r20_gateway.store import GatewayStore, BJ_TZ
-        from r20_gateway.events import GatewayEvent
-        db = os.path.join(tempfile.mkdtemp(prefix="r20-b5-cl-"), "gw.sqlite3")
+        from astra_gateway.store import GatewayStore, BJ_TZ
+        from astra_gateway.events import GatewayEvent
+        db = os.path.join(tempfile.mkdtemp(prefix="astra-b5-cl-"), "gw.sqlite3")
         store = GatewayStore(Path(db))
         ev = GatewayEvent(event_type="test", title="t", message="m")
         store.publish(ev, ["webhook"])
@@ -69,7 +69,7 @@ class TestGatewayJobRuns(unittest.TestCase):
         self.assertEqual(len(again), 1, "过期租约的 processing 行必须可老化重领")
 
     def test_worker_loop_tick_not_starved(self):
-        src = (ROOT / "r20_gateway" / "worker.py").read_text(encoding="utf-8")
+        src = (ROOT / "astra_gateway" / "worker.py").read_text(encoding="utf-8")
         self.assertIn("store.claim_due(1)", src)       # 每轮至多一发，发完即回 tick
         self.assertNotIn("claim_due(20)", src)
         loop = src.split("while RUNNING:")[1]
@@ -101,7 +101,7 @@ class _RedirectServer(http.server.BaseHTTPRequestHandler):
 
 class TestNoRedirect(unittest.TestCase):
     def test_safe_urlopen_refuses_302(self):
-        from r20_backend.net_security import safe_urlopen
+        from astra_backend.net_security import safe_urlopen
         import urllib.error
         import urllib.request
         _RedirectServer.followed = False
@@ -126,7 +126,7 @@ class TestCleanupDisk(unittest.TestCase):
     def test_copytruncate_keeps_inode_for_live_writer(self):
         import cleanup_disk as cd
         import shutil
-        d = tempfile.mkdtemp(prefix="r20-b5-cl2-")
+        d = tempfile.mkdtemp(prefix="astra-b5-cl2-")
         # 事故(2026-09-13)：本钉写 10MB 日志却从不清理——全量套件每跑一轮就在 /tmp
         # (256MB tmpfs) 漏 11MB，累积把 tmpfs 撑满→其余测试集体 Errno 28、套件中断。
         # 测试自己造的临时物必须自己收尸（addCleanup 无论成败都执行）。
@@ -149,12 +149,12 @@ class TestCleanupDisk(unittest.TestCase):
         finally:
             live.close()
 
-    def test_tmp_sweep_scoped_to_r20_prefix(self):
+    def test_tmp_sweep_scoped_to_astra_prefix(self):
         lines = [ln for ln in (ROOT / "scripts" / "cleanup_disk.py").read_text(encoding="utf-8").splitlines()
                  if not ln.lstrip().startswith("#")]   # 注释里引用旧命令不算复活
         body = "\n".join(lines)
         self.assertNotIn("-type f -mtime +2 -delete", body)
-        self.assertIn("-maxdepth 1 -name 'r20-*'", body)
+        self.assertIn("-maxdepth 1 -name 'astra-*'", body)
 
 
 class TestBaiduTokenPost(unittest.TestCase):
@@ -169,12 +169,12 @@ class TestBaiduTokenPost(unittest.TestCase):
             if len(captured) == 2:
                 return {"uploadid": "u1"}
             return {"fs_id": "f1"}
-        d = tempfile.mkdtemp(prefix="r20-b5-bd-")
+        d = tempfile.mkdtemp(prefix="astra-b5-bd-")
         import shutil
         self.addCleanup(shutil.rmtree, d, ignore_errors=True)
-        src = Path(d) / "r20_backup_x_20260913_010000.tar.gz"
+        src = Path(d) / "astra_backup_x_20260913_010000.tar.gz"
         src.write_bytes(b"payload-less-than-chunk" * 3)
-        target = {"id": "j", "credential_ref": "c", "remote_path": "R20"}
+        target = {"id": "j", "credential_ref": "c", "remote_path": "ASTRA"}
         with patch.object(br, "_credentials", lambda t: {"app_key": "AK", "app_secret": "SEC",
                                                           "refresh_token": "RT", "access_token": ""}), \
              patch.object(br, "_urlencoded_json", side_effect=fake_json), \
@@ -193,7 +193,7 @@ class TestBaiduTokenPost(unittest.TestCase):
 
 class TestAggregatorSymmetry(unittest.TestCase):
     def test_half_broken_card_does_not_leak_avail(self):
-        from r20_backend.portfolio_aggregator import aggregate_venue_accounts
+        from astra_backend.portfolio_aggregator import aggregate_venue_accounts
         venues = {
             "okx": {"status": "ready", "equity": 1000.0, "available": 800.0, "positions_count": 1, "open_orders_count": 0},
             "gate": {"status": "ready", "equity": -5, "available": 500.0, "positions_count": 2, "open_orders_count": 0},  # eq 坏
@@ -328,9 +328,9 @@ class TestLeverageLanding(unittest.TestCase):
                       if "def run_trading_cycle" in trader_src else trader_src)
 
     def test_three_venues_expose_set_leverage(self):
-        from r20_backend.exchanges.okx import OKXAdapter
-        from r20_backend.exchanges.binance import BinanceAdapter
-        from r20_backend.exchanges.gate import GateAdapter
+        from astra_backend.exchanges.okx import OKXAdapter
+        from astra_backend.exchanges.binance import BinanceAdapter
+        from astra_backend.exchanges.gate import GateAdapter
         import scripts.okx_rest as okx_rest
         for cls in (OKXAdapter, BinanceAdapter, GateAdapter):
             self.assertTrue(callable(cls.set_leverage), cls.__name__)
@@ -352,7 +352,7 @@ class TestLeverageLanding(unittest.TestCase):
 class TestDbManagerTz(unittest.TestCase):
     def test_migration_log_aware_timestamp(self):
         import db_manager as dm
-        d = tempfile.mkdtemp(prefix="r20-b5-db-")
+        d = tempfile.mkdtemp(prefix="astra-b5-db-")
         target = os.path.join(d, "mig.json")
         with patch.object(dm, "migration_log_path", lambda: target):
             dm._write_migration_log({"mode": "alter", "added": 1})

@@ -3,7 +3,7 @@
 ## 这个门在防什么
 
 这三条邀请链接原先**硬编码在前端** `dashboard/AboutModal.vue` 里，与后端
-`r20_backend/config.py` 的 `okx_invite_url` / `gate_invite_url` 是两份各说各话的
+`astra_backend/config.py` 的 `okx_invite_url` / `gate_invite_url` 是两份各说各话的
 字面量。后果不是"显示错了"，而是**"用环境变量把通道换成自己的"这个能力，在用户
 唯一看得见的那一处完全失效** —— 后端改了，界面照旧显示旧链接（Binance 更是压根
 没出现在界面上）。
@@ -32,8 +32,8 @@ from fastapi.testclient import TestClient
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-import r20_backend.app as app_module  # noqa: E402
-import r20_backend.routers.system as system_router  # noqa: E402
+import astra_backend.app as app_module  # noqa: E402
+import astra_backend.routers.system as system_router  # noqa: E402
 
 
 class InviteCodeTest(unittest.TestCase):

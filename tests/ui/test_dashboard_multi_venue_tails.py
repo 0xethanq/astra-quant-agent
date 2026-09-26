@@ -1,4 +1,4 @@
-"""多所看板聚合装配（`r20_backend/dashboard_payload/multi_venue.py`）残余分支收口测试 —— 第 343 刀。
+"""多所看板聚合装配（`astra_backend/dashboard_payload/multi_venue.py`）残余分支收口测试 —— 第 343 刀。
 
 本模块 471 行，是操盘控制台跨所视野核心装配引擎：
 - 云端保护触发价提取（`_protection_triggers`）：非字典跳过、非正价格过滤、Gate auto_size 方向严格校验；
@@ -11,7 +11,7 @@ from __future__ import annotations
 import unittest
 from unittest.mock import MagicMock, patch
 
-from r20_backend.dashboard_payload.multi_venue import (
+from astra_backend.dashboard_payload.multi_venue import (
     _protection_triggers,
     _protection_verdict,
     _venue_orphan_summary,
@@ -98,7 +98,7 @@ class DashboardMultiVenueTailsTests(unittest.TestCase):
         mock_ad.open_orders.return_value = []
         mock_ad.list_protective_orders.return_value = []
 
-        with patch("r20_backend.exchanges.get_adapter", return_value=mock_ad):
+        with patch("astra_backend.exchanges.get_adapter", return_value=mock_ad):
             positions, orders = [], []
             l, s, upl = collect_cross_venue_positions(positions, orders, 0, 0, 0.0)
             self.assertEqual(len(positions), 2)  # binance 与 gate 各 1 笔
@@ -119,7 +119,7 @@ class DashboardMultiVenueTailsTests(unittest.TestCase):
         mock_ad.list_protective_orders.return_value = []
 
         # 隔离**生产** `data/position_trackers.json`：`collect_cross_venue_positions`
-        # 在函数内以 `from r20_backend.config import ROOT` + `ROOT / "data" / …`
+        # 在函数内以 `from astra_backend.config import ROOT` + `ROOT / "data" / …`
         # 拼这个路径（调用期求值）。它**真的会被读**，且内容会塑造判定 ——
         # 本用例断言 `lever == "3x"`，而线上 tracker 里若有该仓的档位，读出来就是别的值。
         #
@@ -133,9 +133,9 @@ class DashboardMultiVenueTailsTests(unittest.TestCase):
         # （不提成模块级常量：`tests/audit/test_production_data_isolation.py` 明确
         #   记录过，那样会让"patch ROOT"这一手失效。）
         #
-        # 同时钉死 `R20_MIN_LEVERAGE`：负杠杆那条分支的回退链是
-        # `_sym_pos.leverage → os.getenv("R20_MIN_LEVERAGE") → 3.0`（multi_venue.py:441）。
-        # 本用例只想验**末端的 3.0 兜底**，但线上 `.env` 里 `R20_MIN_LEVERAGE=5.0`，
+        # 同时钉死 `ASTRA_MIN_LEVERAGE`：负杠杆那条分支的回退链是
+        # `_sym_pos.leverage → os.getenv("ASTRA_MIN_LEVERAGE") → 3.0`（multi_venue.py:441）。
+        # 本用例只想验**末端的 3.0 兜底**，但线上 `.env` 里 `ASTRA_MIN_LEVERAGE=5.0`，
         # 任何在它之前设置过该变量的用例都会把这个断言带偏（实测全量跑时变成 2x）。
         # 故显式移除该键，让断言只依赖被测代码、不依赖运行环境。
         import os
@@ -145,11 +145,11 @@ class DashboardMultiVenueTailsTests(unittest.TestCase):
         env = patch.dict(os.environ)
         env.start()
         self.addCleanup(env.stop)
-        os.environ.pop("R20_MIN_LEVERAGE", None)
+        os.environ.pop("ASTRA_MIN_LEVERAGE", None)
 
-        with tempfile.TemporaryDirectory(prefix="r20-test-trackers-") as _tmp:
-            with patch("r20_backend.config.ROOT", Path(_tmp)), \
-                 patch("r20_backend.exchanges.get_adapter", return_value=mock_ad):
+        with tempfile.TemporaryDirectory(prefix="astra-test-trackers-") as _tmp:
+            with patch("astra_backend.config.ROOT", Path(_tmp)), \
+                 patch("astra_backend.exchanges.get_adapter", return_value=mock_ad):
                 positions, orders = [], []
                 collect_cross_venue_positions(positions, orders, 0, 0, 0.0)
                 # binance 3 单 + gate 3 单
@@ -159,7 +159,7 @@ class DashboardMultiVenueTailsTests(unittest.TestCase):
                 self.assertEqual(orders[0]["cTime"], "")
                 self.assertEqual(
                     orders[0]["lever"], "3x",
-                    "负杠杆应回退到末端 3.0 兜底（此处已清掉 R20_MIN_LEVERAGE）")
+                    "负杠杆应回退到末端 3.0 兜底（此处已清掉 ASTRA_MIN_LEVERAGE）")
                 # 第二单：sell
                 self.assertEqual(orders[1]["side"], "sell")
                 # 第三单：sz 保留原始非数值串
@@ -172,7 +172,7 @@ class DashboardMultiVenueTailsTests(unittest.TestCase):
         mock_ad.capabilities.quantity_unit = "contracts"
         mock_ad.fetch_instrument_spec.side_effect = RuntimeError("spec contract error")
 
-        with patch("r20_backend.exchanges.get_adapter", return_value=mock_ad):
+        with patch("astra_backend.exchanges.get_adapter", return_value=mock_ad):
             positions, orders = [], []
             collect_cross_venue_positions(positions, orders, 0, 0, 0.0)
             # Gate 订单（索引 1）在面值抛异常时保证金安全为 None (line 432)
@@ -180,7 +180,7 @@ class DashboardMultiVenueTailsTests(unittest.TestCase):
 
     def test_collect_cross_venue_positions_outer_exception_suppressed(self):
         # 最外层环境轴或导入异常时静默 pass 并保留原有计数 (line 470)
-        with patch("r20_backend.dashboard_payload.multi_venue._global_env_axis", side_effect=RuntimeError("axis crash")):
+        with patch("astra_backend.dashboard_payload.multi_venue._global_env_axis", side_effect=RuntimeError("axis crash")):
             l, s, upl = collect_cross_venue_positions([], [], 5, 3, 100.5)
             self.assertEqual(l, 5)
             self.assertEqual(s, 3)

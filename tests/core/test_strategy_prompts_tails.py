@@ -1,4 +1,4 @@
-"""策略提示词路由（`r20_backend/routers/strategy/prompts.py`）残余分支收口测试 —— 第 341 刀。
+"""策略提示词路由（`astra_backend/routers/strategy/prompts.py`）残余分支收口测试 —— 第 341 刀。
 
 本模块 378 行，负责方案库（Prompt Profiles）、系统提示词实时覆盖与自进化复盘起始时间配置：
 - 方案 CRUD 异常分流：非法标识拦截（正则格式）、400 校验异常、404 不存在、409 冲突与 500 异常；
@@ -22,12 +22,12 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT / "scripts") not in sys.path:
     sys.path.insert(0, str(ROOT / "scripts"))
 
-import r20_backend.routers.strategy.prompts as sp
+import astra_backend.routers.strategy.prompts as sp
 
 
 class StrategyPromptsTailsTests(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(prefix="r20_prompts_tails_")
+        self.tmp = tempfile.TemporaryDirectory(prefix="astra_prompts_tails_")
         self.addCleanup(self.tmp.cleanup)
         self.temp_override = Path(self.tmp.name) / "system_prompt_override.txt"
 
@@ -261,7 +261,7 @@ class StrategyPromptsTailsTests(unittest.TestCase):
     # 7. 自进化起始时间配置 (evolution/config)
     # -------------------------------------------------------------------------
     def test_get_evolution_config(self):
-        with patch("r20_backend.account_baseline.load_account_baseline", return_value={"evolution_start_time": "2026-09-10 12:00:00"}):
+        with patch("astra_backend.account_baseline.load_account_baseline", return_value={"evolution_start_time": "2026-09-10 12:00:00"}):
             with patch("scripts.self_improvement_engine.load_closed_trades", return_value=[{"id": 1}, {"id": 2}]):
                 res = sp.get_evolution_config()
                 self.assertEqual(res["evolution_start_time"], "2026-09-10 12:00:00")
@@ -270,7 +270,7 @@ class StrategyPromptsTailsTests(unittest.TestCase):
 
     def test_update_evolution_config(self):
         payload = sp.EvolutionConfigUpdate(start_time="2026-09-15 00:00:00")
-        with patch("r20_backend.account_baseline.update_evolution_start_time", return_value={"evolution_start_time": "2026-09-15 00:00:00"}):
+        with patch("astra_backend.account_baseline.update_evolution_start_time", return_value={"evolution_start_time": "2026-09-15 00:00:00"}):
             with patch("scripts.self_improvement_engine.load_closed_trades", return_value=[{"id": 1}]):
                 res = sp.update_evolution_config(payload)
                 self.assertTrue(res["ok"])

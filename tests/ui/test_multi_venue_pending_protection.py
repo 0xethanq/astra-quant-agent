@@ -26,7 +26,7 @@ _ROOT = Path(__file__).resolve().parents[2]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from r20_backend.dashboard_payload.multi_venue import collect_cross_venue_positions
+from astra_backend.dashboard_payload.multi_venue import collect_cross_venue_positions
 
 
 class _FakeAdapter:
@@ -62,8 +62,8 @@ class PendingOrderProtectionDisplayTest(unittest.TestCase):
         # 两个场所，否则同一份夹具会被记两次。
         def _pick(venue, *a, **k):
             return adapter if venue == "binance" else empty
-        with patch("r20_backend.exchanges.get_adapter", _pick), \
-             patch("r20_backend.dashboard_payload.multi_venue._global_env_axis",
+        with patch("astra_backend.exchanges.get_adapter", _pick), \
+             patch("astra_backend.dashboard_payload.multi_venue._global_env_axis",
                    lambda: "demo"):
             collect_cross_venue_positions([], pending, 0, 0, 0.0)
         return pending
@@ -125,12 +125,12 @@ class PendingOrderProtectionDisplayTest(unittest.TestCase):
             {
                 "id": "2100868994629107712",
                 "trigger": {"price": "77060.0", "rule": 2},
-                "initial": {"contract": "BTC_USDT", "text": "t-r20sl21170244", "auto_size": "close_long"}
+                "initial": {"contract": "BTC_USDT", "text": "t-astrasl21170244", "auto_size": "close_long"}
             },
             {
                 "id": "2100952253513859072",
                 "trigger": {"price": "81000.0", "rule": 1},
-                "initial": {"contract": "BTC_USDT", "text": "t-r20tp41020503", "auto_size": "close_long"}
+                "initial": {"contract": "BTC_USDT", "text": "t-astratp41020503", "auto_size": "close_long"}
             }
         ]
         ad = _FakeAdapter(
@@ -165,7 +165,7 @@ class CrossVenueProtectionVerdictTest(unittest.TestCase):
 
     实测的缺口：`collect_algo_protection` 给 OKX 持仓写 `protectionStatus`，
     而外所持仓只有 `exchangeSl`/`exchangeTp` —— 面板上**看不出**"这笔 binance 空仓
-    到底有没有活止损"。而在 `R20_VENUE_PROTECTION_WATCHDOG` 默认关闭的当下
+    到底有没有活止损"。而在 `ASTRA_VENUE_PROTECTION_WATCHDOG` 默认关闭的当下
     （唯一会复核外所腿的周期巡检），这个字段就是运营唯一的可见面。
 
     判据直接复用已有专测的 `venue_protection.scan_protective_orders`
@@ -186,8 +186,8 @@ class CrossVenueProtectionVerdictTest(unittest.TestCase):
         def _pick(venue, *a, **k):
             return ad if venue == "binance" else empty
         errs = errors if errors is not None else []
-        with patch("r20_backend.exchanges.get_adapter", _pick), \
-             patch("r20_backend.dashboard_payload.multi_venue._global_env_axis",
+        with patch("astra_backend.exchanges.get_adapter", _pick), \
+             patch("astra_backend.dashboard_payload.multi_venue._global_env_axis",
                    lambda: "demo"):
             collect_cross_venue_positions(got_positions, pending, 0, 0, 0.0,
                                           source_errors=errs)
@@ -268,9 +268,9 @@ class CrossVenueProtectionVerdictTest(unittest.TestCase):
         empty = _FakeAdapter(open_orders=[], algos=[])
         got_positions: list = []
         errs: list = []
-        with patch("r20_backend.exchanges.get_adapter",
+        with patch("astra_backend.exchanges.get_adapter",
                    lambda v, *a, **k: ad if v == "binance" else empty), \
-             patch("r20_backend.dashboard_payload.multi_venue._global_env_axis",
+             patch("astra_backend.dashboard_payload.multi_venue._global_env_axis",
                    lambda: "demo"):
             collect_cross_venue_positions(got_positions, [], 0, 0, 0.0, source_errors=errs)
         self.assertEqual(len(got_positions), 1, "读腿失败不得吞掉持仓行")
@@ -288,9 +288,9 @@ class CrossVenueProtectionVerdictTest(unittest.TestCase):
         empty = _FakeAdapter(open_orders=[], algos=[])
         got_positions: list = []
         errs: list = []
-        with patch("r20_backend.exchanges.get_adapter",
+        with patch("astra_backend.exchanges.get_adapter",
                    lambda v, *a, **k: _Broken() if v == "binance" else empty), \
-             patch("r20_backend.dashboard_payload.multi_venue._global_env_axis",
+             patch("astra_backend.dashboard_payload.multi_venue._global_env_axis",
                    lambda: "demo"):
             collect_cross_venue_positions(got_positions, [], 0, 0, 0.0, source_errors=errs)
         self.assertEqual(got_positions, [])
@@ -329,8 +329,8 @@ class PendingOrderTimeHonestyTest(unittest.TestCase):
 
         def _pick(venue, *a, **k):
             return ad if venue == "binance" else empty
-        with patch("r20_backend.exchanges.get_adapter", _pick), \
-             patch("r20_backend.dashboard_payload.multi_venue._global_env_axis", lambda: "demo"):
+        with patch("astra_backend.exchanges.get_adapter", _pick), \
+             patch("astra_backend.dashboard_payload.multi_venue._global_env_axis", lambda: "demo"):
             collect_cross_venue_positions([], got, 0, 0, 0.0, source_errors=[])
         return got
 
@@ -365,8 +365,8 @@ class PendingOrderTimeHonestyTest(unittest.TestCase):
     def test_display_time_matches_okx_formatter(self):
         """同格式契约：与 OKX 侧 `order_view` 的 `c_time_str` 对同一时间戳一致。"""
         import datetime as _dt
-        from r20_backend.dashboard_payload.multi_venue import _bj_time_str
-        from r20_backend.dashboard_payload.order_view import collect_pending_order_rows
+        from astra_backend.dashboard_payload.multi_venue import _bj_time_str
+        from astra_backend.dashboard_payload.order_view import collect_pending_order_rows
         tz_bj = _dt.timezone(_dt.timedelta(hours=8))
         okx_rows: list = []
         collect_pending_order_rows(

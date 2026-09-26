@@ -177,48 +177,48 @@ class QuoteGeometryTests(unittest.TestCase):
 # ───────────────────────── risk_constants ─────────────────────────
 class EnvParsingTests(unittest.TestCase):
     def test_a_float_is_parsed(self):
-        with patch.dict(os.environ, {"R20_T": "2.5"}):
-            self.assertEqual(rc._env_float("R20_T", 9.9), 2.5)
+        with patch.dict(os.environ, {"ASTRA_T": "2.5"}):
+            self.assertEqual(rc._env_float("ASTRA_T", 9.9), 2.5)
 
     def test_a_missing_float_uses_the_default(self):
         with patch.dict(os.environ, {}, clear=False):
-            os.environ.pop("R20_T", None)
-            self.assertEqual(rc._env_float("R20_T", 9.9), 9.9)
+            os.environ.pop("ASTRA_T", None)
+            self.assertEqual(rc._env_float("ASTRA_T", 9.9), 9.9)
 
     def test_an_empty_float_uses_the_default(self):
-        with patch.dict(os.environ, {"R20_T": ""}):
-            self.assertEqual(rc._env_float("R20_T", 9.9), 9.9)
+        with patch.dict(os.environ, {"ASTRA_T": ""}):
+            self.assertEqual(rc._env_float("ASTRA_T", 9.9), 9.9)
 
     def test_an_unparsable_float_uses_the_default(self):
         # ★ 第 36 行
         for bad in ("abc", "1,5", "--", "null"):
             with self.subTest(bad=bad):
-                with patch.dict(os.environ, {"R20_T": bad}):
-                    self.assertEqual(rc._env_float("R20_T", 9.9), 9.9)
+                with patch.dict(os.environ, {"ASTRA_T": bad}):
+                    self.assertEqual(rc._env_float("ASTRA_T", 9.9), 9.9)
 
     def test_an_int_is_parsed(self):
-        with patch.dict(os.environ, {"R20_T": "7"}):
-            self.assertEqual(rc._env_int("R20_T", 9), 7)
+        with patch.dict(os.environ, {"ASTRA_T": "7"}):
+            self.assertEqual(rc._env_int("ASTRA_T", 9), 7)
 
     def test_a_float_string_is_truncated_to_int(self):
-        with patch.dict(os.environ, {"R20_T": "7.9"}):
-            self.assertEqual(rc._env_int("R20_T", 9), 7)
+        with patch.dict(os.environ, {"ASTRA_T": "7.9"}):
+            self.assertEqual(rc._env_int("ASTRA_T", 9), 7)
 
     def test_a_missing_int_uses_the_default(self):
         with patch.dict(os.environ, {}, clear=False):
-            os.environ.pop("R20_T", None)
-            self.assertEqual(rc._env_int("R20_T", 9), 9)
+            os.environ.pop("ASTRA_T", None)
+            self.assertEqual(rc._env_int("ASTRA_T", 9), 9)
 
     def test_an_unparsable_int_uses_the_default(self):
         # ★ 第 43 行
         for bad in ("abc", "1,5", ""):
             with self.subTest(bad=bad):
-                with patch.dict(os.environ, {"R20_T": bad}):
-                    self.assertEqual(rc._env_int("R20_T", 9), 9)
+                with patch.dict(os.environ, {"ASTRA_T": bad}):
+                    self.assertEqual(rc._env_int("ASTRA_T", 9), 9)
 
     def test_the_int_parser_also_accepts_scientific_notation(self):
-        with patch.dict(os.environ, {"R20_T": "1e2"}):
-            self.assertEqual(rc._env_int("R20_T", 9), 100)
+        with patch.dict(os.environ, {"ASTRA_T": "1e2"}):
+            self.assertEqual(rc._env_int("ASTRA_T", 9), 100)
 
 
 class ImportTimeGuardTests(unittest.TestCase):
@@ -234,7 +234,7 @@ class ImportTimeGuardTests(unittest.TestCase):
         # ⇒ 必须**先把探针注册进 sys.modules**，否则 KeyError
         sys.modules[name] = probe
         self.addCleanup(sys.modules.pop, name, None)
-        clean = {k: v for k, v in os.environ.items() if not k.startswith("R20_")}
+        clean = {k: v for k, v in os.environ.items() if not k.startswith("ASTRA_")}
         clean.update(env)
         with patch.dict(os.environ, clean, clear=True):
             exec(compile(src, rc.__file__, "exec"), probe.__dict__)  # noqa: S102
@@ -242,34 +242,34 @@ class ImportTimeGuardTests(unittest.TestCase):
 
     def test_an_unimportable_load_dotenv_is_swallowed(self):
         # ★ 第 29 行 —— 后端不在路径时不许让整个常量模块导入失败
-        with patch.dict(sys.modules, {"r20_backend.config": None}):
+        with patch.dict(sys.modules, {"astra_backend.config": None}):
             ns = self._reexec({})
         self.assertIn("MAX_LEVERAGE", ns)
 
     def test_the_leverage_cross_guard_clamps_the_floor(self):
         # ★ 第 62 行 —— 下限越过上限时把**下限**压到上限（更保守）
-        ns = self._reexec({"R20_MIN_LEVERAGE": "9", "R20_MAX_LEVERAGE": "5"})
+        ns = self._reexec({"ASTRA_MIN_LEVERAGE": "9", "ASTRA_MAX_LEVERAGE": "5"})
         self.assertEqual(ns["MAX_LEVERAGE"], 5.0)
         self.assertEqual(ns["MIN_LEVERAGE"], 5.0)
 
     def test_a_normal_leverage_pair_is_left_alone(self):
-        ns = self._reexec({"R20_MIN_LEVERAGE": "2", "R20_MAX_LEVERAGE": "6"})
+        ns = self._reexec({"ASTRA_MIN_LEVERAGE": "2", "ASTRA_MAX_LEVERAGE": "6"})
         self.assertEqual((ns["MIN_LEVERAGE"], ns["MAX_LEVERAGE"]), (2.0, 6.0))
 
     def test_the_rr_cross_guard_clamps_the_ceiling(self):
         # ★ 第 72 行 —— 上限低于下限时把**上限**抬到下限（否则 R:R 闸门自相矛盾）
-        ns = self._reexec({"R20_MIN_RISK_REWARD": "4", "R20_MAX_RISK_REWARD": "1.5"})
+        ns = self._reexec({"ASTRA_MIN_RISK_REWARD": "4", "ASTRA_MAX_RISK_REWARD": "1.5"})
         self.assertEqual(ns["MIN_RISK_REWARD_RATIO"], 4.0)
         self.assertEqual(ns["MAX_RISK_REWARD_RATIO"], 4.0)
 
     def test_a_normal_rr_pair_is_left_alone(self):
-        ns = self._reexec({"R20_MIN_RISK_REWARD": "2", "R20_MAX_RISK_REWARD": "3.5"})
+        ns = self._reexec({"ASTRA_MIN_RISK_REWARD": "2", "ASTRA_MAX_RISK_REWARD": "3.5"})
         self.assertEqual((ns["MIN_RISK_REWARD_RATIO"], ns["MAX_RISK_REWARD_RATIO"]),
                          (2.0, 3.5))
 
     def test_an_equal_pair_is_not_guarded(self):
         # `<` 而非 `<=` ⇒ 相等时不触发
-        ns = self._reexec({"R20_MIN_RISK_REWARD": "3", "R20_MAX_RISK_REWARD": "3"})
+        ns = self._reexec({"ASTRA_MIN_RISK_REWARD": "3", "ASTRA_MAX_RISK_REWARD": "3"})
         self.assertEqual((ns["MIN_RISK_REWARD_RATIO"], ns["MAX_RISK_REWARD_RATIO"]),
                          (3.0, 3.0))
 

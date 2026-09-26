@@ -1,4 +1,4 @@
-"""LLM 配置归一化与归属判定（`r20_backend/llm/store_normalize.py`）残余分支收口测试 —— 第 372 刀。
+"""LLM 配置归一化与归属判定（`astra_backend/llm/store_normalize.py`）残余分支收口测试 —— 第 372 刀。
 
 本模块 195 行，负责 LLM 配置文档归一化、主脑供应商凭据继承与回退链净化：
 - 扁平模型归属遍历跳过（`resolve_brain_provider_attribution` 遍历 `flat_models` 时跳过非主脑模型条目）；
@@ -10,7 +10,7 @@ import os
 import unittest
 from unittest.mock import patch
 
-from r20_backend.llm.store_normalize import (
+from astra_backend.llm.store_normalize import (
     finalize_config_document,
     resolve_brain_provider_attribution,
 )

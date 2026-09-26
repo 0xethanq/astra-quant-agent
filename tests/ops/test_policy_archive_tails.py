@@ -1,4 +1,4 @@
-"""策略归档索引管理与文件解析（`r20_backend/policy/archive.py`）残余分支收口测试 —— 第 357 刀。
+"""策略归档索引管理与文件解析（`astra_backend/policy/archive.py`）残余分支收口测试 —— 第 357 刀。
 
 本模块 132 行，是策略快照整包归档、索引原子写入与损坏自愈核心：
 - 索引加载与损坏重建容错（`load_archive_index`）：
@@ -17,12 +17,12 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from r20_backend.policy.archive import _resolve_archive_file, load_archive_index
+from astra_backend.policy.archive import _resolve_archive_file, load_archive_index
 
 
 class PolicyArchiveTailsTests(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(prefix="r20_policy_archive_tails_")
+        self.tmp = tempfile.TemporaryDirectory(prefix="astra_policy_archive_tails_")
         self.addCleanup(self.tmp.cleanup)
         self.tmp_path = Path(self.tmp.name)
 
@@ -31,7 +31,7 @@ class PolicyArchiveTailsTests(unittest.TestCase):
     # -------------------------------------------------------------------------
     def test_load_archive_index_missing_save_exception_ignored(self):
         # 索引不存在重建后，写入保存抛异常安全 pass 忽略并返回重建结果 (lines 37-38)
-        with patch("r20_backend.policy.archive.save_archive_index", side_effect=OSError("disk read-only")):
+        with patch("astra_backend.policy.archive.save_archive_index", side_effect=OSError("disk read-only")):
             res = load_archive_index(lambda d: [{"policy_hash": "rebuilt_h1"}], archive_dir=self.tmp_path)
             self.assertEqual(res, [{"policy_hash": "rebuilt_h1"}])
 
@@ -50,7 +50,7 @@ class PolicyArchiveTailsTests(unittest.TestCase):
     def test_load_archive_index_corrupt_rebuild_save_exception_ignored(self):
         # 坏 JSON 重建后写盘再次抛异常安全 pass (lines 68-69)
         (self.tmp_path / "index.json").write_text("{ corrupt json", encoding="utf-8")
-        with patch("r20_backend.policy.archive.save_archive_index", side_effect=OSError("write fail")):
+        with patch("astra_backend.policy.archive.save_archive_index", side_effect=OSError("write fail")):
             res = load_archive_index(lambda d: [{"policy_hash": "corrupt_rebuilt"}], archive_dir=self.tmp_path)
             self.assertEqual(res, [{"policy_hash": "corrupt_rebuilt"}])
 

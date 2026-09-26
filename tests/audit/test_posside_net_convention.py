@@ -23,7 +23,7 @@ net↔net / long↔long 都能配上），故列入带理由的允许清单。
 
 ## 本门
 
-AST 扫描 `scripts/` 与 `r20_backend/`：任何提到 `posSide` 的比较，若**不含** `"net"` 容错，
+AST 扫描 `scripts/` 与 `astra_backend/`：任何提到 `posSide` 的比较，若**不含** `"net"` 容错，
 必须出现在允许清单里（附理由），否则判红。允许清单亦有"防腐"检查：条目所指函数必须仍存在
 且仍含 `posSide` 比较。
 """
@@ -40,13 +40,13 @@ ROOT = Path(__file__).resolve().parents[2]
 ALLOWLIST = {
     ("scripts/ledger/okx_history.py", "build_okx_trade"):
         "两侧都取自 OKX 自身流水（net↔net / long↔long 都能配上）",
-    ("r20_backend/okx_trade_service.py", "_position_match"):
+    ("astra_backend/okx_trade_service.py", "_position_match"):
         "intent 的 posSide 取自同一份持仓快照（net↔net）",
-    ("r20_backend/okx_trade_service.py", "fast_close_confirmed"):
+    ("astra_backend/okx_trade_service.py", "fast_close_confirmed"):
         "那是**判断侧向是否显式**（`in {long, short}`）的分支，不是与交易所 posSide 的兼容比较",
 }
 
-SCAN_DIRS = ("scripts", "r20_backend", "r20_gateway", "plugins")
+SCAN_DIRS = ("scripts", "astra_backend", "astra_gateway", "plugins")
 
 
 def _enclosing(tree: ast.AST, lineno: int):
@@ -145,7 +145,7 @@ class PosSideNetConventionTest(unittest.TestCase):
             "def _position_match(o, pos_side):\n"
             "    return o.get('posSide') == pos_side\n"
         )
-        self.assertEqual(find_intolerant_posside_compares(allowed, "r20_backend/okx_trade_service.py"), [],
+        self.assertEqual(find_intolerant_posside_compares(allowed, "astra_backend/okx_trade_service.py"), [],
                          "允许清单里的自洽站点被误判")
 
 
@@ -185,9 +185,9 @@ DEFAULT_ALLOWLIST = {
     ("scripts/trader/cycle_stages.py", "fetch_positions_and_reconcile"):
         "**未计数**而非误判：净持仓模式下新开仓已被上游持仓模式闸拦住"
         "（`execution_router` 的 `entry_ready_position_modes`），故此处不可达",
-    ("r20_backend/exchanges/okx.py", "open_orders"):
+    ("astra_backend/exchanges/okx.py", "open_orders"):
         "归一化透传字段（消费方是 sandbox 假适配器；真机 OKX 恒返回 posSide）",
-    ("r20_backend/routers/strategy/council.py", "admin_test_council_debate"):
+    ("astra_backend/routers/strategy/council.py", "admin_test_council_debate"):
         "面板/辩论文案的展示默认（\"—\"）",
 }
 

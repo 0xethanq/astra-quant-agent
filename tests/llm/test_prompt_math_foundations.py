@@ -1,4 +1,4 @@
-"""Regression tests for R20 mathematical foundations and prompt contracts."""
+"""Regression tests for ASTRA mathematical foundations and prompt contracts."""
 from __future__ import annotations
 import sys
 import unittest
@@ -68,7 +68,7 @@ class PromptMathFoundationsTests(unittest.TestCase):
         self.assertIn("目标 R:R 与绝对盈亏比底线一律以【本周期风险预算】", prompt)
 
     def test_user_prompt_injects_real_1h_math_values(self):
-        missing = "/tmp/r20-test-file-does-not-exist"
+        missing = "/tmp/astra-test-file-does-not-exist"
         with patch.object(ai_brain_trader, "NEWS_SENTIMENT_FILE", missing), patch.object(ai_brain_trader, "AI_MEMORY_MD_FILE", missing), patch.object(ai_brain_trader, "AI_MEMORY_FILE", missing):
             prompt = ai_brain_trader.construct_full_market_prompt([self.package()], current_time_str="2026-09-01 12:00:00", usdt_available=4000)
         for required in ("1H:v=0.61,a=0.27,j=0.18,I=1.12", "E=1.44,A=0.82", "P续=73.5%", "VaR=1.36%,CVaR=1.82%"):

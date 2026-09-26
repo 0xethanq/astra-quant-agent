@@ -30,7 +30,7 @@ from pathlib import Path
 def source_area(module_file: str | Path, *, pkg_name: str | None = None) -> dict[Path, str]:
     """返回「该模块文件 + 同目录下的同名包目录」的全部 .py 源码。
 
-    例：`source_area(r20_backend/council_manager.py)`
+    例：`source_area(astra_backend/council_manager.py)`
         → {council_manager.py, council/__init__.py, council/debate.py, council/policy.py}
         `source_area("scripts/ai_factor_trader.py", pkg_name="trader")`
         → {ai_factor_trader.py, trader/__init__.py, trader/signals.py, trader/factors.py, …}
@@ -521,7 +521,7 @@ def router_domain_source(router_name: str = "strategy", *, root=None) -> str:
     """
     from pathlib import Path as _P
     base = _P(root) if root else _P(__file__).resolve().parents[1]
-    d = base / "r20_backend" / "routers"
+    d = base / "astra_backend" / "routers"
     single = d / f"{router_name}.py"
     if single.exists():
         return single.read_text(encoding="utf-8")

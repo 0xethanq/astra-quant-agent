@@ -8,7 +8,7 @@
    原文件被截断为 0、`.1` 是原内容的副本。
 2. **`/tmp` 清扫只碰本仓前缀**（审计D）—— 旧命令 `find /tmp -type f -mtime +2 -delete`
    扫**整个 /tmp**，把别的程序的临时件（SSH agent socket、测试沙箱、harness 文件）
-   当垃圾删，属严重越权。断言实际下发的命令**限定 `-maxdepth 1 -name 'r20-*'`**。
+   当垃圾删，属严重越权。断言实际下发的命令**限定 `-maxdepth 1 -name 'astra-*'`**。
 3. **深度清理只在磁盘紧张时触发**（阈值 5GB）—— 不该每次巡检都去动 npm 缓存。
 """
 from __future__ import annotations
@@ -153,9 +153,9 @@ class CleanSystemCachesTests(unittest.TestCase):
         # ★ 越权收口：只清 /tmp 顶层、且只清本仓前缀
         tmp_cmd = issued[1][0]
         self.assertIn("-maxdepth 1", tmp_cmd)
-        self.assertIn("-name 'r20-*'", tmp_cmd)
+        self.assertIn("-name 'astra-*'", tmp_cmd)
         self.assertNotIn("-delete", tmp_cmd.replace("-exec rm -rf {} +", ""))
-        self.assertEqual(actions, ["npm cache cleaned", "stale /tmp/r20-* entries cleared"])
+        self.assertEqual(actions, ["npm cache cleaned", "stale /tmp/astra-* entries cleared"])
 
     def test_subprocess_failure_for_each_step_is_swallowed(self):
         with patch.object(cd.subprocess, "run", side_effect=OSError("no npm")):
@@ -172,7 +172,7 @@ class CleanSystemCachesTests(unittest.TestCase):
         with patch.object(cd.subprocess, "run", flaky):
             actions = cd.clean_system_caches()
         self.assertEqual(len(calls), 2)
-        self.assertEqual(actions, ["stale /tmp/r20-* entries cleared"])
+        self.assertEqual(actions, ["stale /tmp/astra-* entries cleared"])
 
 
 class RunCleanupAndCheckTests(unittest.TestCase):

@@ -17,6 +17,7 @@ import types
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+from tests.extraction.rename_baseline import legacy_rev_path, normalize
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
@@ -36,8 +37,8 @@ BODY_DELTAS: list = [
      "except Exception as _rsc_exc:\n"
      "        print(f'[demo rescale] warn {inst_id} 沙盒报价重算失败，按当前值提交: {_rsc_exc}')"),
     # ---- 后台「委托订单模式」：限价单 / 市价单（2026-09）----
-    # 需求：操盘手可在后台切换入场单为**市价**（见 `r20_backend/routers/system.py`
-    # 写 `R20_ORDER_MODE`）。落点必然在这条唯一落单的主路径上 —— 原先 `ord_type`
+    # 需求：操盘手可在后台切换入场单为**市价**（见 `astra_backend/routers/system.py`
+    # 写 `ASTRA_ORDER_MODE`）。落点必然在这条唯一落单的主路径上 —— 原先 `ord_type`
     # 与 `px` 都是字面量（恒限价），要按模式分支就只能改这里。
     # 语义：market ⇒ `ord_type='market'` 且 `px=None`（市价单不带价），
     # 限价 ⇒ 原样传 `effective_px`。`os.getenv` 的兜底仍是 `'limit'`，
@@ -63,7 +64,7 @@ BODY_DELTAS: list = [
     ("print(f'[demo rescale] warn {inst_id} 沙盒报价重算失败，按当前值提交: {_rsc_exc}')"
      "\nfrom scripts.order_risk import validate_quote_geometry_and_rr",
      "print(f'[demo rescale] warn {inst_id} 沙盒报价重算失败，按当前值提交: {_rsc_exc}')"
-     "\norder_mode = str(os.getenv('R20_ORDER_MODE', 'limit')).strip().lower()"
+     "\norder_mode = str(os.getenv('ASTRA_ORDER_MODE', 'limit')).strip().lower()"
      "\nif order_mode == 'market':"
      "\n    from scripts.trader.brackets import reanchor_brackets_to_market"
      "\n    _mk_prec = len(str(_tick_last_raw).split('.')[1]) if '.' in str(_tick_last_raw) else 4"
@@ -92,10 +93,15 @@ INJ = ("confirm_signal_reservation", "record_open_intent", "release_signal_reser
 
 
 def _base_text() -> str:
-    r = subprocess.run(["git", "show", f"{PRE}:scripts/ai_factor_trader.py"],
+    """基线源码，**已归一命名空间**（r20_* → astra_*）。
+
+    本门比较的是**段体源码文本**（不是 AST），所以归一必须落在取源码这一步；
+    只包 `ast.parse()` 是不够的。
+    """
+    r = subprocess.run(["git", "show", legacy_rev_path(f"{PRE}:scripts/ai_factor_trader.py")],
                        capture_output=True, text=True, cwd=str(ROOT))
     assert r.returncode == 0, f"基线取不到：{r.stderr[:200]}"
-    return r.stdout
+    return normalize(r.stdout)
 
 
 def _get_func(tree: ast.Module, name: str) -> ast.FunctionDef:
@@ -176,7 +182,7 @@ class OrderSubmitVerbatimTest(unittest.TestCase):
         bad_registry = types.SimpleNamespace(
             native_symbol_pure=lambda *a, **k: (_ for _ in ()).throw(RuntimeError("no meta")))
         with patch.dict(os.environ,
-                        {"R20_MAX_PRICE_CROSS_PCT": "0.005", "R20_ORDER_MODE": "limit"},
+                        {"ASTRA_MAX_PRICE_CROSS_PCT": "0.005", "ASTRA_ORDER_MODE": "limit"},
                         clear=False), \
              patch.object(aft, "current_environment", self._stub_env), \
              patch.object(aft, "fetch_ticker", lambda inst: {"last": 100.0}), \
@@ -196,7 +202,7 @@ class OrderSubmitVerbatimTest(unittest.TestCase):
             place_order=lambda *a, **k: (_ for _ in ()).throw(RuntimeError("not placed")),
             pending_orders=lambda *a, **k: [], cancel_order=lambda *a, **k: None)
         with patch.dict(os.environ,
-                        {"R20_MAX_PRICE_CROSS_PCT": "0.005", "R20_ORDER_MODE": "limit"},
+                        {"ASTRA_MAX_PRICE_CROSS_PCT": "0.005", "ASTRA_ORDER_MODE": "limit"},
                         clear=False), \
              patch.object(aft, "current_environment", self._stub_env), \
              patch.object(aft, "fetch_ticker", lambda inst: {"last": 100.0}), \

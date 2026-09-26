@@ -98,7 +98,7 @@ def persist_venue_decision(inst_id: str, venue_decision: Dict[str, Any], *,
         # 审计③(2026-09-13)：本函数与主脑（ai_brain_trader 整档覆盖写）是同一文件的
         # 两路常驻写者——每次写虽原子，但 读→merge→写 之间可被对方插队（lost update，
         # 证据回退/整轮决策被旧副本覆盖）。RMW 外包 flock 互斥（同 evolution_shield 路数）。
-        from r20_backend.file_locks import file_lock
+        from astra_backend.file_locks import file_lock
         with file_lock(AI_DECISION_CACHE_FILE):
             with open(AI_DECISION_CACHE_FILE, "r", encoding="utf-8") as handle:
                 cache = json.load(handle)

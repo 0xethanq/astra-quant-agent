@@ -13,12 +13,12 @@ from pathlib import Path
 from unittest.mock import patch
 from urllib.error import HTTPError
 
-from r20_backend.exchanges import env_profiles as ep
-from r20_backend.exchanges.base import ExchangeCapabilityError
-from r20_backend.exchanges.binance import BinanceAdapter
-from r20_backend.exchanges.gate import GateAdapter
-from r20_backend.exchanges.okx import OKXPublicAdapter
-from r20_backend.exchanges import registry as reg
+from astra_backend.exchanges import env_profiles as ep
+from astra_backend.exchanges.base import ExchangeCapabilityError
+from astra_backend.exchanges.binance import BinanceAdapter
+from astra_backend.exchanges.gate import GateAdapter
+from astra_backend.exchanges.okx import OKXPublicAdapter
+from astra_backend.exchanges import registry as reg
 
 
 _ENV_GUARD = None
@@ -26,13 +26,13 @@ _PROFILE_GUARD = None
 
 
 def setUpModule():
-    """封闭三律：清掉宿主 .env 注入的 R20_* 旗标（config.load_dotenv 在 import 时
+    """封闭三律：清掉宿主 .env 注入的 ASTRA_* 旗标（config.load_dotenv 在 import 时
     写入 os.environ），并把探测持久化文件钉到 tmp——本模块测试不得读写真实 data/。"""
     global _ENV_GUARD, _PROFILE_GUARD
     import os as _os
     ambient = {k: "0" for k in _os.environ
-               if k.startswith(("R20_BINANCE_TESTNET", "R20_GATE_TESTNET",
-                                "R20_OKX_ENV", "R20_OKX_TESTNET"))}
+               if k.startswith(("ASTRA_BINANCE_TESTNET", "ASTRA_GATE_TESTNET",
+                                "ASTRA_OKX_ENV", "ASTRA_OKX_TESTNET"))}
     _ENV_GUARD = patch.dict(_os.environ, ambient, clear=False)
     _ENV_GUARD.start()
     tmp = tempfile.NamedTemporaryFile(suffix=".json", delete=False)
@@ -87,12 +87,12 @@ class ProfileTableTest(unittest.TestCase):
 
 
 class LegacyFlagCompatTest(unittest.TestCase):
-    """R20_{VENUE}_TESTNET 旧布尔开关 → 档位兼容映射，现有调用点语义不破坏。"""
+    """ASTRA_{VENUE}_TESTNET 旧布尔开关 → 档位兼容映射，现有调用点语义不破坏。"""
 
     def test_binance_flag_maps_to_same_url_as_legacy(self):
-        with patch.dict("os.environ", {"R20_BINANCE_TESTNET": "1"}):
+        with patch.dict("os.environ", {"ASTRA_BINANCE_TESTNET": "1"}):
             self.assertEqual(BinanceAdapter().base_url, "https://demo-fapi.binance.com")
-        with patch.dict("os.environ", {"R20_BINANCE_TESTNET": "0"}):
+        with patch.dict("os.environ", {"ASTRA_BINANCE_TESTNET": "0"}):
             self.assertEqual(BinanceAdapter().base_url, "https://fapi.binance.com")
 
     def test_default_is_live_without_flag(self):
@@ -106,13 +106,13 @@ class LegacyFlagCompatTest(unittest.TestCase):
 
     def test_okx_flag_has_no_effect_structurally(self):
         # OKX 从未声明沙盒适配器档：flag 开也维持 live（与旧实现一致）
-        with patch.dict("os.environ", {"R20_OKX_TESTNET": "1"}):
+        with patch.dict("os.environ", {"ASTRA_OKX_TESTNET": "1"}):
             ad = OKXPublicAdapter()
         self.assertEqual(ad.base_url, "https://www.okx.com")
         self.assertEqual(ep.legacy_environment_for("okx"), "live")
 
     def test_explicit_environment_wins_over_flag(self):
-        with patch.dict("os.environ", {"R20_BINANCE_TESTNET": "1"}):
+        with patch.dict("os.environ", {"ASTRA_BINANCE_TESTNET": "1"}):
             ad = BinanceAdapter(environment="live")
         self.assertEqual(ad.base_url, "https://fapi.binance.com")
         self.assertEqual(ad.environment, "live")
@@ -194,7 +194,7 @@ class SignedTrafficPinningTest(unittest.TestCase):
             raise HTTPError(req.full_url, 500, "boom", {},
                             io.BytesIO(b'{"label":"SERVER_ERROR","message":"x"}'))
 
-        with patch("r20_backend.exchanges.gate.urlopen", fake_urlopen), \
+        with patch("astra_backend.exchanges.gate.urlopen", fake_urlopen), \
              patch.object(self.ad, "_keys", return_value=("k", "s")):
             with self.assertRaises(Exception) as cm:
                 self.ad.account_snapshot()
@@ -232,12 +232,12 @@ class RegistryEnvKeyingTest(unittest.TestCase):
     def test_legacy_flag_via_registry(self):
         pin = "https://fx-api-testnet.gateio.ws"
         ep._persist("gate", "sandbox", pin, {pin: 10, "https://api-testnet.gateapi.io": None})
-        with patch.dict("os.environ", {"R20_GATE_TESTNET": "1"}), \
+        with patch.dict("os.environ", {"ASTRA_GATE_TESTNET": "1"}), \
              patch.object(ep, "_probe_candidate", lambda u: self.fail("钉死后不得再探测")):
             ad = reg.get_adapter("gate")
         self.assertEqual(ad.base_url, pin)
         self.assertEqual(ad.environment, "sandbox")
-        with patch.dict("os.environ", {"R20_GATE_TESTNET": "1"}):
+        with patch.dict("os.environ", {"ASTRA_GATE_TESTNET": "1"}):
             self.assertEqual(reg.adapter_environment("gate"), "sandbox")
 
     def test_import_time_zero_side_effects(self):

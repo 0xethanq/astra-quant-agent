@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * AdminLayout.vue · R20 开发者工作台外壳
+ * AdminLayout.vue · ASTRA 开发者工作台外壳
  * ---------------------------------------------------------------------------
  * 视觉语言：DeepSeek Harness 侧边导航工作台
  *   · 画布与侧栏同底（#0a0a0a），靠 6% 发丝描边分区，不用独立侧栏底色
@@ -42,7 +42,7 @@ const auth = useAuthStore();
 const { t } = useI18n();
 const { theme, toggleTheme } = useTheme();
 
-const collapsed = useLocalStorage('r20_admin_sidebar', false);
+const collapsed = useLocalStorage('astra_admin_sidebar', false);
 const drawerOpen = ref(false);
 
 const currentKey = computed(() => (route.name as string) || 'admin-overview');

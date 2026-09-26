@@ -5,7 +5,7 @@
 本仓为"机器状态混进仓库"付过两次代价：`data/prompt_library.json` 被 `git add -f`
 强加进来、`.archive/` 里 7 个文件被 `-f` 强加。第三次就发生在写这道门的当天：
 
-`data/.r20_gateway_heartbeat` 是 worker **每秒重写**的存活心跳。`.gitignore` 的
+`data/.astra_gateway_heartbeat` 是 worker **每秒重写**的存活心跳。`.gitignore` 的
 `data/` 段落是按**扩展名**列举的（`*.json` / `*.lock` / `*.pid` …），而这个文件
 **没有扩展名** ⇒ 一条规则都没匹配上 ⇒ `git add -A` 把它扫进了提交。
 
@@ -68,11 +68,11 @@ def test_the_extensionless_runtime_prefix_is_ignored():
     故 `.gitignore` 必须同时有一条按前缀的兜底；这里直接问 git 要答案，
     而不是去正则匹配 .gitignore 的文本。
     """
-    heartbeat = ROOT / "data" / ".r20_gateway_heartbeat"
+    heartbeat = ROOT / "data" / ".astra_gateway_heartbeat"
     done = subprocess.run(["git", "check-ignore", "-q", str(heartbeat.relative_to(ROOT))],
                           cwd=ROOT, capture_output=True, text=True)
     assert done.returncode == 0, (
-        "data/.r20_gateway_heartbeat 未被忽略 ⇒ 下一次 git add -A 又会把它扫进来")
+        "data/.astra_gateway_heartbeat 未被忽略 ⇒ 下一次 git add -A 又会把它扫进来")
 
 
 if __name__ == "__main__":

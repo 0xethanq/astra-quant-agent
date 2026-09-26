@@ -147,8 +147,8 @@ class _Harness(unittest.TestCase):
 
 class PortfolioRiskBudgetTests(unittest.TestCase):
     def _budget(self, raw):
-        with patch.dict(os.environ, {"R20_X": raw}):
-            return rp.portfolio_risk_budget_usdt(PORTFOLIO_RISK_BUDGET_ENV="R20_X")
+        with patch.dict(os.environ, {"ASTRA_X": raw}):
+            return rp.portfolio_risk_budget_usdt(PORTFOLIO_RISK_BUDGET_ENV="ASTRA_X")
 
     def test_valid_value_is_parsed(self):
         self.assertEqual(self._budget("750.5"), 750.5)
@@ -158,8 +158,8 @@ class PortfolioRiskBudgetTests(unittest.TestCase):
 
     def test_unset_variable_is_zero(self):
         with patch.dict(os.environ, {}, clear=False):
-            os.environ.pop("R20_X", None)
-            self.assertEqual(rp.portfolio_risk_budget_usdt(PORTFOLIO_RISK_BUDGET_ENV="R20_X"),
+            os.environ.pop("ASTRA_X", None)
+            self.assertEqual(rp.portfolio_risk_budget_usdt(PORTFOLIO_RISK_BUDGET_ENV="ASTRA_X"),
                              0.0)
 
     def test_empty_string_is_zero(self):

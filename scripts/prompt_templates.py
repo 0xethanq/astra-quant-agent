@@ -65,7 +65,16 @@ def stable_base_module_id(title: str) -> str:
     「同 id/同标题继承来源」只能靠标题兜底，方案库里 base 模块 id 每存一次就翻新一遍
     （P1-2/批5 同族）。基座模块内容由代码决定，id 派生自标题即可稳定。
     """
-    digest = hashlib.sha1(f"r20-base-module::{title}".encode("utf-8")).hexdigest()[:10]
+    # ⚠️ 种子串随 2026-09-27「r20 → astra 全量改名」一起改了（`r20-base-module::` →
+    #    `astra-base-module::`）。**已核实这是安全的**，三条证据：
+    #      ① 出厂基线 `data/prompt_library.json` 里**没有任何** `module-base-*` id
+    #         （实测 0 条）—— 它不持久化这类 id，id 每次都由标题现算；
+    #      ② 模块合并是**按标题**匹配的（`prompt_library.py` 的 `base_by_title`），
+    #         且残留基座模块只在"标题未被匹配"时才追加 ⇒ 用户本地库里就算存着
+    #         旧种子算出的 id，也只是被重新派生一次，不会产生重复预设；
+    #      ③ 这个串是**哈希输入**，不对用户显示，也不参与任何对外契约。
+    #    换言之：改它只会让 id 换一批，而 id 与标题是 1:1 的确定性映射。
+    digest = hashlib.sha1(f"astra-base-module::{title}".encode("utf-8")).hexdigest()[:10]
     return f"module-base-{digest}"
 
 def _module(module: dict[str, Any], index: int = 0, *,

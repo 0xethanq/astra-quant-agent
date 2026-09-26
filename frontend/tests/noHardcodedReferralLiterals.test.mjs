@@ -8,7 +8,7 @@
  * | 位置 | 角色 |
  * |---|---|
  * | `scripts/okx_rest.py` | **权威**：随每笔订单发出的经纪商 tag |
- * | `r20_backend/config.py` | 权威：三条邀请链接（环境变量可覆盖） |
+ * | `astra_backend/config.py` | 权威：三条邀请链接（环境变量可覆盖） |
  * | `dashboard/AboutModal.vue` | 副本：用户可见的通道卡（硬编码） |
  * | `views/admin/SecurityPage.vue` | 副本：后台凭证页的 code 与注册按钮（硬编码） |
  *

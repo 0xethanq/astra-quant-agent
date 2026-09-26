@@ -1,15 +1,15 @@
-"""`r20_backend/dashboard_payload/cache_payload.py`（阶段 4·B3 第三十六刀）回归。
+"""`astra_backend/dashboard_payload/cache_payload.py`（阶段 4·B3 第三十六刀）回归。
 
 ## 抽了什么
 
-`r20_backend/dashboard_cache.py::update_cache_cycle` 的 **92 行 `CACHE_DATA` 字面量** —— 该函数里
-最大的一块，也是 `r20_backend/dashboard_cache.py` 里唯一的大块。搬进
+`astra_backend/dashboard_cache.py::update_cache_cycle` 的 **92 行 `CACHE_DATA` 字面量** —— 该函数里
+最大的一块，也是 `astra_backend/dashboard_cache.py` 里唯一的大块。搬进
 `build_live_cache_payload(...)`，56 个入参**显式列在签名里**。
 
 | | 之前 | 之后 |
 |---|---|---|
 | `update_cache_cycle()` | 330 行 | **259 行** |
-| `r20_backend/dashboard_cache.py` | 671 行 | **603 行** |
+| `astra_backend/dashboard_cache.py` | 671 行 | **603 行** |
 
 ## 这个测试在守什么
 
@@ -24,7 +24,7 @@ performance 10 项。装配时**漏一个字段不会报错** —— 前端静�
    （含 `data_health.partial` 是**布尔**、`margin_usage_pct` 是**数值**等易错点）。
 3. **注入缝**：三个测试缝（`load_instruments` / `build_ai_health` /
    `_load_cross_venue_data`）必须**出现在签名里**、由门面调用期传入，
-   且本模块**不得** import `r20_backend.dashboard_cache`。
+   且本模块**不得** import `astra_backend.dashboard_cache`。
 
 > **已经做过的最强验证（记在这里，供后人判断本测试够不够）**：
 > 本轮用**另一个 git worktree 跑改动前的代码**，在**同一套 `patch.object` 环境**下
@@ -51,8 +51,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-MODULE = ROOT / "r20_backend" / "dashboard_payload" / "cache_payload.py"
-FACADE = ROOT / "r20_backend" / "dashboard_cache.py"
+MODULE = ROOT / "astra_backend" / "dashboard_payload" / "cache_payload.py"
+FACADE = ROOT / "astra_backend" / "dashboard_cache.py"
 
 SEAMS = ("load_instruments", "build_ai_health", "_load_cross_venue_data")
 
@@ -132,7 +132,7 @@ class SignatureContractTest(unittest.TestCase):
             self.assertIn(seam, params, f"{seam} 必须在签名里，否则 patch.object 会被绕过")
 
     def test_module_does_not_import_dashboard_app(self):
-        """本模块**不得** import `r20_backend.dashboard_cache`（会构成循环）。
+        """本模块**不得** import `astra_backend.dashboard_cache`（会构成循环）。
 
         我第一版写成函数体内 `from dashboard import app as _app` —— 被既有闸
         `test_dashboard_payload_seam.py::test_core_modules_do_not_import_dashboard_app`
@@ -141,13 +141,13 @@ class SignatureContractTest(unittest.TestCase):
         tree = _load(MODULE)
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom):
-                self.assertNotEqual(node.module, "r20_backend.dashboard_cache")
+                self.assertNotEqual(node.module, "astra_backend.dashboard_cache")
                 # 第 143 刀：原防 `from dashboard import app`（旧顶层包），
-                # 现门面在 r20_backend 包内 ⇒ 防 `from r20_backend import dashboard_cache`
+                # 现门面在 astra_backend 包内 ⇒ 防 `from astra_backend import dashboard_cache`
                 self.assertNotIn("dashboard_cache", [a.name for a in node.names]
-                                 if node.module == "r20_backend" else [])
+                                 if node.module == "astra_backend" else [])
             if isinstance(node, ast.Import):
-                self.assertNotIn("r20_backend.dashboard_cache", [a.name for a in node.names])
+                self.assertNotIn("astra_backend.dashboard_cache", [a.name for a in node.names])
 
     def test_module_is_pure_at_import(self):
         """模块层不得有任何可调用副作用（无 I/O、无 loader 绑定）。"""
@@ -165,7 +165,7 @@ class PayloadStructureTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         from unittest.mock import patch
-        import r20_backend.dashboard_cache as app
+        import astra_backend.dashboard_cache as app
 
         cls.app = app
         cls._stack = patch.multiple(
@@ -183,7 +183,7 @@ class PayloadStructureTest(unittest.TestCase):
         cls._stack.stop()
 
     def _payload(self, **over):
-        from r20_backend.dashboard_payload.cache_payload import build_live_cache_payload
+        from astra_backend.dashboard_payload.cache_payload import build_live_cache_payload
         params, _ = _sig_names()
         # 中性入参：数值 0/空容器，便于分辨"某个字段被漏装配"
         args = {p: 0.0 for p in params}

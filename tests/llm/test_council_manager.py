@@ -1,7 +1,7 @@
 import time
 import unittest
 from unittest.mock import patch, MagicMock
-from r20_backend.council_manager import (
+from astra_backend.council_manager import (
     load_council_config,
     save_council_config,
     reset_role_template,
@@ -53,7 +53,7 @@ class TestCouncilManager(unittest.TestCase):
         )
 
     def test_consensus_mode_and_suites(self):
-        from r20_backend.council_manager import get_preset_suites, apply_preset_suite
+        from astra_backend.council_manager import get_preset_suites, apply_preset_suite
         suites = get_preset_suites()
         self.assertGreaterEqual(len(suites), 1)
         suite_ids = [s["id"] for s in suites]
@@ -84,7 +84,7 @@ class TestCouncilManager(unittest.TestCase):
             250
         )
 
-        with patch("r20_backend.llm_manager.execute_llm_request") as mock_exec:
+        with patch("astra_backend.llm_manager.execute_llm_request") as mock_exec:
             mock_exec.side_effect = [
                 mock_trader_return,
                 mock_trader_return,
@@ -131,7 +131,7 @@ class TestCouncilManager(unittest.TestCase):
             200
         )
 
-        with patch("r20_backend.llm_manager.execute_llm_request") as mock_exec:
+        with patch("astra_backend.llm_manager.execute_llm_request") as mock_exec:
             mock_exec.side_effect = [
                 mock_trader_return, mock_trader_return, mock_trader_return,
                 mock_cio_json,
@@ -166,7 +166,7 @@ class TestCouncilManager(unittest.TestCase):
             200
         )
 
-        with patch("r20_backend.llm_manager.execute_llm_request") as mock_exec:
+        with patch("astra_backend.llm_manager.execute_llm_request") as mock_exec:
             # 3 proposals (trader_trend, trader_momentum, trader_quant)
             # 3 critiques
             # 1 CIO arbitration
@@ -235,8 +235,8 @@ class TestCouncilManager(unittest.TestCase):
             }
 
         with patch("time.time", side_effect=fake_time), \
-             patch("r20_backend.council_manager._call_single_trader", side_effect=fake_trader_exec), \
-             patch("r20_backend.llm_manager.execute_llm_request", return_value=(mock_cio_json[0], "", {}, 150)):
+             patch("astra_backend.council_manager._call_single_trader", side_effect=fake_trader_exec), \
+             patch("astra_backend.llm_manager.execute_llm_request", return_value=(mock_cio_json[0], "", {}, 150)):
 
             brain_output, transcript = execute_council_debate(
                 market_prompt="BTC: 77000",
@@ -267,8 +267,8 @@ class SeatBindingWriteGateFailClosedTest(unittest.TestCase):
     """
 
     def test_unreadable_model_library_blocks_save(self):
-        from r20_backend.council import roster
-        with patch("r20_backend.llm_manager.load_llm_config",
+        from astra_backend.council import roster
+        with patch("astra_backend.llm_manager.load_llm_config",
                    side_effect=OSError("模型库读不出来")):
             problems = roster.validate_seat_model_bindings(
                 {"cio": {"model_id": "some-model"}}, {})
@@ -278,8 +278,8 @@ class SeatBindingWriteGateFailClosedTest(unittest.TestCase):
 
     def test_save_council_config_raises_with_the_reason(self):
         """行为闭环：问题列表被调用方转成 ValueError（管理页可见原因）。"""
-        from r20_backend import council_manager
-        with patch("r20_backend.llm_manager.load_llm_config",
+        from astra_backend import council_manager
+        with patch("astra_backend.llm_manager.load_llm_config",
                    side_effect=OSError("模型库读不出来")), \
              patch.object(council_manager, "COUNCIL_CONFIG_FILE", "/tmp/nonexistent-council.json"):
             with self.assertRaises(ValueError) as ctx:
@@ -289,17 +289,17 @@ class SeatBindingWriteGateFailClosedTest(unittest.TestCase):
 
     def test_empty_library_is_not_treated_as_unreadable(self):
         """合法为空（全新环境）仍放行：没有任何绑定可能合法，堵死首次配置没有意义。"""
-        from r20_backend.council import roster
-        with patch("r20_backend.llm_manager.load_llm_config",
+        from astra_backend.council import roster
+        with patch("astra_backend.llm_manager.load_llm_config",
                    return_value={"models": []}):
             self.assertEqual(roster.validate_seat_model_bindings(
                 {"cio": {"model_id": "x"}}, {}), [])
 
     def test_registered_ids_still_pass_and_unknown_ids_still_fail(self):
         """回归护栏：正常路径语义不变。"""
-        from r20_backend.council import roster
+        from astra_backend.council import roster
         cfg = {"models": [{"id": "deepseek-v4"}, {"id": "glm-4.6"}]}
-        with patch("r20_backend.llm_manager.load_llm_config", return_value=cfg):
+        with patch("astra_backend.llm_manager.load_llm_config", return_value=cfg):
             self.assertEqual(roster.validate_seat_model_bindings(
                 {"cio": {"model_id": "deepseek-v4"}}, {}), [])
             problems = roster.validate_seat_model_bindings(

@@ -89,7 +89,7 @@ class PayloadBoundedTest(unittest.TestCase):
 
 class SidecarToSourceErrorsTest(unittest.TestCase):
     def setUp(self):
-        from r20_backend.dashboard_payload import integrity_sidecars as I
+        from astra_backend.dashboard_payload import integrity_sidecars as I
         self.I = I
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)

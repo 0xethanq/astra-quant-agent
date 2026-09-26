@@ -1,8 +1,8 @@
 """测试环境统一隔离。
 
-生产 .env 可能带有用户经后台「风控管理页」应用的套件/自定义覆盖值（R20_* 风控键），
+生产 .env 可能带有用户经后台「风控管理页」应用的套件/自定义覆盖值（ASTRA_* 风控键），
 而全部引擎测试的断言基线是代码默认值。本模块在 discover 导入任何测试模块之前：
-1) 先正常 import r20_backend.config，完成真实 .env 加载（OKX/LLM/QQ 等配置是测试需要的）；
+1) 先正常 import astra_backend.config，完成真实 .env 加载（OKX/LLM/QQ 等配置是测试需要的）；
 2) 禁用后续 load_dotenv 回灌（refresh_settings/update_env 每次都会调用它）；
 3) 用静态键表从进程环境剥离全部风控覆盖键——必须在 import risk_constants 之前完成，
    因为其常量在 import 时一次性绑定；
@@ -17,29 +17,29 @@ from pathlib import Path
 
 # 审计卫生（2026-09-13 清积压）：audit.py / self_improvement_engine.log_msg 的
 # 路径此前是模块级硬编码、不可重定向，走 TestClient 的后台测试把伪造记录直写
-# 生产 logs/r20_admin_audit.jsonl（实测 2000+ 条 testclient）与
+# 生产 logs/astra_admin_audit.jsonl（实测 2000+ 条 testclient）与
 # self_improvement.log（fake "corrupt" 行）。二者已改为调用时读环境变量；这里
 # 在 discover 导入任何测试模块之前把变量指到会话级临时目录，一次性隔离所有
 # 此类落盘副作用（律①：测试不触生产文件）。
-_TEST_SANDBOX = tempfile.mkdtemp(prefix="r20-tests-")
+_TEST_SANDBOX = tempfile.mkdtemp(prefix="astra-tests-")
 
 # ⚠️ 四个生产 sqlite 库的**环境覆盖**必须在这里就设好 —— 这是文件最早的可执行点，
-# 早于任何 `r20_backend.*` import（`r20_backend/dependencies.py` 在 import 期就建
+# 早于任何 `astra_backend.*` import（`astra_backend/dependencies.py` 在 import 期就建
 # `AdminAuthStore()`）。生产**从不设置**这四个变量 ⇒ 生产行为逐位不变；
 # 测试里它们指向会话临时目录，于是"忘加沙箱"的测试也连不到生产库。
 # 为什么要用 env 而不是只 patch 常量：`db_manager` 存在**双拼写**两个模块实例
 # （`scripts.db_manager` 与顶层 `db_manager`），只 patch 常量会漏掉另一个
 # —— 本刀实测正是它漏了 2 次生产连接（`ai_factor_trader` 走 `from db_manager import`）。
-os.environ.setdefault("R20_QUANT_DB", os.path.join(_TEST_SANDBOX, "r20_quant.db"))
-os.environ.setdefault("R20_RISK_RESERVATION_DB",
+os.environ.setdefault("ASTRA_QUANT_DB", os.path.join(_TEST_SANDBOX, "astra_quant.db"))
+os.environ.setdefault("ASTRA_RISK_RESERVATION_DB",
                       os.path.join(_TEST_SANDBOX, "risk_reservation.db"))
-os.environ.setdefault("R20_ADMIN_DB", os.path.join(_TEST_SANDBOX, "r20_admin.db"))
-os.environ.setdefault("R20_GATEWAY_DB", os.path.join(_TEST_SANDBOX, "r20_gateway.db"))
+os.environ.setdefault("ASTRA_ADMIN_DB", os.path.join(_TEST_SANDBOX, "astra_admin.db"))
+os.environ.setdefault("ASTRA_GATEWAY_DB", os.path.join(_TEST_SANDBOX, "astra_gateway.db"))
 
 # 会话级沙箱必须在进程退出时清掉。
 #
 # 2026-09-14 实测：本会话反复运行全量套件后，/tmp（256M tmpfs）里积了 **6000+ 个**
-# `r20-tests-*` 空目录，把 /tmp 用到 94%，导致 `No space left on device`，
+# `astra-tests-*` 空目录，把 /tmp 用到 94%，导致 `No space left on device`，
 # 进而让 `test_copytruncate_keeps_inode_for_live_writer` 这类**真的往 /tmp 写文件**
 # 的测试假红（它断言的是"轮转成功"，失败信息里才看到 ENOSPC）。
 #
@@ -58,30 +58,30 @@ import atexit as _atexit
 
 _atexit.register(_cleanup_test_sandbox)
 
-os.environ.setdefault("R20_AUDIT_FILE", os.path.join(_TEST_SANDBOX, "r20_admin_audit.jsonl"))
-os.environ.setdefault("R20_SELF_IMPROVEMENT_LOG", os.path.join(_TEST_SANDBOX, "self_improvement.log"))
+os.environ.setdefault("ASTRA_AUDIT_FILE", os.path.join(_TEST_SANDBOX, "astra_admin_audit.jsonl"))
+os.environ.setdefault("ASTRA_SELF_IMPROVEMENT_LOG", os.path.join(_TEST_SANDBOX, "self_improvement.log"))
 # 批E(2026-09-13)：仪表盘载荷构建在台账 >60s 未更新时会 spawn 真实台账同步子进程
 # （打三所接口 + 重写 data/trading_ledger.json）。仪表盘相关测试走真实 DATA_DIR，
 # 于是测试会打真网络并改写生产台账——同款隔离：默认禁用该触发点。生产不设此变量。
-os.environ.setdefault("R20_LEDGER_SYNC_DISABLED", "1")
+os.environ.setdefault("ASTRA_LEDGER_SYNC_DISABLED", "1")
 
-import r20_backend.config as _config
+import astra_backend.config as _config
 
 _config.load_dotenv = lambda path: None
 
 _RISK_KEYS_STATIC = (
-    "R20_PORTFOLIO_RISK_BUDGET_USDT",
+    "ASTRA_PORTFOLIO_RISK_BUDGET_USDT",
     # 批4 P2-1：跨所同向敞口上限（此前只在 settings_store.MANAGED_KEYS 里，无任何读者）
-    "R20_MAX_TOTAL_EXPOSURE_USDT",
-    "R20_MAX_CONCURRENT_POSITIONS", "R20_MAX_SAME_DIRECTION_POSITIONS",
-    "R20_MAX_MARGIN_EQUITY_RATIO", "R20_SINGLE_ASSET_EQUITY_RATIO",
-    "R20_MAX_SINGLE_ASSET_MARGIN_USDT", "R20_MAX_LEVERAGE", "R20_MIN_LEVERAGE",
-    "R20_RISK_PER_TRADE_RATIO", "R20_MIN_RISK_REWARD", "R20_MIN_ENTRY_CONFIDENCE",
-    "R20_MAX_DAILY_LOSS_USDT", "R20_DAILY_LOSS_EQUITY_RATIO",
-    "R20_TIME_STOP_HOURS", "R20_TIME_STOP_ATR_BAND", "R20_STOP_COOLDOWN_MINUTES",
-    "R20_MAX_SCALE_IN_COUNT", "R20_MIN_SCALE_IN_PROFIT_RATIO", "R20_MIN_SCALE_IN_CONFIDENCE",
-    "R20_SCALE_OUT_ENABLED", "R20_SCALE_OUT_RATIO", "R20_SCALE_OUT_TRIGGER_ATR",
-    "R20_MAX_RISK_REWARD", "R20_STOP_LOSS_ATR_MULT", "R20_MAX_TAKE_PROFIT_ATR",
+    "ASTRA_MAX_TOTAL_EXPOSURE_USDT",
+    "ASTRA_MAX_CONCURRENT_POSITIONS", "ASTRA_MAX_SAME_DIRECTION_POSITIONS",
+    "ASTRA_MAX_MARGIN_EQUITY_RATIO", "ASTRA_SINGLE_ASSET_EQUITY_RATIO",
+    "ASTRA_MAX_SINGLE_ASSET_MARGIN_USDT", "ASTRA_MAX_LEVERAGE", "ASTRA_MIN_LEVERAGE",
+    "ASTRA_RISK_PER_TRADE_RATIO", "ASTRA_MIN_RISK_REWARD", "ASTRA_MIN_ENTRY_CONFIDENCE",
+    "ASTRA_MAX_DAILY_LOSS_USDT", "ASTRA_DAILY_LOSS_EQUITY_RATIO",
+    "ASTRA_TIME_STOP_HOURS", "ASTRA_TIME_STOP_ATR_BAND", "ASTRA_STOP_COOLDOWN_MINUTES",
+    "ASTRA_MAX_SCALE_IN_COUNT", "ASTRA_MIN_SCALE_IN_PROFIT_RATIO", "ASTRA_MIN_SCALE_IN_CONFIDENCE",
+    "ASTRA_SCALE_OUT_ENABLED", "ASTRA_SCALE_OUT_RATIO", "ASTRA_SCALE_OUT_TRIGGER_ATR",
+    "ASTRA_MAX_RISK_REWARD", "ASTRA_STOP_LOSS_ATR_MULT", "ASTRA_MAX_TAKE_PROFIT_ATR",
 )
 for _key in _RISK_KEYS_STATIC:
     os.environ.pop(_key, None)
@@ -98,7 +98,7 @@ assert set(_RISK_KEYS) == set(_RISK_KEYS_STATIC), (
 # settings_store 加 flock 后还会在仓库根留下 ..env.lock）。
 # 这里上硬闸：测试进程内 ENV_FILE 仍指向仓库根 .env 时，写操作直接失败，
 # 逼调用方显式沙箱化（`patch.object(settings_store, "ENV_FILE", tmp)`）。
-import r20_backend.settings_store as _settings_store  # noqa: E402
+import astra_backend.settings_store as _settings_store  # noqa: E402
 
 _REAL_ENV_FILE = _settings_store.ENV_FILE
 
@@ -138,7 +138,7 @@ _PROTECTED_CONFIG_FILES = {
     (_PROJECT_ROOT / "data" / "position_trackers.json").resolve(),
 }
 _DATA_DIR = (_PROJECT_ROOT / "data").resolve()
-_ALLOW_REAL_WRITES = os.environ.get("R20_TESTS_ALLOW_REAL_DATA", "") == "1"
+_ALLOW_REAL_WRITES = os.environ.get("ASTRA_TESTS_ALLOW_REAL_DATA", "") == "1"
 _WARNED_PATHS: set[str] = set()
 
 
@@ -151,7 +151,7 @@ _WARNED_PATHS: set[str] = set()
 # ⇒ 静态判不可靠，故改为**运行时**守卫：读生产 `data/` 直接失败。
 #
 # 与之配套的两个出口：
-#   ① 环境变量 `R20_TESTS_ALLOW_REAL_DATA=1`（与写守卫同一开关，整进程放开）；
+#   ① 环境变量 `ASTRA_TESTS_ALLOW_REAL_DATA=1`（与写守卫同一开关，整进程放开）；
 #   ② `_READ_ALLOW`：**逐文件**登记 + 写明理由（要求"只读且只做结构/哈希，不得断言内容"）。
 _READ_ALLOW: dict = {}
 
@@ -169,7 +169,7 @@ def _install_in_test_flag() -> None:
     """把 `unittest.TestCase.run` 包一层：仅用例执行期间 `_IN_TEST=True`。"""
     import unittest as _unittest
 
-    if getattr(_unittest.TestCase.run, "_r20_wrapped", False):
+    if getattr(_unittest.TestCase.run, "_astra_wrapped", False):
         return
     _real_run = _unittest.TestCase.run
 
@@ -182,7 +182,7 @@ def _install_in_test_flag() -> None:
         finally:
             _IN_TEST, _CURRENT_TEST[0] = prev_in, prev_name
 
-    _run_with_flag._r20_wrapped = True  # type: ignore[attr-defined]
+    _run_with_flag._astra_wrapped = True  # type: ignore[attr-defined]
     _unittest.TestCase.run = _run_with_flag
 
 
@@ -246,7 +246,7 @@ def _assert_not_reading_production(path: object) -> None:
         # 实测（第二百三十二刀）：一旦硬失败，`tests/venues` 里立刻有 21 个用例红（3 个文件）——
         # 也就是说**测试套件确实在依赖线上运维配置的内容**。这是真问题，但一次掀翻 21 个用例
         # 不叫修好；缺省改为**可见的提示**（每个「路径@用例」一次），并留一个**严格模式**
-        # （`R20_TESTS_STRICT_READS=1`）供逐个清理时当闸用。清理清单见台账第 131 刀。
+        # （`ASTRA_TESTS_STRICT_READS=1`）供逐个清理时当闸用。清理清单见台账第 131 刀。
         key = f"readcfg:{resolved}@{_CURRENT_TEST[0]}"
         if key not in _WARNED_PATHS:
             _WARNED_PATHS.add(key)
@@ -259,8 +259,8 @@ def _assert_not_reading_production(path: object) -> None:
             # （实测 `test_gate_execution_router.py` 13 个用例表现为 `venue_dry_run != protective`
             # 这类 stage 漂移，读取点信息整个丢失）。打印后即便被吞也能在输出里找到真凶。
             print(msg)
-            if os.environ.get("R20_TESTS_STRICT_READS", "") == "1":
-                raise AssertionError(msg + "（当前为严格模式 R20_TESTS_STRICT_READS=1）")
+            if os.environ.get("ASTRA_TESTS_STRICT_READS", "") == "1":
+                raise AssertionError(msg + "（当前为严格模式 ASTRA_TESTS_STRICT_READS=1）")
             print(msg)
     if resolved == _DATA_DIR or str(resolved).startswith(str(_DATA_DIR) + os.sep):
         key = "read:" + str(resolved)
@@ -342,7 +342,7 @@ if not _ALLOW_REAL_WRITES:
 
 
 # ── 会话级配置沙箱（第二百三十四刀）────────────────────────────────────────
-# 严格模式普查（`R20_TESTS_STRICT_READS=1 pytest tests`）实测 108 处用例读线上配置，
+# 严格模式普查（`ASTRA_TESTS_STRICT_READS=1 pytest tests`）实测 108 处用例读线上配置，
 # 按**读取点**排序：`scripts/okx_runtime.py` 43（读 `ROOT/.env`）、
 # `scripts/instrument_pool.py` 19（读池）、`scripts/prompt_library.py` 16（读提示词库）。
 # 这三处是"缺省不安全"的源头 ⇒ 本刀把前两处**会话级**钉进沙箱（其余仍逐处处理）。
@@ -392,12 +392,12 @@ class _ConfigSandboxFinder:
 
             def exec_module(self, module):
                 inner.exec_module(module)
-                # `tests.config_sandbox.isolate_config` 会设 `R20_DATA_DIR` 并把
+                # `tests.config_sandbox.isolate_config` 会设 `ASTRA_DATA_DIR` 并把
                 # 它白名单里的模块（含 prompt_library）重载进**更具体的**沙箱；
                 # 那种情况下让位（否则会把它的沙箱路径顶掉 —— 实测
                 # `test_config_sandbox.py::test_nested_policy_paths_share_one_sandbox` 就是这么红的）。
                 for attr, value, defer in entries:
-                    if defer and os.environ.get("R20_DATA_DIR"):
+                    if defer and os.environ.get("ASTRA_DATA_DIR"):
                         continue
                     setattr(module, attr, value)
 
@@ -407,11 +407,11 @@ class _ConfigSandboxFinder:
 
 def _install_session_config_sandbox() -> None:
     """把 `okx_runtime.ROOT` 与 `instrument_pool.POOL_FILE` 钉到临时沙箱（缺省安全）。"""
-    if _ALLOW_REAL_WRITES:          # R20_TESTS_ALLOW_REAL_DATA=1：整进程放开，不沙箱
+    if _ALLOW_REAL_WRITES:          # ASTRA_TESTS_ALLOW_REAL_DATA=1：整进程放开，不沙箱
         return
     import tempfile
 
-    tmp = tempfile.TemporaryDirectory(prefix="r20_tests_config_")
+    tmp = tempfile.TemporaryDirectory(prefix="astra_tests_config_")
     _SESSION_SANDBOX.append(tmp)    # 保持引用，别被 GC 掉
     root = Path(tmp.name)
     # 池夹具：**同形且字段齐全**（少字段会把路由打进 `venue_pool` 分支），7 条 ≥ 本仓基线 6。
@@ -446,8 +446,8 @@ def _install_session_config_sandbox() -> None:
         targets[name] = ("ROOT", root, False)
     for name in ("instrument_pool", "scripts.instrument_pool"):
         targets[name] = ("POOL_FILE", pool, False)
-    # `r20_backend/notifications.py` 用**内联** `ROOT / ".env"` 读配置（同 okx_runtime 型）
-    for name in ("r20_backend.notifications",):
+    # `astra_backend/notifications.py` 用**内联** `ROOT / ".env"` 读配置（同 okx_runtime 型）
+    for name in ("astra_backend.notifications",):
         targets[name] = ("ROOT", root, False)
     # 场所路由：`routing_policy.py` 读 `data/venue_routing.json`（读取点 121，由守卫指出）。
     # ⚠️ 缺键时 **gate 默认 dry_run=True** ⇒ 不钉住就会让"实盘闸"的用例漂到 `venue_dry_run`
@@ -463,7 +463,7 @@ def _install_session_config_sandbox() -> None:
                     "dry_run": False, "margin_per_trade_usdt": 500.0, "max_open": 5,
                     "min_confidence": 72.0},
     }, ensure_ascii=False), encoding="utf-8")
-    for name in ("r20_backend.exchanges.routing_policy",):
+    for name in ("astra_backend.exchanges.routing_policy",):
         targets[name] = ("ROUTING_FILE", routing, False)
     # 提示词库：**双文件都要钉**（2026-09 拆分）——出厂基线指向沙箱里**不存在**的路径
     # ⇒ `load_library()` 走 `_default()` 确定性回退（不读生产、也不随线上模板漂移）；
@@ -483,28 +483,28 @@ def _install_session_config_sandbox() -> None:
         if mod is None:
             continue
         for attr, value, defer in (entries if isinstance(entries, list) else [entries]):
-            if not (defer and os.environ.get("R20_DATA_DIR")):
+            if not (defer and os.environ.get("ASTRA_DATA_DIR")):
                 setattr(mod, attr, value)
     sys.meta_path.insert(0, _ConfigSandboxFinder(targets))
     print(f"[tests] 会话级配置沙箱已启用：okx_runtime.ROOT / instrument_pool.POOL_FILE → {root}"
-          f"（要读真实配置：R20_TESTS_ALLOW_REAL_DATA=1）")
+          f"（要读真实配置：ASTRA_TESTS_ALLOW_REAL_DATA=1）")
 
 
 _install_session_config_sandbox()
 
 # ⚠️ 第八十刀：import 时机静默 dashboard 的 **2 秒缓存外呼循环**。
-# `r20_backend/dashboard_cache.py` 模块**顶层末尾**就 `start_dashboard_background_worker()`
-# （web_shell 降格为纯库的历史残留，但删不得——`r20_backend/static/`（原 （已归档的 dashboard/start.sh），已归档） 的
-# `uvicorn r20_backend.dashboard_cache:app` 独立部署模式全靠它）。后果：任何 import 过
-# r20_backend.dashboard_cache 的测试进程里，都有一个 daemon 线程**每 2s 真外呼
+# `astra_backend/dashboard_cache.py` 模块**顶层末尾**就 `start_dashboard_background_worker()`
+# （web_shell 降格为纯库的历史残留，但删不得——`astra_backend/static/`（原 （已归档的 dashboard/start.sh），已归档） 的
+# `uvicorn astra_backend.dashboard_cache:app` 独立部署模式全靠它）。后果：任何 import 过
+# astra_backend.dashboard_cache 的测试进程里，都有一个 daemon 线程**每 2s 真外呼
 # www.okx.com**（balances/positions/pending_orders）——11+ 个路由测试文件
 # 的共同泄漏源，连完全不碰 dashboard 的用例都被波及（探针逐文件实测）。
 # 测试进程不是 web 宿主：这里（tests 包最早加载点）先 import 再立即 stop。
 # 模块顶层只执行一次；此后唯一重启者是 `with TestClient` 的 lifespan
-# （r20_backend/app.py:139），那种用例必在 isolate_config 窗口内，
+# （astra_backend/app.py:139），那种用例必在 isolate_config 窗口内，
 # 外呼已被 `_fetch_json` 压制（见 config_sandbox）。
 try:
-    import r20_backend.dashboard_cache as _dashboard_app
+    import astra_backend.dashboard_cache as _dashboard_app
     _dashboard_app.stop_dashboard_background_worker()
     del _dashboard_app
 except Exception:      # pragma: no cover — 导入失败不阻断测试收集
@@ -521,10 +521,10 @@ except Exception:      # pragma: no cover — 导入失败不阻断测试收集
 #
 # | 库 | 次数 | 入口 |
 # |---|---|---|
-# | `r20_admin.db` | 6 | `r20_backend/dependencies.py` **import 期**建 `AdminAuthStore()` |
-# | `r20_quant.db` | 4 | `aft.record_trade` → `ledger_writer` → `db_manager.init_database()` |
+# | `astra_admin.db` | 6 | `astra_backend/dependencies.py` **import 期**建 `AdminAuthStore()` |
+# | `astra_quant.db` | 4 | `aft.record_trade` → `ledger_writer` → `db_manager.init_database()` |
 # | `risk_reservation.db` | 6 | 仪表盘 stale 注入 → `dashboard_payload.market.get_manager()` |
-# | `r20_gateway.db` | 2 | `metrics.build_snapshot` → `GatewayStore(DB_PATH)` |
+# | `astra_gateway.db` | 2 | `metrics.build_snapshot` → `GatewayStore(DB_PATH)` |
 #
 # 后果不是理论：生产 `data/risk_reservation.db` 里**真的**留下一行
 # `environment=<MagicMock name='current_environment().mode'>` 的垃圾预留
@@ -533,7 +533,7 @@ except Exception:      # pragma: no cover — 导入失败不阻断测试收集
 #
 # 所以缺省必须安全：**测试进程内连接生产 data/*.db 直接失败**，逼调用方沙箱化
 # （`tests.config_sandbox.isolate_config`，或把库路径 patch 到 tmp）。
-# 逃生口与上面一致：`R20_TESTS_ALLOW_REAL_DATA=1`。
+# 逃生口与上面一致：`ASTRA_TESTS_ALLOW_REAL_DATA=1`。
 if not _ALLOW_REAL_WRITES:
     import sqlite3 as _sqlite3
     import traceback as _traceback
@@ -567,17 +567,17 @@ if not _ALLOW_REAL_WRITES:
 # 都不会连到生产库；需要特定库内容的测试照旧自己 patch 到临时文件。
 #
 # 覆盖到的四个（全量实测的 18 次连接全部来自它们）：
-#   `r20_admin.db`（`dependencies` import 期建 AdminAuthStore）、
-#   `r20_quant.db`（`db_manager.get_db`）、
+#   `astra_admin.db`（`dependencies` import 期建 AdminAuthStore）、
+#   `astra_quant.db`（`db_manager.get_db`）、
 #   `risk_reservation.db`（`get_manager`）、
-#   `r20_gateway.db`（`publisher.DB_PATH`，走 `R20_GATEWAY_DB` 环境变量）。
+#   `astra_gateway.db`（`publisher.DB_PATH`，走 `ASTRA_GATEWAY_DB` 环境变量）。
 #
-# ⚠️ 必须在**任何** `r20_backend.dependencies` import 之前完成 ——
+# ⚠️ 必须在**任何** `astra_backend.dependencies` import 之前完成 ——
 # 它 import 期就 `AdminAuthStore()` 建表（本刀实测的 6 次连接来源）。
 if not _ALLOW_REAL_WRITES:
     import tempfile as _tempfile
-    _DB_SANDBOX = _tempfile.mkdtemp(prefix="r20-tests-dbs-")
-    os.environ.setdefault("R20_GATEWAY_DB", os.path.join(_DB_SANDBOX, "r20_gateway.db"))
+    _DB_SANDBOX = _tempfile.mkdtemp(prefix="astra-tests-dbs-")
+    os.environ.setdefault("ASTRA_GATEWAY_DB", os.path.join(_DB_SANDBOX, "astra_gateway.db"))
 
     def _redirect_db_paths():
         """把这四个库的模块常量指到会话临时目录（调用期读取，故改常量即生效）。
@@ -586,25 +586,25 @@ if not _ALLOW_REAL_WRITES:
         `scripts.db_manager` 与顶层 `db_manager` 是两个模块实例。
         """
         try:
-            import r20_backend.admin_auth as _aa
-            _aa.DB_PATH = Path(os.environ["R20_ADMIN_DB"])
+            import astra_backend.admin_auth as _aa
+            _aa.DB_PATH = Path(os.environ["ASTRA_ADMIN_DB"])
         except Exception:
             pass
         try:
-            import r20_backend.risk_reservation as _rr
-            _rr.DEFAULT_DB_PATH = os.environ["R20_RISK_RESERVATION_DB"]
+            import astra_backend.risk_reservation as _rr
+            _rr.DEFAULT_DB_PATH = os.environ["ASTRA_RISK_RESERVATION_DB"]
             _rr.reset_default_manager()
         except Exception:
             pass
         for _name in ("scripts.db_manager", "db_manager"):
             try:
                 _mod = __import__(_name, fromlist=["DB_PATH"])
-                _mod.DB_PATH = os.environ["R20_QUANT_DB"]
+                _mod.DB_PATH = os.environ["ASTRA_QUANT_DB"]
             except Exception:
                 pass
         try:
-            import r20_gateway.publisher as _pub
-            _pub.DB_PATH = Path(os.environ["R20_GATEWAY_DB"])
+            import astra_gateway.publisher as _pub
+            _pub.DB_PATH = Path(os.environ["ASTRA_GATEWAY_DB"])
         except Exception:
             pass
 

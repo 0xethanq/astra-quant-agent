@@ -24,6 +24,7 @@ import subprocess
 import sys
 import unittest
 from pathlib import Path
+from tests.extraction.rename_baseline import legacy_rev_path, normalize
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
@@ -34,10 +35,10 @@ FN = "execute_entry_scan"
 
 
 def _base_loop() -> ast.For:
-    r = subprocess.run(["git", "show", f"{PRE}:scripts/ai_factor_trader.py"],
+    r = subprocess.run(["git", "show", legacy_rev_path(f"{PRE}:scripts/ai_factor_trader.py")],
                        capture_output=True, text=True, cwd=str(ROOT))
     assert r.returncode == 0, f"基线取不到：{r.stderr[:200]}"
-    t = ast.parse(r.stdout)
+    t = ast.parse(normalize(r.stdout))
     f = next(n for n in t.body if isinstance(n, ast.FunctionDef) and n.name == "execute_portfolio")
     blk = f.body[52]
     loop = blk.body[0]

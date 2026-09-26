@@ -36,7 +36,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 COMPOSE = ROOT / "docker-compose.yml"
 ENTRYPOINT = ROOT / "deploy" / "docker-entrypoint.sh"
-SUPERVISOR = ROOT / "r20_gateway" / "supervisor.py"
+SUPERVISOR = ROOT / "astra_gateway" / "supervisor.py"
 
 
 def _service_block(name: str) -> str:
@@ -74,16 +74,16 @@ class HealthProbeTest(unittest.TestCase):
     def test_gateway_probe_cannot_match_itself(self):
         """探针若含裸字面量，`/bin/sh -c` 自己的命令行会自匹配 ⇒ 永远判健康、探针失效。"""
         block = _service_block("gateway")
-        # 整行匹配：不能用 `\[.*?\]` —— 探针里 `r20_gateway[.]worker` 那个 `[.]`
+        # 整行匹配：不能用 `\[.*?\]` —— 探针里 `astra_gateway[.]worker` 那个 `[.]`
         # 会让非贪婪匹配提前收尾（本门第一版就栽在这里，把判据截成了一小段）。
         probe = re.search(r"^\s*test:.*$", block, re.M)
         assert probe, "找不到网关健康探测的 test 命令"
         cmd = probe.group(0)
         # 进程判据必须以 `[.]` 形态出现（正则与被匹配字面量不同形）
-        assert "r20_gateway[.]worker" in cmd, (
-            "网关探针的进程判据必须写成 r20_gateway[.]worker，否则会匹配到探针自身")
-        assert "r20_gateway.worker /proc" not in cmd, (
-            "探针里出现了裸的 r20_gateway.worker —— 它会匹配 /bin/sh -c 自己的命令行，"
+        assert "astra_gateway[.]worker" in cmd, (
+            "网关探针的进程判据必须写成 astra_gateway[.]worker，否则会匹配到探针自身")
+        assert "astra_gateway.worker /proc" not in cmd, (
+            "探针里出现了裸的 astra_gateway.worker —— 它会匹配 /bin/sh -c 自己的命令行，"
             "导致探针永远返回健康")
 
     def test_backend_health_probe_targets_the_health_endpoint(self):
@@ -117,17 +117,17 @@ class EntrypointTest(unittest.TestCase):
         网关按存活心跳判定），把"卡死"一并覆盖。
         """
         text = ENTRYPOINT.read_text(encoding="utf-8")
-        assert 'exec bash "$ROOT_DIR/scripts/r20_watchdog.sh"' in text, "后端模式没交给看门狗"
-        assert 'exec bash "$ROOT_DIR/scripts/r20_watchdog.sh" gateway' in text, "网关模式没交给看门狗"
+        assert 'exec bash "$ROOT_DIR/scripts/astra_watchdog.sh"' in text, "后端模式没交给看门狗"
+        assert 'exec bash "$ROOT_DIR/scripts/astra_watchdog.sh" gateway' in text, "网关模式没交给看门狗"
 
     def test_supervision_has_a_fallback(self):
         """看门狗脚本缺失时不能把容器搞成起不来 —— 必须有直起进程的兜底。"""
         text = ENTRYPOINT.read_text(encoding="utf-8")
-        assert "uvicorn r20_backend.app:app" in text
-        assert "r20_gateway.worker" in text
+        assert "uvicorn astra_backend.app:app" in text
+        assert "astra_gateway.worker" in text
         # exec 而非裸调用：容器 PID 1 必须是被 exec 的进程，否则信号传递不到
         assert "exec python3 -m uvicorn" in text, "后端缺少直起兜底"
-        assert "exec python3 -m r20_gateway.worker" in text, "网关缺少直起兜底"
+        assert "exec python3 -m astra_gateway.worker" in text, "网关缺少直起兜底"
 
 
 class SchedulerOwnershipTest(unittest.TestCase):

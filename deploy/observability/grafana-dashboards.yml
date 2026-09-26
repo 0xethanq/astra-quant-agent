@@ -5,10 +5,10 @@
 apiVersion: 1
 
 providers:
-  - name: r20
+  - name: astra
     orgId: 1
-    folder: R20
-    folderUid: r20
+    folder: ASTRA
+    folderUid: astra
     type: file
     disableDeletion: true
     allowUiUpdates: false

@@ -9,7 +9,7 @@
 | ★ **静态资源长缓存** | `assets` 走 `immutable` 一年（文件名带 hash，可安全 immutable）；`coins`/`docs/images` 走 7 天 + `stale-while-revalidate` |
 | ★ **条件挂载，缺目录不报错** | `/static` 无条件；`/assets`、`/coins`、`/docs/images`、`/images` 仅在目录存在时挂 —— 镜像/裸仓库里没有 `dist` 时应用仍能起 |
 | ★ **单一 SPA 构建** | `VUE_ADMIN_DIST_DIR is VUE_DIST_DIR`：`/` 与 `/admin/*` 共用同一份构建产物 |
-| ★ **外壳不许绑回库（边界）** | 模块 docstring 明写：本模块**不 import `r20_backend.dashboard_cache`**，也不被它 import —— 否则又把外壳绑回库文件。本刀用 **AST** 验（docstring 里提到它很多次，纯文本 grep 会误判）|
+| ★ **外壳不许绑回库（边界）** | 模块 docstring 明写：本模块**不 import `astra_backend.dashboard_cache`**，也不被它 import —— 否则又把外壳绑回库文件。本刀用 **AST** 验（docstring 里提到它很多次，纯文本 grep 会误判）|
 | ★ **不用任何全局可变态** | 路径常量全部由本文件位置推导，不 import `dependencies`，避免与 config/settings 的导入链互相牵扯 |
 """
 
@@ -25,7 +25,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from r20_backend import web_shell as WS
+from astra_backend import web_shell as WS
 
 
 class _FakeApp:
@@ -59,9 +59,9 @@ class PathConstantTests(unittest.TestCase):
         self.assertEqual(WS.WORKSPACE_DIR, str(Path(WS.__file__).resolve().parents[1]))
 
     def test_web_root_dir_is_this_package_directory(self):
-        """第 143 刀：`dashboard/` 并入本包，所以这里必须落在 `r20_backend/`。"""
+        """第 143 刀：`dashboard/` 并入本包，所以这里必须落在 `astra_backend/`。"""
         self.assertEqual(WS.WEB_ROOT_DIR, str(Path(WS.__file__).resolve().parent))
-        self.assertTrue(WS.WEB_ROOT_DIR.endswith("r20_backend"))
+        self.assertTrue(WS.WEB_ROOT_DIR.endswith("astra_backend"))
 
     def test_the_vue_paths_hang_off_the_workspace(self):
         self.assertEqual(WS.VUE_DIST_DIR, os.path.join(WS.WORKSPACE_DIR, "frontend", "dist"))
@@ -96,7 +96,7 @@ class PathConstantTests(unittest.TestCase):
                          [os.path.join(WS.WEB_ROOT_DIR, "templates")])
 
     def test_the_module_does_not_import_its_library(self):
-        """★ 边界契约：外壳**不 import** `r20_backend.dashboard_cache`（也不被它 import）。
+        """★ 边界契约：外壳**不 import** `astra_backend.dashboard_cache`（也不被它 import）。
 
         ⚠️ 这里必须用 AST 而不是文本搜索 —— 该模块的 docstring 里"`dashboard_cache.py`"
         出现多次，纯 grep 会把这层注释当成违规。
@@ -110,7 +110,7 @@ class PathConstantTests(unittest.TestCase):
                 imported.add(node.module)
         offenders = {m for m in imported if "dashboard_cache" in m}
         self.assertEqual(offenders, set(), f"外壳不许绑回库：{offenders}")
-        self.assertFalse(any(m.startswith("r20_backend.dependencies") for m in imported),
+        self.assertFalse(any(m.startswith("astra_backend.dependencies") for m in imported),
                          "路径常量必须自推导，不 import dependencies（避免导入链互相牵扯）")
 
     def test_the_module_only_needs_fastapi_and_the_stdlib(self):
@@ -192,14 +192,14 @@ class ServeVueSpaTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.html = Path(self.tmp.name) / "index.html"
-        self.html.write_text("<!doctype html><title>R20</title>", encoding="utf-8")
+        self.html.write_text("<!doctype html><title>ASTRA</title>", encoding="utf-8")
 
     def _serve(self, **kwargs):
         return WS.serve_vue_spa(str(self.html), **kwargs)
 
     def test_it_returns_the_file_content(self):
         self.assertEqual(self._serve().body.decode("utf-8"),
-                         "<!doctype html><title>R20</title>")
+                         "<!doctype html><title>ASTRA</title>")
 
     def test_it_is_an_html_response(self):
         self.assertIsInstance(self._serve(), HTMLResponse)
@@ -213,9 +213,9 @@ class ServeVueSpaTests(unittest.TestCase):
         self.assertEqual(headers["Expires"], "0")
 
     def test_utf8_content_survives(self):
-        self.html.write_text("<!doctype html><title>R20量子交易系统</title>",
+        self.html.write_text("<!doctype html><title>ASTRA量子交易系统</title>",
                              encoding="utf-8")
-        self.assertIn("R20量子交易系统", self._serve().body.decode("utf-8"))
+        self.assertIn("ASTRA量子交易系统", self._serve().body.decode("utf-8"))
 
     def test_the_file_is_read_fresh_each_call(self):
         """壳不许在进程内缓存 —— 否则重新部署后用户拿不到新壳。"""

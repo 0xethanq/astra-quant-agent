@@ -4,7 +4,7 @@
  * ## 守什么
  *
  * 1. **全站路由页面标题独特性与规范化（WCAG 2.4.2 Page Titled）**：
- *    此前全站 18 个后台页面标题全部写死为 `"管理控制台 · R20"`，
+ *    此前全站 18 个后台页面标题全部写死为 `"管理控制台 · ASTRA"`，
  *    用户打开多个浏览器标签页时无法区分，读屏器报读完全重复。
  *    现要求：
  *    - 每一个后台路由必须动态获取其对应的导航名，格式为 `${pageName} · ${consoleName} · AstraQuant`；
@@ -32,12 +32,12 @@ test('router/index.ts 必须声明并执行 updateDocumentTitle', () => {
   const routerText = readFileSync(path.join(SRC, 'router/index.ts'), 'utf8');
   assert.match(routerText, /export function updateDocumentTitle\(/, '缺少 updateDocumentTitle 函数导出');
   assert.match(routerText, /router\.afterEach\(\s*\(to\)\s*=>\s*\{\s*updateDocumentTitle\(to\)/, 'afterEach 未调用 updateDocumentTitle');
-  assert.match(routerText, /r20:locale-changed/, '缺少语言切换全局监听');
+  assert.match(routerText, /astra:locale-changed/, '缺少语言切换全局监听');
 });
 
-test('useI18n.ts 在语言变更时必须广播 r20:locale-changed 事件', () => {
+test('useI18n.ts 在语言变更时必须广播 astra:locale-changed 事件', () => {
   const i18nText = readFileSync(path.join(SRC, 'composables/useI18n.ts'), 'utf8');
-  assert.match(i18nText, /r20:locale-changed/, 'useI18n 未在 applyLocale 中广播语言变更事件');
+  assert.match(i18nText, /astra:locale-changed/, 'useI18n 未在 applyLocale 中广播语言变更事件');
 });
 
 test('所有后台子路由在 nav.ts 中均有唯一的导航元数据匹配', () => {
@@ -71,7 +71,7 @@ test('后台各页面标题在 locales/zh/nav.ts 与 locales/en/nav.ts 中均已
 });
 
 test('闸自检：能准确校验缺失的路由更新与重复标题', () => {
-  const badRouter = 'router.afterEach((to) => { document.title = "管理控制台 · R20"; });';
+  const badRouter = 'router.afterEach((to) => { document.title = "管理控制台 · ASTRA"; });';
   const goodRouter = 'router.afterEach((to) => { updateDocumentTitle(to); });';
 
   assert.equal(/updateDocumentTitle/.test(badRouter), false, '应拦截硬编码的统一标题');

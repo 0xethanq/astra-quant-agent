@@ -1,7 +1,7 @@
 """QQ / 网关通知发布（`scripts/qq_notifier.py`）的残余分支收口 —— 第 327 刀。
 
 本模块 380 行，是**所有对外通知的唯一出口**（开仓 / 平仓 / 移损 / 拦截 / 熔断 /
-日报 / 自进化报告）。它本身不联网 —— 只把结构化事件交给 `r20_gateway.publisher`
+日报 / 自进化报告）。它本身不联网 —— 只把结构化事件交给 `astra_gateway.publisher`
 持久化入队，因此**"返回 True = 已持久入队"而非"已同步送达"**（`send_qq_message`
 的 docstring 明说此事）。
 

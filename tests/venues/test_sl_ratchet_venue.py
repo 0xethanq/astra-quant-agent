@@ -27,8 +27,8 @@ class _GateLike:
     def list_protective_orders(self, symbol):
         self.calls.append(("list", symbol))
         return [
-            {"id": "11", "order": {"text": "t-r20sl9001"}},
-            {"id": "12", "order": {"text": "t-r20tp9001"}},
+            {"id": "11", "order": {"text": "t-astrasl9001"}},
+            {"id": "12", "order": {"text": "t-astratp9001"}},
         ]
 
     def amend_stop_loss(self, symbol, pos_side, old_sl_id, new_sl_px, **kw):

@@ -1,4 +1,4 @@
-"""`r20_backend/math_utils.py::clamp` 单一事实源（阶段 4·B3 第五十一刀）。
+"""`astra_backend/math_utils.py::clamp` 单一事实源（阶段 4·B3 第五十一刀）。
 
 ## 修了什么
 
@@ -19,9 +19,9 @@
 
 | 函数 | 位置 |
 |---|---|
-| `clamp_leverage` | `r20_backend/execution/risk_gates.py` |
+| `clamp_leverage` | `astra_backend/execution/risk_gates.py` |
 | `clamp_margin` | 同上 |
-| `clamp_council_timeout` | `r20_backend/council/roster.py` |
+| `clamp_council_timeout` | `astra_backend/council/roster.py` |
 
 它们不是"同一函数的拷贝"，而是**同一动词的不同业务规则**
 （取三道上限的最小值 / `0` 退化为不夹 / 处理 `NaN`·`±inf` / 夹动时打印运维文案）。
@@ -42,11 +42,11 @@ for p in (str(ROOT), str(ROOT / "scripts")):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-MODULE = ROOT / "r20_backend" / "math_utils.py"
+MODULE = ROOT / "astra_backend" / "math_utils.py"
 SIGNALS = ROOT / "scripts" / "trader" / "signals.py"
 ENGINE = ROOT / "scripts" / "self_improvement_engine.py"
 
-from r20_backend.math_utils import clamp  # noqa: E402
+from astra_backend.math_utils import clamp  # noqa: E402
 
 
 class ClampSemanticsTest(unittest.TestCase):
@@ -205,7 +205,7 @@ class NotToBeMergedTest(unittest.TestCase):
 
     def test_clamp_council_timeout_rejects_nan(self):
         """`clamp_council_timeout` 会把 `NaN`/`±inf` 换成默认值；`clamp` 不会。"""
-        from r20_backend.council.roster import clamp_council_timeout, DEFAULT_COUNCIL_TIMEOUT
+        from astra_backend.council.roster import clamp_council_timeout, DEFAULT_COUNCIL_TIMEOUT
         self.assertEqual(clamp_council_timeout(float("nan")), DEFAULT_COUNCIL_TIMEOUT)
         self.assertEqual(clamp_council_timeout(float("inf")), DEFAULT_COUNCIL_TIMEOUT)
         # 反证：本模块的 clamp 对 NaN 不做这层过滤
@@ -214,14 +214,14 @@ class NotToBeMergedTest(unittest.TestCase):
 
     def test_clamp_margin_only_accepts_positive_finite_caps(self):
         """`clamp_margin` 的 `0` 表示"该上限不可用"，而 `clamp` 的 `0` 是真实边界。"""
-        src = (ROOT / "r20_backend" / "execution" / "risk_gates.py").read_text(encoding="utf-8")
+        src = (ROOT / "astra_backend" / "execution" / "risk_gates.py").read_text(encoding="utf-8")
         self.assertIn("math.isfinite(c) and c > 0", src,
                       "clamp_margin 的 `>0 且有限` 过滤是它的核心语义")
 
     def test_clamp_leverage_zero_means_no_clamping(self):
         """`clamp_leverage` 的 `0/None` 退化为**不夹**（用原值），
         而 `clamp` 的 `0` 会把值夹成 0 —— 语义相反。"""
-        src = (ROOT / "r20_backend" / "execution" / "risk_gates.py").read_text(encoding="utf-8")
+        src = (ROOT / "astra_backend" / "execution" / "risk_gates.py").read_text(encoding="utf-8")
         self.assertIn("MAX_LEVERAGE or leverage", src)
         # 反证：本模块的 clamp 遇 0 上界会把值夹成 0
         self.assertEqual(clamp(5, 0, 0, 1), 0)

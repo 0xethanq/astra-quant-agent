@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import r20_backend.dashboard_cache as dashboard
+import astra_backend.dashboard_cache as dashboard
 
 
 class DashboardPersistentCacheTests(unittest.TestCase):

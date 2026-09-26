@@ -1,10 +1,10 @@
 """
-R20 物理拦截插件规范（策略广场官方示例模板）
+ASTRA 物理拦截插件规范（策略广场官方示例模板）
 =============================================
 id: 99_custom_template_sample
 name: 策略广场示例模板：动能背离与资金流拦截
 version: 1.0.0
-author: R20 Community / Plaza Template
+author: ASTRA Community / Plaza Template
 description: 官方自定义风控插件示例模板。演示如何基于微积分加速度 a、累积能量 E 与聪明钱资金流编写专有物理拦截规则。
 tags: 示例模板, 策略广场, 自定义开发
 """

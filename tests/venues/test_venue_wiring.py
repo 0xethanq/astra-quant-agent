@@ -15,7 +15,7 @@
    listing_mod.ensure_contract_listed / trader.okx_rest.place_order /
    routing_policy.ROUTING_FILE——零真实网络、零真实凭证、零真实下单；
 ② 决策缓存、预留库、意图文件、路由配置全部落在 tempfile 目录；
-③ 不触碰真实 data/**、.env、交易所端点；ambient R20_* 开闸旗标在夹具里排除，
+③ 不触碰真实 data/**、.env、交易所端点；ambient ASTRA_* 开闸旗标在夹具里排除，
    执行档只由用例自己决定（同 test_gate_execution_router 的钉法）。
 """
 from __future__ import annotations
@@ -36,11 +36,11 @@ if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
 import scripts.ai_factor_trader as trader
-from r20_backend import risk_reservation
-from r20_backend.exchanges import listing as listing_mod
+from astra_backend import risk_reservation
+from astra_backend.exchanges import listing as listing_mod
 import shutil
-from r20_backend.exchanges import routing_policy
-from r20_backend.venue_routing import selection as venue_selection
+from astra_backend.exchanges import routing_policy
+from astra_backend.venue_routing import selection as venue_selection
 
 FP = "fp-test-1234"
 
@@ -82,7 +82,7 @@ class _WiringSandbox(unittest.TestCase):
         self._envp = patch.dict("os.environ", {}, clear=False)
         self._envp.start()
         for key in [k for k in os.environ
-                    if k.startswith("R20_") and ("EXECUTION" in k or "TESTNET" in k)]:
+                    if k.startswith("ASTRA_") and ("EXECUTION" in k or "TESTNET" in k)]:
             os.environ.pop(key, None)
         os.environ.pop(trader.PORTFOLIO_RISK_BUDGET_ENV, None)
 
@@ -210,7 +210,7 @@ class TestManualPreferredVenue(_WiringSandbox):
     def test_manual_preferred_venue_with_gate_dispatches_execution_router(self):
         self._write_cache(["BTC-USDT-SWAP"])
         fake_res = {"ok": True, "order_id": "GATE-ORDER-888", "detail": "gate success"}
-        with patch("r20_backend.execution_router.open_protected_position", return_value=fake_res) as mock_open:
+        with patch("astra_backend.execution_router.open_protected_position", return_value=fake_res) as mock_open:
             ok, ref = self._submit(preferred="gate", executable={"gate": True},
                                    health=_health_with("gate"))
             self.assertTrue(ok, ref)
@@ -226,7 +226,7 @@ class TestManualPreferredVenue(_WiringSandbox):
     def test_manual_preferred_venue_with_binance_dispatches_execution_router(self):
         self._write_cache(["BTC-USDT-SWAP"])
         fake_res = {"ok": True, "order_id": "BINANCE-ORDER-999", "detail": "binance success"}
-        with patch("r20_backend.execution_router.open_protected_position", return_value=fake_res) as mock_open:
+        with patch("astra_backend.execution_router.open_protected_position", return_value=fake_res) as mock_open:
             ok, ref = self._submit(preferred="binance", executable={"binance": True})
             self.assertTrue(ok, ref)
             self.assertEqual(ref, "BINANCE-ORDER-999")
@@ -249,7 +249,7 @@ class TestManualPreferredVenue(_WiringSandbox):
 
         self._write_cache(["BTC-USDT-SWAP"])
         fake_res = {"ok": True, "order_id": "BN-1", "detail": "ok"}
-        with patch("r20_backend.execution_router.open_protected_position", return_value=fake_res):
+        with patch("astra_backend.execution_router.open_protected_position", return_value=fake_res):
             ok, ref = self._submit(preferred="binance", executable={"binance": True},
                                    listing_check=capture_listing)
             self.assertTrue(ok, ref)
@@ -588,7 +588,7 @@ class TestRoutingModesWiring(_WiringSandbox):
 
     def test_balanced_mode_rotates_and_records_evidence(self):
         self._write_cache(["BTC-USDT-SWAP"])
-        from r20_backend import execution_router as er_mod
+        from astra_backend import execution_router as er_mod
         winners = set()
         fake = er_mod.RouteResult(ok=True, venue="mock", stage="done", order_id="MOCK-1")
         for inst in ("BTC-USDT-SWAP", "ETH-USDT-SWAP", "SOL-USDT-SWAP"):

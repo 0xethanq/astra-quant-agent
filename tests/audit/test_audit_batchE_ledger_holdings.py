@@ -9,7 +9,7 @@
    （幽灵持仓）——且旧 id `holding_{inst}_{side}` 不含场所，多所同标的还会撞键。
 
 修：① 抽出共用行构造器 `_holding_row`，id 改为 `holding_{venue}_{inst}_{side}`，并由
-`_other_venue_live_positions` 按仪表盘同一事实源（r20_backend.exchanges.get_adapter）
+`_other_venue_live_positions` 按仪表盘同一事实源（astra_backend.exchanges.get_adapter）
 汇入 binance/gate 活动持仓；② 合并后清理「已成功取数的场所」中不在本轮实时持仓里的
 holding 行——取数失败的场所保守保留（缺失≠已平仓）。
 > ⚠️ 测试桩必须打在被测代码真正持有的模块对象上：sync_full_ledger 用
@@ -40,7 +40,7 @@ import scripts.okx_runtime as okx_runtime  # noqa: E402
 import sync_full_ledger as sfl  # noqa: E402
 
 DEMO_VALUES = {
-    "R20_OKX_ENV": "demo", "OKX_IS_SIMULATED": "true",
+    "ASTRA_OKX_ENV": "demo", "OKX_IS_SIMULATED": "true",
     "OKX_DEMO_API_KEY": "k", "OKX_DEMO_SECRET_KEY": "s", "OKX_DEMO_PASSPHRASE": "p",
 }
 

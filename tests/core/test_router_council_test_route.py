@@ -20,8 +20,8 @@ import types
 import unittest
 from unittest import mock
 
-from r20_backend.routers.strategy import council as C
-from r20_backend.schemas import CouncilTestRequest
+from astra_backend.routers.strategy import council as C
+from astra_backend.schemas import CouncilTestRequest
 
 
 class CouncilTestRouteTest(unittest.TestCase):
@@ -31,7 +31,7 @@ class CouncilTestRouteTest(unittest.TestCase):
             p = mock.patch.object(C, name, mock.Mock(), create=True)
             p.start()
             self.addCleanup(p.stop)
-        p = mock.patch("r20_backend.council_manager.load_council_config",
+        p = mock.patch("astra_backend.council_manager.load_council_config",
                        return_value={"timeout_seconds": 120.0, "roles": {}})
         p.start()
         self.addCleanup(p.stop)
@@ -49,17 +49,17 @@ class CouncilTestRouteTest(unittest.TestCase):
             C, "ROOT", C.ROOT)
         p.start()
         self.addCleanup(p.stop)
-        p = mock.patch("r20_backend.council_manager.execute_council_debate",
+        p = mock.patch("astra_backend.council_manager.execute_council_debate",
                        side_effect=debate or self._debate)
         p.start()
         self.addCleanup(p.stop)
-        saved = __import__("r20_backend.dashboard_cache", fromlist=["x"]).CACHE_DATA
-        self.addCleanup(setattr, __import__("r20_backend.dashboard_cache", fromlist=["x"]),
+        saved = __import__("astra_backend.dashboard_cache", fromlist=["x"]).CACHE_DATA
+        self.addCleanup(setattr, __import__("astra_backend.dashboard_cache", fromlist=["x"]),
                         "CACHE_DATA", saved)
-        __import__("r20_backend.dashboard_cache", fromlist=["x"]).CACHE_DATA = cache
+        __import__("astra_backend.dashboard_cache", fromlist=["x"]).CACHE_DATA = cache
         payload = CouncilTestRequest(**({"mock_market_prompt": mock_prompt}
                                         if mock_prompt else {}))
-        return C.admin_test_council_debate(payload, x_r20_session="t")
+        return C.admin_test_council_debate(payload, x_astra_session="t")
 
     def _temp_root(self, snapshot=None):
         import tempfile
@@ -198,7 +198,7 @@ class NonDictRowsInsideTheSliceTest(unittest.TestCase):
         p = mock.patch.object(C, "require_admin_header", mock.Mock(), create=True)
         p.start()
         self.addCleanup(p.stop)
-        p = mock.patch("r20_backend.council_manager.load_council_config",
+        p = mock.patch("astra_backend.council_manager.load_council_config",
                        return_value={"timeout_seconds": 60.0, "roles": {}})
         p.start()
         self.addCleanup(p.stop)
@@ -210,13 +210,13 @@ class NonDictRowsInsideTheSliceTest(unittest.TestCase):
         def _debate(**kw):
             self.kwargs = dict(kw)
             return ({}, {})
-        p = mock.patch("r20_backend.council_manager.execute_council_debate",
+        p = mock.patch("astra_backend.council_manager.execute_council_debate",
                        side_effect=_debate)
         p.start()
         self.addCleanup(p.stop)
 
     def _run_with_cache(self, cache):
-        import r20_backend.dashboard_cache as dc
+        import astra_backend.dashboard_cache as dc
         saved = dc.CACHE_DATA
         self.addCleanup(setattr, dc, "CACHE_DATA", saved)
         dc.CACHE_DATA = cache
@@ -227,7 +227,7 @@ class NonDictRowsInsideTheSliceTest(unittest.TestCase):
         root = Path(tmp.name)
         (root / "data").mkdir(parents=True, exist_ok=True)
         with mock.patch.object(C, "ROOT", root):
-            return C.admin_test_council_debate(CouncilTestRequest(), x_r20_session="t")
+            return C.admin_test_council_debate(CouncilTestRequest(), x_astra_session="t")
 
     def test_a_dirty_position_row_inside_the_first_eight_is_skipped(self):
         cache = {"account": {"avail_eq": 1},

@@ -16,7 +16,7 @@
 import unittest
 from unittest import mock
 
-from r20_backend.council.debate import execute_council_debate
+from astra_backend.council.debate import execute_council_debate
 
 ROLES = {
     "cio": {"name": "首席", "is_arbitrator": True, "prompt": "p"},
@@ -29,10 +29,10 @@ ROLES = {
 class OrchestrationTest(unittest.TestCase):
     def setUp(self):
         self.trader_calls = []
-        self.sleep = mock.patch("r20_backend.council.debate.time.sleep")
+        self.sleep = mock.patch("astra_backend.council.debate.time.sleep")
         self.sleep_mock = self.sleep.start()
         self.addCleanup(self.sleep.stop)
-        p = mock.patch("r20_backend.llm_manager.get_active_llm_runtime",
+        p = mock.patch("astra_backend.llm_manager.get_active_llm_runtime",
                        return_value={"model": "M"})
         p.start()
         self.addCleanup(p.stop)

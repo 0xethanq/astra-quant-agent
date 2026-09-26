@@ -35,7 +35,7 @@ class _Reg:
 
 class Base(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(prefix="r20-aim-")
+        self.tmp = tempfile.TemporaryDirectory(prefix="astra-aim-")
         self.addCleanup(self.tmp.cleanup)
         self.path = Path(self.tmp.name) / "ai_position_management.json"
         self.actions = []

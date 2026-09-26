@@ -21,7 +21,7 @@ import unittest
 import warnings
 from unittest import mock
 
-from r20_backend.exchanges import listing as L
+from astra_backend.exchanges import listing as L
 
 
 class GetDirectoryTest(unittest.TestCase):

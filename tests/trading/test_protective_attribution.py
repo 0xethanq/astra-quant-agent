@@ -188,12 +188,12 @@ def _gate_leg(contract, text, auto_size, trig, rule=1, algo_id="g1", direction="
 
 
 class GateShapeTest(unittest.TestCase):
-    """Gate 腿：**带我们的标签**（`t-r20sl/t-r20tp`）⇒ 归属可**证明**，与币安不同。"""
+    """Gate 腿：**带我们的标签**（`t-astrasl/t-astratp`）⇒ 归属可**证明**，与币安不同。"""
 
     REAL_GATE_LEGS = [
-        _gate_leg("BTC_USDT", "t-r20sl75064327", "close_short", 81320.0, rule=1, algo_id="g-sl"),
-        _gate_leg("BTC_USDT", "t-r20tp75063933", "close_short", 78920.0, rule=2, algo_id="g-tp"),
-        _gate_leg("BTC_USDT", "t-r20tp2166840", "close_long", 82560.0, rule=1,
+        _gate_leg("BTC_USDT", "t-astrasl75064327", "close_short", 81320.0, rule=1, algo_id="g-sl"),
+        _gate_leg("BTC_USDT", "t-astratp75063933", "close_short", 78920.0, rule=2, algo_id="g-tp"),
+        _gate_leg("BTC_USDT", "t-astratp2166840", "close_long", 82560.0, rule=1,
                   algo_id="g-tp-old", direction="short"),
     ]
 
@@ -224,7 +224,7 @@ class GateShapeTest(unittest.TestCase):
 class UnparsedTest(unittest.TestCase):
     def test_tagged_leg_without_readable_symbol_goes_to_unparsed(self):
         """连币种都读不出的行单独登记，**不得**伪装成"不可判定孤儿"（那会误导清理决策）。"""
-        broken = {"id": "x", "initial": {"text": "t-r20sl1", "size": 0}, "raw": None}
+        broken = {"id": "x", "initial": {"text": "t-astrasl1", "size": 0}, "raw": None}
         r = attribute_protective_orders([], [broken], [])
         self.assertEqual(r["counts"]["unparsed"], 1)
         self.assertEqual(r["counts"]["orphan_unattributed"], 0)

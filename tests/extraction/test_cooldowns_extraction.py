@@ -3,7 +3,7 @@
 ## 修了什么
 
 `scripts/ai_factor_trader.py`（活交易路径）与
-`r20_backend/execution/circuit_breaker.py`（后端风控面）各自内联了同一套
+`astra_backend/execution/circuit_breaker.py`（后端风控面）各自内联了同一套
 止损冷却读写。两文件同名的顶层函数有 7 个，其中 3 个是**逐字/等价重复**：
 
 | 函数 | 状态 |
@@ -16,17 +16,17 @@
 「硬止损后能否**立即同向重进**」。两份拷贝若漂移，就会出现
 **交易侧认为可重进、风控面认为仍在冷却**（或反之）的不一致。
 
-本仓 `r20_backend/execution/sizing.py` 的注释已记录过同源问题并用同样办法修过
+本仓 `astra_backend/execution/sizing.py` 的注释已记录过同源问题并用同样办法修过
 （审计 P1-1：两条 `min()` 口径曾在同两个文件各存一份拷贝）。
 
-现收敛到 `r20_backend/execution/cooldowns.py`。
+现收敛到 `astra_backend/execution/cooldowns.py`。
 
 ## ⚠️ 为什么参数是显式传入的（本刀最关键的约束）
 
 两个调用方各自持有**可被 patch 的**模块级全局：
 
 - `scripts/ai_factor_trader.py`：`STOP_COOLDOWN_FILE`（**str**）
-- `r20_backend/execution/circuit_breaker.py`：`STOP_COOLDOWN_FILE`（**Path**）
+- `astra_backend/execution/circuit_breaker.py`：`STOP_COOLDOWN_FILE`（**Path**）
 
 测试**同时** patch 两边（`tests/audit/test_audit_batch3_persistence_atomic.py` 里
 `patch.object(aft, "STOP_COOLDOWN_FILE", f)` 与
@@ -56,14 +56,15 @@ for p in (str(ROOT), str(ROOT / "scripts")):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-MODULE = ROOT / "r20_backend" / "execution" / "cooldowns.py"
+MODULE = ROOT / "astra_backend" / "execution" / "cooldowns.py"
 AFT = ROOT / "scripts" / "ai_factor_trader.py"
-CB = ROOT / "r20_backend" / "execution" / "circuit_breaker.py"
+CB = ROOT / "astra_backend" / "execution" / "circuit_breaker.py"
 PRE_EXTRACTION_COMMIT = "39fb81f"
 
 SHELL_NAMES = ("_read_stop_cooldowns_state", "load_stop_cooldowns", "is_in_stop_cooldown")
 
-from r20_backend.execution import cooldowns as cd  # noqa: E402
+from astra_backend.execution import cooldowns as cd  # noqa: E402
+from tests.extraction.rename_baseline import legacy_rev_path, normalize
 
 
 class ReadStateTest(unittest.TestCase):
@@ -262,10 +263,10 @@ class BehavioralParityWithPreExtractionTest(unittest.TestCase):
         import subprocess
         import typing
         src = subprocess.run(
-            ["git", "show", f"{PRE_EXTRACTION_COMMIT}:{relpath}"],
+            ["git", "show", legacy_rev_path(f"{PRE_EXTRACTION_COMMIT}:{relpath}")],
             capture_output=True, text=True, cwd=str(ROOT))
         self.assertEqual(src.returncode, 0, src.stderr)
-        tree = ast.parse(src.stdout)
+        tree = ast.parse(normalize(src.stdout))
         keep = [n for n in tree.body
                 if isinstance(n, ast.FunctionDef) and n.name in self.NAMES]
         self.assertEqual(len(keep), 3, f"{relpath} 未取到三个函数")
@@ -276,7 +277,7 @@ class BehavioralParityWithPreExtractionTest(unittest.TestCase):
 
     def test_three_implementations_agree_on_every_branch(self):
         old_aft = self._old_ns("scripts/ai_factor_trader.py")
-        old_cb = self._old_ns("r20_backend/execution/circuit_breaker.py")
+        old_cb = self._old_ns("astra_backend/execution/circuit_breaker.py")
         tmp = Path(tempfile.mkdtemp())
         self.addCleanup(__import__("shutil").rmtree, tmp, ignore_errors=True)
         f = tmp / "cd.json"
@@ -333,7 +334,7 @@ class BothConsumersStillRepointTest(unittest.TestCase):
     def test_patching_each_module_repoints_its_own_lookup(self):
         from unittest.mock import patch
         import ai_factor_trader as aft
-        from r20_backend.execution import circuit_breaker as cb
+        from astra_backend.execution import circuit_breaker as cb
 
         f = self.tmp / "cd.json"
         now = int(time.time())

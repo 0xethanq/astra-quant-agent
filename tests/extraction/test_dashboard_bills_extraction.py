@@ -1,9 +1,9 @@
-"""`r20_backend/dashboard_payload/bills.py`（结构优化阶段 4·B3 第二十一刀）回归。
+"""`astra_backend/dashboard_payload/bills.py`（结构优化阶段 4·B3 第二十一刀）回归。
 
 ## 这个测试在守什么
 
 `aggregate_bills` 把 OKX `account/bills` 的原始流水聚成仪表盘要用的量。它原先
-内联在 `r20_backend/dashboard_cache.py::update_cache_cycle` 里（49 行）。
+内联在 `astra_backend/dashboard_cache.py::update_cache_cycle` 里（49 行）。
 
 三个容易出错的细节，本文件逐个钉住：
 
@@ -28,12 +28,12 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from r20_backend.dashboard_payload.bills import aggregate_bills
+from astra_backend.dashboard_payload.bills import aggregate_bills
 
 ROOT = Path(__file__).resolve().parents[2]
-APP = ROOT / "r20_backend" / "dashboard_cache.py"
-MODULE = ROOT / "r20_backend" / "dashboard_payload" / "bills.py"
-STATS = ROOT / "r20_backend" / "dashboard_payload" / "trade_stats.py"   # 第九十五刀：消费点现住此
+APP = ROOT / "astra_backend" / "dashboard_cache.py"
+MODULE = ROOT / "astra_backend" / "dashboard_payload" / "bills.py"
+STATS = ROOT / "astra_backend" / "dashboard_payload" / "trade_stats.py"   # 第九十五刀：消费点现住此
 
 TZ = datetime.timezone(datetime.timedelta(hours=8))
 RESET = "2026-09-01 00:00:00"
@@ -380,11 +380,11 @@ class WiringTest(unittest.TestCase):
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 for a in node.names:
-                    self.assertFalse(a.name == "r20_backend.dashboard_cache" or a.name.startswith("r20_backend.dashboard_cache."),
+                    self.assertFalse(a.name == "astra_backend.dashboard_cache" or a.name.startswith("astra_backend.dashboard_cache."),
                                      f"反向 import {a.name}")
             elif isinstance(node, ast.ImportFrom):
                 mod = node.module or ""
-                self.assertFalse(mod == "r20_backend.dashboard_cache" or mod.startswith("r20_backend.dashboard_cache."),
+                self.assertFalse(mod == "astra_backend.dashboard_cache" or mod.startswith("astra_backend.dashboard_cache."),
                                  f"反向 import {mod}")
 
     def test_datetime_is_injected_not_bound_at_import(self):
@@ -414,8 +414,8 @@ class WiringTest(unittest.TestCase):
             self.assertIn(f'_bills["{key}"]', stats_src, f"聚合段未取用 {key}")
 
     def test_patch_seam_still_selects_the_core(self):
-        """经 `r20_backend.dashboard_cache` 打到核心的补丁必须生效（薄壳接缝）。"""
-        import r20_backend.dashboard_cache as app
+        """经 `astra_backend.dashboard_cache` 打到核心的补丁必须生效（薄壳接缝）。"""
+        import astra_backend.dashboard_cache as app
         sentinel = {"orders_by_key": {"SENTINEL": {}}, "today_realized_gross": 0.0,
                     "today_fees": 0.0, "cum_total_fees": 0.0, "today_funding": 0.0,
                     "funding_history_list": []}
@@ -437,7 +437,7 @@ _CYCLE_PROBE = r'''
 """在**全新解释器**里跑一遍 update_cache_cycle，并打印载荷摘要。
 
 为什么要另起进程：`update_cache_cycle()` 把结果写进**模块全局** `CACHE_DATA`，
-而 `r20_backend.dashboard_cache` 是单例模块。全量套件里别的用例会 `patch.object(r20_backend.dashboard_cache,
+而 `astra_backend.dashboard_cache` 是单例模块。全量套件里别的用例会 `patch.object(astra_backend.dashboard_cache,
 "CACHE_DATA", ...)`（`unittest.mock` 在 unwinding 时**还原该属性**，从而丢掉函数
 刚写好的载荷），于是断言读到的是别人塞进去的空 dict —— 与抽取正确性无关。
 全新进程没有这些外部补丁，是唯一能稳定验证"端到端是否接通"的办法。
@@ -460,7 +460,7 @@ def main():
 
     t = _T()
     isolate_config(t)
-    import r20_backend.dashboard_cache as app
+    import astra_backend.dashboard_cache as app
 
     TZ = datetime.timezone(datetime.timedelta(hours=8))
 
@@ -549,8 +549,8 @@ class UpdateCacheCycleIntegrationTest(unittest.TestCase):
 
     ## 为什么另起进程
 
-    `update_cache_cycle()` 把结果写进**模块全局** `CACHE_DATA`，而 `r20_backend.dashboard_cache`
-    是单例模块。全量套件里别的用例会 `patch.object(r20_backend.dashboard_cache, "CACHE_DATA", ...)`，
+    `update_cache_cycle()` 把结果写进**模块全局** `CACHE_DATA`，而 `astra_backend.dashboard_cache`
+    是单例模块。全量套件里别的用例会 `patch.object(astra_backend.dashboard_cache, "CACHE_DATA", ...)`，
     而 `unittest.mock` 在 unwinding 时**还原该属性**，等于把函数刚写好的载荷丢掉 ——
     实测现象极具误导性：单独跑全绿、全量跑读到空 dict，看起来像"跨测试污染"，
     根因却是 patch 语义本身吃掉了赋值（我为此绕了很久）。

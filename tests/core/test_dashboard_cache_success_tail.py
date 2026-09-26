@@ -14,7 +14,7 @@ import types
 import unittest
 from unittest import mock
 
-from r20_backend import dashboard_cache as DC
+from astra_backend import dashboard_cache as DC
 
 
 class SuccessTailTest(unittest.TestCase):
@@ -59,13 +59,13 @@ class SuccessTailTest(unittest.TestCase):
             q.start()
             self.addCleanup(q.stop)
         extras = [
-            mock.patch("r20_backend.llm_manager.get_active_llm_runtime",
+            mock.patch("astra_backend.llm_manager.get_active_llm_runtime",
                        side_effect=RuntimeError("读不到") if runtime_raises
                        else mock.Mock(return_value={"model": "M", "provider_name": "P",
                                                     "reasoning_effort": "high",
                                                     "api_format": "openai_chat"})),
             mock.patch("scripts.trader.venue_protection.read_ledger_rows", return_value=[]),
-            mock.patch("r20_backend.execution.circuit_breaker.ledger_today_stats",
+            mock.patch("astra_backend.execution.circuit_breaker.ledger_today_stats",
                        return_value={"realized_gross": 0.0, "fees_paid": 0.0,
                                      "net_realized": 0.0, "win_trades": 0, "loss_trades": 0,
                                      "win_rate": 0.0}),

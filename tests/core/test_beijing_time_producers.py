@@ -46,9 +46,9 @@ def isolated(path, *names, **deps):
 
 
 PRODUCER_PATHS = [
-    "r20_backend/llm_manager.py", "r20_backend/council_manager.py",
-    "r20_backend/policy_snapshot.py", "scripts/factor_library.py",
-    "r20_backend/qq_gateway_daemon.py", "scripts/cleanup_disk.py",
+    "astra_backend/llm_manager.py", "astra_backend/council_manager.py",
+    "astra_backend/policy_snapshot.py", "scripts/factor_library.py",
+    "astra_backend/qq_gateway_daemon.py", "scripts/cleanup_disk.py",
 ]
 
 
@@ -76,7 +76,7 @@ def test_all_datetime_producer_expressions(path):
 
 def test_failover_epoch_preserved():
     write = MagicMock()
-    mod = isolated("r20_backend/llm_manager.py", "record_failover_event",
+    mod = isolated("astra_backend/llm_manager.py", "record_failover_event",
                    FAILOVER_EVENTS_FILE=MagicMock(exists=lambda: False), _atomic_write_json=write)
     entry = {"reason": "mock failover"}
     mod.record_failover_event(entry)
@@ -89,7 +89,7 @@ def test_council_save_export_and_backup_mocked():
     source = MagicMock()
     directory = MagicMock()
     directory.glob.return_value = []
-    mod = isolated("r20_backend/council_manager.py", "save_council_config", "export_council_config", "_backup_council_config",
+    mod = isolated("astra_backend/council_manager.py", "save_council_config", "export_council_config", "_backup_council_config",
                    COUNCIL_CONFIG_FILE=source, DATA_DIR=directory, _atomic_write_json=write,
                    DEFAULT_CONSENSUS_MODE="standard", VALID_CONSENSUS_MODES={"standard"},
                    COUNCIL_EXPORT_FORMAT="test", COUNCIL_EXPORT_VERSION=1,
@@ -122,7 +122,7 @@ def test_policy_rebuild_preserves_legacy_and_converts_mtime():
     file.stat.return_value.st_mtime = EPOCH
     archive.glob.return_value = [file]
     for original, expected in [(legacy, legacy), (None, EXPECTED)]:
-        mod = isolated("r20_backend/policy_snapshot.py", "_rebuild_index_from_archives",
+        mod = isolated("astra_backend/policy_snapshot.py", "_rebuild_index_from_archives",
                        open=mock_open(read_data=json.dumps({"policy_hash": "abc", "metadata": {"archived_at": original}})),
                        logger=MagicMock())
         entries = mod._rebuild_index_from_archives(archive)
@@ -133,7 +133,7 @@ def test_new_policy_archive_keeps_hash_and_writes_offset():
     package = {"policy_hash": "abc12345", "policy_version": "v-test@abc12345", "summary": "mock"}
     write = MagicMock()
     index_write = MagicMock()
-    mod = isolated("r20_backend/policy_snapshot.py", "archive_current_policy",
+    mod = isolated("astra_backend/policy_snapshot.py", "archive_current_policy",
                    _index_lock=MagicMock(),
                    capture_full_strategy_package=MagicMock(return_value=package),
                    # 审计 P0-3：归档文件改由「整包标识」命名（四单元哈希看不到风控/路由，
@@ -165,7 +165,7 @@ def test_factor_snapshot_mocked():
 
 def test_qq_log_mocked():
     log_file = MagicMock()
-    mod = isolated("r20_backend/qq_gateway_daemon.py", "log", LOG_FILE=log_file,
+    mod = isolated("astra_backend/qq_gateway_daemon.py", "log", LOG_FILE=log_file,
                    datetime=SimpleNamespace(datetime=FrozenDateTime), print=MagicMock())
     mod.log("mock")
     log_file.open.return_value.__enter__.return_value.write.assert_called_once_with(f"[{EXPECTED}] mock\n")
@@ -186,7 +186,7 @@ def test_scheduler_record_created_and_handler_scope():
     handler = logging.StreamHandler()
     mocked_logging = SimpleNamespace(Formatter=logging.Formatter, INFO=logging.INFO,
                                     FileHandler=MagicMock(return_value=handler))
-    mod = isolated("r20_backend/scheduler.py", "BeijingFormatter", "configure_logging",
+    mod = isolated("astra_backend/scheduler.py", "BeijingFormatter", "configure_logging",
                    logging=mocked_logging, logger=logger, LOGS=MagicMock())
     mod.configure_logging()
     record = logging.LogRecord("test", logging.INFO, "test", 1, "delayed", (), None)
@@ -200,7 +200,7 @@ def test_scheduler_record_created_and_handler_scope():
 
 
 def test_watchdog_date_explicit_timezone():
-    text = (ROOT / "scripts/r20_watchdog.sh").read_text()
+    text = (ROOT / "scripts/astra_watchdog.sh").read_text()
     assert "$(TZ=Asia/Shanghai date '+%F %T +08:00')" in text
 
 

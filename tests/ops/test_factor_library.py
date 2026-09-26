@@ -20,7 +20,7 @@
 
 全文**会真的发 HTTP 请求**（ticker / 资金费率 / 持仓量 / Rubik×2）并调
 `market_data_service`，故 `urlopen` 与四个 data-service 函数**全程打桩**；
-`R20_DATA_DIR` 指向临时目录（模块顶部就把它作为 `DATA_DIR` 的首选），
+`ASTRA_DATA_DIR` 指向临时目录（模块顶部就把它作为 `DATA_DIR` 的首选），
 确保 `factor_library_snapshot.json` 绝不落到生产 `data/`。
 """
 
@@ -87,7 +87,7 @@ class _Base(unittest.TestCase):
         self.data = Path(self.tmp.name) / "data"
         self.data.mkdir()
         self.env = mock.patch.dict(os.environ,
-                                   {"R20_DATA_DIR": str(self.data)}).start()
+                                   {"ASTRA_DATA_DIR": str(self.data)}).start()
         # ⚠️ `DATA_DIR` / `FACTOR_LIB_CACHE_FILE` 是**模块 import 期**就算好的常量，
         # 光改环境变量对已导入的模块没用 —— 必须打模块全局，否则文件会落到
         # 沙箱或生产 data/ 下。
@@ -556,7 +556,7 @@ class UpdateFactorLibraryTests(_Base):
         self.assertEqual(stored["timestamp"], snap["timestamp"])
 
     def test_the_cache_path_lives_under_the_data_dir(self):
-        """`R20_DATA_DIR` 是沙箱专用变量：生产不设它 ⇒ 取值与原先逐位相同。"""
+        """`ASTRA_DATA_DIR` 是沙箱专用变量：生产不设它 ⇒ 取值与原先逐位相同。"""
         self.assertEqual(str(Path(FL.FACTOR_LIB_CACHE_FILE).parent), FL.DATA_DIR)
         self.assertEqual(Path(FL.FACTOR_LIB_CACHE_FILE).name,
                          "factor_library_snapshot.json")
@@ -568,7 +568,7 @@ class CliEntryTests(_Base):
     ⚠️ 这**不是**为了凑数：调度器真的就是 `python scripts/factor_library.py` 这样拉起它的，
     入口段（打印逐标的摘要）坏掉等于运维每天看不到因子快照。之所以能安全 exec，
     是因为本模块的外部依赖**全部可打桩**（`urlopen` + 四个 data-service 函数 +
-    `instrument_pool.load_instruments`），且 `R20_DATA_DIR` 已指向临时目录 ——
+    `instrument_pool.load_instruments`），且 `ASTRA_DATA_DIR` 已指向临时目录 ——
     生产 `data/` 不会被动一个字节。
     """
 

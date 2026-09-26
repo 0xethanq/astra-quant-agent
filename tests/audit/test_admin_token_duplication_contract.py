@@ -56,8 +56,8 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-APP = ROOT / "r20_backend" / "app.py"
-DEPS = ROOT / "r20_backend" / "dependencies.py"
+APP = ROOT / "astra_backend" / "app.py"
+DEPS = ROOT / "astra_backend" / "dependencies.py"
 
 
 def _fn(path: Path, name: str):

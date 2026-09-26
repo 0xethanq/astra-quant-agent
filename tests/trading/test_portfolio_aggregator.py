@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import unittest
 
-from r20_backend.portfolio_aggregator import aggregate_venue_accounts
+from astra_backend.portfolio_aggregator import aggregate_venue_accounts
 
 
 class PortfolioAggregatorTests(unittest.TestCase):

@@ -20,7 +20,7 @@ services:
       - TZ=Asia/Shanghai
       - PYTHONUNBUFFERED=1
       - PYTHONPATH=/app
-      - R20_STANDALONE_GATEWAY=true
+      - ASTRA_STANDALONE_GATEWAY=true
     volumes:
       # 挂载私密配置（读写挂载：支持管理后台直接修改并持久化配置变更）
       - ./.env:/app/.env
@@ -63,13 +63,13 @@ services:
     # （restart 策略只对"退出"生效）。要真正做到挂了自动拉起，需配合 autoheal 之类
     # 订阅健康状态的工具；本文件先把"看不见"变成"看得见"。
     healthcheck:
-      # ⚠️ 判据里的 `r20_gateway[.]worker` 是**故意**这么写的：CMD-SHELL 会以
-      # `/bin/sh -c "grep -l r20_gateway[.]worker ..."` 运行，若写成裸的
-      # `r20_gateway.worker`，探针**自己的命令行**就含该字符串 ⇒ grep 匹配到自己
+      # ⚠️ 判据里的 `astra_gateway[.]worker` 是**故意**这么写的：CMD-SHELL 会以
+      # `/bin/sh -c "grep -l astra_gateway[.]worker ..."` 运行，若写成裸的
+      # `astra_gateway.worker`，探针**自己的命令行**就含该字符串 ⇒ grep 匹配到自己
       # ⇒ 永远返回"健康"，探针形同虚设（本仓当天刚踩过一次同类自匹配）。
       # 方括号让正则与被匹配的字面量不同形：worker 的真身 cmdline 是裸点号，能匹配到；
       # 探针自身含的是 `[.]`，匹配不到自己。
-      test: ["CMD-SHELL", "grep -l 'r20_gateway[.]worker' /proc/[0-9]*/cmdline 2>/dev/null | head -1 | grep -q . || exit 1"]
+      test: ["CMD-SHELL", "grep -l 'astra_gateway[.]worker' /proc/[0-9]*/cmdline 2>/dev/null | head -1 | grep -q . || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3

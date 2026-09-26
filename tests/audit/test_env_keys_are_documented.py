@@ -6,12 +6,12 @@
 
 - 操作者**无法发现**这个开关存在（只能吃代码里的兜底默认值）；
 - 对**安全开关**尤其致命：本刀实测漏掉的两个里就有
-  `R20_VENUE_PROTECTION_WATCHDOG_DRY_RUN`（预演档：1 = 只报不做、0 = 真实写单）——
+  `ASTRA_VENUE_PROTECTION_WATCHDOG_DRY_RUN`（预演档：1 = 只报不做、0 = 真实写单）——
   模板不提它，等于让人以为"开了巡检就在安全档"。
 
 实测（本刀）：真正的环境访问点涉及 71 键，模板只记录 66 个 ⇒ **24 个键完全缺席**
-（含上面那个安全档、防抖窗口、价格理智闸 `R20_MAX_PRICE_CROSS_PCT`/`FAR_PCT`、
-台账同步总闸 `R20_LEDGER_SYNC_DISABLED`、LLM 超时/重试、路径覆盖等）。
+（含上面那个安全档、防抖窗口、价格理智闸 `ASTRA_MAX_PRICE_CROSS_PCT`/`FAR_PCT`、
+台账同步总闸 `ASTRA_LEDGER_SYNC_DISABLED`、LLM 超时/重试、路径覆盖等）。
 
 ## 判据
 
@@ -33,12 +33,12 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-#: **全部代码根**。⚠️ 第二百刀自查：第一版只扫 `scripts` + `r20_backend`，
-#: 而本仓还有 `r20_gateway/`（网关：凭证库、发布器、任务存储）与 `plugins/` ——
-#: 那两处的读点**完全隐形**，实测漏掉 `R20_GATEWAY_DB`、`R20_ALLOW_TEST_PUBLISH`、
-#: `R20_JOB_RUNS_KEEP_DAYS` 三个键（模板里根本没有，门却是绿的 = **假绿**）。
+#: **全部代码根**。⚠️ 第二百刀自查：第一版只扫 `scripts` + `astra_backend`，
+#: 而本仓还有 `astra_gateway/`（网关：凭证库、发布器、任务存储）与 `plugins/` ——
+#: 那两处的读点**完全隐形**，实测漏掉 `ASTRA_GATEWAY_DB`、`ASTRA_ALLOW_TEST_PUBLISH`、
+#: `ASTRA_JOB_RUNS_KEEP_DAYS` 三个键（模板里根本没有，门却是绿的 = **假绿**）。
 #: 这条清单本身就是"判据范围"的一部分：新增代码根必须同步加进来。
-SCAN_DIRS = ("scripts", "r20_backend", "r20_gateway", "plugins")
+SCAN_DIRS = ("scripts", "astra_backend", "astra_gateway", "plugins")
 
 #: 允许"代码读、模板不提"的例外（附理由）。当前为空 —— 全部已补进模板。
 ALLOWLIST: dict[str, str] = {}
@@ -57,9 +57,9 @@ def _is_env_accessor(call: ast.Call) -> bool:
 
     ⚠️ 第一百九十九刀自查出的**假阴性**：第一版只认 `os.getenv` / `os.environ.get` /
     `*environ*` / `_env_*` helper，而本仓大量代码把环境做成 dict 传参后写
-    `env.get("R20_XXX")`（`notifications.py`、`routers/gateway/*`）—— 那些读点**完全隐形**。
-    实测漏了 16 个键，其中 4 个（`OKX_BASE_URL`/`R20_TELEGRAM_API_BASE`/
-    `R20_DINGTALK_SECRET`/`R20_FEISHU_SECRET`）**连模板都没有** ⇒ 本门当时是绿的，却是假绿。
+    `env.get("ASTRA_XXX")`（`notifications.py`、`routers/gateway/*`）—— 那些读点**完全隐形**。
+    实测漏了 16 个键，其中 4 个（`OKX_BASE_URL`/`ASTRA_TELEGRAM_API_BASE`/
+    `ASTRA_DINGTALK_SECRET`/`ASTRA_FEISHU_SECRET`）**连模板都没有** ⇒ 本门当时是绿的，却是假绿。
     """
     name = ast.unparse(call.func)
     if name in ("os.getenv", "getenv", "os.environ.get", "environ.get"):
@@ -124,8 +124,8 @@ class EnvKeysAreDocumentedTest(unittest.TestCase):
         template = (ROOT / "env.example").read_text(encoding="utf-8")
         self.assertGreaterEqual(len(re.findall(r"^[A-Za-z_][A-Za-z0-9_]*\s*=", template, re.M)), 60,
                                 "模板赋值行太少 ⇒ 可能读错了文件")
-        for must in ("R20_OKX_ENV", "R20_VENUE_PROTECTION_WATCHDOG",
-                     "R20_VENUE_PROTECTION_WATCHDOG_DRY_RUN", "R20_MAX_PRICE_CROSS_PCT"):
+        for must in ("ASTRA_OKX_ENV", "ASTRA_VENUE_PROTECTION_WATCHDOG",
+                     "ASTRA_VENUE_PROTECTION_WATCHDOG_DRY_RUN", "ASTRA_MAX_PRICE_CROSS_PCT"):
             self.assertIn(must, template, f"安全相关键 {must} 必须出现在模板里")
 
     def test_allowlist_entries_have_reasons(self):
@@ -135,7 +135,7 @@ class EnvKeysAreDocumentedTest(unittest.TestCase):
     def test_scanner_covers_every_code_root(self):
         """牙齿（第二百刀）：代码根清单必须覆盖仓里**所有**含 .py 的一级目录。
 
-        第一版只写了两根 ⇒ `r20_gateway/` 的读点隐形。这里让"漏根"变成判红：
+        第一版只写了两根 ⇒ `astra_gateway/` 的读点隐形。这里让"漏根"变成判红：
         仓库里凡有 .py 的一级目录（除 tests/data 这类），都必须出现在 SCAN_DIRS 里。
         """
         skip = {"tests", "data", "backups", "logs", "deploy", "docs", "plan_local",
@@ -151,18 +151,18 @@ class EnvKeysAreDocumentedTest(unittest.TestCase):
         self.assertEqual(missing, [], f"这些代码根没被扫描 ⇒ 它们的读点会隐形（假绿）：{missing}")
 
     def test_scanner_sees_env_dict_receivers(self):
-        """牙齿（第一百九十九刀）：`env.get("R20_X")` 这种**dict 传参**的读法必须被看见。
+        """牙齿（第一百九十九刀）：`env.get("ASTRA_X")` 这种**dict 传参**的读法必须被看见。
 
         第一版看不见 ⇒ 4 个键在模板里缺席却门是绿的（假绿）。
         """
-        for src in ('def f(env):\n    return env.get("R20_DICT_STYLE_KEY", "")\n',
-                    'def f(environment):\n    return environment.get("R20_DICT_STYLE_KEY")\n'):
-            self.assertEqual(consulted_env_keys(src), {"R20_DICT_STYLE_KEY"},
+        for src in ('def f(env):\n    return env.get("ASTRA_DICT_STYLE_KEY", "")\n',
+                    'def f(environment):\n    return environment.get("ASTRA_DICT_STYLE_KEY")\n'):
+            self.assertEqual(consulted_env_keys(src), {"ASTRA_DICT_STYLE_KEY"},
                              "dict 风格的环境读取没被看见 ⇒ 门会假绿")
 
     def test_teeth_on_an_undocumented_key(self):
-        src = 'import os\nX = os.environ.get("R20_BRAND_NEW_KNOB", "0")\n'
-        self.assertEqual(consulted_env_keys(src), {"R20_BRAND_NEW_KNOB"},
+        src = 'import os\nX = os.environ.get("ASTRA_BRAND_NEW_KNOB", "0")\n'
+        self.assertEqual(consulted_env_keys(src), {"ASTRA_BRAND_NEW_KNOB"},
                          "连合成样本都扫不到 ⇒ 门没有牙齿")
         # 非字面量（变量键）不该被误当成键
         self.assertEqual(consulted_env_keys('import os\nK="X"\nY=os.environ.get(K)\n'), set())
@@ -170,7 +170,7 @@ class EnvKeysAreDocumentedTest(unittest.TestCase):
     def test_safety_switches_document_their_safe_tier(self):
         """安全开关必须在模板里**讲清档位**（只说"有这个键"不够）。"""
         template = (ROOT / "env.example").read_text(encoding="utf-8")
-        for needle in ("R20_VENUE_PROTECTION_WATCHDOG_DRY_RUN",
+        for needle in ("ASTRA_VENUE_PROTECTION_WATCHDOG_DRY_RUN",
                        "只报", "绝不下单"):
             self.assertIn(needle, template, f"模板缺少 {needle!r} ⇒ 档位语义没写清")
 
@@ -189,7 +189,7 @@ if __name__ == "__main__":
 #   1. 直接读：`os.environ[...]` / `environ.get` / `os.getenv` / `_env_*` helper（方向一用的判据）；
 #   2. **键表**：`settings_store.MANAGED_KEYS` 这类表把键名当字符串存着，读写经由表
 #      （凭证键全走这条：`OKX_LIVE_API_KEY` 等）；
-#   3. **f-string 派生**：`env.get(f"R20_NOTIFY_{channel.upper()}_ENABLED")` 之类拼出键名
+#   3. **f-string 派生**：`env.get(f"ASTRA_NOTIFY_{channel.upper()}_ENABLED")` 之类拼出键名
 #      （通知开关全走这条）。
 # 故判据 = 直接读 ∪ **非 docstring 的字面量出现** ∪ f-string 前后缀匹配。
 # 排除 docstring 很关键：把键名写进文档字符串不算"代码会用它"。
@@ -222,7 +222,7 @@ def _literal_and_fstring_mechanisms() -> tuple:
                     literal.setdefault(node.value, f"{rel}:{node.lineno}")
                 elif isinstance(node, ast.JoinedStr):
                     parts = [v.value if isinstance(v, ast.Constant) else None for v in node.values]
-                    if len(parts) >= 2 and isinstance(parts[0], str) and parts[0].startswith("R20_"):
+                    if len(parts) >= 2 and isinstance(parts[0], str) and parts[0].startswith("ASTRA_"):
                         suffix = parts[-1] if isinstance(parts[-1], str) else ""
                         fpatterns.append((parts[0], suffix, f"{rel}:{node.lineno}"))
     return literal, fpatterns
@@ -261,11 +261,11 @@ class TemplateKeysAreConsumedTest(unittest.TestCase):
 
     def test_teeth_on_a_knob_nobody_reads(self):
         literal, fpatterns = {"SOMETHING_ELSE": "x:1"}, []
-        self.assertIsNone(consumed_by("R20_NOBODY_READS_THIS", literal, fpatterns),
+        self.assertIsNone(consumed_by("ASTRA_NOBODY_READS_THIS", literal, fpatterns),
                           "没人消费的键必须判为未消费")
         # docstring 里出现不算消费（合成）：字面量表里不该有它
-        src = 'def f():\n    """R20_DOC_ONLY_KNOB 只写在文档里"""\n    return 1\n'
+        src = 'def f():\n    """ASTRA_DOC_ONLY_KNOB 只写在文档里"""\n    return 1\n'
         import ast as _ast
         ds = _ast.get_docstring(_ast.parse(src).body[0], clean=False)
-        self.assertIn("R20_DOC_ONLY_KNOB", ds, "样本本身要成立")
-        self.assertNotIn("R20_DOC_ONLY_KNOB", literal, "docstring 不得被当成消费点")
+        self.assertIn("ASTRA_DOC_ONLY_KNOB", ds, "样本本身要成立")
+        self.assertNotIn("ASTRA_DOC_ONLY_KNOB", literal, "docstring 不得被当成消费点")

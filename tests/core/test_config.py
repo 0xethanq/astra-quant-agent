@@ -13,7 +13,7 @@
 只能像下面这样把函数节点从源码里摘出来单独 exec。
 
 ★ 本刀最要紧的一条是**别把线上的东西读进来**：`refresh_settings()` 原实现会
-`load_dotenv(ROOT/".env")` + `load_encrypted_secrets()`（读 `data/r20_secrets.enc`），
+`load_dotenv(ROOT/".env")` + `load_encrypted_secrets()`（读 `data/astra_secrets.enc`），
 所以用例把这两个函数 patch 掉，只测"装配逻辑"本身，绝不触碰生产配置与密钥库。
 `settings` 是模块级单例，逐用例**整份快照/还原**其 `__dict__`，不留跨用例污染。
 """
@@ -25,8 +25,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import mock
 
-from r20_backend import config as CFG
-from r20_gateway import secrets as SEC
+from astra_backend import config as CFG
+from astra_gateway import secrets as SEC
 
 
 class LoadEncryptedSecretsTests(unittest.TestCase):
@@ -42,7 +42,7 @@ class LoadEncryptedSecretsTests(unittest.TestCase):
             self.assertIsNone(CFG.load_encrypted_secrets())
 
     def test_an_import_failure_is_also_swallowed(self):
-        with mock.patch.dict("sys.modules", {"r20_gateway.secrets": None}):
+        with mock.patch.dict("sys.modules", {"astra_gateway.secrets": None}):
             self.assertIsNone(CFG.load_encrypted_secrets())
 
 
@@ -54,7 +54,7 @@ def _extract(function_name: str):
        `lambda path: None`（会话级沙箱要挡住 `.env` 回灌到 `os.environ`），
        于是真实现根本不会被调用；
     2. 整个 `exec` 一遍 `config.py` —— 它在文件末尾就 `settings = Settings();
-       refresh_settings()`，那会去读**生产 `.env` 与 `data/r20_secrets.enc`**。
+       refresh_settings()`，那会去读**生产 `.env` 与 `data/astra_secrets.enc`**。
 
     故只把目标函数节点摘出来执行（本仓既有的"单函数 AST + exec"手法）。
     """
@@ -102,9 +102,9 @@ class LoadDotenvTests(unittest.TestCase):
             self.load_dotenv(directory)
 
     def test_a_present_file_is_loaded(self):
-        os.environ.pop("R20_TEST_DOTENV_KEY", None)
-        self.load_dotenv(self._write("R20_TEST_DOTENV_KEY=hello\n"))
-        self.assertEqual(os.environ["R20_TEST_DOTENV_KEY"], "hello")
+        os.environ.pop("ASTRA_TEST_DOTENV_KEY", None)
+        self.load_dotenv(self._write("ASTRA_TEST_DOTENV_KEY=hello\n"))
+        self.assertEqual(os.environ["ASTRA_TEST_DOTENV_KEY"], "hello")
 
     def test_comments_blanks_and_lines_without_equals_are_skipped(self):
         for key in ("A_KEY", "B_KEY"):
@@ -140,7 +140,7 @@ class RefreshSettingsFallbackTests(unittest.TestCase):
         CFG.settings.__dict__.update(self._snapshot)
 
     def _refresh(self, **kw):
-        # ★ 必须同时挡住两条"读线上"的路径：生产 .env 与 data/r20_secrets.enc
+        # ★ 必须同时挡住两条"读线上"的路径：生产 .env 与 data/astra_secrets.enc
         with mock.patch.object(CFG, "load_dotenv"), \
                 mock.patch.object(CFG, "load_encrypted_secrets"), \
                 mock.patch.object(SEC, "load_secrets", **kw):

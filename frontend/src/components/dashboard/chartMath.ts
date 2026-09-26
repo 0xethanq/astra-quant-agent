@@ -58,7 +58,7 @@ export function computeRiskReward(input: {
   const isAtrOptimal = atrMultiple >= 1.8 && atrMultiple <= 2.2
 
   const hasRealPosition = !!activePosition
-  // 未持仓时按「可用余额 × 20%」估算单笔保证金（与执行层 R20_MAX_MARGIN_EQUITY_RATIO 同口径），
+  // 未持仓时按「可用余额 × 20%」估算单笔保证金（与执行层 ASTRA_MAX_MARGIN_EQUITY_RATIO 同口径），
   // 不再写死 100U —— 那会让小资金账户看到与真实风险完全不符的预估盈亏。
   let activeMargin = availEq > 0 ? Math.round(availEq * 0.20 * 100) / 100 : 0
   let activeLeverage = 3.0

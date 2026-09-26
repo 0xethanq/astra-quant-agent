@@ -6,7 +6,7 @@
 |---|---|---|
 | `load_routing_mode` | 7 | 路由模式（auto/锁定所）读取 |
 | `load_preferred_venue` | 7 | 手选锁定所读取 |
-| `portfolio_risk_budget_usdt` | 5 | 组合风险预算（env `R20_PORTFOLIO_RISK_BUDGET_USDT`，0=不限） |
+| `portfolio_risk_budget_usdt` | 5 | 组合风险预算（env `ASTRA_PORTFOLIO_RISK_BUDGET_USDT`，0=不限） |
 | `estimate_margin_usdt` | 6 | 名义额 → 保证金估算 |
 | `_decision_payload` | 12 | 决策载荷取值（含缺省合并） |
 | `_rejection_focus_reason` | 19 | 拒单焦点原因提取（日志/通知用） |
@@ -48,7 +48,7 @@ def load_preferred_venue(
                               routing_policy) -> str:
     """手动选所优先项（data/venue_routing.json 顶层 preferred_venue）。
 
-    单一事实源在 r20_backend.exchanges.routing_policy：缺字段/非法值由其回退
+    单一事实源在 astra_backend.exchanges.routing_policy：缺字段/非法值由其回退
     'auto' 并打 warn。此处只做模块绑定转发，方便接线级测试一键切档。
     """
     return routing_policy.load_preferred_venue()

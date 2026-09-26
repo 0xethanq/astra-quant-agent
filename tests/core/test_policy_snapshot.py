@@ -1,7 +1,7 @@
 """策略快照门面：**ROOT 必须调用时解析、薄壳必须传"门面自己的"包装、整包标识去重**（第二百八十六刀，开新面 policy_snapshot.py）。
 
 先打印整个文件（295 行）再动笔。B6 拆分后本模块只剩**门面薄壳** + 一段索引重建 + 归档：
-真正的指纹/规范化/整包标识在 `r20_backend/policy/*`。
+真正的指纹/规范化/整包标识在 `astra_backend/policy/*`。
 
 | 语义 | 口径 |
 |---|---|
@@ -21,10 +21,10 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import mock
 
-from r20_backend import policy_snapshot as PS
+from astra_backend import policy_snapshot as PS
 
 _BJ = timezone(timedelta(hours=8))
-_SANDBOX_ROOT = Path("/tmp/r20-facade-sandbox-root")
+_SANDBOX_ROOT = Path("/tmp/astra-facade-sandbox-root")
 
 
 class _Base(unittest.TestCase):
@@ -259,14 +259,14 @@ class RebuildIndexTests(_Base):
     def test_a_broken_archive_is_skipped_with_a_warning(self):
         self._archive("policy_good.json", {"policy_hash": "good"})
         (self.a_dir / "policy_bad.json").write_text("{不是 JSON", encoding="utf-8")
-        with self.assertLogs("r20_backend.policy_snapshot", level="WARNING") as logs:
+        with self.assertLogs("astra_backend.policy_snapshot", level="WARNING") as logs:
             entries = PS._rebuild_index_from_archives(self.a_dir)
         self.assertEqual([e["policy_hash"] for e in entries], ["good"])
         self.assertIn("policy_bad.json", "\n".join(logs.output))
 
     def test_a_non_dict_package_does_not_crash_the_scan(self):
         self._archive("policy_list.json", [1, 2, 3])
-        with self.assertLogs("r20_backend.policy_snapshot", level="WARNING"):
+        with self.assertLogs("astra_backend.policy_snapshot", level="WARNING"):
             self.assertEqual(PS._rebuild_index_from_archives(self.a_dir), [])
 
     def test_entries_are_sorted_newest_first(self):

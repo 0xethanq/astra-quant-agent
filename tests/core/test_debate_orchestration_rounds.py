@@ -14,7 +14,7 @@
 import unittest
 from unittest import mock
 
-from r20_backend.council.debate import execute_council_debate
+from astra_backend.council.debate import execute_council_debate
 
 ROLES = {
     "cio": {"name": "首席", "is_arbitrator": True, "prompt": "p"},
@@ -27,10 +27,10 @@ class RoundsTest(unittest.TestCase):
     def setUp(self):
         self.trader_calls = []
         self.critique_calls = []
-        p = mock.patch("r20_backend.council.debate.time.sleep")
+        p = mock.patch("astra_backend.council.debate.time.sleep")
         self.sleep_mock = p.start()
         self.addCleanup(p.stop)
-        p2 = mock.patch("r20_backend.llm_manager.get_active_llm_runtime",
+        p2 = mock.patch("astra_backend.llm_manager.get_active_llm_runtime",
                         return_value={"model": "M"})
         p2.start()
         self.addCleanup(p2.stop)
@@ -54,7 +54,7 @@ class RoundsTest(unittest.TestCase):
         patches = []
         if time_seq is not None:
             ticks = iter(time_seq)
-            patches.append(mock.patch("r20_backend.council.debate.time.time",
+            patches.append(mock.patch("astra_backend.council.debate.time.time",
                                       side_effect=lambda: next(ticks, 999.0)))
         for p in patches:
             p.start()

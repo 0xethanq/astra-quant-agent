@@ -16,7 +16,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from r20_backend.dashboard_payload import factors
+from astra_backend.dashboard_payload import factors
 
 
 class TrackerLoaderShellTest(unittest.TestCase):

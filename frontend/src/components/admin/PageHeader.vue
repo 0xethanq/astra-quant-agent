@@ -30,7 +30,7 @@ defineProps<{
   display: flex;
   flex-direction: column;
   gap: var(--ds-space-3);
-  animation: r20-enter var(--dur-slow) var(--ease-out) backwards;
+  animation: astra-enter var(--dur-slow) var(--ease-out) backwards;
 }
 @media (min-width: 640px) {
   .ph:not(.is-stacked) {

@@ -1,4 +1,4 @@
-"""交易所连接诊断（`r20_backend/exchanges/diagnostics.py`）残余分支收口测试 —— 第 340 刀。
+"""交易所连接诊断（`astra_backend/exchanges/diagnostics.py`）残余分支收口测试 —— 第 340 刀。
 
 本模块 334 行，是 OKX / Binance / Gate 三所连通性与凭证鉴权诊断核心：
 - `_default_http_call`：标准 HTTP 请求封装、JSON 与纯文本降级、HTTPError 解析；
@@ -13,7 +13,7 @@ import unittest
 import urllib.error
 from unittest.mock import MagicMock, patch
 
-from r20_backend.exchanges.diagnostics import (
+from astra_backend.exchanges.diagnostics import (
     _default_http_call,
     _diagnose_binance,
     _diagnose_gate,
@@ -53,7 +53,7 @@ class ExchangeDiagnosticsTailsTests(unittest.TestCase):
     # -------------------------------------------------------------------------
     # 1. 默认 HTTP 封装 (_default_http_call)
     # -------------------------------------------------------------------------
-    @patch("r20_backend.exchanges.diagnostics.urlopen")
+    @patch("astra_backend.exchanges.diagnostics.urlopen")
     def test_default_http_call_success_json(self, mock_urlopen):
         mock_urlopen.return_value = _make_mock_response(200, json.dumps({"server_time": 123456789}))
         status, data, headers = _default_http_call("https://api.test.com/time")
@@ -61,14 +61,14 @@ class ExchangeDiagnosticsTailsTests(unittest.TestCase):
         self.assertEqual(data.get("server_time"), 123456789)
         self.assertEqual(headers.get("content-type"), "application/json")
 
-    @patch("r20_backend.exchanges.diagnostics.urlopen")
+    @patch("astra_backend.exchanges.diagnostics.urlopen")
     def test_default_http_call_success_non_json(self, mock_urlopen):
         mock_urlopen.return_value = _make_mock_response(200, "plain text response")
         status, data, headers = _default_http_call("https://api.test.com/ping")
         self.assertEqual(status, 200)
         self.assertEqual(data.get("raw_text"), "plain text response")
 
-    @patch("r20_backend.exchanges.diagnostics.urlopen")
+    @patch("astra_backend.exchanges.diagnostics.urlopen")
     def test_default_http_call_http_error_json(self, mock_urlopen):
         mock_urlopen.side_effect = _make_mock_http_error(400, json.dumps({"code": -1001, "msg": "Invalid param"}))
         status, data, headers = _default_http_call("https://api.test.com/order")
@@ -76,7 +76,7 @@ class ExchangeDiagnosticsTailsTests(unittest.TestCase):
         self.assertEqual(data.get("code"), -1001)
         self.assertEqual(data.get("msg"), "Invalid param")
 
-    @patch("r20_backend.exchanges.diagnostics.urlopen")
+    @patch("astra_backend.exchanges.diagnostics.urlopen")
     def test_default_http_call_http_error_non_json(self, mock_urlopen):
         mock_urlopen.side_effect = _make_mock_http_error(502, "Bad Gateway HTML error page")
         status, data, headers = _default_http_call("https://api.test.com/down")
@@ -94,8 +94,8 @@ class ExchangeDiagnosticsTailsTests(unittest.TestCase):
 
     def test_diagnose_venue_connection_implicit_credentials_loading_okx(self):
         # api_key 与 secret_key 均未显式传参时，从 venue_credentials 与 venue_passphrase 加载
-        with patch("r20_backend.exchanges.diagnostics.venue_credentials", return_value=("ak_okx", "sk_okx")):
-            with patch("r20_backend.exchanges.diagnostics.venue_passphrase", return_value="pp_okx"):
+        with patch("astra_backend.exchanges.diagnostics.venue_credentials", return_value=("ak_okx", "sk_okx")):
+            with patch("astra_backend.exchanges.diagnostics.venue_passphrase", return_value="pp_okx"):
                 caller = MagicMock(return_value=(200, {"code": "0", "data": [{"total": "100"}]}, {}))
                 res = diagnose_venue_connection(
                     venue="okx",
@@ -107,7 +107,7 @@ class ExchangeDiagnosticsTailsTests(unittest.TestCase):
                 self.assertIn("OKX LIVE 凭证鉴权成功", res["message"])
 
     def test_diagnose_venue_connection_implicit_credentials_loading_binance(self):
-        with patch("r20_backend.exchanges.diagnostics.venue_credentials", return_value=("ak_bin", "sk_bin")):
+        with patch("astra_backend.exchanges.diagnostics.venue_credentials", return_value=("ak_bin", "sk_bin")):
             caller = MagicMock(return_value=(200, {"canTrade": True, "totalWalletBalance": "500"}, {}))
             res = diagnose_venue_connection(
                 venue="binance",
@@ -201,9 +201,9 @@ class ExchangeDiagnosticsTailsTests(unittest.TestCase):
 
     def test_resolve_for_diagnostics_probe_exception_handled(self):
         # 当沙盒未钉死且多候选探测全部抛异常时，触发 line 147 (return None)，最终 fail-closed 报错
-        from r20_backend.exchanges.base import ExchangeCapabilityError
+        from astra_backend.exchanges.base import ExchangeCapabilityError
         caller = MagicMock(side_effect=ConnectionRefusedError("Connection refused"))
-        with patch("r20_backend.exchanges.env_profiles.pinned_base_url", return_value=None):
+        with patch("astra_backend.exchanges.env_profiles.pinned_base_url", return_value=None):
             with self.assertRaises(ExchangeCapabilityError):
                 _resolve_for_diagnostics("gate", "sandbox", caller)
 

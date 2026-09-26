@@ -73,7 +73,7 @@ def free_names(path):
 
 if __name__ == '__main__':
     import pathlib, sys
-    roots = sys.argv[1:] or ['scripts', 'r20_backend', 'r20_gateway']
+    roots = sys.argv[1:] or ['scripts', 'astra_backend', 'astra_gateway']
     hits, total = [], 0
     for root in roots:
         for p in sorted(pathlib.Path(root).rglob('*.py')):

@@ -15,8 +15,8 @@ import unittest
 from io import BytesIO
 from unittest.mock import MagicMock, patch
 
-from r20_backend.exchanges import listing as L
-from r20_backend.exchanges import ExchangeCapabilityError
+from astra_backend.exchanges import listing as L
+from astra_backend.exchanges import ExchangeCapabilityError
 
 
 class _Resp:

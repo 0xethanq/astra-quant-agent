@@ -1,4 +1,4 @@
-"""投委会席位花名册与模型绑定（`r20_backend/council/roster.py`）残余分支收口测试 —— 第 356 刀。
+"""投委会席位花名册与模型绑定（`astra_backend/council/roster.py`）残余分支收口测试 —— 第 356 刀。
 
 本模块 146 行，是投委会席位模型绑定校验、席位健康度核验与超时区间夹取核心：
 - 席位模型健康度（`seat_model_health`）：模型库读取异常自愈、非字典角色条目跳过；
@@ -12,7 +12,7 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from r20_backend.council.roster import (
+from astra_backend.council.roster import (
     DEFAULT_COUNCIL_TIMEOUT,
     clamp_council_timeout,
     resolve_seat_model,
@@ -28,7 +28,7 @@ class CouncilRosterTailsTests(unittest.TestCase):
     # -------------------------------------------------------------------------
     def test_seat_model_health_config_exception_and_non_dict_role(self):
         # 模型配置读取抛异常时回退空集合 (line 28)；非字典角色自动跳过 (line 32)
-        with patch("r20_backend.llm_manager.load_llm_config", side_effect=RuntimeError("db error")):
+        with patch("astra_backend.llm_manager.load_llm_config", side_effect=RuntimeError("db error")):
             roles = {
                 "invalid_role": "not_a_dict",
                 "risk_controller": {"model_id": "claude-3-5-sonnet"},
@@ -41,7 +41,7 @@ class CouncilRosterTailsTests(unittest.TestCase):
 
     def test_resolve_seat_model_config_exception_returns_explicit_failure(self):
         # 模型配置读取异常时显式返回失败结构而不静默崩溃 (lines 54-57)
-        with patch("r20_backend.llm_manager.load_llm_config", side_effect=RuntimeError("config broken")):
+        with patch("astra_backend.llm_manager.load_llm_config", side_effect=RuntimeError("config broken")):
             res = resolve_seat_model({"model_id": "gpt-4o", "reasoning_effort": "high"})
             self.assertEqual(res["model"], "")
             self.assertFalse(res["registered"])
@@ -54,7 +54,7 @@ class CouncilRosterTailsTests(unittest.TestCase):
     # -------------------------------------------------------------------------
     def test_validate_seat_model_bindings_skips_non_dict_role(self):
         # 非字典形式的角色条目在校验中安全跳过 (line 109)
-        with patch("r20_backend.llm_manager.load_llm_config", return_value={"models": [{"id": "m1"}]}):
+        with patch("astra_backend.llm_manager.load_llm_config", return_value={"models": [{"id": "m1"}]}):
             roles = {
                 "bad_entry": None,
                 "role1": {"model_id": "m1"},

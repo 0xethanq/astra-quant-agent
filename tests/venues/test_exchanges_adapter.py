@@ -8,7 +8,7 @@ from __future__ import annotations
 import unittest
 from unittest.mock import Mock, patch
 
-from r20_backend.exchanges import (
+from astra_backend.exchanges import (
     BinanceAdapter,
     ExchangeCapabilityError,
     GateAdapter,
@@ -23,12 +23,12 @@ _AMBIENT: dict = {}
 
 def setUpModule():
     """封闭三律：排除宿主 .env 注入的 ambient 执行旗标——
-    R20_BINANCE/GATE_EXECUTION=1 会把 fail-closed 契约用例带偏（US-005 后
+    ASTRA_BINANCE/GATE_EXECUTION=1 会把 fail-closed 契约用例带偏（US-005 后
     binance 旗标已进 .env，整文件并跑时曾炸出顺序红）。旗标只由用例自设。"""
     import os
     global _AMBIENT
     _AMBIENT = {k: os.environ.pop(k, None) for k in list(os.environ)
-                if k.startswith("R20_") and ("EXECUTION" in k or "TESTNET" in k)}
+                if k.startswith("ASTRA_") and ("EXECUTION" in k or "TESTNET" in k)}
 
 
 def tearDownModule():
@@ -130,7 +130,7 @@ class TestFailClosedPrivateFacets(unittest.TestCase):
     def test_orders_rejected_on_readonly_adapters(self):
         # US-005 后只读私有面的仅剩 OKX 适配器（执行居遗留直签链）；
         # Binance/Gate 私有面已实装——契约改由「无凭证 fail-closed」用例守护
-        from r20_backend.exchanges import OKXPublicAdapter
+        from astra_backend.exchanges import OKXPublicAdapter
         okx = OKXPublicAdapter()
         for call in (lambda: okx.place_order("BTC", "buy", 1),
                      lambda: okx.attach_protective_orders("BTC", "long"),
@@ -144,7 +144,7 @@ class TestFailClosedPrivateFacets(unittest.TestCase):
         # 与 Gate 同款契约：实装 ≠ 放行——无凭证一律显式拒绝，绝不静默出网
         # 注：place_order 先 fetch_instrument_spec（出网）再 signed_request 查凭证，
         # 故 mock 掉规格拉取（None 走代码内 step/tick 兜底），让用例直达凭证闸
-        import r20_gateway.secrets as gw_secrets
+        import astra_gateway.secrets as gw_secrets
         with patch.object(gw_secrets, "load_secrets", lambda: {}):
             bn = BinanceAdapter()
             bn.fetch_instrument_spec = Mock(return_value=None)
@@ -155,7 +155,7 @@ class TestFailClosedPrivateFacets(unittest.TestCase):
 
     def test_gate_private_requires_credentials_fail_closed(self):
         # Gate 私有面已实装但仍 fail-closed：无凭证 → 显式拒绝，绝不静默
-        import r20_gateway.secrets as gw_secrets
+        import astra_gateway.secrets as gw_secrets
         with patch.object(gw_secrets, "load_secrets", lambda: {}):
             gt = GateAdapter()
             with self.assertRaises(ExchangeCapabilityError):
@@ -168,10 +168,10 @@ class TestFailClosedPrivateFacets(unittest.TestCase):
         # US-005 后 binance/gate 均声明开闸路径，拒绝文案必须指路各自的闸
         with self.assertRaises(ExchangeCapabilityError) as cm:
             registry.require_execution("binance")
-        self.assertIn("R20_BINANCE_EXECUTION", str(cm.exception))
+        self.assertIn("ASTRA_BINANCE_EXECUTION", str(cm.exception))
         with self.assertRaises(ExchangeCapabilityError) as cm2:
             registry.require_execution("gate")
-        self.assertIn("R20_GATE_EXECUTION", str(cm2.exception))
+        self.assertIn("ASTRA_GATE_EXECUTION", str(cm2.exception))
         with self.assertRaises(ExchangeCapabilityError):
             registry.require_execution("okx")   # OKX 执行在遗留链路，适配器路由结构性恒关
         with self.assertRaises(ExchangeCapabilityError):
@@ -320,8 +320,8 @@ class ContractsRoundingBoundTest(unittest.TestCase):
 
     @staticmethod
     def _gate(ct_val):
-        from r20_backend.exchanges.gate import GateAdapter
-        from r20_backend.exchanges.base import InstrumentSpec
+        from astra_backend.exchanges.gate import GateAdapter
+        from astra_backend.exchanges.base import InstrumentSpec
         return GateAdapter(), InstrumentSpec(venue="gate", inst_id="X_USDT", base="X",
                                             tick_size=0.01, step_size=0.0001,
                                             ct_val=ct_val, min_size=1)
@@ -350,8 +350,8 @@ class ContractsRoundingBoundTest(unittest.TestCase):
 
     def test_base_asset_branch_never_exceeds_target(self):
         """对照：币数分支同样向下截断（两条分支方向**一致**，都是一律不超买）。"""
-        from r20_backend.exchanges.binance import BinanceAdapter
-        from r20_backend.exchanges.base import InstrumentSpec
+        from astra_backend.exchanges.binance import BinanceAdapter
+        from astra_backend.exchanges.base import InstrumentSpec
         ad = BinanceAdapter()
         spec = InstrumentSpec(venue="binance", inst_id="XUSDT", base="X",
                               tick_size=0.01, step_size=1.0, ct_val=1.0, min_size=0.5)

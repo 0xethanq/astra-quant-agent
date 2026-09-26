@@ -200,7 +200,7 @@ class CloudOcoHttpBoundaryTests(unittest.TestCase):
         self.http = install_http(self, aft)
         from scripts.okx_runtime import freeze_environment, unfreeze_environment
         freeze_environment({
-            "R20_OKX_ENV": "demo",
+            "ASTRA_OKX_ENV": "demo",
             "OKX_DEMO_API_KEY": "AK-demo", "OKX_DEMO_SECRET_KEY": "SK-demo",
             "OKX_DEMO_PASSPHRASE": "PP-demo",
         })
@@ -292,7 +292,7 @@ class CloudOcoHttpBoundaryTests(unittest.TestCase):
     def test_missing_credentials_fail_closed_zero_http(self):
         from scripts.okx_runtime import unfreeze_environment, freeze_environment
         unfreeze_environment()
-        freeze_environment({"R20_OKX_ENV": "demo"})  # no keys at all
+        freeze_environment({"ASTRA_OKX_ENV": "demo"})  # no keys at all
         self.captured.clear()
         with patch.object(aft.okx_rest, "urlopen", side_effect=AssertionError("network!")):
             ok1, detail1 = aft.ensure_cloud_position_protection("SOL-USDT-SWAP", "long", 4.0, 106, 101)

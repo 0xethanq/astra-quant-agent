@@ -140,7 +140,7 @@ class InjectionContractTest(unittest.TestCase):
             abt.fetch_cross_venue_matrix([{"name": "BTC", "price": 100.0}])  # 不得抛
 
     def test_xvenue_disabled_short_circuits(self):
-        with patch.dict(os.environ, {"R20_XVENUE_PROMPT": "0"}):
+        with patch.dict(os.environ, {"ASTRA_XVENUE_PROMPT": "0"}):
             self.assertFalse(abt._xvenue_enabled())
 
 

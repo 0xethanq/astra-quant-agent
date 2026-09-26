@@ -358,7 +358,7 @@ def run_full_portfolio_backtest(bar: str = "1H", limit: int = 100, capital_per_a
 
 
 def main():
-    parser = argparse.ArgumentParser(description="R20 Multi-Asset Quantitative Backtesting & Statistical Engine")
+    parser = argparse.ArgumentParser(description="ASTRA Multi-Asset Quantitative Backtesting & Statistical Engine")
     parser.add_argument("--symbol", default="ALL", help="Symbol or 'ALL' for portfolio")
     parser.add_argument("--bar", default="1H", help="Candle bar: 15m, 1H, 4H")
     parser.add_argument("--limit", type=int, default=100, help="Candle count")

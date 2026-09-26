@@ -7,7 +7,7 @@
 
 | 实现 | 角色 |
 |---|---|
-| `r20_backend/execution/circuit_breaker.py` | 后端风控面 + **助手单一事实源**（`ledger_daily_closed_pnl` 等） |
+| `astra_backend/execution/circuit_breaker.py` | 后端风控面 + **助手单一事实源**（`ledger_daily_closed_pnl` 等） |
 | `scripts/trader/circuit_guard.py` | **交易活路径**（trader 每轮经门面调到它） |
 
 本仓已经吃过一次这个亏并有案可查：`circuit_guard.py` 里的注释写着「上轮 A2 的
@@ -36,7 +36,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-BACKEND = ROOT / "r20_backend" / "execution" / "circuit_breaker.py"
+BACKEND = ROOT / "astra_backend" / "execution" / "circuit_breaker.py"
 TRADER = ROOT / "scripts" / "trader" / "circuit_guard.py"
 FN = "is_circuit_breaker_active"
 

@@ -19,6 +19,7 @@ import types
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+from tests.extraction.rename_baseline import legacy_rev_path, normalize
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
@@ -37,10 +38,10 @@ INJ = {
 
 
 def _old_tree() -> ast.Module:
-    r = subprocess.run(["git", "show", f"{PRE}:scripts/ai_factor_trader.py"],
+    r = subprocess.run(["git", "show", legacy_rev_path(f"{PRE}:scripts/ai_factor_trader.py")],
                        capture_output=True, text=True, cwd=str(ROOT))
     assert r.returncode == 0, f"基线取不到：{r.stderr[:200]}"
-    return ast.parse(r.stdout)
+    return ast.parse(normalize(r.stdout))
 
 
 def _get_func(tree: ast.Module, name: str) -> ast.FunctionDef:
@@ -123,7 +124,7 @@ class VenueQueryVerbatimTest(unittest.TestCase):
 
     def test_close_confirm_uses_patched_facade_other_venues(self):
         """外所分支：patch 门面 fetch_other_venue_positions 必须改变经壳行为。"""
-        import r20_backend.execution_router as router
+        import astra_backend.execution_router as router
         import scripts.ai_factor_trader as aft
         with patch.object(router, "close_position",
                           lambda *a, **k: {"ok": True, "detail": ""}), \

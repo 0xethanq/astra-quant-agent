@@ -10,13 +10,13 @@ from unittest.mock import patch
 from urllib.parse import urlsplit
 
 from fastapi.testclient import TestClient
-import r20_backend.app as api
-import r20_backend.config as config
-import r20_backend.okx_client as client_module
-import r20_backend.okx_trade_service as trade
+import astra_backend.app as api
+import astra_backend.config as config
+import astra_backend.okx_client as client_module
+import astra_backend.okx_trade_service as trade
 from scripts import okx_rest as rest
-import r20_gateway.secrets as secrets
-from r20_backend.admin_auth import AdminAuthStore
+import astra_gateway.secrets as secrets
+from astra_backend.admin_auth import AdminAuthStore
 from scripts import okx_rest as rest, okx_runtime as runtime
 from tests.config_sandbox import isolate_config
 
@@ -45,7 +45,7 @@ class UnifiedPrivateChannelTests(unittest.TestCase):
         login = self.client.post('/api/v1/admin/auth/login', json={
             'username': 'admin', 'password': 'FakeAdminPassword123'})
         self.assertEqual(login.status_code, 200, login.text)
-        self.headers = {'X-R20-Session': login.json()['session_token']}
+        self.headers = {'X-Astra-Session': login.json()['session_token']}
         self.requests = []
         self.net = self.patch(rest, 'urlopen', self.http)
         self.public = self.patch(client_module, 'urlopen', side_effect=AssertionError('private leak'))
@@ -58,12 +58,12 @@ class UnifiedPrivateChannelTests(unittest.TestCase):
 
     def configure(self, keys):
         self.env_file.write_text('\n'.join(f'{k}={v}' for k, v in {
-            'R20_MANUAL_CLOSE_ENABLED': '1', **keys}.items()))
+            'ASTRA_MANUAL_CLOSE_ENABLED': '1', **keys}.items()))
 
     @staticmethod
     def keys(mode='demo', tag='A', legacy=False):
         prefix = 'OKX' if legacy else 'OKX_' + mode.upper()
-        return {'R20_OKX_ENV': mode, **{
+        return {'ASTRA_OKX_ENV': mode, **{
             prefix + '_' + field: tag + field
             for field in ('API_KEY', 'SECRET_KEY', 'PASSPHRASE')}}
 

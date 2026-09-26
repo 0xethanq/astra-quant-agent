@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-R20 AI LLM-Native Self-Improvement & Strategy Evolution Engine v6.8.1 (self_improvement_engine.py)
+ASTRA AI LLM-Native Self-Improvement & Strategy Evolution Engine v6.8.1 (self_improvement_engine.py)
 Focuses purely on Crypto Alpha generation & dynamic quantitative risk adaptation.
 Eliminates rigid cooldown bans in favor of dynamic volatility-adjusted thresholds,
 asymmetric Kelly bet-sizing, and LLM cognitive post-mortem lessons.
@@ -25,7 +25,7 @@ if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 try:
-    from r20_backend.config import settings as standalone_settings
+    from astra_backend.config import settings as standalone_settings
 except ImportError:
     standalone_settings = None
 
@@ -42,11 +42,11 @@ EVOLUTION_LAST_PROMPT_FILE = os.path.join(DATA_DIR, "self_improvement_last_promp
 LOG_FILE = os.path.join(LOGS_DIR, "self_improvement.log")
 EVOLUTION_LOCK_FILE = os.path.join(DATA_DIR, ".self_improvement.lock")
 
-from r20_backend.time_utils import parse_beijing
-from r20_backend.version import __version__
+from astra_backend.time_utils import parse_beijing
+from astra_backend.version import __version__
 from instrument_pool import load_instruments
 from prompt_library import active_profile, apply_module_layout
-from r20_gateway.telemetry import ModelCallTelemetry
+from astra_gateway.telemetry import ModelCallTelemetry
 
 # 结构优化阶段 4·B3 第四十二刀：数理快照可观测性聚簇外提到 scripts/evolution/observability.py。
 # 这里**再导出**（不是搬空）——外部 `from scripts.self_improvement_engine import
@@ -71,7 +71,7 @@ from scripts.evolution.observability import (  # noqa: E402,F401
     render_observability_brief,
 )
 from llm_credentials import get_cpa_client_config as _get_cpa_client_config  # noqa: E402
-from r20_backend.math_utils import clamp as _clamp
+from astra_backend.math_utils import clamp as _clamp
 TARGET_INSTRUMENTS = [item["name"] for item in load_instruments()]
 
 def atomic_write_json(path: str, payload: Any) -> None:
@@ -92,7 +92,7 @@ def clamp(value, lower, upper, default):
     """把 value 夹到 [lower, upper]；不可比较时返回 default。
 
     结构优化阶段 4·B3 第五十一刀：本函数与 ``scripts/trader/signals.py`` 的同名函数原为逐字重复，
-    已收敛到 `r20_backend.math_utils.clamp`。
+    已收敛到 `astra_backend.math_utils.clamp`。
 
     ⚠️ 名字保留在本模块：调用点按全局名查找，且 `patch.object(模块, "clamp")`
     是既有接缝（别名赋值会让它失效）。
@@ -119,9 +119,9 @@ def single_evolution_cycle(func):
 
 def _log_file() -> str:
     """调用时解析（审计卫生）：测试未 patch LOG_FILE 时（如 evolution_fallback_model
-    的异常路径）不再污染生产 logs/self_improvement.log。R20_SELF_IMPROVEMENT_LOG
+    的异常路径）不再污染生产 logs/self_improvement.log。ASTRA_SELF_IMPROVEMENT_LOG
     覆盖 + tests/__init__.py 统一隔离；生产默认不变。"""
-    return os.environ.get("R20_SELF_IMPROVEMENT_LOG") or LOG_FILE
+    return os.environ.get("ASTRA_SELF_IMPROVEMENT_LOG") or LOG_FILE
 
 
 def log_msg(msg: str):
@@ -140,7 +140,7 @@ def log_msg(msg: str):
 def get_cpa_client_config() -> Tuple[str, str]:
     """薄壳：调用时解析门面全局，使测试的 patch / 直接赋值生效。
 
-    实现已迁往 r20_backend.llm.credentials（结构优化阶段 4·B3 第四十六刀）。
+    实现已迁往 astra_backend.llm.credentials（结构优化阶段 4·B3 第四十六刀）。
     ⚠️ `standalone_settings` 必须**在这里**读取后传入 —— 门面全局会被测试
     patch / 原地 reload，子模块 import 期绑定会读到陈旧副本。
     """
@@ -171,7 +171,7 @@ def evolution_fallback_model() -> Optional[str]:
     调整需用户批准（fallback_model_ids 属全局配置，本函数绝不改写）。
     """
     try:
-        from r20_backend.llm_manager import init_llm_config
+        from astra_backend.llm_manager import init_llm_config
         cfg = init_llm_config() or {}
         active = str(cfg.get("active_model_id") or "").strip()
         models = [m for m in (cfg.get("models") or []) if isinstance(m, dict)]
@@ -248,7 +248,7 @@ def _match_snapshot(journal_by_inst, inst, open_time, side=None):
 def load_closed_trades(start_time_override: str | None = None):
     account_init_file = os.path.join(DATA_DIR, "account_initial_state.json")
     reset_time_str = "1970-01-01 00:00:00"
-    evo_start_str = os.getenv("R20_EVOLUTION_START_TIME", "").strip()
+    evo_start_str = os.getenv("ASTRA_EVOLUTION_START_TIME", "").strip()
     if os.path.exists(account_init_file):
         try:
             with open(account_init_file, "r", encoding="utf-8") as f:
@@ -260,7 +260,7 @@ def load_closed_trades(start_time_override: str | None = None):
             pass
 
     # 确定自进化复盘起始时间（过滤更早的人工历史交易，杜绝远古历史单污染自进化）：
-    # 显式入参 > 环境变量 R20_EVOLUTION_START_TIME > account_initial_state.json evolution_start_time > reset_time > 默认 2026-09-01 00:00:00
+    # 显式入参 > 环境变量 ASTRA_EVOLUTION_START_TIME > account_initial_state.json evolution_start_time > reset_time > 默认 2026-09-01 00:00:00
     effective_start = (
         start_time_override
         or evo_start_str
@@ -470,7 +470,7 @@ def compose_evolution_prompts(closed_trades: List[Dict[str, Any]], existing_memo
         "dynamics_observable_trades": snapshot_audit["math_observable"],
         "unobservable_trades": snapshot_audit["PRICE_ONLY"] + snapshot_audit["NONE"],
         "profile_name": profile.get("name", ""), "timezone": "Asia/Shanghai",
-        "strategy_version": os.getenv("R20_VERSION", f"v{__version__}"),
+        "strategy_version": os.getenv("ASTRA_VERSION", f"v{__version__}"),
     }
     effective_evolution_system = apply_module_layout(EVOLUTION_SYSTEM_PROMPT, profile, "evolution_system", f"{profile.get('name', '稳健')}自进化系统提示词模板", context=runtime_context)
     effective_evolution_user = apply_module_layout(prompt, profile, "evolution_user", f"{profile.get('name', '稳健')}自进化用户提示词模板", context=runtime_context)
@@ -505,7 +505,7 @@ def call_llm_evolution_review(closed_trades: List[Dict[str, Any]], existing_memo
     effort = os.environ.get("LLM_REASONING_EFFORT") or "high"
     api_format = "openai_chat"
     try:
-        from r20_backend.llm_manager import get_active_llm_runtime, execute_llm_request
+        from astra_backend.llm_manager import get_active_llm_runtime, execute_llm_request
         active_llm = get_active_llm_runtime()
         model_name = os.environ.get("LLM_MODEL") or active_llm.get("model") or model_name
         effort = os.environ.get("LLM_REASONING_EFFORT") or active_llm.get("reasoning_effort") or effort

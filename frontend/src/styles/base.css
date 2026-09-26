@@ -159,7 +159,7 @@ table {
   }
 }
 
-@keyframes r20-enter {
+@keyframes astra-enter {
   from {
     opacity: 0;
     transform: translateY(5px);
@@ -169,7 +169,7 @@ table {
     transform: none;
   }
 }
-@keyframes r20-fade-in {
+@keyframes astra-fade-in {
   from {
     opacity: 0;
   }
@@ -177,7 +177,7 @@ table {
     opacity: 1;
   }
 }
-@keyframes r20-pop-in {
+@keyframes astra-pop-in {
   from {
     opacity: 0;
     transform: translateY(6px) scale(0.985);
@@ -187,7 +187,7 @@ table {
     transform: translateY(0) scale(1);
   }
 }
-@keyframes r20-slide-in-right {
+@keyframes astra-slide-in-right {
   from {
     transform: translateX(20px);
     opacity: 0.6;
@@ -197,7 +197,7 @@ table {
     opacity: 1;
   }
 }
-@keyframes r20-pulse-dot {
+@keyframes astra-pulse-dot {
   0%,
   100% {
     opacity: 1;

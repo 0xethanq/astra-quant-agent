@@ -14,7 +14,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from r20_backend import llm_manager
+from astra_backend import llm_manager
 
 
 class Qwen3ReasoningEffortTests(unittest.TestCase):
@@ -69,7 +69,7 @@ class Qwen3ReasoningEffortTests(unittest.TestCase):
         # 走完整 pydantic → upsert 链路（与 POST /api/v1/admin/llm/models 相同）。
         import json, tempfile
         from unittest import mock
-        from r20_backend.app import LLMModelUpsertRequest
+        from astra_backend.app import LLMModelUpsertRequest
         tmp = Path(tempfile.mkdtemp()) / "llm_models.json"
         tmp.write_text(json.dumps({"version": "3.1", "providers": [], "models": []}), encoding="utf-8")
         req = LLMModelUpsertRequest(

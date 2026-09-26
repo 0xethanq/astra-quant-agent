@@ -7,7 +7,7 @@
 
 ```python
 try:
-    from r20_backend.file_locks import file_lock
+    from astra_backend.file_locks import file_lock
     return file_lock(TARGET_FILE)
 except Exception:
     # …… 手写一个 contextmanager 做本地 flock ……
@@ -18,7 +18,7 @@ except Exception:
 
 ## ⚠️ 它修掉的是一个**潜伏死锁**
 
-后端 `r20_backend/file_locks.py::file_lock` 是**可重入**的（审计 P2-6：
+后端 `astra_backend/file_locks.py::file_lock` 是**可重入**的（审计 P2-6：
 「同一线程重复进入同一目标文件不会死锁」）。而两处手写兜底都是**裸 flock**、
 **不可重入**。
 
@@ -35,8 +35,8 @@ def mutate_instruments(mutator):
 正常路径下 `file_lock` 用层数计数兜住，嵌套**不会**自锁；
 但一旦走到兜底分支，**同线程二次 `flock` 会阻塞自己** —— 该脚本会**永久挂死**。
 
-**如实记录：该兜底分支在本仓当前是"不可达"的**（`r20_backend.file_locks`
-只依赖标准库，且两个脚本在本仓都由 `r20_backend` 侧导入）。
+**如实记录：该兜底分支在本仓当前是"不可达"的**（`astra_backend.file_locks`
+只依赖标准库，且两个脚本在本仓都由 `astra_backend` 侧导入）。
 所以这是一个**潜伏**缺陷，不是正在发生的线上故障。
 但把兜底改成可重入是**纯行为收窄**：只在"本来会挂死"的路径上改为"正常返回"，
 正常路径一行不变。故按「发现 bug 直接修」处理。
@@ -44,8 +44,8 @@ def mutate_instruments(mutator):
 ## 实现与后端同路数
 
 层数计数放在 `threading.local()` 上，归零才真正 `flock`/解锁 ——
-与 `r20_backend/file_locks.py` 的 `_STATE` 机制**逐条对应**。
-本模块**只依赖标准库**，故可被"脱离 `r20_backend`"的脚本安全导入。
+与 `astra_backend/file_locks.py` 的 `_STATE` 机制**逐条对应**。
+本模块**只依赖标准库**，故可被"脱离 `astra_backend`"的脚本安全导入。
 """
 
 from __future__ import annotations
@@ -79,7 +79,7 @@ def _lock_path(target_file) -> str:
 def local_file_lock(target_file) -> Iterator[None]:
     """对 `target_file` 的 RMW 取**进程内 + 跨进程**互斥（阻塞式、同线程可重入）。
 
-    ⚠️ 语义必须与 `r20_backend.file_locks.file_lock` 保持一致 ——
+    ⚠️ 语义必须与 `astra_backend.file_locks.file_lock` 保持一致 ——
     调用方在两者之间无条件切换（后者 import 失败就退到本函数），
     任何语义差异都会让"退化路径"变成另一种行为。
     """

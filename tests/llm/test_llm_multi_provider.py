@@ -10,9 +10,9 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
-import r20_backend.app as app_module
-import r20_backend.llm_manager as llm_manager
-from r20_backend.admin_auth import AdminAuthStore
+import astra_backend.app as app_module
+import astra_backend.llm_manager as llm_manager
+from astra_backend.admin_auth import AdminAuthStore
 
 
 class LLMMultiProviderTests(unittest.TestCase):
@@ -34,8 +34,8 @@ class LLMMultiProviderTests(unittest.TestCase):
         app_module.admin_auth.initialize_from_legacy("TestAdminPass123456")
 
         # Isolate production environment and secrets from test mutations
-        self.patcher_env = patch("r20_backend.settings_store.update_env")
-        self.patcher_sec = patch("r20_gateway.secrets.save_secrets")
+        self.patcher_env = patch("astra_backend.settings_store.update_env")
+        self.patcher_sec = patch("astra_gateway.secrets.save_secrets")
         self.mock_update_env = self.patcher_env.start()
         self.mock_save_secrets = self.patcher_sec.start()
 
@@ -57,7 +57,7 @@ class LLMMultiProviderTests(unittest.TestCase):
     def login(self) -> dict[str, str]:
         resp = self.client.post("/api/v1/admin/auth/login", json={"username": "admin", "password": "TestAdminPass123456"})
         self.assertEqual(resp.status_code, 200, resp.text)
-        return {"X-R20-Session": resp.json()["session_token"]}
+        return {"X-Astra-Session": resp.json()["session_token"]}
 
     def test_init_and_load_models_clean_no_bloat(self):
         config = llm_manager.load_llm_config(mask_keys=True)
@@ -463,7 +463,7 @@ class LLMMultiProviderTests(unittest.TestCase):
             ]
         }
         test_file.write_text(json.dumps(legacy_data))
-        from r20_backend.llm.store import init_llm_config as _store_init_llm_config
+        from astra_backend.llm.store import init_llm_config as _store_init_llm_config
         unseeded_cfg = _store_init_llm_config(test_file)
         unseeded_ids = [p["id"] for p in unseeded_cfg["providers"]]
         self.assertNotIn("siliconflow", unseeded_ids)  # Keyless legacy filtered

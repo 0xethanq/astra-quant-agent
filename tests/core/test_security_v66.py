@@ -1,8 +1,8 @@
 import unittest
 from fastapi.testclient import TestClient
-from r20_backend.app import app
-from r20_backend.settings_store import mask_url
-from r20_backend.interceptor_manager import get_plugin_detail, save_plugin_code, create_plugin, delete_plugin
+from astra_backend.app import app
+from astra_backend.settings_store import mask_url
+from astra_backend.interceptor_manager import get_plugin_detail, save_plugin_code, create_plugin, delete_plugin
 
 class SecurityFixesTestCase(unittest.TestCase):
     def setUp(self):

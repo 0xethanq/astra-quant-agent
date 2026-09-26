@@ -11,7 +11,7 @@
  *
  * | 位置 | 后果 |
  * |---|---|
- * | `ChartWorkstation.copySimulationSummary` | 剪贴板文案硬编码 `【R20 风控测算】入场: SL: TP:` —— 英文界面复制出中英混排 |
+ * | `ChartWorkstation.copySimulationSummary` | 剪贴板文案硬编码 `【ASTRA 风控测算】入场: SL: TP:` —— 英文界面复制出中英混排 |
  * | `CouncilPage` 席位号位 ×3 | 回落值硬编码**英文** `'Senior Trader'` —— **中文**界面下显示英文 |
  * | `CouncilPage.addNewCustomTrader` | 新席位 `name` / `role_title` / `description` 硬编码 |
  * | `chartIndicators.ts` | 11 条中文 `desc` **全站无人渲染** —— 死数据，与 `confTier.label` 同类隐雷，已删 |
@@ -175,7 +175,7 @@ test('已删的死中文数据不得回潮', () => {
 
 test('闸自检：识别组件文案与剪贴板中文，不误伤数据匹配', () => {
   assert.deepEqual(
-    componentCopyHits(codeOnly("navigator.clipboard.writeText(`【R20 风控测算】`)")).map((h) => h.why),
+    componentCopyHits(codeOnly("navigator.clipboard.writeText(`【ASTRA 风控测算】`)")).map((h) => h.why),
     ['clipboard'],
     '应拦截剪贴板中文',
   );

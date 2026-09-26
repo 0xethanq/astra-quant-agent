@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import r20_backend.account_baseline as baseline
+import astra_backend.account_baseline as baseline
 
 
 class AccountBaselineTests(unittest.TestCase):

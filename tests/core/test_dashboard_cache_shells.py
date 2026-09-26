@@ -18,7 +18,7 @@ import time
 import unittest
 from unittest import mock
 
-from r20_backend import dashboard_cache as DC
+from astra_backend import dashboard_cache as DC
 
 
 class FacadeShellTest(unittest.TestCase):
@@ -69,7 +69,7 @@ class FetchJsonTest(unittest.TestCase):
 
     def test_not_configured_says_not_ready_not_a_traceback(self):
         """★ 未配置凭证 ⇒ 给「NOT READY」人话，不是 traceback。"""
-        # ⚠️ `okx_rest` 是**懒子模块**：`from r20_backend import okx_rest` 会 ImportError
+        # ⚠️ `okx_rest` 是**懒子模块**：`from astra_backend import okx_rest` 会 ImportError
         # （第 229 刀踩过同一个坑）⇒ 从已经导入它的模块里取。
         not_configured = DC.okx_rest.OKXNotConfigured
 
@@ -161,7 +161,7 @@ class BackgroundWorkerTest(unittest.TestCase):
             raise RuntimeError("周期炸了")
         DC._BG_WORKER_RUNNING = True
         with mock.patch.object(DC, "update_cache_cycle", side_effect=_flip), \
-                mock.patch("r20_backend.dashboard_cache.time.sleep", return_value=None):
+                mock.patch("astra_backend.dashboard_cache.time.sleep", return_value=None):
             DC._dashboard_background_worker_loop()   # 不许把异常抛出来
         self.assertEqual(len(calls), 1)
 

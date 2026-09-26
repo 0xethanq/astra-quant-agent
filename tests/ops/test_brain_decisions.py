@@ -53,7 +53,7 @@ class FailClosedFallbackTests(unittest.TestCase):
     """★ 管线抛异常 ⇒ 一律 `WAIT`，但 `rr` 仍要尽力算出来给前台看。"""
 
     def _fallback(self, d_item, exc=None):
-        import r20_backend.interceptor_manager as im
+        import astra_backend.interceptor_manager as im
         boom = exc or RuntimeError("插件系统崩了")
         with patch.object(im, "run_interceptor_pipeline", side_effect=boom):
             return validate_and_filter_decision({}, d_item, set(), {}, safe_float=_sf)
@@ -126,7 +126,7 @@ class FailClosedFallbackTests(unittest.TestCase):
         self.assertEqual(rr, 0.0)
 
     def test_normal_path_returns_the_pipeline_result_verbatim(self):
-        import r20_backend.interceptor_manager as im
+        import astra_backend.interceptor_manager as im
         with patch.object(im, "run_interceptor_pipeline",
                           return_value=("BUY_LONG", "通过", 2.5)) as pipeline:
             out = validate_and_filter_decision({"instId": "X"}, {"action": "BUY_LONG"},
@@ -135,7 +135,7 @@ class FailClosedFallbackTests(unittest.TestCase):
         pipeline.assert_called_once()
 
     def test_context_carries_active_ids_and_sides(self):
-        import r20_backend.interceptor_manager as im
+        import astra_backend.interceptor_manager as im
         with patch.object(im, "run_interceptor_pipeline",
                           return_value=("WAIT", "r", 0.0)) as pipeline:
             validate_and_filter_decision({}, {}, {"A"}, {"A": "long"}, safe_float=_sf)
@@ -144,7 +144,7 @@ class FailClosedFallbackTests(unittest.TestCase):
         self.assertEqual(context["active_position_sides"], {"A": "long"})
 
     def test_import_failure_also_degrades_rather_than_raising(self):
-        with patch.dict(sys.modules, {"r20_backend.interceptor_manager": None}):
+        with patch.dict(sys.modules, {"astra_backend.interceptor_manager": None}):
             action, reason, _ = validate_and_filter_decision({}, {"action": "BUY_LONG"},
                                                              set(), {}, safe_float=_sf)
         self.assertEqual(action, "WAIT")

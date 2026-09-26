@@ -81,8 +81,8 @@ router.onError((error) => {
       msg,
     )
   if (isChunkOrModuleError) {
-    const key = 'r20_chunk_reload_lock'
-    const attemptsKey = 'r20_chunk_reload_attempts'
+    const key = 'astra_chunk_reload_lock'
+    const attemptsKey = 'astra_chunk_reload_attempts'
     const lastReload = parseInt(sessionStorage.getItem(key) || '0', 10)
     const attempts = parseInt(sessionStorage.getItem(attemptsKey) || '0', 10)
     const now = Date.now()
@@ -169,14 +169,14 @@ export function updateDocumentTitle(to = router.currentRoute.value) {
 router.afterEach((to) => {
   updateDocumentTitle(to)
   try {
-    sessionStorage.removeItem('r20_chunk_reload_attempts')
+    sessionStorage.removeItem('astra_chunk_reload_attempts')
   } catch {
     // ignore
   }
 })
 
 if (typeof window !== 'undefined') {
-  window.addEventListener('r20:locale-changed', () => updateDocumentTitle())
+  window.addEventListener('astra:locale-changed', () => updateDocumentTitle())
 }
 
 export default router

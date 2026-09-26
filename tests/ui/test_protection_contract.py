@@ -42,8 +42,8 @@ _ROOT = Path(__file__).resolve().parents[2]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from r20_backend.dashboard_payload.algo_protection import collect_algo_protection
-from r20_backend.dashboard_payload.multi_venue import collect_cross_venue_positions
+from astra_backend.dashboard_payload.algo_protection import collect_algo_protection
+from astra_backend.dashboard_payload.multi_venue import collect_cross_venue_positions
 
 #: 前端 `KpiRibbon.vue:82` / `PositionsOrdersPanel.vue:79` 的判据（**逐字**抄写）。
 #: ⚠️ 改这里必须同步改前端：本门的意义就是让"两处判据"不可能悄悄分叉。
@@ -83,9 +83,9 @@ def _xvenue_row(algos, *, size=100.0, ledger_rows=None):
 
     empty = type("E", (), {"positions": lambda self: [], "open_orders": lambda self: [],
                            "list_protective_orders": lambda self, *a, **k: []})()
-    with patch("r20_backend.exchanges.get_adapter",
+    with patch("astra_backend.exchanges.get_adapter",
                lambda v, *a, **k: _Ad() if v == "binance" else empty), \
-         patch("r20_backend.dashboard_payload.multi_venue._global_env_axis", lambda: "demo"):
+         patch("astra_backend.dashboard_payload.multi_venue._global_env_axis", lambda: "demo"):
         collect_cross_venue_positions(got, [], 0, 0, 0.0, source_errors=[],
                                       ledger_rows=ledger_rows)
     assert got, "跨所夹具没产出持仓行"
@@ -240,7 +240,7 @@ class OrphanCandidatesPayloadTest(unittest.TestCase):
     """第一百七十五刀：孤儿腿候选进面板载荷（**只报告不撤销**，且读不到要说读不到）。"""
 
     _ORPHAN_TAGGED = {"symbol": "XRPUSDT", "side": "buy", "type": "TAKE_PROFIT_MARKET",
-                      "raw": {"orderType": "TAKE_PROFIT_MARKET", "clientAlgoId": "t-r20tp1",
+                      "raw": {"orderType": "TAKE_PROFIT_MARKET", "clientAlgoId": "t-astratp1",
                               "triggerPrice": "1.3255", "quantity": "826.5"}}
 
     def test_tagged_orphan_is_listed_as_a_candidate_with_evidence(self):
@@ -274,17 +274,17 @@ class OrphanCandidatesPayloadTest(unittest.TestCase):
     def test_client_algo_id_tag_is_now_scanned(self):
         """扫描器补了客户端订单号：带标签的 `clientAlgoId` 现在能被认出来。
 
-        ⚠️ 真机现状（如实）：Binance 的 `clientAlgoId` 是交易所随机串（20/20 无 `r20`），
+        ⚠️ 真机现状（如实）：Binance 的 `clientAlgoId` 是交易所随机串（20/20 无 `astra`），
         所以这条**不会**让当下的 Binance 腿变得可归因 —— 它只是把"标签存在但看不见"的洞补上。
         """
         from scripts.trader.venue_protection import _row_text
-        self.assertIn("r20sl", _row_text({"raw": {"clientAlgoId": "t-r20sl9"}}))
-        self.assertNotIn("r20sl", _row_text({"raw": {"clientAlgoId": "1vzDTiF4UXEHSSULlD9lug"}}))
+        self.assertIn("astrasl", _row_text({"raw": {"clientAlgoId": "t-astrasl9"}}))
+        self.assertNotIn("astrasl", _row_text({"raw": {"clientAlgoId": "1vzDTiF4UXEHSSULlD9lug"}}))
 
     def test_unreadable_legs_are_unknown_not_empty(self):
         """读腿失败 ⇒ `readable: False`（不是"没有孤儿腿"）。"""
         import pathlib as _p
-        src = (_p.Path(__file__).resolve().parents[2] / "r20_backend" / "dashboard_payload"
+        src = (_p.Path(__file__).resolve().parents[2] / "astra_backend" / "dashboard_payload"
                / "multi_venue.py").read_text(encoding="utf-8")
         body = src[src.index("def _venue_orphan_summary("):]
         body = body[:body.index("\ndef ")]
@@ -294,7 +294,7 @@ class OrphanCandidatesPayloadTest(unittest.TestCase):
     def test_summary_does_not_cancel_anything(self):
         """本函数**只报告**：源码里不得出现任何撤销调用（撤销是显式运营动作）。"""
         import pathlib as _p
-        src = (_p.Path(__file__).resolve().parents[2] / "r20_backend" / "dashboard_payload"
+        src = (_p.Path(__file__).resolve().parents[2] / "astra_backend" / "dashboard_payload"
                / "multi_venue.py").read_text(encoding="utf-8")
         body = src[src.index("def _venue_orphan_summary("):]
         body = body[:body.index("\ndef ")]
@@ -311,7 +311,7 @@ class MismatchLegsDisclosureTest(unittest.TestCase):
     def test_mismatch_legs_are_listed(self):
         """⚠️ 要造出 `side_mismatch`，必须**同币有持仓**且腿方向相反 —— 只有别币持仓时
         那条腿属于 `orphan_*`（我第一版就搞错了，用例当场纠正）。这里直接调汇总函数。"""
-        from r20_backend.dashboard_payload.multi_venue import _venue_orphan_summary
+        from astra_backend.dashboard_payload.multi_venue import _venue_orphan_summary
         positions = [{"base": "SOL", "symbol": "SOLUSDT", "side": "long", "size_signed": 10.0}]
         o = _venue_orphan_summary(positions, [self._MISM], None, readable=True)
         self.assertTrue(o["readable"])
@@ -327,7 +327,7 @@ class MismatchLegsDisclosureTest(unittest.TestCase):
 
     def test_unreadable_legs_report_empty_mismatch_not_fake_zero(self):
         import pathlib as _p
-        src = (_p.Path(__file__).resolve().parents[2] / "r20_backend" / "dashboard_payload"
+        src = (_p.Path(__file__).resolve().parents[2] / "astra_backend" / "dashboard_payload"
                / "multi_venue.py").read_text(encoding="utf-8")
         body = src[src.index("def _venue_orphan_summary("):]
         body = body[:body.index("\ndef ", 10)]
@@ -340,7 +340,7 @@ class UnclassifiedLegsDisclosureTest(unittest.TestCase):
     _UNKNOWN = {"symbol": "XRPUSDT", "type": "CONDITIONAL", "raw": {"quantity": "100"}}
 
     def _summary(self, legs):
-        from r20_backend.dashboard_payload.multi_venue import _venue_orphan_summary
+        from astra_backend.dashboard_payload.multi_venue import _venue_orphan_summary
         positions = [{"base": "XRP", "symbol": "XRPUSDT", "side": "long", "size_signed": 100.0}]
         return _venue_orphan_summary(positions, legs, None, readable=True)
 
@@ -359,6 +359,6 @@ class UnclassifiedLegsDisclosureTest(unittest.TestCase):
         self.assertEqual(v["foreign_count"], 1)
 
     def test_unreadable_legs_give_none_not_zero(self):
-        from r20_backend.dashboard_payload.multi_venue import _venue_orphan_summary
+        from astra_backend.dashboard_payload.multi_venue import _venue_orphan_summary
         o = _venue_orphan_summary([], [], None, readable=False)
         self.assertIsNone(o["foreignCount"], "读腿失败时不得给出'0 条认不出'的假精确")

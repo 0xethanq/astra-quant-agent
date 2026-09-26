@@ -37,7 +37,7 @@ def _explode(*a, **k):
 class TestAtomicHelpers(unittest.TestCase):
     def test_trader_atomic_write_json_rollback_safety(self):
         import scripts.ai_factor_trader as aft
-        d = tempfile.mkdtemp(prefix="r20-b3-")
+        d = tempfile.mkdtemp(prefix="astra-b3-")
         target = os.path.join(d, "x.json")
         with open(target, "w") as f:
             f.write('{"old": true}')
@@ -60,7 +60,7 @@ class TestAtomicHelpers(unittest.TestCase):
 class TestLedgerRecordTradeAtomic(unittest.TestCase):
     def test_record_trade_never_truncates_ledger(self):
         import scripts.ai_factor_trader as aft
-        d = tempfile.mkdtemp(prefix="r20-b3-ledger-")
+        d = tempfile.mkdtemp(prefix="astra-b3-ledger-")
         ledger = os.path.join(d, "trading_ledger.json")
         with open(ledger, "w") as f:
             json.dump([{"status": "closed", "pnl": 1.0}], f)
@@ -78,7 +78,7 @@ class TestLedgerRecordTradeAtomic(unittest.TestCase):
 class TestStopCooldownUnification(unittest.TestCase):
     def test_file_names_unified(self):
         import scripts.ai_factor_trader as aft
-        import r20_backend.execution.circuit_breaker as cb
+        import astra_backend.execution.circuit_breaker as cb
         self.assertEqual(os.path.basename(aft.STOP_COOLDOWN_FILE),
                          Path(cb.STOP_COOLDOWN_FILE).name)      # 单数活文件归一
         self.assertEqual(Path(cb.STOP_COOLDOWN_FILE).name, "stop_cooldown.json")
@@ -89,9 +89,9 @@ class TestStopCooldownUnification(unittest.TestCase):
 
     def test_corrupt_means_in_cooldown_fail_closed(self):
         import scripts.ai_factor_trader as aft
-        import r20_backend.execution.circuit_breaker as cb
+        import astra_backend.execution.circuit_breaker as cb
         for mod, as_path in ((aft, False), (cb, True)):
-            tmp = tempfile.mkdtemp(prefix="r20-b3-cd-")
+            tmp = tempfile.mkdtemp(prefix="astra-b3-cd-")
             with self._sandbox(mod, tmp, as_path):
                 f = mod.STOP_COOLDOWN_FILE
                 with open(f, "w") as h:
@@ -101,7 +101,7 @@ class TestStopCooldownUnification(unittest.TestCase):
 
     def test_add_refuses_overwrite_corrupt_scene(self):
         import scripts.ai_factor_trader as aft
-        tmp = tempfile.mkdtemp(prefix="r20-b3-cd2-")
+        tmp = tempfile.mkdtemp(prefix="astra-b3-cd2-")
         with self._sandbox(aft, tmp), redirect_stdout(io.StringIO()) as buf:
             f = str(aft.STOP_COOLDOWN_FILE)
             with open(f, "w") as h:
@@ -112,8 +112,8 @@ class TestStopCooldownUnification(unittest.TestCase):
 
     def test_live_roundtrip_and_cross_visibility(self):
         import scripts.ai_factor_trader as aft
-        import r20_backend.execution.circuit_breaker as cb
-        tmp = tempfile.mkdtemp(prefix="r20-b3-cd3-")
+        import astra_backend.execution.circuit_breaker as cb
+        tmp = tempfile.mkdtemp(prefix="astra-b3-cd3-")
         f = os.path.join(tmp, "stop_cooldown.json")
         with patch.object(aft, "STOP_COOLDOWN_FILE", f), \
              patch.object(cb, "STOP_COOLDOWN_FILE", Path(f)):
@@ -128,7 +128,7 @@ class TestStopCooldownUnification(unittest.TestCase):
 class TestHarvesterBreakerSelfHeal(unittest.TestCase):
     def test_trigger_is_atomic_and_readable(self):
         import news_sentiment_harvester as nh
-        tmp = tempfile.mkdtemp(prefix="r20-b3-cb-")
+        tmp = tempfile.mkdtemp(prefix="astra-b3-cb-")
         f = os.path.join(tmp, "circuit_breaker.json")
         with patch.object(nh, "CIRCUIT_BREAKER_FILE", f):
             nh.trigger_circuit_breaker("BTC 交易所跑路", "exchange-collapse")
@@ -139,7 +139,7 @@ class TestHarvesterBreakerSelfHeal(unittest.TestCase):
     def test_corrupt_file_self_heals_not_deadlock(self):
         # 审计③#5 的核心事故：损坏 → 读者每轮误停，清除路径 except:pass 永不自愈
         import news_sentiment_harvester as nh
-        tmp = tempfile.mkdtemp(prefix="r20-b3-cb2-")
+        tmp = tempfile.mkdtemp(prefix="astra-b3-cb2-")
         f = os.path.join(tmp, "circuit_breaker.json")
         with open(f, "w") as h:
             h.write("[trunc")
@@ -159,8 +159,8 @@ class TestHarvesterBreakerSelfHeal(unittest.TestCase):
 
 class TestReadJsonCorruptVsMissing(unittest.TestCase):
     def test_decode_error_logs_critically(self):
-        from r20_backend import dependencies as dep
-        tmp = tempfile.mkdtemp(prefix="r20-b3-rj-")
+        from astra_backend import dependencies as dep
+        tmp = tempfile.mkdtemp(prefix="astra-b3-rj-")
         (Path(tmp) / "broken.json").write_text("{nope", encoding="utf-8")
         with patch.object(dep, "DATA_DIR", Path(tmp)), patch("sys.stderr", new_callable=io.StringIO) as err:
             self.assertEqual(dep.read_json("broken.json", []), [])
@@ -174,7 +174,7 @@ class TestReadJsonCorruptVsMissing(unittest.TestCase):
 class TestDailyBriefingNoFakeZero(unittest.TestCase):
     def _brief(self, ledger_content):
         import daily_summary_and_backup as ds
-        tmp = tempfile.mkdtemp(prefix="r20-b3-ds-")
+        tmp = tempfile.mkdtemp(prefix="astra-b3-ds-")
         ledger = os.path.join(tmp, "trading_ledger.json")
         with open(ledger, "w") as f:
             f.write(ledger_content)
@@ -200,14 +200,14 @@ class TestDailyBriefingNoFakeZero(unittest.TestCase):
 class TestBackupPruneJobIsolation(unittest.TestCase):
     def test_other_jobs_archives_survive(self):
         import backup_runtime as br
-        root = Path(tempfile.mkdtemp(prefix="r20-b3-bk-"))
+        root = Path(tempfile.mkdtemp(prefix="astra-b3-bk-"))
         (root / "backups").mkdir()
         dest = root / "backups" / "local"
         dest.mkdir()
         staging = root / "backups" / "staging"
         staging.mkdir()
-        a = dest / "r20_backup_jobA_20260913_010000.tar.gz"
-        b = staging / "r20_backup_jobB_20260913_020000.tar.gz"  # 真实流：源在 staging
+        a = dest / "astra_backup_jobA_20260913_010000.tar.gz"
+        b = staging / "astra_backup_jobB_20260913_020000.tar.gz"  # 真实流：源在 staging
         a.write_bytes(b"x")
         b.write_bytes(b"y")
         import os as _os
@@ -215,18 +215,18 @@ class TestBackupPruneJobIsolation(unittest.TestCase):
         _os.utime(b, (999_999_900, 999_999_900))
         with patch.object(br, "ROOT", root):          # 守卫目录重定向到沙箱
             br.retain_local_archive(b, retention=0, destination_dir=dest)
-        # 旧行为：retention=0 会把目录里所有 r20_backup_* 全删（包括 A 刚生成的）
+        # 旧行为：retention=0 会把目录里所有 astra_backup_* 全删（包括 A 刚生成的）
         self.assertTrue(a.exists(), "任务 B 的 prune 不得触碰任务 A 的归档")
         self.assertFalse((dest / b.name).exists(), "本任务超额归档照旧被裁")
 
     def test_staging_keeps_fresh_inflight(self):
         import backup_runtime as br
-        root = tempfile.mkdtemp(prefix="r20-b3-st-")
+        root = tempfile.mkdtemp(prefix="astra-b3-st-")
         staging = Path(root) / "staging"
         staging.mkdir()
-        inflight = staging / "r20_backup_jobX_20260913_030000.tar.gz"
+        inflight = staging / "astra_backup_jobX_20260913_030000.tar.gz"
         inflight.write_bytes(b"")                     # 并发备份刚 mkstemp（0 字节）
-        stale = staging / "r20_backup_jobY_20200101_000000.tar.gz"
+        stale = staging / "astra_backup_jobY_20200101_000000.tar.gz"
         stale.write_bytes(b"old")
         import os as _os
         _os.utime(stale, (1_000, 1_000))
@@ -242,8 +242,8 @@ class TestBackupPruneJobIsolation(unittest.TestCase):
 
 class TestBackupConfigCorruptCircuit(unittest.TestCase):
     def test_corrupt_blocks_default_overwrite(self):
-        import r20_backend.backup_store as bs
-        tmp = Path(tempfile.mkdtemp(prefix="r20-b3-bm-"))
+        import astra_backend.backup_store as bs
+        tmp = Path(tempfile.mkdtemp(prefix="astra-b3-bm-"))
         cfg = tmp / "backup_methods.json"
         cfg.write_text("{corrupt", encoding="utf-8")
         with patch.object(bs, "CONFIG_FILE", cfg), patch("sys.stderr", new_callable=io.StringIO) as err:
@@ -280,9 +280,9 @@ class TestDecisionsFlock(unittest.TestCase):
                          "门面函数里出现 flock 文本会虚 Hits 上面断言")
 
     def test_lock_mutual_exclusion_semantics(self):
-        from r20_backend.file_locks import file_lock
+        from astra_backend.file_locks import file_lock
         import fcntl
-        target = os.path.join(tempfile.mkdtemp(prefix="r20-b3-fl-"), "d.json")
+        target = os.path.join(tempfile.mkdtemp(prefix="astra-b3-fl-"), "d.json")
         with open(target, "w") as f:
             f.write("{}")
         with file_lock(target):
@@ -383,7 +383,7 @@ class StopCooldownWriterSingleSourceTest(unittest.TestCase):
     """止损冷却**写入规则只有一处实现**（第一百四十八刀）。
 
     历史：读取路径早已收敛（结构优化 4·B3 第五十刀），**写入**却留了两份等价实现
-    （`r20_backend/execution/circuit_breaker.py` 与 `scripts/ai_factor_trader.py`），
+    （`astra_backend/execution/circuit_breaker.py` 与 `scripts/ai_factor_trader.py`），
     只差一句提示文案 —— 本仓老毛病"同一语义两处写 ⇒ 必然漂移"。此处漂移的代价很实：
     冷却登记规则一变，两进程可能一个记一个不记，而"止损后能否立刻反手"直接取决于它。
 
@@ -393,9 +393,9 @@ class StopCooldownWriterSingleSourceTest(unittest.TestCase):
 
     def test_both_entrypoints_are_shells_over_one_implementation(self):
         import ast
-        import r20_backend.execution.circuit_breaker as cb
+        import astra_backend.execution.circuit_breaker as cb
         root = Path(__file__).resolve().parents[2]
-        for path, mod in ((root / "r20_backend" / "execution" / "circuit_breaker.py", cb),
+        for path, mod in ((root / "astra_backend" / "execution" / "circuit_breaker.py", cb),
                           (root / "scripts" / "ai_factor_trader.py", None)):
             tree = ast.parse(path.read_text(encoding="utf-8"))
             fn = next(n for n in ast.walk(tree)
@@ -415,7 +415,7 @@ class StopCooldownWriterSingleSourceTest(unittest.TestCase):
     def test_rules_of_the_single_implementation(self):
         import json as _json
         import tempfile
-        from r20_backend.execution import cooldowns as cd
+        from astra_backend.execution import cooldowns as cd
         with tempfile.TemporaryDirectory(prefix="cd-single-") as td:
             f = os.path.join(td, "stop_cooldown.json")
             written = []

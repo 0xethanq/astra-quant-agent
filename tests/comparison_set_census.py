@@ -37,7 +37,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 ROOT = Path(__file__).resolve().parents[1]
-ROOTS = ("scripts", "r20_backend", "plugins")
+ROOTS = ("scripts", "astra_backend", "plugins")
 
 RISKY = re.compile(r"(posside|positionside|_side|side|state|status|reduce_?only)", re.I)
 

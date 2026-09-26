@@ -20,7 +20,7 @@ LEDGER_JSON_FILE = os.path.join(DATA_DIR, "trading_ledger.json")
 os.makedirs(BACKUPS_DIR, exist_ok=True)
 sys.path.append(os.path.join(WORKSPACE_DIR, "scripts"))
 sys.path.insert(0, WORKSPACE_DIR)
-from r20_backend.time_utils import beijing_day
+from astra_backend.time_utils import beijing_day
 try:
     from qq_notifier import notify_daily_summary
 except Exception:
@@ -28,7 +28,7 @@ except Exception:
 
 def _run_captured(script, label=None, timeout=15):
     """审计(2026-09-13)：同解释器子进程 + 非零必吼（旧裸 python3 shell 串=静默死亡）。"""
-    from r20_backend.spawn import run_script
+    from astra_backend.spawn import run_script
     return run_script(script, timeout=timeout, label=label)
 
 

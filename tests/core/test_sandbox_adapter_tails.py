@@ -1,4 +1,4 @@
-"""沙箱交易所适配器（`r20_backend/sandbox/adapter.py`）残余分支收口测试 —— 第 337 刀。
+"""沙箱交易所适配器（`astra_backend/sandbox/adapter.py`）残余分支收口测试 —— 第 337 刀。
 
 本模块 466 行，是全真沙箱回测与点在时间（Point-In-Time）模拟执行的核心：
 - 撮合引擎：挂单限价匹配、买卖双向滑点成交、仓位合并与均价推算；
@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import unittest
 
-from r20_backend.sandbox.adapter import SandboxExchangeAdapter
+from astra_backend.sandbox.adapter import SandboxExchangeAdapter
 
 
 class SandboxAdapterTailsTests(unittest.TestCase):

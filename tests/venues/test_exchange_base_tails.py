@@ -1,4 +1,4 @@
-"""交易所适配器基类（`r20_backend/exchanges/base.py`）残余分支收口测试 —— 第 344 刀。
+"""交易所适配器基类（`astra_backend/exchanges/base.py`）残余分支收口测试 —— 第 344 刀。
 
 本模块 328 行，是 OKX / Binance / Gate 及未来扩展交易所的抽象基类与接口契约：
 - 未配 Profile 场所的旧 Base URL 兜底（`test_url` 与 `live_url`）；
@@ -15,7 +15,7 @@ from unittest.mock import MagicMock, patch
 
 import requests
 
-from r20_backend.exchanges.base import (
+from astra_backend.exchanges.base import (
     BaseExchangeAdapter,
     ExchangeCapabilities,
     ExchangeCapabilityError,

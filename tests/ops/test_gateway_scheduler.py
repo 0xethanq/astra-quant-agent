@@ -6,8 +6,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from r20_gateway.scheduler import GatewayScheduler, JOBS
-from r20_gateway.store import GatewayStore
+from astra_gateway.scheduler import GatewayScheduler, JOBS
+from astra_gateway.store import GatewayStore
 
 BJ = timezone(timedelta(hours=8))
 
@@ -25,7 +25,7 @@ class GatewaySchedulerTests(unittest.TestCase):
 
     def test_migration_baseline_prevents_immediate_launch(self):
         self.scheduler.initialize_migration_baseline(self.now)
-        with patch("r20_gateway.scheduler.load_schedule", return_value={}):
+        with patch("astra_gateway.scheduler.load_schedule", return_value={}):
             self.assertEqual(self.scheduler.tick(self.now), [])
 
     def test_interval_job_becomes_due_on_aligned_trader_boundary(self):
@@ -87,8 +87,8 @@ if __name__ == "__main__":
 from datetime import timezone as _tz  # noqa: E402
 from unittest.mock import MagicMock  # noqa: E402
 
-from r20_gateway import scheduler as SCH  # noqa: E402
-from r20_gateway.scheduler import (  # noqa: E402
+from astra_gateway import scheduler as SCH  # noqa: E402
+from astra_gateway.scheduler import (  # noqa: E402
     JobSpec, backup_job_specs, current_jobs, scheduler_snapshot,
 )
 

@@ -591,8 +591,8 @@ const bandFacts = () => [
   color: var(--ds-color-text-primary);
 }
 .pv-preset.is-on {
-  background-color: var(--r20-brand-bg);
-  border-color: var(--r20-brand-line);
+  background-color: var(--astra-brand-bg);
+  border-color: var(--astra-brand-line);
   color: var(--ds-color-brand);
   font-weight: 600;
 }

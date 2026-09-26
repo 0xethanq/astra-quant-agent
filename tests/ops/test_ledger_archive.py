@@ -66,7 +66,7 @@ class PlanArchiveTests(unittest.TestCase):
 
 class ArchiveSafetyTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.tmp = Path(tempfile.mkdtemp(prefix="r20-ledger-archive-"))
+        self.tmp = Path(tempfile.mkdtemp(prefix="astra-ledger-archive-"))
         self.addCleanup(shutil.rmtree, self.tmp, True)
         self.ledger = self.tmp / "trading_ledger.json"
         self.archive = self.tmp / "archive"
@@ -257,7 +257,7 @@ class ArchiveShardsTests(unittest.TestCase):
 
 class ReadbackIntegrityTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.tmp = Path(tempfile.mkdtemp(prefix="r20-ledger-readback-"))
+        self.tmp = Path(tempfile.mkdtemp(prefix="astra-ledger-readback-"))
         self.addCleanup(shutil.rmtree, self.tmp, True)
         self.ledger = self.tmp / "trading_ledger.json"
         self.archive = self.tmp / "archive"
@@ -340,7 +340,7 @@ class ReadbackIntegrityTests(unittest.TestCase):
 
 class CliFailClosedTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.tmp = Path(tempfile.mkdtemp(prefix="r20-ledger-cli-"))
+        self.tmp = Path(tempfile.mkdtemp(prefix="astra-ledger-cli-"))
         self.addCleanup(shutil.rmtree, self.tmp, True)
         self.ledger = self.tmp / "trading_ledger.json"
         self.archive = self.tmp / "archive"

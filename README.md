@@ -136,8 +136,8 @@ Legacy quant software buries trading logic in underlying scripts where it is pai
 | :--- | :--- | :--- | :--- |
 | `trader` | `logs/ai_factor_trader.log` | Main brain cycle process | Instrument pool quotes, multi-seat debate, confidence filtering, venue routing, protection-order attachment and stop-loss ratcheting |
 | `backend` | `logs/uvicorn.log` | FastAPI / Uvicorn | HTTP request/response flow, middleware, CORS, exception stacks and read-side data-plane errors |
-| `scheduler` | `logs/r20_gateway.log` | Scheduler daemon | Singleton lock acquisition, scheduled job dispatch, heartbeat lease and fragment pruning |
-| `audit` | `logs/r20_admin_audit.jsonl` | Security audit subsystem (append-only) | Timestamp, IP, action type and result (login, password change, credential edits, risk tuning, emergency close-all) |
+| `scheduler` | `logs/astra_gateway.log` | Scheduler daemon | Singleton lock acquisition, scheduled job dispatch, heartbeat lease and fragment pruning |
+| `audit` | `logs/astra_admin_audit.jsonl` | Security audit subsystem (append-only) | Timestamp, IP, action type and result (login, password change, credential edits, risk tuning, emergency close-all) |
 
 For the Prometheus + Grafana stack see [`deploy/observability/README.md`](deploy/observability/README.md): it turns `/api/v1/admin/metrics` into dashboards and alerts, bound to `127.0.0.1` by default.
 
@@ -185,7 +185,7 @@ node --test tests/*.test.mjs
 
 | To learn about | Read | Why |
 |---|---|---|
-| **Backend layering** | `r20_backend/README.md` | Layers (L0 facade / L1 wiring / L2 routers / L3 domain / L4 subpackages) and the module-extraction convention |
+| **Backend layering** | `astra_backend/README.md` | Layers (L0 facade / L1 wiring / L2 routers / L3 domain / L4 subpackages) and the module-extraction convention |
 | **Runtime scripts & daemons** | `scripts/README.md` | Which file is the entry point vs. the daemon, root-module inventory, schedules and the dual-spelling import rule |
 | **Frontend components & state** | `frontend/src/components/admin/README.md` | Component / composable boundaries and the Vue 3 admin + trading-desk state machines |
 | **Standalone deployment** | `STANDALONE.md` | Local standalone install, environment configuration and service startup |
@@ -196,7 +196,7 @@ node --test tests/*.test.mjs
 **Architecture gates that watch the docs themselves:**
 
 1. **Every subpackage module is registered** — `tests/audit/test_directory_docs_current.py` requires newly added modules under managed subpackages to be listed in their `__init__.py`;
-2. **Every root module is registered** — root-level `r20_backend/*.py` and `scripts/*.py` modules must appear in the corresponding `README.md` table;
+2. **Every root module is registered** — root-level `astra_backend/*.py` and `scripts/*.py` modules must appear in the corresponding `README.md` table;
 3. **Documented numbers cannot rot** — `tests/core/test_readme_baseline_numbers.py` requires documented baseline test counts to stay within the same order of magnitude as the real suite, so a 2× drift gets caught.
 
 > 📌 **Commit discipline**: run the gates on **the tree you are about to commit** (`git status --short`, plus `git ls-files --error-unmatch <path>` for each new file).
@@ -232,11 +232,11 @@ vim .env
 source .venv/bin/activate
 cd frontend && npm install && npm run build && cd ..
 
-python -m uvicorn r20_backend.app:app --host 0.0.0.0 --port 8080
+python -m uvicorn astra_backend.app:app --host 0.0.0.0 --port 8080
 # or simply: ./start.sh
 ```
 
-Windows / PowerShell users can use `start.ps1`. systemd unit templates live in `deploy/` (see `deploy/r20-quantum.service` and the sibling units).
+Windows / PowerShell users can use `start.ps1`. systemd unit templates live in `deploy/` (see `deploy/astra-quant.service` and the sibling units).
 
 ---
 
@@ -259,21 +259,49 @@ This project officially links to and endorses the **[LINUX DO (linux.do)](https:
 
 ---
 
-## 🏷️ Brand and internal codename (read before renaming)
+## 🏷️ Brand and internal namespace (read before renaming)
 
-**Public brand: AstraQuant** (website <https://www.astraquant.tech>; docs in [README.md](README.md) (English) / [README.zh-CN.md](README.zh-CN.md) (中文)). **Internal codename: R20.**
+**Public brand: AstraQuant** (website <https://www.astraquant.tech>; docs in [README.md](README.md) (English) / [README.zh-CN.md](README.zh-CN.md) (中文)).
+**Internal namespace: `astra`.**
 
-A rebrand happened in 2026-09 that changed **only the externally visible layer**; internal identifiers are **intentionally retained**:
+### The `r20` namespace is gone — the rename is complete
 
-| Layer | Content | State |
+Three stages, finished 2026-09-27:
+
+| Stage | Scope | State |
 |---|---|---|
-| **Public** | Repo name · description · topics · README · UI brand strings · notification titles · container image name · robots/sitemap/canonical | **AstraQuant** |
-| **Internal** | Python packages `r20_backend` / `r20_gateway` · **`R20_*` environment variable keys** · filenames containing `r20` · database filenames | **R20 retained** |
-| **Internal (wire contracts)** | Session header `X-R20-Session` · high-risk confirmation phrases `UPDATE R20` / `BACKUP R20` / `RESTORE R20` · backup archive magic `R20GCM2` · Grafana dashboard UID `r20-quantum-trader` · `/opt/r20-quantum-trader` in the systemd units | **R20 retained** |
+| 1 | Public brand strings: repo name · description · topics · README · UI copy · notification titles · container image · canonical / robots / sitemap | **AstraQuant** |
+| 2 | Python packages `r20_backend` / `r20_gateway` → `astra_*`; **154 filenames**; systemd units; Grafana dashboard; deploy paths | **astra** |
+| 3 | **129 `R20_*` environment keys** → `ASTRA_*` · session header → `X-Astra-Session` · high-risk confirmation phrases → `UPDATE` / `BACKUP` / `RESTORE ASTRA` · DB / lock / log filenames | **astra** |
 
-**Why the internals were not renamed too**: `R20_*` is the **configuration contract users have already written into their `.env`** — changing the prefix would silently strip configuration from every deployed instance (leaving it "not ready") while buying exactly zero public traffic. Package names are wired into 2000+ imports, and the confirmation phrases and session header are **byte-for-byte** contracts between frontend and backend — changing one side alone would break high-risk operations. So if you are here to "finish the rename": read this section first. **It is not unfinished work; it is deliberate.**
+**Stage 3 was a hard cut**: the application no longer reads `R20_*`. There is no alias layer.
 
-`R20_*` appearing in user-facing copy is correct — that is an **interface name**, not a brand name.
+### Upgrading an existing deployment
+
+```bash
+# 1) stop the services
+# 2) rename your .env keys
+sed -i 's/^R20_/ASTRA_/' .env
+# 3) migrate runtime state — dry-run first, it prints the plan
+python scripts/migrate_r20_to_astra.py
+python scripts/migrate_r20_to_astra.py --apply
+```
+
+The startup path runs `--check` and **fails closed** with that exact command when it detects
+un-migrated state — silently booting on an empty ledger is the one outcome we refuse.
+
+### What intentionally still says `r20`
+
+Three things cannot be renamed without destroying data. They sit on an explicit,
+gate-enforced list (`tests/audit/test_brand_strings_are_consistent.py`):
+
+| Retained | Why |
+|---|---|
+| legacy exchange-side leg markers `t-r20sl*` / `t-r20tp*` | protection legs created **before** the rename are still live on OKX / Gate / Binance. `scripts/tag_markers.py` normalizes them so the cloud ratchet keeps managing those positions; legs written *after* the rename use `astrasl` / `astratp` |
+| legacy backup archive magic (`R20GCM2` + NUL) | archives users already hold must stay decryptable. The reader accepts both magics (equal length, so header offsets are unchanged); new archives are written with `ASTRAGCM` |
+| `cpa.r20.cn` in test fixtures | that is the maintainer's **own DNS**, used as the live model gateway — not our namespace |
+
+Everything else — including every filename in the repository — is `astra`.
 
 ---
 

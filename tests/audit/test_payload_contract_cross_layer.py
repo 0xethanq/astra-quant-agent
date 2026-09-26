@@ -33,7 +33,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 TS_TYPES = ROOT / "frontend" / "src" / "types" / "dashboard.ts"
-BUILDER = ROOT / "r20_backend" / "dashboard_payload" / "cache_payload.py"
+BUILDER = ROOT / "astra_backend" / "dashboard_payload" / "cache_payload.py"
 
 #: 允许"TS 声明、后端不直接发"的字段（附理由）。修复后为空。
 ALLOWLIST: dict[str, str] = {}
@@ -83,7 +83,7 @@ def emitted_root_keys() -> set:
     if not keys:
         raise AssertionError("找不到 build_live_cache_payload 的返回字典（门已过期）")
 
-    for path in sorted((ROOT / "r20_backend").rglob("*.py")):
+    for path in sorted((ROOT / "astra_backend").rglob("*.py")):
         if "__pycache__" in path.parts:
             continue
         if path.name != "dashboard_cache.py" and "dashboard_payload" not in path.parts:
@@ -128,7 +128,7 @@ class PayloadContractCrossLayerTest(unittest.TestCase):
 
     def test_stale_payload_marks_itself(self):
         """陈旧分支是**拷贝** ⇒ 必须显式把 is_stale 改真（否则前端看不出这是旧数据）。"""
-        src = (ROOT / "r20_backend" / "dashboard_cache.py").read_text(encoding="utf-8")
+        src = (ROOT / "astra_backend" / "dashboard_cache.py").read_text(encoding="utf-8")
         self.assertIn('stale["is_stale"] = True', src,
                       "陈旧载荷没有显式标记 is_stale ⇒ 前端会把它当新鲜数据")
 
@@ -195,7 +195,7 @@ def _interface_fields(iface: str) -> list:
 def _code_string_literals() -> set:
     """后端/脚本里作为字符串字面量出现的名字（生产者显式写出的键名）。"""
     names = set()
-    for root in ("r20_backend", "scripts"):
+    for root in ("astra_backend", "scripts"):
         for path in (ROOT / root).rglob("*.py"):
             if "__pycache__" in path.parts:
                 continue

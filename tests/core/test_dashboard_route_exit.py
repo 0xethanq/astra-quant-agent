@@ -24,7 +24,7 @@ import time
 import unittest
 from unittest import mock
 
-from r20_backend import dashboard_cache as DC
+from astra_backend import dashboard_cache as DC
 
 
 def _body(response):

@@ -39,13 +39,13 @@ FACADES = (
     "scripts/ai_brain_trader.py",
     "scripts/sync_full_ledger.py",
     "scripts/self_improvement_engine.py",
-    "r20_backend/dashboard_cache.py",
-    "r20_backend/llm/store.py",
-    "r20_backend/llm_manager.py",
-    "r20_backend/council_manager.py",
-    "r20_backend/policy_snapshot.py",
+    "astra_backend/dashboard_cache.py",
+    "astra_backend/llm/store.py",
+    "astra_backend/llm_manager.py",
+    "astra_backend/council_manager.py",
+    "astra_backend/policy_snapshot.py",
 )
-PKG_HINT = ("scripts.trader.", "scripts.brain.", "r20_backend.dashboard_payload.",
+PKG_HINT = ("scripts.trader.", "scripts.brain.", "astra_backend.dashboard_payload.",
             "scripts.")
 
 

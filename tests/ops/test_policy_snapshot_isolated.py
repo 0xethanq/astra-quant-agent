@@ -19,7 +19,7 @@ import unittest
 from pathlib import Path
 from typing import Any, Dict, List
 
-from r20_backend.policy_snapshot import (
+from astra_backend.policy_snapshot import (
     compute_layout_hash,
     format_policy_snapshot_summary,
     generate_policy_snapshot,
@@ -37,8 +37,8 @@ class TestPolicySnapshotIsolated(unittest.TestCase):
         # 不管它（实测会改写生产 .env）→ 必须显式沙箱化。
         import tempfile
         from unittest.mock import patch
-        import r20_backend.settings_store as settings_store
-        env_tmp = tempfile.TemporaryDirectory(prefix="r20-policytest-")
+        import astra_backend.settings_store as settings_store
+        env_tmp = tempfile.TemporaryDirectory(prefix="astra-policytest-")
         self.addCleanup(env_tmp.cleanup)
         env_patcher = patch.object(settings_store, "ENV_FILE", Path(env_tmp.name) / ".env")
         env_patcher.start()
@@ -424,8 +424,8 @@ class TestPolicySnapshotIsolated(unittest.TestCase):
         test_app = FastAPI()
 
         @test_app.get("/api/v1/admin/policy/current-snapshot")
-        def endpoint(x_r20_session: str | None = Header(default=None, alias="X-R20-Session")):
-            if not x_r20_session or x_r20_session != "valid_admin_token":
+        def endpoint(x_astra_session: str | None = Header(default=None, alias="X-Astra-Session")):
+            if not x_astra_session or x_astra_session != "valid_admin_token":
                 raise HTTPException(status_code=401, detail="未授权访问")
             snap = generate_policy_snapshot()
             return {
@@ -444,12 +444,12 @@ class TestPolicySnapshotIsolated(unittest.TestCase):
         # 2. Authenticated request should be 200 with snapshot
         res_auth = client.get(
             "/api/v1/admin/policy/current-snapshot",
-            headers={"X-R20-Session": "valid_admin_token"},
+            headers={"X-Astra-Session": "valid_admin_token"},
         )
         self.assertEqual(res_auth.status_code, 200)
         data = res_auth.json()
         self.assertTrue(data["ok"])
-        from r20_backend.version import __version__
+        from astra_backend.version import __version__
         self.assertTrue(data["policy_version"].startswith(f"v{__version__}@"))
         self.assertEqual(len(data["policy_hash"]), 8)
         self.assertIn("units", data["snapshot"])
@@ -457,7 +457,7 @@ class TestPolicySnapshotIsolated(unittest.TestCase):
     def test_archive_creation_and_index_tracking(self) -> None:
         """Verify archive creation writes package and updates index with metadata."""
         import tempfile
-        from r20_backend.policy_snapshot import (
+        from astra_backend.policy_snapshot import (
             archive_current_policy,
             archive_policy_snapshot,
             load_archive_index,
@@ -488,7 +488,7 @@ class TestPolicySnapshotIsolated(unittest.TestCase):
     def test_archive_deletion_and_aliases(self) -> None:
         """Verify deletion removes file and index tracking, with alias support."""
         import tempfile
-        from r20_backend.policy_snapshot import (
+        from astra_backend.policy_snapshot import (
             archive_current_policy,
             delete_archived_policy,
             delete_policy_archive,
@@ -518,7 +518,7 @@ class TestPolicySnapshotIsolated(unittest.TestCase):
     def test_one_click_rollback_and_no_partial_state(self) -> None:
         """Verify one-click rollback restores snapshot and reverts on corruption."""
         import tempfile
-        from r20_backend.policy_snapshot import (
+        from astra_backend.policy_snapshot import (
             archive_current_policy,
             get_current_policy_snapshot,
             restore_archived_policy,
@@ -552,7 +552,7 @@ class TestPolicySnapshotIsolated(unittest.TestCase):
     def test_index_locking_and_corrupt_recovery(self) -> None:
         """Verify index detects corrupt json, creates backup, and reconstructs from archives."""
         import tempfile
-        from r20_backend.policy_snapshot import (
+        from astra_backend.policy_snapshot import (
             archive_current_policy,
             load_archive_index,
         )

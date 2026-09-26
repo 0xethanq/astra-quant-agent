@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-R20 High-Alpha Quantitative Multi-Factor Trading Matrix & Execution Engine (AstraQuant v6.8.1)
+ASTRA High-Alpha Quantitative Multi-Factor Trading Matrix & Execution Engine (AstraQuant v6.8.1)
 Architecture:
 1. Multi-Dimensional Quant Factor Sub-Engine:
    - Trend Momentum: EMA Slope (9/21/55), Multi-Timeframe Alignment (15M, 1H, 4H)
@@ -31,11 +31,11 @@ if str(_THIS_DIR) not in sys.path:
     sys.path.insert(0, str(_THIS_DIR))
 
 try:
-    from r20_backend.version import __version__
+    from astra_backend.version import __version__
 except Exception:
     __version__ = "7.6.0"
 
-from r20_backend.time_utils import beijing_day
+from astra_backend.time_utils import beijing_day
 
 # 结构优化阶段4·B3：纯信号逻辑已搬入 scripts/trader/signals.py，re-export 保持门面表面不变
 from scripts.trader.signals import clamp, evaluate_asset_signal as _evaluate_asset_signal  # noqa: F401
@@ -159,11 +159,11 @@ from scripts.trader.protection import (
 
 # US-003 决策面接线：选所路由（US-002）与预算原子预留（US-001）以模块绑定名引用，
 # 接线级测试 patch 模块属性即可完全离线（零出网/零凭证/零真实预留库）。
-from r20_backend import risk_reservation
-from r20_backend import venue_router
-from r20_backend.exchanges import canonical_base
-from r20_backend.exchanges import registry as venue_registry
-from r20_backend.exchanges import routing_policy
+from astra_backend import risk_reservation
+from astra_backend import venue_router
+from astra_backend.exchanges import canonical_base
+from astra_backend.exchanges import registry as venue_registry
+from astra_backend.exchanges import routing_policy
 
 # 必须用 scripts.okx_runtime 包形式：okx_rest 读的是同一模块实例的冻结环境，
 # 裸 okx_runtime 是另一份 _FROZEN_ENVIRONMENT 全局，freeze 周期对其无效（US-002 命门）。
@@ -218,24 +218,24 @@ LOGS_DIR = os.path.join(WORKSPACE_DIR, "logs")
 
 LEDGER_JSON_FILE = os.path.join(DATA_DIR, "trading_ledger.json")
 # 批E(2026-09-13)：周期收尾的台账/DB spawn 总闸（模块导入时快照——测试用
-# patch.dict(clear=True) 清空环境也抹不掉）。生产不设 R20_LEDGER_SYNC_DISABLED。
-LEDGER_AUTOSYNC_ENABLED = str(os.environ.get("R20_LEDGER_SYNC_DISABLED", "")).strip().lower() not in ("1", "true", "yes")
+# patch.dict(clear=True) 清空环境也抹不掉）。生产不设 ASTRA_LEDGER_SYNC_DISABLED。
+LEDGER_AUTOSYNC_ENABLED = str(os.environ.get("ASTRA_LEDGER_SYNC_DISABLED", "")).strip().lower() not in ("1", "true", "yes")
 # roadmap G8：跨所（Gate/Binance）云端保护单巡检总闸。**默认关闭** —— 置于模块导入时
 # 快照（与 LEDGER_AUTOSYNC_ENABLED 同法）。开闸 = 每周期对外所仓位核验保护腿并在临期
 # 前续期（先挂新后撤旧；绝不猜价位、绝不撤人工腿）。开闸是运营决定，需人工拍板。
-R20_VENUE_PROTECTION_WATCHDOG = str(os.environ.get("R20_VENUE_PROTECTION_WATCHDOG", "0")).strip().lower() in ("1", "true", "yes")
+ASTRA_VENUE_PROTECTION_WATCHDOG = str(os.environ.get("ASTRA_VENUE_PROTECTION_WATCHDOG", "0")).strip().lower() in ("1", "true", "yes")
 # 第一百二十九刀：**预演模式**（G8 开闸前的第一步）。置 1 时巡检每周期照常判定，
 # 但**绝不下单/撤单**——只报"如果开闸这一轮会做什么"（审计层的 `dry_run`/`would`）。
 # 与总闸同法：默认关，且总闸未开时本标志无意义（整个巡检不跑）。
-R20_VENUE_PROTECTION_WATCHDOG_DRY_RUN = str(os.environ.get("R20_VENUE_PROTECTION_WATCHDOG_DRY_RUN", "0")).strip().lower() in ("1", "true", "yes")
+ASTRA_VENUE_PROTECTION_WATCHDOG_DRY_RUN = str(os.environ.get("ASTRA_VENUE_PROTECTION_WATCHDOG_DRY_RUN", "0")).strip().lower() in ("1", "true", "yes")
 # 第一百三十刀：**防抖窗口**（分钟，默认 30）：缺口必须持续这么久才允许真实写单。
 # 续期窗口是 24h，30 分钟远小于它 —— 防的是"瞬时口径波动被当成缺口"。
 # 置 0 = 显式关闭防抖（立即动手）。
 try:
-    R20_VENUE_PROTECTION_WATCHDOG_DEBOUNCE_S = float(
-        os.environ.get("R20_VENUE_PROTECTION_WATCHDOG_DEBOUNCE_MIN", "30")) * 60.0
+    ASTRA_VENUE_PROTECTION_WATCHDOG_DEBOUNCE_S = float(
+        os.environ.get("ASTRA_VENUE_PROTECTION_WATCHDOG_DEBOUNCE_MIN", "30")) * 60.0
 except (TypeError, ValueError):
-    R20_VENUE_PROTECTION_WATCHDOG_DEBOUNCE_S = 30 * 60.0
+    ASTRA_VENUE_PROTECTION_WATCHDOG_DEBOUNCE_S = 30 * 60.0
 # 防抖状态（跨周期记忆"这缺口从什么时候开始"）：只记时刻，不记凭证/不记仓位细节
 VENUE_PROTECTION_WATCHDOG_STATE_FILE = os.path.join(
     DATA_DIR, "venue_protection_watchdog_state.json")
@@ -304,18 +304,18 @@ ASSET_CLASS_PROFILES = {
     }
 }
 
-# 并发/同向持仓上限：后台风控管理页可配 (R20_MAX_CONCURRENT_POSITIONS=0 表示自动跟随标的池容量)
+# 并发/同向持仓上限：后台风控管理页可配 (ASTRA_MAX_CONCURRENT_POSITIONS=0 表示自动跟随标的池容量)
 MAX_CONCURRENT_POSITIONS, MAX_SAME_DIRECTION_POSITIONS = effective_max_positions(len(TARGET_INSTRUMENTS))
 TAKER_FEE_RATE = 0.0005
 MAKER_FEE_RATE = 0.0002 # Limit Order Maker Fee (60% Lower Than Market Taker)
 # 单笔 1R 风险额 / 数量量化 / 可用余额硬顶：**不再本地孪生**（审计批6）。
-# 曾与 r20_backend/execution/sizing.py 逐字重复两份，是「改一处漏一处」的漂移源。
-from r20_backend.execution import (
+# 曾与 astra_backend/execution/sizing.py 逐字重复两份，是「改一处漏一处」的漂移源。
+from astra_backend.execution import (
     effective_risk_per_trade,
     max_size_within_margin,
     quantize_size,
 )
-from r20_backend.execution.cooldowns import (
+from astra_backend.execution.cooldowns import (
     add_stop_cooldown as _cooldowns_add,
     is_in_stop_cooldown as _cooldowns_is_in,
     load_stop_cooldowns as _cooldowns_load,
@@ -426,7 +426,7 @@ def save_trackers(trackers):
 
 def _atomic_write_json(path, payload):
     """审计③(2026-09-13)：常驻写者统一原子路数（mkstemp+fsync+os.replace，对齐
-    sync_full_ledger / r20_gateway.secrets）。此前台账/状态/冷却直 open("w") 覆写，
+    sync_full_ledger / astra_gateway.secrets）。此前台账/状态/冷却直 open("w") 覆写，
     并发读者（熔断/日报/备份/面板）可读到半截 JSON：误停开仓、推「0胜0负」假研报、
     止损冷却静默解除。失败时旧文件原样保全（绝不撕裂）。"""
     _dir = os.path.dirname(os.path.abspath(path))
@@ -450,9 +450,9 @@ def _read_stop_cooldowns_state():
     """薄壳：转调单一事实源，并在**调用时**解析本模块的 `STOP_COOLDOWN_FILE`。
 
     结构优化阶段 4·B3 第五十刀：本函数与
-    `r20_backend/execution/circuit_breaker.py` 的同名函数原为等价重复
+    `astra_backend/execution/circuit_breaker.py` 的同名函数原为等价重复
     （差在 `os.path.exists` vs `Path.exists`）。已收敛到
-    `r20_backend.execution.cooldowns.read_stop_cooldowns_state`。
+    `astra_backend.execution.cooldowns.read_stop_cooldowns_state`。
 
     ⚠️ 文件路径**必须**在调用时从本模块全局解析：测试会
     `patch.object(aft, "STOP_COOLDOWN_FILE", f)`（见
@@ -514,7 +514,7 @@ def load_adaptive_config():
     return {}
 
 def _run_captured(script, label=None, timeout=15):
-    from r20_backend.spawn import run_script
+    from astra_backend.spawn import run_script
     t = 60 if timeout == 15 and "sync_full_ledger" in str(script) else timeout
     return run_script(script, timeout=t, label=label)
 
@@ -678,7 +678,7 @@ VENUE_HEALTH_FILE = os.path.join(DATA_DIR, "venue_health.json")
 MARKET_DATA_HEALTH_FILE = os.path.join(DATA_DIR, "market_data_health.json")
 CYCLE_DISCLOSURE_FILE = os.path.join(DATA_DIR, "cycle_disclosure.json")
 #: 组合风险预算总上限（US-001 预留层封顶口径；0/未配置 = 只累计台账不封顶）
-PORTFOLIO_RISK_BUDGET_ENV = "R20_PORTFOLIO_RISK_BUDGET_USDT"
+PORTFOLIO_RISK_BUDGET_ENV = "ASTRA_PORTFOLIO_RISK_BUDGET_USDT"
 #: 场所取数健康度可容忍年龄（brain 15min 周期写盘，给 2 个周期 + 余量）
 VENUE_HEALTH_MAX_AGE_S = 1900.0
 
@@ -952,7 +952,7 @@ def record_trade(trade_data):
 # =============================================================================
 # 🧮 Enhanced Quantitative Technical Indicators Math Engine
 # =============================================================================
-from r20_backend.execution import (
+from astra_backend.execution import (
     calc_ema,
     calc_rsi,
     calc_atr,
@@ -1258,20 +1258,20 @@ def execute_portfolio():
 
     # 4b. 跨所云端保护单巡检（roadmap G8）：Gate/Binance 的触发单带 expiration，
     # 到期后仓位裸奔，而主链的 OKX 保护核验够不到跨所仓位（合成 id 匹配不上）。
-    # **默认关闭**（R20_VENUE_PROTECTION_WATCHDOG=1 才跑）：本刀只接线，线上行为零变化。
-    # 开闸前先用 `R20_VENUE_PROTECTION_WATCHDOG_DRY_RUN=1` 预演一轮：照常判定但不写单，
+    # **默认关闭**（ASTRA_VENUE_PROTECTION_WATCHDOG=1 才跑）：本刀只接线，线上行为零变化。
+    # 开闸前先用 `ASTRA_VENUE_PROTECTION_WATCHDOG_DRY_RUN=1` 预演一轮：照常判定但不写单，
     # 日志逐条给出"本来会做"的动作（见该函数 docstring）。
     _wd_report = venue_protection_watchdog_stage(
         xv_positions_by_venue=xv_positions_by_venue,
         executed_actions=executed_actions,
         venue_registry=venue_registry,
         current_environment=current_environment,
-        R20_VENUE_PROTECTION_WATCHDOG=R20_VENUE_PROTECTION_WATCHDOG,
+        ASTRA_VENUE_PROTECTION_WATCHDOG=ASTRA_VENUE_PROTECTION_WATCHDOG,
         # 第一百二十九刀：预演模式（总闸未开时无意义）——开闸前先看"会做什么"。
-        dry_run=R20_VENUE_PROTECTION_WATCHDOG_DRY_RUN,
+        dry_run=ASTRA_VENUE_PROTECTION_WATCHDOG_DRY_RUN,
         # 第一百三十刀：防抖 —— 缺口必须持续够久才允许真实写单（状态不可读写则不写单）。
         state_path=VENUE_PROTECTION_WATCHDOG_STATE_FILE,
-        debounce_s=R20_VENUE_PROTECTION_WATCHDOG_DEBOUNCE_S,
+        debounce_s=ASTRA_VENUE_PROTECTION_WATCHDOG_DEBOUNCE_S,
         debounce_step=watchdog_debounce_step,
         audit_cross_venue_protection=audit_cross_venue_protection,
         # 第一百七十四刀：台账行（只读；读不到 ⇒ None ⇒ 不产生 ledger 证据）
@@ -1315,7 +1315,7 @@ def execute_portfolio():
         entries_blocked=entries_blocked,
         shape_violations=_shape_violations,
         watchdog_report=_wd_report,
-        watchdog_enabled=R20_VENUE_PROTECTION_WATCHDOG)
+        watchdog_enabled=ASTRA_VENUE_PROTECTION_WATCHDOG)
     print(cycle_disclosure_summary(_disc))
     write_cycle_disclosure_snapshot(
         path=CYCLE_DISCLOSURE_FILE, payload=_disc,

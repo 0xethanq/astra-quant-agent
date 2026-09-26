@@ -4,7 +4,7 @@
 
 | 语义 | 口径 |
 |---|---|
-| ★ **路径必须"调用时"解析** | 审计卫生修复：模块级绑定路径不可重定向，历史上全部 TestClient 后台测试把伪造记录**直写生产** `logs/r20_admin_audit.jsonl`（实测 >2200 条污染）。现在每次调用读 `R20_AUDIT_FILE`，空值回落生产默认 |
+| ★ **路径必须"调用时"解析** | 审计卫生修复：模块级绑定路径不可重定向，历史上全部 TestClient 后台测试把伪造记录**直写生产** `logs/astra_admin_audit.jsonl`（实测 >2200 条污染）。现在每次调用读 `ASTRA_AUDIT_FILE`，空值回落生产默认 |
 | ★ **只追加、不重写** | 用 `open("a")`，已有内容一字不动（审计流的根本要求：不能丢历史）|
 | ★ **+08:00 业务时区** | `datetime.now(timezone(timedelta(hours=8)))` 固定东八区，**不随宿主 TZ 漂移**（审计时间必须可对账）|
 | ★ **来源字段是截断不是拒绝** | `actor_ip` 截 64、`user_agent` 截 200；**空值不写键**（不是写空串），避免"字段在场但没值"的歧义 |
@@ -23,7 +23,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
 
-from r20_backend import audit as AU
+from astra_backend import audit as AU
 
 
 class _Base(unittest.TestCase):
@@ -31,7 +31,7 @@ class _Base(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.path = Path(self.tmp.name) / "nested" / "audit.jsonl"
-        patcher = mock.patch.dict(os.environ, {"R20_AUDIT_FILE": str(self.path)})
+        patcher = mock.patch.dict(os.environ, {"ASTRA_AUDIT_FILE": str(self.path)})
         patcher.start()
         self.addCleanup(patcher.stop)
 
@@ -44,26 +44,26 @@ class _Base(unittest.TestCase):
 class AuditFilePathTests(unittest.TestCase):
     def test_default_is_the_production_path(self):
         with mock.patch.dict(os.environ, {}, clear=False):
-            os.environ.pop("R20_AUDIT_FILE", None)
+            os.environ.pop("ASTRA_AUDIT_FILE", None)
             self.assertEqual(AU._audit_file(), AU.AUDIT_FILE)
 
     def test_the_env_var_overrides_it(self):
-        with mock.patch.dict(os.environ, {"R20_AUDIT_FILE": "/tmp/other.jsonl"}):
+        with mock.patch.dict(os.environ, {"ASTRA_AUDIT_FILE": "/tmp/other.jsonl"}):
             self.assertEqual(AU._audit_file(), Path("/tmp/other.jsonl"))
 
     def test_an_empty_override_falls_back_to_the_default(self):
         """空串按"没配"处理（`if override` 为假）——不会解析成当前目录。"""
-        with mock.patch.dict(os.environ, {"R20_AUDIT_FILE": ""}):
+        with mock.patch.dict(os.environ, {"ASTRA_AUDIT_FILE": ""}):
             self.assertEqual(AU._audit_file(), AU.AUDIT_FILE)
 
     def test_the_path_is_resolved_on_every_call(self):
-        with mock.patch.dict(os.environ, {"R20_AUDIT_FILE": "/tmp/a.jsonl"}):
+        with mock.patch.dict(os.environ, {"ASTRA_AUDIT_FILE": "/tmp/a.jsonl"}):
             self.assertEqual(AU._audit_file(), Path("/tmp/a.jsonl"))
-        with mock.patch.dict(os.environ, {"R20_AUDIT_FILE": "/tmp/b.jsonl"}):
+        with mock.patch.dict(os.environ, {"ASTRA_AUDIT_FILE": "/tmp/b.jsonl"}):
             self.assertEqual(AU._audit_file(), Path("/tmp/b.jsonl"))
 
     def test_the_default_path_lives_under_logs(self):
-        self.assertEqual(AU.AUDIT_FILE, AU.ROOT / "logs" / "r20_admin_audit.jsonl")
+        self.assertEqual(AU.AUDIT_FILE, AU.ROOT / "logs" / "astra_admin_audit.jsonl")
 
 
 class RecordTests(_Base):
@@ -265,7 +265,7 @@ class RecentTests(_Base):
     def test_it_honours_the_env_override(self):
         AU.record("here", "success")
         other = Path(self.tmp.name) / "elsewhere.jsonl"
-        with mock.patch.dict(os.environ, {"R20_AUDIT_FILE": str(other)}):
+        with mock.patch.dict(os.environ, {"ASTRA_AUDIT_FILE": str(other)}):
             self.assertEqual(AU.recent(), [])
         self.assertEqual([r["action"] for r in AU.recent()], ["here"])
 

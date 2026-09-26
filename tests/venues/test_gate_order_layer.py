@@ -10,7 +10,7 @@
 
 import unittest
 
-from r20_backend.exchanges.gate import GateAdapter, GateAPIError
+from astra_backend.exchanges.gate import GateAdapter, GateAPIError
 
 
 class _Base(unittest.TestCase):

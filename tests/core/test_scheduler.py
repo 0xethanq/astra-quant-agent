@@ -22,7 +22,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
 
-from r20_backend import scheduler as SC
+from astra_backend import scheduler as SC
 
 _BJ = timezone(timedelta(hours=8))
 
@@ -38,7 +38,7 @@ class _Base(unittest.TestCase):
         return started
 
     def setUp(self):
-        self.tmp = Path(tempfile.mkdtemp(prefix="r20-sched-"))
+        self.tmp = Path(tempfile.mkdtemp(prefix="astra-sched-"))
         self.addCleanup(shutil.rmtree, self.tmp, True)
         self.logs = self.tmp / "logs"
         self.data = self.tmp / "data"
@@ -117,7 +117,7 @@ class BeijingFormatterTests(unittest.TestCase):
 
     def test_formatted_record_carries_the_beijing_offset(self):
         formatter = SC.BeijingFormatter("%(asctime)s %(message)s")
-        record = logging.LogRecord("r20", logging.INFO, __file__, 1, "hello",
+        record = logging.LogRecord("astra", logging.INFO, __file__, 1, "hello",
                                    None, None)
         record.created = 0
         formatted = formatter.format(record)
@@ -128,7 +128,7 @@ class BeijingFormatterTests(unittest.TestCase):
 class ConfigureLoggingTests(_Base):
     def setUp(self):
         super().setUp()
-        self.fresh = logging.Logger("r20-scheduler-test")
+        self.fresh = logging.Logger("astra-scheduler-test")
         self.addCleanup(lambda: [h.close() for h in list(self.fresh.handlers)])
         self._start(mock.patch.object(SC, "logger", self.fresh))
 
@@ -155,7 +155,7 @@ class ConfigureLoggingTests(_Base):
         SC.logger.info("probe-line")
         for handler in SC.logger.handlers:
             handler.flush()
-        text = (self.logs / "r20_scheduler.log").read_text(encoding="utf-8")
+        text = (self.logs / "astra_scheduler.log").read_text(encoding="utf-8")
         self.assertIn("probe-line", text)
         self.assertIn("+08:00", text)
 
@@ -163,7 +163,7 @@ class ConfigureLoggingTests(_Base):
 class RunScriptTests(_Base):
     def setUp(self):
         super().setUp()
-        self.fresh = logging.Logger("r20-scheduler-run")
+        self.fresh = logging.Logger("astra-scheduler-run")
         self._start(mock.patch.object(SC, "logger", self.fresh))
         self.runner = self._start(mock.patch.object(SC.subprocess, "run"))
 
@@ -208,7 +208,7 @@ class RunScriptTests(_Base):
 class MainLoopTests(_Base):
     def setUp(self):
         super().setUp()
-        self.fresh = logging.Logger("r20-scheduler-main")
+        self.fresh = logging.Logger("astra-scheduler-main")
         self._start(mock.patch.object(SC, "logger", self.fresh))
         self._start(mock.patch.object(SC, "configure_logging"))
         self._start(mock.patch.object(SC, "fcntl"))

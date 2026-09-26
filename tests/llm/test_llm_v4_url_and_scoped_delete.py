@@ -15,7 +15,7 @@ import urllib.error
 from pathlib import Path
 from unittest.mock import patch
 
-import r20_backend.llm_manager as llm_manager
+import astra_backend.llm_manager as llm_manager
 
 
 def _http_error(url: str, code: int) -> urllib.error.HTTPError:
@@ -55,9 +55,9 @@ class ScopedLLMTestCase(unittest.TestCase):
         llm_manager.FAILOVER_EVENTS_FILE = self.temp_path / "llm_failover_events.json"
 
         self.patchers = [
-            patch("r20_backend.settings_store.update_env"),
-            patch("r20_backend.config.refresh_settings"),
-            patch("r20_gateway.secrets.save_secrets"),
+            patch("astra_backend.settings_store.update_env"),
+            patch("astra_backend.config.refresh_settings"),
+            patch("astra_gateway.secrets.save_secrets"),
         ]
         for p in self.patchers:
             p.start()
@@ -189,7 +189,7 @@ class FetchRemoteModelsUrlTests(ScopedLLMTestCase):
                 return FakeResp({"data": [{"id": "glm-5.3-flash", "name": "GLM"}]})
             raise _http_error(req.full_url, 404)
 
-        with patch("r20_backend.llm_manager.urllib.request.urlopen", side_effect=fake_open):
+        with patch("astra_backend.llm_manager.urllib.request.urlopen", side_effect=fake_open):
             res = llm_manager.fetch_remote_models(
                 base_url="https://open.bigmodel.cn/api/paas/v4", api_key="k"
             )
@@ -203,7 +203,7 @@ class FetchRemoteModelsUrlTests(ScopedLLMTestCase):
                 raise _http_error(req.full_url, 401)
             return FakeResp({"data": [{"id": "any-model"}]})
 
-        with patch("r20_backend.llm_manager.urllib.request.urlopen", side_effect=fake_open):
+        with patch("astra_backend.llm_manager.urllib.request.urlopen", side_effect=fake_open):
             res = llm_manager.fetch_remote_models(base_url="https://gw.example/v1", api_key="k")
         self.assertTrue(res["ok"], res)
 
@@ -211,7 +211,7 @@ class FetchRemoteModelsUrlTests(ScopedLLMTestCase):
         def fake_open(req, timeout=None):
             raise _http_error(req.full_url, 401)
 
-        with patch("r20_backend.llm_manager.urllib.request.urlopen", side_effect=fake_open):
+        with patch("astra_backend.llm_manager.urllib.request.urlopen", side_effect=fake_open):
             res = llm_manager.fetch_remote_models(base_url="https://gw.example/v1", api_key="bad")
         self.assertFalse(res["ok"])
         self.assertIn("401", res["error"])

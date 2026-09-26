@@ -59,7 +59,7 @@ def setUpModule():
     （只查结构，不断言具体内容/标的）—— 有意的线上守卫。
 
     只读、不改；声明在此把「依赖线上配置内容」从**静默**变成**可审计**
-    （未声明时 `R20_TESTS_STRICT_READS=1` 会报错）。
+    （未声明时 `ASTRA_TESTS_STRICT_READS=1` 会报错）。
     """
     global _READ_SCOPE
     from tests import allow_real_data_reads

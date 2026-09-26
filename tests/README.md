@@ -19,7 +19,7 @@
 1. **域目录名不得与标准库或仓库顶层包重名** —— 由 `audit/test_test_tree_layout.py` 钉死。
    踩过两次：`tests/platform/` 遮蔽标准库 `platform`（pydantic 连锁崩、报错却是
    `cannot import name 'BaseModel'`）；`tests/dashboard/` 因为是常规包，抢在仓库根
-   `dashboard/` 之前被 import，导致 `import r20_backend.dashboard_cache` 失败。
+   `dashboard/` 之前被 import，导致 `import astra_backend.dashboard_cache` 失败。
 2. **移到子目录后必须给 `Path(__file__)` 路径"加一层"**，三种等价写法都要改：
    `parents[1]` → `parents[2]`、`.parent.parent` → `.parent.parent.parent`、
    `Path(__file__).resolve().parent / ...` → 多加一个 `.parent`。

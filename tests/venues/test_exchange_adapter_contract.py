@@ -31,9 +31,9 @@ for _p in (str(ROOT), str(ROOT / "scripts")):
         sys.path.insert(0, _p)
 
 import scripts.okx_rest as okx_rest  # noqa: E402
-from r20_backend.exchanges.okx import OKXAdapter  # noqa: E402
-from r20_backend.exchanges.binance import BinanceAdapter  # noqa: E402
-from r20_backend.exchanges.gate import GateAdapter  # noqa: E402
+from astra_backend.exchanges.okx import OKXAdapter  # noqa: E402
+from astra_backend.exchanges.binance import BinanceAdapter  # noqa: E402
+from astra_backend.exchanges.gate import GateAdapter  # noqa: E402
 
 
 class _Recorder:
@@ -241,10 +241,10 @@ class TestCancelIdFamilies(unittest.TestCase):
             return {"status": "CANCELED"}
         with patch.object(ad, "signed_request", fake_signed):
             ad.cancel_order("BTC", order_id="123456789")
-            ad.cancel_order("BTC", order_id="t-r20e1712345")
+            ad.cancel_order("BTC", order_id="t-astrae1712345")
         self.assertEqual(str(seen[0].get("orderId")), "123456789")
         self.assertNotIn("origClientOrderId", seen[0])
-        self.assertEqual(seen[1].get("origClientOrderId"), "t-r20e1712345")
+        self.assertEqual(seen[1].get("origClientOrderId"), "t-astrae1712345")
         self.assertNotIn("orderId", seen[1])
 
 
@@ -293,7 +293,7 @@ class TestNoPhantomModuleAttributes(unittest.TestCase):
     """把「调了不存在的函数」整族变测试期红：全仓 X.y( 调用点 hasattr(X) 核对。"""
 
     def _iter_py(self):
-        for d in ("r20_backend", "scripts", "r20_gateway"):
+        for d in ("astra_backend", "scripts", "astra_gateway"):
             for f in sorted((ROOT / d).rglob("*.py")):
                 if "test" in f.name.lower():
                     continue
@@ -355,7 +355,7 @@ class TestCloseCannotOpenOppositeTest(unittest.TestCase):
         return types.SimpleNamespace(step_size=0.1, tick_size=0.1)
 
     def _params(self, **over):
-        from r20_backend.exchanges.binance_orders import build_order_params
+        from astra_backend.exchanges.binance_orders import build_order_params
         kw = dict(inst="BTCUSDT", position_side=None, price=None, qty=1.0,
                   reduce_only=False, s="SELL", spec=self._spec(), text="", tif="gtc")
         kw.update(over)

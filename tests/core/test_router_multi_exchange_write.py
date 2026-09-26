@@ -24,7 +24,7 @@ from unittest.mock import MagicMock, patch
 
 from fastapi import HTTPException
 
-from r20_backend.routers import exchanges as R
+from astra_backend.routers import exchanges as R
 
 
 def _payload(**over):
@@ -73,13 +73,13 @@ class WritePathTest(unittest.TestCase):
         _out, exc = self._call(okx_execution=True, confirmation="  open okx execution ")
         self.assertIsNone(exc, "大小写与首尾空白要归一")
         self.assertEqual(self.fns["update_env"].call_args.args[0],
-                         {"R20_OKX_EXECUTION": "1"})
+                         {"ASTRA_OKX_EXECUTION": "1"})
 
     def test_each_venue_has_its_own_phrase(self):
         for field, phrase, env_key in (("gate_execution", "OPEN GATE EXECUTION",
-                                        "R20_GATE_EXECUTION"),
+                                        "ASTRA_GATE_EXECUTION"),
                                        ("binance_execution", "OPEN BINANCE EXECUTION",
-                                        "R20_BINANCE_EXECUTION")):
+                                        "ASTRA_BINANCE_EXECUTION")):
             with self.subTest(field=field):
                 for fn in self.fns.values():
                     fn.reset_mock()
@@ -104,18 +104,18 @@ class WritePathTest(unittest.TestCase):
         _out, exc = self._call(binance_testnet=True, gate_testnet=False)
         self.assertIsNone(exc)
         self.assertEqual(self.fns["update_env"].call_args.args[0],
-                         {"R20_BINANCE_TESTNET": "1", "R20_GATE_TESTNET": "0"})
+                         {"ASTRA_BINANCE_TESTNET": "1", "ASTRA_GATE_TESTNET": "0"})
 
     def test_okx_environment_falls_back_to_live_for_anything_but_demo(self):
         """⚠️ **实测边界（列待议）**：只有「等于 demo」才算演示档，**拼错也落实盘**。"""
         _out, exc = self._call(okx_environment="demoo")
         self.assertIsNone(exc)
-        self.assertEqual(self.fns["update_env"].call_args.args[0], {"R20_OKX_ENV": "live"},
+        self.assertEqual(self.fns["update_env"].call_args.args[0], {"ASTRA_OKX_ENV": "live"},
                          "拼写错误的档位被当成 **live**（保守默认应反过来）")
         for fn in self.fns.values():
             fn.reset_mock()
         self._call(okx_environment="DEMO")
-        self.assertEqual(self.fns["update_env"].call_args.args[0], {"R20_OKX_ENV": "demo"},
+        self.assertEqual(self.fns["update_env"].call_args.args[0], {"ASTRA_OKX_ENV": "demo"},
                          "大小写仍可识别")
 
     def test_a_rejected_confirmation_still_lands_the_secrets(self):
@@ -144,7 +144,7 @@ class WritePathTest(unittest.TestCase):
         self.assertEqual(status, "success")
         self.assertEqual(detail["secret_keys_saved"], ["OKX_DEMO_API_KEY"],
                          "只记键名")
-        self.assertEqual(detail["env_updated"], ["R20_BINANCE_TESTNET"])
+        self.assertEqual(detail["env_updated"], ["ASTRA_BINANCE_TESTNET"])
         self.assertEqual(detail["actor"], "张三", "记的是审计主体")
         self.assertNotIn("SUPER-SECRET", repr(detail),
                          "**任何字段都不得出现密钥值**（安全红线）")

@@ -14,7 +14,7 @@ REPO = str(Path(__file__).resolve().parents[2])
 
 _SNIPPET_PICK = (
     "import sys; sys.path.insert(0, %r);"
-    "from r20_backend.venue_router import _balanced_pick;"
+    "from astra_backend.venue_router import _balanced_pick;"
     "print(_balanced_pick('BTC', ['binance', 'gate', 'okx']))" % REPO
 )
 _SNIPPET_NEWS = (
@@ -42,20 +42,20 @@ class BalancedPickDeterminismTests(unittest.TestCase):
         self.assertIn(next(iter(results)), {"binance", "gate", "okx"})
 
     def test_matches_direct_computation(self):
-        from r20_backend.venue_router import _balanced_pick
+        from astra_backend.venue_router import _balanced_pick
         venues = ["binance", "gate", "okx"]
         expected = venues[int(hashlib.sha256(b"BTC").hexdigest(), 16) % 3]
         self.assertEqual(_balanced_pick("BTC", venues), expected)
 
     def test_distribution_spreads_assets(self):
         # 「均衡轮换」的灵魂：不同标的应打散到多个所（全落一所=哈希写错）
-        from r20_backend.venue_router import _balanced_pick
+        from astra_backend.venue_router import _balanced_pick
         venues = ["binance", "gate", "okx"]
         picks = {_balanced_pick(a, venues) for a in ("BTC", "ETH", "SOL", "LINK", "AVAX", "DOGE")}
         self.assertGreater(len(picks), 1, "均衡选所退化为单所固定")
 
     def test_empty_venues_honest_empty(self):
-        from r20_backend.venue_router import _balanced_pick
+        from astra_backend.venue_router import _balanced_pick
         self.assertEqual(_balanced_pick("BTC", []), "")
 
     def test_builtin_hash_would_drift(self):

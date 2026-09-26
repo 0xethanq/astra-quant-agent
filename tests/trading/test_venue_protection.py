@@ -36,7 +36,7 @@ NOW = 1_789_000_000.0          # 固定"现在"，避免用例依赖时钟
 
 
 def gate_sl_row(oid="sl1", *, size=0, close=True, created=None, expiration=604800,
-                text="t-r20sl12345", contract="BTC_USDT", status="open", trigger="78000"):
+                text="t-astrasl12345", contract="BTC_USDT", status="open", trigger="78000"):
     """Gate `price_orders` 形状：标签在 initial.text，到期在 trigger.expiration。"""
     return {
         "id": oid, "status": status, "contract": contract,
@@ -96,7 +96,7 @@ class ScanTest(unittest.TestCase):
 
     def test_tp_only_is_not_loss_protection(self):
         """只有止盈腿不算保护（止盈触发不了 = 亏损无人接）。"""
-        row = gate_sl_row(text="t-r20tp12345")
+        row = gate_sl_row(text="t-astratp12345")
         scan = scan_protective_orders([row], symbol="BTC_USDT", pos_side="long",
                                       position_size=10, now_s=NOW)
         self.assertFalse(scan["has_live_sl"])
@@ -349,7 +349,7 @@ class WiringTest(unittest.TestCase):
         from scripts.trader import venue_protection
         src = inspect.getsource(venue_protection)
         for forbidden in ("from scripts.ai_factor_trader import", "import scripts.ai_factor_trader",
-                          "from scripts.risk_constants import", "from r20_backend.exchanges import"):
+                          "from scripts.risk_constants import", "from astra_backend.exchanges import"):
             self.assertNotIn(forbidden, src, f"import 期绑定了门面名字：{forbidden}")
 
     def test_registered_in_subpackage_manifest(self):
@@ -547,7 +547,7 @@ class WatchdogStageTest(unittest.TestCase):
             executed_actions=actions,
             venue_registry=MagicMock(),
             current_environment=lambda: MagicMock(mode="demo"),
-            R20_VENUE_PROTECTION_WATCHDOG=flag,
+            ASTRA_VENUE_PROTECTION_WATCHDOG=flag,
             audit_cross_venue_protection=fake_audit,
             dry_run=dry_run,
         )
@@ -610,21 +610,21 @@ class WatchdogStageTest(unittest.TestCase):
         """源码钉：开关未设置时必须视为关闭（开闸需显式置 1）。"""
         from pathlib import Path
         src = (Path(__file__).resolve().parents[2] / "scripts" / "ai_factor_trader.py").read_text(encoding="utf-8")
-        self.assertIn('os.environ.get("R20_VENUE_PROTECTION_WATCHDOG", "0")', src,
+        self.assertIn('os.environ.get("ASTRA_VENUE_PROTECTION_WATCHDOG", "0")', src,
                       "默认值必须显式为 0（否则巡检会在无人知情时开闸）")
         # 第一百二十九刀：预演标志同样必须默认关 —— 否则总闸一开就是真实写单，
         # 而"先预演一轮"这道过渡闸形同虚设。
-        self.assertIn('os.environ.get("R20_VENUE_PROTECTION_WATCHDOG_DRY_RUN", "0")', src,
+        self.assertIn('os.environ.get("ASTRA_VENUE_PROTECTION_WATCHDOG_DRY_RUN", "0")', src,
                       "预演标志默认值必须显式为 0")
         # 第一百三十刀：防抖默认 30 分钟，且**门面必须真的把状态路径与判定函数传下去**
         # —— 漏传会静默退化成"不防抖直通写单"，这正是本刀要防的事。
-        self.assertIn('os.environ.get("R20_VENUE_PROTECTION_WATCHDOG_DEBOUNCE_MIN", "30")', src,
+        self.assertIn('os.environ.get("ASTRA_VENUE_PROTECTION_WATCHDOG_DEBOUNCE_MIN", "30")', src,
                       "防抖窗口默认值必须显式（30 分钟）")
         self.assertIn("state_path=VENUE_PROTECTION_WATCHDOG_STATE_FILE", src,
                       "门面必须把防抖状态路径传进巡检格")
         self.assertIn("debounce_step=watchdog_debounce_step", src,
                       "门面必须把防抖判定函数传进巡检格")
-        self.assertIn("debounce_s=R20_VENUE_PROTECTION_WATCHDOG_DEBOUNCE_S", src,
+        self.assertIn("debounce_s=ASTRA_VENUE_PROTECTION_WATCHDOG_DEBOUNCE_S", src,
                       "门面必须把防抖窗口传进巡检格（漏传=None ⇒ 退化成不防抖）")
 
 
@@ -703,8 +703,8 @@ class PreflightEndpointTest(unittest.TestCase):
         from pathlib import Path
         from fastapi.testclient import TestClient
         from tests.config_sandbox import isolate_config
-        import r20_backend.app as app_module
-        from r20_backend.admin_auth import AdminAuthStore
+        import astra_backend.app as app_module
+        from astra_backend.admin_auth import AdminAuthStore
 
         isolate_config(self)
         self.temp = tempfile.TemporaryDirectory()
@@ -714,7 +714,7 @@ class PreflightEndpointTest(unittest.TestCase):
         self.client = TestClient(app_module.app)
 
     def tearDown(self):
-        import r20_backend.app as app_module
+        import astra_backend.app as app_module
         app_module.admin_auth = self._orig
         self.temp.cleanup()
 
@@ -722,7 +722,7 @@ class PreflightEndpointTest(unittest.TestCase):
         r = self.client.post("/api/v1/admin/auth/login",
                              json={"username": "admin", "password": "InitialAdmin123456"})
         self.assertEqual(r.status_code, 200, r.text)
-        return {"X-R20-Session": r.json()["session_token"]}
+        return {"X-Astra-Session": r.json()["session_token"]}
 
     def test_requires_admin(self):
         r = self.client.get("/api/v1/admin/venue-protection/scan")
@@ -736,7 +736,7 @@ class PreflightEndpointTest(unittest.TestCase):
                                       "size_signed": 1.0, "leverage": 5.0}]
         ad.list_protective_orders.return_value = [
             gate_sl_row("old-sl", created=NOW - (604800 - 60), trigger="77000")]
-        with patch("r20_backend.exchanges.get_adapter", return_value=ad):
+        with patch("astra_backend.exchanges.get_adapter", return_value=ad):
             r = self.client.get("/api/v1/admin/venue-protection/scan", headers=self._headers())
         self.assertEqual(r.status_code, 200, r.text)
         body = r.json()
@@ -817,7 +817,7 @@ class WatchdogStageDebounceTest(unittest.TestCase):
             executed_actions=actions,
             venue_registry=MagicMock(),
             current_environment=lambda: MagicMock(mode="demo"),
-            R20_VENUE_PROTECTION_WATCHDOG=True,
+            ASTRA_VENUE_PROTECTION_WATCHDOG=True,
             audit_cross_venue_protection=fake_audit,
             dry_run=dry_run,
             state_path=(self.state if state_path is None else state_path),
@@ -1023,7 +1023,7 @@ class CancelOrphanAttributedLegsTest(unittest.TestCase):
 
     def _tagged_orphan(self):
         return {"id": "o-1", "initial": {"contract": "DOGE_USDT", "size": 0,
-                                         "text": "t-r20tp261158", "is_close": True},
+                                         "text": "t-astratp261158", "is_close": True},
                 "trigger": {"price": "0.0811"}}
 
     def test_tagged_orphan_is_cancelled_only_when_not_dry_run(self):
@@ -1063,7 +1063,7 @@ class CancelOrphanAttributedLegsTest(unittest.TestCase):
                 # 标签的真实落点就是 `raw.clientAlgoId`（写入侧打标签方案用的也是它）。
                 return [{"id": "o-1", "symbol": "DOGEUSDT",
                          "raw": {"algoId": "o-1", "orderType": "TAKE_PROFIT_MARKET",
-                                 "clientAlgoId": "t-r20tp261158", "quantity": "0"}}]
+                                 "clientAlgoId": "t-astratp261158", "quantity": "0"}}]
 
             def cancel_algo_order(self, *, algo_id=None):
                 calls.append(algo_id)
@@ -1083,7 +1083,7 @@ class CancelOrphanAttributedLegsTest(unittest.TestCase):
             def list_protective_orders(self, symbol):
                 return [{"id": "o-1", "symbol": "DOGEUSDT",
                          "raw": {"algoId": "o-1", "orderType": "TAKE_PROFIT_MARKET",
-                                 "clientAlgoId": "t-r20tp261158", "quantity": "0"}}]
+                                 "clientAlgoId": "t-astratp261158", "quantity": "0"}}]
 
         rep = cancel_orphan_attributed_legs(_NoCapability(), positions=[],
                                             symbols=["DOGE_USDT"], dry_run=False)
@@ -1129,7 +1129,7 @@ class CancelOrphanAttributedLegsTest(unittest.TestCase):
         class _Ad:
             def list_protective_orders(self, symbol):
                 return [{"id": "o-2", "initial": {"contract": "DOGE_USDT", "size": 0,
-                                                  "text": "t-r20sl1", "is_close": True}}]
+                                                  "text": "t-astrasl1", "is_close": True}}]
 
             def cancel_price_order(self, order_id):
                 raise RuntimeError("network down")
@@ -1189,7 +1189,7 @@ class TriggerPxTypePerVenueTest(unittest.TestCase):
         """归一化腿必须带上类型（跨所路径的展示依赖它）。"""
         from scripts.trader.venue_protection import scan_protective_orders
         rows = [{"symbol": "DOGE_USDT", "type": "CONDITIONAL",
-                 "initial": {"contract": "DOGE_USDT", "size": 0, "text": "t-r20sl1",
+                 "initial": {"contract": "DOGE_USDT", "size": 0, "text": "t-astrasl1",
                              "is_close": True},
                  "trigger": {"price_type": 0, "price": "0.08"}}]
         v = scan_protective_orders(rows, symbol="DOGE", pos_side="long", position_size=1.0,
@@ -1263,7 +1263,7 @@ class LedgerEvidenceTest(unittest.TestCase):
             xv_positions_by_venue={"gate": [], "binance": []},
             executed_actions=[], venue_registry=object(),
             current_environment=lambda: _Env(),
-            R20_VENUE_PROTECTION_WATCHDOG=True,
+            ASTRA_VENUE_PROTECTION_WATCHDOG=True,
             audit_cross_venue_protection=_fake_audit,
             ledger_rows=[{"inst": "XRP", "side": "空", "sz": 826.5}],
         )
@@ -1292,7 +1292,7 @@ class ExpiredLegIsNotCoverageTest(unittest.TestCase):
         now = time.time()
         row = {"id": "L1", "symbol": "BTC_USDT",
                "initial": {"contract": "BTC_USDT", "size": 0 if is_close else (size or 1),
-                           "text": "t-r20sl1", "is_close": bool(is_close)},
+                           "text": "t-astrasl1", "is_close": bool(is_close)},
                "trigger": {"price": "60000", "expiration": expiration_s},
                "create_time": (now - age_s) * 1000}
         return row, now
@@ -1343,7 +1343,7 @@ class ExpiredLegIsNotCoverageTest(unittest.TestCase):
         """**显式**永不过期（`expiration=0` / GTC）算活，且**不**产生复验噪音。"""
         now = time.time()
         row = {"id": "L2", "symbol": "BTC_USDT",
-               "initial": {"contract": "BTC_USDT", "size": 0, "text": "t-r20sl1", "is_close": True},
+               "initial": {"contract": "BTC_USDT", "size": 0, "text": "t-astrasl1", "is_close": True},
                "trigger": {"price": "60000", "expiration": 0}, "create_time": (now - 9999) * 1000}
         v = self._scan(row, now)
         self.assertEqual(v["has_live_sl"], True)
@@ -1360,7 +1360,7 @@ class ExpiredLegIsNotCoverageTest(unittest.TestCase):
         from scripts.trader.venue_protection import scan_protective_orders as _scan
         now = time.time()
         row = {"id": "L3", "symbol": "BTC_USDT",   # 完全没有到期字段 ⇒ exp_state = unknown
-               "initial": {"contract": "BTC_USDT", "size": 0, "text": "t-r20sl1", "is_close": True},
+               "initial": {"contract": "BTC_USDT", "size": 0, "text": "t-astrasl1", "is_close": True},
                "trigger": {"price": "60000"}}
         v = _scan([row], symbol="BTC", pos_side="long", position_size=1.0, now_s=now)
         self.assertEqual(v["has_live_sl"], True, "不可判定到期**不**等于没有保护腿")
@@ -1392,7 +1392,7 @@ class LegDirectionIsCoverageTest(unittest.TestCase):
     """
 
     @staticmethod
-    def _gate_leg(auto="close_long", *, tag="t-r20sl1", expired=False, size=0):
+    def _gate_leg(auto="close_long", *, tag="t-astrasl1", expired=False, size=0):
         now = time.time()
         return {"symbol": "BTC_USDT", "direction": "short",
                 "initial": {"contract": "BTC_USDT", "size": size, "text": tag, "is_close": False,
@@ -1439,7 +1439,7 @@ class LegDirectionIsCoverageTest(unittest.TestCase):
         """
         now = time.time()
         row = {"symbol": "BTC_USDT",
-               "initial": {"contract": "BTC_USDT", "size": 1, "text": "t-r20sl1", "is_close": False},
+               "initial": {"contract": "BTC_USDT", "size": 1, "text": "t-astrasl1", "is_close": False},
                "trigger": {"price": "60000", "expiration": 0}, "create_time": (now - 60) * 1000}
         v = self._scan([row])
         self.assertEqual(v["covered_size"], 1.0, "方向不可判定时**仍计入**（既有口径）")
@@ -1465,7 +1465,7 @@ class LegDirectionIsCoverageTest(unittest.TestCase):
     def test_live_gate_legs_resolve_their_direction(self):
         """真机轻量回归：Gate 腿的方向必须读得出（今天 100% 可读；读不出会让覆盖整体变不可判定）。"""
         from scripts.trader.venue_protection import _leg_position_side
-        leg = {"initial": {"contract": "BTC_USDT", "auto_size": "close_long", "text": "t-r20sl1"}}
+        leg = {"initial": {"contract": "BTC_USDT", "auto_size": "close_long", "text": "t-astrasl1"}}
         self.assertEqual(_leg_position_side(leg), "long")
         leg2 = {"initial": {"contract": "BTC_USDT", "auto_size": "close_short"}}
         self.assertEqual(_leg_position_side(leg2), "short")
@@ -1481,7 +1481,7 @@ class ContractMatchRobustnessTest(unittest.TestCase):
     """
 
     @staticmethod
-    def _leg(contract, *, auto="close_long", size=0, tag="t-r20sl1"):
+    def _leg(contract, *, auto="close_long", size=0, tag="t-astrasl1"):
         now = time.time()
         return {"symbol": contract, "direction": "short",
                 "initial": {"contract": contract, "size": size, "text": tag, "is_close": False,
@@ -1544,8 +1544,8 @@ class ContractMatchRobustnessTest(unittest.TestCase):
                                 "is_close": False, "direction": "short"},
                     "trigger": {"price": "60000", "expiration": 0},
                     "create_time": (now - 60) * 1000}
-        partial = _partial("BTC_USDT", 4, "t-r20sl1")
-        eth_big = _partial("ETH_USDT", 90, "t-r20sl2")
+        partial = _partial("BTC_USDT", 4, "t-astrasl1")
+        eth_big = _partial("ETH_USDT", 90, "t-astrasl2")
         gate = MagicMock()                      # 故意**无视** symbol 参数，返回全量腿
         gate.list_protective_orders.return_value = [partial, eth_big]
         reg = MagicMock()
@@ -1681,7 +1681,7 @@ class CancelOrphanSafetyTest(unittest.TestCase):
         """
         from scripts.trader.venue_protection import (attribute_protective_orders,
                                                      select_legs_to_cancel_after_close)
-        legs = [gate_sl_row("sl-mine", close=False, size=5)]   # text = t-r20sl… ⇒ tag 证据
+        legs = [gate_sl_row("sl-mine", close=False, size=5)]   # text = t-astrasl… ⇒ tag 证据
 
         # ① 归因层（真实流程）：无任何持仓 ⇒ 孤儿 + tag 证据
         att = attribute_protective_orders([], legs, None)
@@ -1935,11 +1935,26 @@ class UncoverableLineTest(unittest.TestCase):
 
     SRC = Path(venue_protection.__file__).read_text(encoding="utf-8")
 
-    def test_the_module_has_exactly_one_bare_annotation(self):
-        tree = ast.parse(self.SRC)
-        bare = [(n.lineno, n.target.id) for n in ast.walk(tree)
+    @staticmethod
+    def _bare_annotation_lines() -> "list[int]":
+        """纯注解语句所在行（`AnnAssign` 且无值）。
+
+        ⚠️ 2026-09-27「r20 → astra 全量改名」打红了本类原来写死的行号 521：
+        改名在文件上方加了一个导入与一处标记归一调用，整个函数下移 7 行。
+        「行号」不是这里要钉的性质 —— 要钉的是「注解语句在不在、是不是孤例、
+        有没有字节码」。故行号一律**由 AST 现求**，与断言同源。
+        """
+        tree = ast.parse(Path(venue_protection.__file__).read_text(encoding="utf-8"))
+        return [n.lineno for n in ast.walk(tree)
                 if isinstance(n, ast.AnnAssign) and n.value is None]
-        self.assertEqual(bare, [(521, "coverage_ok")],
+
+    def test_the_module_has_exactly_one_bare_annotation(self):
+        bare = self._bare_annotation_lines()
+        self.assertEqual(len(bare), 1, f"纯注解语句应恰好一处，实得 {bare}")
+        tree = ast.parse(self.SRC)
+        ids = [n.target.id for n in ast.walk(tree)
+               if isinstance(n, ast.AnnAssign) and n.value is None]
+        self.assertEqual(ids, ["coverage_ok"],
                          "纯注解语句集合变了 —— 要么补了初值（那就该删掉本类），"
                          "要么新增了一处（那就该把它一起核查）")
 
@@ -1960,11 +1975,12 @@ class UncoverableLineTest(unittest.TestCase):
         self.assertIsNotNone(fn, "找不到目标函数的 code 对象")
         executable_lines = {i.starts_line for i in dis.get_instructions(fn)
                             if i.starts_line is not None}
-        self.assertNotIn(521, executable_lines)
+        line = self._bare_annotation_lines()[0]
+        self.assertNotIn(line, executable_lines)
         # 对照：紧邻的两行**有**字节码 —— 证明"没字节码"是这一行的性质，
         # 而不是整个函数都没被编译
-        self.assertIn(520, executable_lines)
-        self.assertIn(522, executable_lines)
+        self.assertIn(line - 1, executable_lines)
+        self.assertIn(line + 1, executable_lines)
 
     def test_neighbouring_assignments_are_covered_by_other_tests(self):
         # 521 之所以是"孤例"，是因为它两侧都正常执行：520 算容差、522 判是否不可判定。

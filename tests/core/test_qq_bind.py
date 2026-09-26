@@ -31,10 +31,10 @@ from unittest import mock
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-from r20_backend import notifications as NOTIF
-from r20_backend import qq_bind as PS
-from r20_backend import settings_store as SS
-from r20_gateway import secrets as SEC
+from astra_backend import notifications as NOTIF
+from astra_backend import qq_bind as PS
+from astra_backend import settings_store as SS
+from astra_gateway import secrets as SEC
 
 
 class _Resp:
@@ -458,7 +458,7 @@ class EnsureDaemonTests(_Base):
 
     def test_an_existing_daemon_short_circuits(self):
         self._start(mock.patch("subprocess.check_output",
-                               return_value="x r20_backend.qq_gateway_daemon\n"))
+                               return_value="x astra_backend.qq_gateway_daemon\n"))
         popen = self._start(mock.patch("subprocess.Popen"))
         PS.ensure_qq_gateway_daemon_running()
         popen.assert_not_called()
@@ -469,7 +469,7 @@ class EnsureDaemonTests(_Base):
         PS.ensure_qq_gateway_daemon_running()
         popen.assert_called_once()
         args, kwargs = popen.call_args
-        self.assertEqual(args[0][1:], ["-m", "r20_backend.qq_gateway_daemon"])
+        self.assertEqual(args[0][1:], ["-m", "astra_backend.qq_gateway_daemon"])
         self.assertEqual(kwargs["cwd"], self.root)
         self.assertIsNotNone(kwargs["stdout"])
 
@@ -608,24 +608,24 @@ class PersistTests(unittest.TestCase):
 
     def test_a_secret_and_openid_go_to_both_stores(self):
         PS._persist("app-1", "secret-1", "openid-1")
-        self.save.assert_called_once_with({"R20_QQ_CLIENT_SECRET": "secret-1",
-                                           "R20_QQ_OPENID": "openid-1"})
-        self.update.assert_called_once_with({"R20_QQ_APP_ID": "app-1",
-                                             "R20_QQ_OPENID": "openid-1"})
+        self.save.assert_called_once_with({"ASTRA_QQ_CLIENT_SECRET": "secret-1",
+                                           "ASTRA_QQ_OPENID": "openid-1"})
+        self.update.assert_called_once_with({"ASTRA_QQ_APP_ID": "app-1",
+                                             "ASTRA_QQ_OPENID": "openid-1"})
 
     def test_without_a_secret_the_secret_store_is_skipped(self):
         PS._persist("app-1", "", "")
         self.save.assert_not_called()
-        self.update.assert_called_once_with({"R20_QQ_APP_ID": "app-1"})
+        self.update.assert_called_once_with({"ASTRA_QQ_APP_ID": "app-1"})
 
     def test_without_an_openid_only_the_app_id_reaches_the_env(self):
         PS._persist("app-1", "secret-1", "")
-        self.save.assert_called_once_with({"R20_QQ_CLIENT_SECRET": "secret-1"})
-        self.update.assert_called_once_with({"R20_QQ_APP_ID": "app-1"})
+        self.save.assert_called_once_with({"ASTRA_QQ_CLIENT_SECRET": "secret-1"})
+        self.update.assert_called_once_with({"ASTRA_QQ_APP_ID": "app-1"})
 
     def test_the_secret_never_reaches_the_env(self):
         PS._persist("app-1", "secret-1", "openid-1")
-        self.assertNotIn("R20_QQ_CLIENT_SECRET", self.update.call_args[0][0])
+        self.assertNotIn("ASTRA_QQ_CLIENT_SECRET", self.update.call_args[0][0])
 
 
 class PollBindTaskTests(_Base):
@@ -865,23 +865,23 @@ class StartOpenidCaptureTests(_Base):
         self.assertIn("缺少 QQ App ID", str(ctx.exception))
 
     def test_a_missing_secret_alone_raises(self):
-        self._env(R20_QQ_APP_ID="app-1")
+        self._env(ASTRA_QQ_APP_ID="app-1")
         with self.assertRaises(ValueError):
             PS.start_openid_capture()
 
     def test_the_env_is_used_when_arguments_are_absent(self):
-        self._env(R20_QQ_APP_ID="app-1", R20_QQ_CLIENT_SECRET="secret-1")
+        self._env(ASTRA_QQ_APP_ID="app-1", ASTRA_QQ_CLIENT_SECRET="secret-1")
         out = PS.start_openid_capture()
         self.assertEqual(out["app_id"], "app-1")
 
     def test_explicit_arguments_win_over_the_env(self):
-        self._env(R20_QQ_APP_ID="env-app", R20_QQ_CLIENT_SECRET="env-secret")
+        self._env(ASTRA_QQ_APP_ID="env-app", ASTRA_QQ_CLIENT_SECRET="env-secret")
         out = PS.start_openid_capture("arg-app", "arg-secret")
         self.assertEqual(out["app_id"], "arg-app")
 
     def test_whitespace_only_env_values_are_rejected(self):
         """只填空白 = 没填（strip 之后为空）⇒ ValueError，而不是拿空白去连网关。"""
-        self._env(R20_QQ_APP_ID="   ", R20_QQ_CLIENT_SECRET="   ")
+        self._env(ASTRA_QQ_APP_ID="   ", ASTRA_QQ_CLIENT_SECRET="   ")
         with self.assertRaises(ValueError):
             PS.start_openid_capture()
 

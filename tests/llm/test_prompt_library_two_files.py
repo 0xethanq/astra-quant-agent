@@ -64,7 +64,7 @@ def tearDownModule():
 
 class TwoFileLibraryTest(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(prefix="r20-prompt-twofile-")
+        self.tmp = tempfile.TemporaryDirectory(prefix="astra-prompt-twofile-")
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
         self.baseline = self.root / "prompt_library.json"

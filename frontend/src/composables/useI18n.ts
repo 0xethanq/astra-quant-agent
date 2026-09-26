@@ -7,7 +7,7 @@ import { enUS } from '../locales/en/index'
 
 export type LocaleType = 'zh-CN' | 'en-US'
 
-const LOCALE_KEY = 'r20_locale'
+const LOCALE_KEY = 'astra_locale'
 
 /**
  * 界面语言选项 —— **全站唯一来源**。
@@ -51,7 +51,7 @@ export function useI18n() {
         // ignore storage error in private browsing
       }
       if (typeof window !== 'undefined') {
-        window.dispatchEvent(new Event('r20:locale-changed'))
+        window.dispatchEvent(new Event('astra:locale-changed'))
       }
     }
   }

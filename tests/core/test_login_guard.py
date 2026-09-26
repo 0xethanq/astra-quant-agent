@@ -5,7 +5,7 @@
 
 | 语义 | 口径 |
 |---|---|
-| ★ **一个开关能整体关掉** | `R20_LOGIN_RATE_LIMIT` 取 `0/false/off/no`（去空白、忽略大小写）⇒ 三个入口全部 no-op，`check` 恒放行；**`_enabled()` 是调用时读环境**，所以测试/压测可以在运行中切换 |
+| ★ **一个开关能整体关掉** | `ASTRA_LOGIN_RATE_LIMIT` 取 `0/false/off/no`（去空白、忽略大小写）⇒ 三个入口全部 no-op，`check` 恒放行；**`_enabled()` 是调用时读环境**，所以测试/压测可以在运行中切换 |
 | ★ **两级阈值、封锁只增不减** | 窗口内**总尝试** ≥ `_MAX_ATTEMPTS` ⇒ 封 `_WINDOW`；窗口内**失败** ≥ `_MAX_FAILURES` ⇒ 封 `_BLOCK_SECONDS`（更长）。两处都用 `max(现封锁, 新封锁)` ⇒ **猜密封锁不会被洪泛封锁缩短** |
 | ★ **`unknown` / 空 IP 绝不记账** | 既不能用它锁别人，也不会因它被判洪泛（来源不可判定时的明确取舍）|
 | ★ **返回的等待秒数至少 1** | `int(remain) + 1`（避免"还要等 0 秒"被前端当成已解封）|
@@ -23,7 +23,7 @@ import threading
 import unittest
 from unittest import mock
 
-from r20_backend import login_guard as LG
+from astra_backend import login_guard as LG
 
 
 class _GuardBase(unittest.TestCase):
@@ -41,7 +41,7 @@ class _GuardBase(unittest.TestCase):
         self._start(mock.patch.object(LG, "_MAX_KEYS", 10000))
         self._start(mock.patch.object(LG.time, "time", side_effect=lambda: self.now))
         self._start(mock.patch.dict(os.environ, {}, clear=False))
-        os.environ.pop("R20_LOGIN_RATE_LIMIT", None)
+        os.environ.pop("ASTRA_LOGIN_RATE_LIMIT", None)
         LG._reset_for_tests()
         self.addCleanup(LG._reset_for_tests)
 
@@ -54,7 +54,7 @@ class SwitchTests(_GuardBase):
         for token in ("0", "false", "FALSE", " off ", "no", "No"):
             with self.subTest(token=token):
                 LG._reset_for_tests()
-                with mock.patch.dict(os.environ, {"R20_LOGIN_RATE_LIMIT": token}):
+                with mock.patch.dict(os.environ, {"ASTRA_LOGIN_RATE_LIMIT": token}):
                     self.assertFalse(LG._enabled())
                     self.assertEqual(LG.check("1.2.3.4"), (True, 0))
                     LG.note_attempt("1.2.3.4")
@@ -66,13 +66,13 @@ class SwitchTests(_GuardBase):
         self.assertTrue(LG._enabled(), "默认开启")
         for token in ("1", "yes", "on", "", "  "):
             with self.subTest(token=token):
-                with mock.patch.dict(os.environ, {"R20_LOGIN_RATE_LIMIT": token}):
+                with mock.patch.dict(os.environ, {"ASTRA_LOGIN_RATE_LIMIT": token}):
                     self.assertTrue(LG._enabled())
 
     def test_switch_is_read_at_call_time_not_import_time(self):
         LG.note_failure("1.2.3.4")
         self.assertEqual(LG.stats()["tracked_ips"], 1)
-        with mock.patch.dict(os.environ, {"R20_LOGIN_RATE_LIMIT": "0"}):
+        with mock.patch.dict(os.environ, {"ASTRA_LOGIN_RATE_LIMIT": "0"}):
             self.assertEqual(LG.check("1.2.3.4"), (True, 0),
                              "调用点重新读环境 ⇒ 运行中即可停用")
 
@@ -82,7 +82,7 @@ class SwitchTests(_GuardBase):
                      "_BLOCK_SECONDS", "_MAX_KEYS"):
             with self.subTest(name=name):
                 self.assertIsInstance(getattr(LG, name), int)
-        with mock.patch.dict(os.environ, {"R20_LOGIN_IP_MAX_FAILURES": "1"}):
+        with mock.patch.dict(os.environ, {"ASTRA_LOGIN_IP_MAX_FAILURES": "1"}):
             self.assertEqual(LG._MAX_FAILURES, 15,
                              "改环境变量不会影响已导入的常量（需重启才生效）")
 
@@ -302,7 +302,7 @@ class StatsTests(_GuardBase):
         self.assertEqual(LG.stats()["tracked_ips"], 1, "解封不等于忘记该 IP")
 
     def test_stats_reports_the_switch_off(self):
-        with mock.patch.dict(os.environ, {"R20_LOGIN_RATE_LIMIT": "off"}):
+        with mock.patch.dict(os.environ, {"ASTRA_LOGIN_RATE_LIMIT": "off"}):
             self.assertFalse(LG.stats()["enabled"])
 
 

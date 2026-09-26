@@ -19,7 +19,7 @@ import time
 import unittest
 from unittest import mock
 
-from r20_backend import dashboard_cache as DC
+from astra_backend import dashboard_cache as DC
 
 
 def _core_tuple(*, positions_ok=True, balance_ok=True, not_ready=False):

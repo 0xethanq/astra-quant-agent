@@ -1,4 +1,4 @@
-"""LLM 调用链（`r20_backend/llm/call.py`）的残余分支收口 —— 第 336 刀。
+"""LLM 调用链（`astra_backend/llm/call.py`）的残余分支收口 —— 第 336 刀。
 
 本模块 523 行，三件事：远端模型列举、**统一韧性执行器**、连通性诊断。
 修正后基线里它是**最大单块**（79 行真运行时缺口 / 64.9%）。
@@ -33,8 +33,8 @@ for _p in (str(ROOT), str(ROOT / "scripts")):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-import r20_backend.llm.call as call  # noqa: E402
-from r20_backend.llm.transport import _LLMHardError, _LLMTransientError  # noqa: E402
+import astra_backend.llm.call as call  # noqa: E402
+from astra_backend.llm.transport import _LLMHardError, _LLMTransientError  # noqa: E402
 
 
 def _resp(payload, *, code=200, raw=None):

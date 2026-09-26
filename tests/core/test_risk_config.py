@@ -22,7 +22,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from r20_backend import risk_config as RC
+from astra_backend import risk_config as RC
 from scripts.risk_constants import DEFAULTS, RISK_ENV_KEYS
 
 
@@ -30,8 +30,8 @@ class SuiteTests(unittest.TestCase):
     def test_known_suite_is_returned_as_a_copy(self):
         values = RC.suite_values("conservative")
         self.assertEqual(set(values), set(RC.SUITES[0]["values"]))
-        values["R20_MAX_LEVERAGE"] = 999
-        self.assertEqual(RC.suite_values("conservative")["R20_MAX_LEVERAGE"], 3.0,
+        values["ASTRA_MAX_LEVERAGE"] = 999
+        self.assertEqual(RC.suite_values("conservative")["ASTRA_MAX_LEVERAGE"], 3.0,
                          "必须返回副本，改动不得污染全局套件")
 
     def test_unknown_suite_is_rejected(self):
@@ -50,19 +50,19 @@ class SuiteTests(unittest.TestCase):
 
 class HighRiskTests(unittest.TestCase):
     def test_below_threshold_is_not_flagged(self):
-        self.assertEqual(RC.high_risk_changes({"R20_MAX_LEVERAGE": 5.0}), [])
+        self.assertEqual(RC.high_risk_changes({"ASTRA_MAX_LEVERAGE": 5.0}), [])
 
     def test_at_or_above_threshold_is_flagged_with_label_and_threshold(self):
-        out = RC.high_risk_changes({"R20_MAX_LEVERAGE": 10.0,
-                                    "R20_DAILY_LOSS_EQUITY_RATIO": 0.30})
+        out = RC.high_risk_changes({"ASTRA_MAX_LEVERAGE": 10.0,
+                                    "ASTRA_DAILY_LOSS_EQUITY_RATIO": 0.30})
         keys = {item["key"]: item for item in out}
-        self.assertEqual(keys["R20_MAX_LEVERAGE"]["threshold"], 10.0)
-        self.assertEqual(keys["R20_MAX_LEVERAGE"]["label"], "单笔杠杆上限")
-        self.assertEqual(keys["R20_DAILY_LOSS_EQUITY_RATIO"]["value"], 0.30)
+        self.assertEqual(keys["ASTRA_MAX_LEVERAGE"]["threshold"], 10.0)
+        self.assertEqual(keys["ASTRA_MAX_LEVERAGE"]["label"], "单笔杠杆上限")
+        self.assertEqual(keys["ASTRA_DAILY_LOSS_EQUITY_RATIO"]["value"], 0.30)
 
     def test_non_numeric_and_unknown_keys_are_skipped_not_crashed(self):
-        self.assertEqual(RC.high_risk_changes({"R20_MAX_LEVERAGE": "abc"}), [])
-        self.assertEqual(RC.high_risk_changes({"R20_NOT_A_PARAM": 999}), [])
+        self.assertEqual(RC.high_risk_changes({"ASTRA_MAX_LEVERAGE": "abc"}), [])
+        self.assertEqual(RC.high_risk_changes({"ASTRA_NOT_A_PARAM": 999}), [])
 
 
 class SchemaTests(unittest.TestCase):
@@ -75,8 +75,8 @@ class SchemaTests(unittest.TestCase):
         for key, param in params.items():
             self.assertEqual(param["default"], DEFAULTS[key],
                              f"{key} 的 default 必须来自单一事实源")
-        self.assertEqual(params["R20_MAX_LEVERAGE"]["high_risk_at"], 10.0)
-        self.assertIsNone(params["R20_TIME_STOP_HOURS"]["high_risk_at"])
+        self.assertEqual(params["ASTRA_MAX_LEVERAGE"]["high_risk_at"], 10.0)
+        self.assertIsNone(params["ASTRA_TIME_STOP_HOURS"]["high_risk_at"])
 
 
 class CurrentValuesTests(unittest.TestCase):
@@ -85,20 +85,20 @@ class CurrentValuesTests(unittest.TestCase):
         with mock.patch.dict(os.environ, clean, clear=True):
             values = RC.current_values()
         self.assertEqual(set(values), set(DEFAULTS))
-        self.assertEqual(values["R20_MAX_LEVERAGE"], DEFAULTS["R20_MAX_LEVERAGE"])
+        self.assertEqual(values["ASTRA_MAX_LEVERAGE"], DEFAULTS["ASTRA_MAX_LEVERAGE"])
 
     def test_env_overrides_are_parsed_by_declared_type(self):
-        with mock.patch.dict(os.environ, {"R20_MAX_LEVERAGE": "7.5",
-                                          "R20_MAX_CONCURRENT_POSITIONS": "6.0"}, clear=False):
+        with mock.patch.dict(os.environ, {"ASTRA_MAX_LEVERAGE": "7.5",
+                                          "ASTRA_MAX_CONCURRENT_POSITIONS": "6.0"}, clear=False):
             values = RC.current_values()
-        self.assertEqual(values["R20_MAX_LEVERAGE"], 7.5)
-        self.assertIsInstance(values["R20_MAX_CONCURRENT_POSITIONS"], int)
-        self.assertEqual(values["R20_MAX_CONCURRENT_POSITIONS"], 6)
+        self.assertEqual(values["ASTRA_MAX_LEVERAGE"], 7.5)
+        self.assertIsInstance(values["ASTRA_MAX_CONCURRENT_POSITIONS"], int)
+        self.assertEqual(values["ASTRA_MAX_CONCURRENT_POSITIONS"], 6)
 
     def test_unparsable_env_falls_back_to_the_default(self):
-        with mock.patch.dict(os.environ, {"R20_MAX_LEVERAGE": "not-a-number"}, clear=False):
-            self.assertEqual(RC.current_values()["R20_MAX_LEVERAGE"],
-                             DEFAULTS["R20_MAX_LEVERAGE"])
+        with mock.patch.dict(os.environ, {"ASTRA_MAX_LEVERAGE": "not-a-number"}, clear=False):
+            self.assertEqual(RC.current_values()["ASTRA_MAX_LEVERAGE"],
+                             DEFAULTS["ASTRA_MAX_LEVERAGE"])
 
     def test_reset_keys_are_exactly_the_managed_env_keys(self):
         self.assertEqual(RC.reset_keys(), list(RISK_ENV_KEYS))
@@ -108,7 +108,7 @@ class ProcessViewTests(unittest.TestCase):
     def test_process_values_cover_every_managed_key(self):
         values = RC.process_values()
         self.assertEqual(set(values), set(RISK_ENV_KEYS))
-        self.assertIn(values["R20_SCALE_OUT_ENABLED"], (0, 1),
+        self.assertIn(values["ASTRA_SCALE_OUT_ENABLED"], (0, 1),
                       "布尔量必须以 0/1 暴露，不能是 True/False 混入数值列")
 
     def test_reload_refreshes_the_snapshot_timestamp(self):
@@ -119,12 +119,12 @@ class ProcessViewTests(unittest.TestCase):
         self.assertEqual(RC._LOADED_AT, 4_000_000_000.0)
 
     def test_freshness_is_stale_when_env_is_newer_than_the_process_snapshot(self):
-        tmp = Path(tempfile.mkdtemp(prefix="r20-riskcfg-"))
+        tmp = Path(tempfile.mkdtemp(prefix="astra-riskcfg-"))
         self.addCleanup(shutil.rmtree, tmp, True)
         env_file = tmp / ".env"
-        env_file.write_text("R20_MAX_LEVERAGE=5\n", encoding="utf-8")
+        env_file.write_text("ASTRA_MAX_LEVERAGE=5\n", encoding="utf-8")
         os.utime(env_file, (time.time(), time.time()))
-        with mock.patch("r20_backend.settings_store.ENV_FILE", env_file), \
+        with mock.patch("astra_backend.settings_store.ENV_FILE", env_file), \
                 mock.patch.object(RC, "_LOADED_AT", 0.0):
             out = RC.process_freshness()
         self.assertIsNotNone(out["env_file_mtime"])
@@ -132,19 +132,19 @@ class ProcessViewTests(unittest.TestCase):
         self.assertIn("重启", out["note"])
 
     def test_freshness_is_not_stale_for_an_old_env_file(self):
-        tmp = Path(tempfile.mkdtemp(prefix="r20-riskcfg-"))
+        tmp = Path(tempfile.mkdtemp(prefix="astra-riskcfg-"))
         self.addCleanup(shutil.rmtree, tmp, True)
         env_file = tmp / ".env"
         env_file.write_text("x=1\n", encoding="utf-8")
         os.utime(env_file, (time.time() - 1000, time.time() - 1000))
-        with mock.patch("r20_backend.settings_store.ENV_FILE", env_file), \
+        with mock.patch("astra_backend.settings_store.ENV_FILE", env_file), \
                 mock.patch.object(RC, "_LOADED_AT", time.time()):
             out = RC.process_freshness()
         self.assertFalse(out["stale"])
         self.assertNotIn("重启", out["note"])
 
     def test_freshness_tolerates_every_lookup_failure(self):
-        with mock.patch("r20_backend.settings_store.ENV_FILE", object()):
+        with mock.patch("astra_backend.settings_store.ENV_FILE", object()):
             out = RC.process_freshness()
         self.assertIsNone(out["env_file_mtime"])
         self.assertFalse(out["stale"])
@@ -152,12 +152,12 @@ class ProcessViewTests(unittest.TestCase):
     def test_file_vs_process_diff_lists_only_differing_numeric_keys(self):
         file_values = {key: 1.0 for key in RISK_ENV_KEYS}
         proc_values = {key: 1.0 for key in RISK_ENV_KEYS}
-        proc_values["R20_MAX_LEVERAGE"] = 9.0
+        proc_values["ASTRA_MAX_LEVERAGE"] = 9.0
         with mock.patch.object(RC, "current_values", return_value=file_values), \
                 mock.patch.object(RC, "process_values", return_value=proc_values):
             out = RC.file_vs_process_diff()
         self.assertEqual(out["count"], 1)
-        self.assertEqual(out["differing"]["R20_MAX_LEVERAGE"],
+        self.assertEqual(out["differing"]["ASTRA_MAX_LEVERAGE"],
                          {"file": 1.0, "process": 9.0})
 
 
@@ -208,47 +208,47 @@ class EffectiveEngineValuesTests(unittest.TestCase):
 class NormalizeTests(unittest.TestCase):
     def test_unknown_keys_are_rejected_as_a_batch(self):
         with self.assertRaises(ValueError) as ctx:
-            RC.normalize({"R20_NOT_A_PARAM": 1, "R20_MAX_LEVERAGE": 5})
+            RC.normalize({"ASTRA_NOT_A_PARAM": 1, "ASTRA_MAX_LEVERAGE": 5})
         self.assertIn("未知风控参数", str(ctx.exception))
-        self.assertIn("R20_NOT_A_PARAM", str(ctx.exception))
+        self.assertIn("ASTRA_NOT_A_PARAM", str(ctx.exception))
 
     def test_non_numeric_values_are_rejected_with_the_label(self):
         with self.assertRaises(ValueError) as ctx:
-            RC.normalize({"R20_MAX_LEVERAGE": "abc"})
+            RC.normalize({"ASTRA_MAX_LEVERAGE": "abc"})
         self.assertIn("必须是数字", str(ctx.exception))
 
     def test_out_of_range_reports_display_units(self):
-        # R20_MAX_MARGIN_EQUITY_RATIO 的 display_scale=100（原生 0.01~1.0 显示为 1~100 %）
+        # ASTRA_MAX_MARGIN_EQUITY_RATIO 的 display_scale=100（原生 0.01~1.0 显示为 1~100 %）
         with self.assertRaises(ValueError) as ctx:
-            RC.normalize({"R20_MAX_MARGIN_EQUITY_RATIO": 1.5})
+            RC.normalize({"ASTRA_MAX_MARGIN_EQUITY_RATIO": 1.5})
         self.assertIn("100", str(ctx.exception))
 
     def test_success_returns_string_mapping_for_update_env(self):
-        out = RC.normalize({"R20_MAX_LEVERAGE": 7.5,
-                            "R20_MAX_CONCURRENT_POSITIONS": 6.6})
-        self.assertEqual(out["R20_MAX_LEVERAGE"], "7.5")
-        self.assertEqual(out["R20_MAX_CONCURRENT_POSITIONS"], "7",
+        out = RC.normalize({"ASTRA_MAX_LEVERAGE": 7.5,
+                            "ASTRA_MAX_CONCURRENT_POSITIONS": 6.6})
+        self.assertEqual(out["ASTRA_MAX_LEVERAGE"], "7.5")
+        self.assertEqual(out["ASTRA_MAX_CONCURRENT_POSITIONS"], "7",
                          "int 类型必须四舍五入成整数再转字符串")
 
     def test_same_direction_may_not_exceed_total_positions(self):
         with self.assertRaises(ValueError) as ctx:
-            RC.normalize({"R20_MAX_CONCURRENT_POSITIONS": 3,
-                          "R20_MAX_SAME_DIRECTION_POSITIONS": 5})
+            RC.normalize({"ASTRA_MAX_CONCURRENT_POSITIONS": 3,
+                          "ASTRA_MAX_SAME_DIRECTION_POSITIONS": 5})
         self.assertIn("同向持仓上限", str(ctx.exception))
 
     def test_leverage_and_rr_intervals_must_not_invert(self):
         with self.assertRaises(ValueError) as ctx:
-            RC.normalize({"R20_MIN_LEVERAGE": 8, "R20_MAX_LEVERAGE": 3})
+            RC.normalize({"ASTRA_MIN_LEVERAGE": 8, "ASTRA_MAX_LEVERAGE": 3})
         self.assertIn("杠杆下限", str(ctx.exception))
 
         with self.assertRaises(ValueError) as ctx:
-            RC.normalize({"R20_MIN_RISK_REWARD": 5.0, "R20_MAX_RISK_REWARD": 3.0})
+            RC.normalize({"ASTRA_MIN_RISK_REWARD": 5.0, "ASTRA_MAX_RISK_REWARD": 3.0})
         self.assertIn("最小盈亏比底线", str(ctx.exception))
 
     def test_multiple_errors_are_merged_into_one_message(self):
         with self.assertRaises(ValueError) as ctx:
-            RC.normalize({"R20_MIN_LEVERAGE": 8, "R20_MAX_LEVERAGE": 3,
-                          "R20_MIN_RISK_REWARD": 5.0, "R20_MAX_RISK_REWARD": 3.0})
+            RC.normalize({"ASTRA_MIN_LEVERAGE": 8, "ASTRA_MAX_LEVERAGE": 3,
+                          "ASTRA_MIN_RISK_REWARD": 5.0, "ASTRA_MAX_RISK_REWARD": 3.0})
         message = str(ctx.exception)
         self.assertIn("；", message)
         self.assertIn("杠杆下限", message)
@@ -256,10 +256,10 @@ class NormalizeTests(unittest.TestCase):
 
     def test_cross_field_checks_compare_against_current_values_when_absent(self):
         # 只提交同向上限：与「当前生效的总仓上限」比较
-        with mock.patch.dict(os.environ, {"R20_MAX_CONCURRENT_POSITIONS": "2"},
+        with mock.patch.dict(os.environ, {"ASTRA_MAX_CONCURRENT_POSITIONS": "2"},
                              clear=False):
             with self.assertRaises(ValueError) as ctx:
-                RC.normalize({"R20_MAX_SAME_DIRECTION_POSITIONS": 4})
+                RC.normalize({"ASTRA_MAX_SAME_DIRECTION_POSITIONS": 4})
         self.assertIn("同向持仓上限", str(ctx.exception))
 
 

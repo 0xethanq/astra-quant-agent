@@ -118,7 +118,7 @@ class ClosedTradeSizeTests(unittest.TestCase):
             return _Resp(json.dumps(body).encode())
 
         okx_runtime.freeze_environment({
-            "R20_OKX_ENV": "demo",
+            "ASTRA_OKX_ENV": "demo",
             "OKX_DEMO_API_KEY": "AKD", "OKX_DEMO_SECRET_KEY": "SKD",
             "OKX_DEMO_PASSPHRASE": "PPD",
         })

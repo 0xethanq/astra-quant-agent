@@ -41,7 +41,7 @@ const store = useDashboardStore();
 const { t } = useI18n();
 const { aboutOpen, trajectoryOpen } = useUi();
 
-const sidebarCollapsed = useLocalStorage('r20_sidebar_collapsed', false);
+const sidebarCollapsed = useLocalStorage('astra_sidebar_collapsed', false);
 
 /* ── 窄屏导航（2026-09-16 用户反馈修复）────────────────────────────────────
  * 症状：窗口宽度 < 768px（Tailwind md 断点）时左侧栏被 `hidden md:flex` 整体隐藏，
@@ -105,7 +105,7 @@ function go(path: string) {
   >
     <!-- 键盘用户的第一个 Tab 落点：跳过侧边导航与顶栏动作组直达正文（批 45） -->
     <SkipLink />
-    <!-- 左侧：R20 终端侧边导航栏
+    <!-- 左侧：ASTRA 终端侧边导航栏
          桌面（md+）= 常驻侧栏（可折叠 236/56）；窄屏 = off-canvas 抽屉（同一元素）
          层级：遮罩 z-30 < 抽屉 z-50 < 顶栏 z-[60] —— 顶栏必须压在抽屉之上，
          否则抽屉展开后会把顶栏那颗「展开/收起导航」按钮自己盖住，点不回去。 -->

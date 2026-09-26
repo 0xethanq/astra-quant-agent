@@ -26,12 +26,12 @@ from unittest.mock import patch
 
 from scripts.trader.circuit_guard import is_circuit_breaker_active
 
-CB_MODULE = "r20_backend.execution.circuit_breaker"
+CB_MODULE = "astra_backend.execution.circuit_breaker"
 
 
 class CircuitBreakerActiveFailClosedTest(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(prefix="r20-cb-")
+        self.tmp = tempfile.TemporaryDirectory(prefix="astra-cb-")
         self.addCleanup(self.tmp.cleanup)
         self.cb_file = Path(self.tmp.name) / "circuit_breaker.json"
         self.ledger_file = Path(self.tmp.name) / "trading_ledger.json"

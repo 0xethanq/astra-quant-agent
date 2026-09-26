@@ -181,7 +181,7 @@ class VenueHealthStampTest(unittest.TestCase):
 
     def test_missing_file_means_no_observation(self):
         stamp, venues = _venue_health_stamp(
-            VENUE_HEALTH_FILE=os.path.join(tempfile.gettempdir(), "r20_no_health_xyz.json"))
+            VENUE_HEALTH_FILE=os.path.join(tempfile.gettempdir(), "astra_no_health_xyz.json"))
         self.assertIsNone(stamp, "缺文件 ⇒ 跨所观测不存在，不得编造新鲜度")
         self.assertEqual(venues, {})
 

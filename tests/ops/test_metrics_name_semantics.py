@@ -11,7 +11,7 @@ family = families.setdefault(name, {"help": help_text, "type": type_text, "label
 
 ⇒ 同一个名字第二次带**不同的 HELP** 时，那句 HELP **永远不会出现在输出里**（静默丢失）。
 
-这不是假想：上一刀我写 `r20_protection_mismatch_legs{kind="side"|"size"}` 时就踩了 ——
+这不是假想：上一刀我写 `astra_protection_mismatch_legs{kind="side"|"size"}` 时就踩了 ——
 "方向不符不计入覆盖"与"量不符仍被计入覆盖"是**两种语义**，共用名字后 `size` 那句 HELP
 发不出去。本门把该约束钉死：**名字即语义**，不同语义必须不同名字。
 
@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Dict, List
 
 ROOT = Path(__file__).resolve().parents[2]
-METRICS_FILE = ROOT / "r20_backend" / "metrics.py"
+METRICS_FILE = ROOT / "astra_backend" / "metrics.py"
 
 
 def _literal(node):
@@ -126,7 +126,7 @@ class MetricsNameSemanticsTest(unittest.TestCase):
     def test_rendered_exposition_has_one_help_per_family(self):
         """行为侧复核：真实渲染结果里，每个名字的 HELP 只能出现一次。"""
         import re
-        from r20_backend import metrics as M
+        from astra_backend import metrics as M
         text = M.render_prometheus(M.build_snapshot(protection_orphans={
             "binance": {"readable": True, "candidates": 1, "unattributed": 1,
                         "side_mismatch": 2, "size_mismatch": 3, "ledger_evidence": True},
@@ -134,14 +134,14 @@ class MetricsNameSemanticsTest(unittest.TestCase):
                      "side_mismatch": None, "size_mismatch": None, "ledger_evidence": None}}))
         helps = re.findall(r"^# HELP (\S+)", text, flags=re.M)
         self.assertEqual(len(helps), len(set(helps)), "渲染输出里出现重复的 HELP 行")
-        for metric in ("r20_protection_side_mismatch_legs", "r20_protection_size_mismatch_legs"):
+        for metric in ("astra_protection_side_mismatch_legs", "astra_protection_size_mismatch_legs"):
             self.assertIn(metric, helps, f"{metric} 没有 HELP（那种语义就没被解释）")
 
     def test_gate_has_teeth_on_help(self):
         bad = (
             "def render():\n"
-            "    emit('r20_x', 1, [('kind', 'a')], help_text='语义甲')\n"
-            "    emit('r20_x', 2, [('kind', 'b')], help_text='语义乙')\n"
+            "    emit('astra_x', 1, [('kind', 'a')], help_text='语义甲')\n"
+            "    emit('astra_x', 2, [('kind', 'b')], help_text='语义乙')\n"
         )
         problems = find_name_semantic_conflicts(bad)
         self.assertTrue(any("种 HELP" in p for p in problems),
@@ -150,8 +150,8 @@ class MetricsNameSemanticsTest(unittest.TestCase):
     def test_gate_has_teeth_on_label_shape(self):
         bad = (
             "def render():\n"
-            "    emit('r20_y', 1, [('venue', 'a')], help_text='同义')\n"
-            "    emit('r20_y', 2, [('venue', 'a'), ('kind', 'b')], help_text='同义')\n"
+            "    emit('astra_y', 1, [('venue', 'a')], help_text='同义')\n"
+            "    emit('astra_y', 2, [('venue', 'a'), ('kind', 'b')], help_text='同义')\n"
         )
         problems = find_name_semantic_conflicts(bad)
         self.assertTrue(any("种标签集" in p for p in problems), "同名不同标签集没被抓出来")
@@ -159,9 +159,9 @@ class MetricsNameSemanticsTest(unittest.TestCase):
     def test_clean_source_passes(self):
         good = (
             "def render():\n"
-            "    emit('r20_z', 1, [('venue', 'a')], help_text='甲')\n"
-            "    emit('r20_z', 2, [('venue', 'b')], help_text='甲')\n"
-            "    emit('r20_w', 3, [('venue', 'a')], help_text='乙')\n"
+            "    emit('astra_z', 1, [('venue', 'a')], help_text='甲')\n"
+            "    emit('astra_z', 2, [('venue', 'b')], help_text='甲')\n"
+            "    emit('astra_w', 3, [('venue', 'a')], help_text='乙')\n"
         )
         self.assertEqual(find_name_semantic_conflicts(good), [],
                          "同义不同取值被误判（门太严会逼着大家改名字）")

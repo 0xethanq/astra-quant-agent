@@ -25,6 +25,7 @@ import unittest
 from pathlib import Path
 
 from scripts.factors.defaults import build_default_factors
+from tests.extraction.rename_baseline import legacy_rev_path, normalize
 
 ROOT = Path(__file__).resolve().parents[2]
 MODULE = ROOT / "scripts" / "factors" / "defaults.py"
@@ -50,11 +51,11 @@ def _facade_dict_literal():
     我第一版正是用 HEAD，提交后立刻红。故**钉死到具体提交的父提交**。
     """
     out = subprocess.run(
-        ["git", "show", f"{_BASE_REV}:scripts/factor_library.py"],
+        ["git", "show", legacy_rev_path(f"{_BASE_REV}:scripts/factor_library.py")],
         capture_output=True, text=True, cwd=str(ROOT))
     if out.returncode != 0:
         return None
-    tree = ast.parse(out.stdout)
+    tree = ast.parse(normalize(out.stdout))
     fn = next(n for n in ast.walk(tree)
               if isinstance(n, ast.FunctionDef)
               and n.name == "compute_instrument_factors")

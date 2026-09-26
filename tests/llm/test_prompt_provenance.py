@@ -34,7 +34,7 @@ def setUpModule():
     就是「线上那份库是否健康」（含绝对金额/来源标注等），属**有意的线上守卫**。
 
     只读、不改；声明在此是为了把「依赖线上配置内容」从**静默**变成**可审计**
-    （守卫见 `tests/__init__.py`；`R20_TESTS_STRICT_READS=1` 下未声明的读会报错）。
+    （守卫见 `tests/__init__.py`；`ASTRA_TESTS_STRICT_READS=1` 下未声明的读会报错）。
     """
     global _READ_SCOPE
     from tests import allow_real_data_reads
@@ -58,7 +58,7 @@ class _PromptLibraryCase(unittest.TestCase):
     """
 
     def setUp(self) -> None:
-        self._tmp = Path(tempfile.mkdtemp(prefix="r20-promptlib-"))
+        self._tmp = Path(tempfile.mkdtemp(prefix="astra-promptlib-"))
         self.addCleanup(shutil.rmtree, self._tmp, True)
         target = self._tmp / "prompt_library.json"
         target.write_text(REAL_LIBRARY.read_text(encoding="utf-8"), encoding="utf-8")

@@ -31,10 +31,10 @@ import scripts.sync_web_data as swd
 import scripts.generate_snapshots as gs
 
 DEMO_VALUES = {
-    "R20_OKX_ENV": "demo",
+    "ASTRA_OKX_ENV": "demo",
     "OKX_DEMO_API_KEY": "AKD", "OKX_DEMO_SECRET_KEY": "SKD", "OKX_DEMO_PASSPHRASE": "PPD",
 }
-EMPTY_VALUES = {"R20_OKX_ENV": "demo"}  # 无任何密钥 → configured False
+EMPTY_VALUES = {"ASTRA_OKX_ENV": "demo"}  # 无任何密钥 → configured False
 
 _NOW_MS = str(int(time.time() * 1000))
 
@@ -309,8 +309,8 @@ class LedgerRestMigrationTests(unittest.TestCase):
                     return fake_risk
                 return []
 
-        with patch("r20_backend.exchanges.venue_credentials", return_value=("key", "secret")), \
-             patch("r20_backend.exchanges.get_adapter", return_value=MockBinanceAdapter()):
+        with patch("astra_backend.exchanges.venue_credentials", return_value=("key", "secret")), \
+             patch("astra_backend.exchanges.get_adapter", return_value=MockBinanceAdapter()):
             rows = sfl.fetch_binance_closed_trades(environment="demo")
 
         self.assertEqual(len(rows), 1)
@@ -341,8 +341,8 @@ class LedgerRestMigrationTests(unittest.TestCase):
                     return fake_positions
                 return []
 
-        with patch("r20_backend.exchanges.venue_credentials", return_value=("key", "secret")), \
-             patch("r20_backend.exchanges.get_adapter", return_value=MockGateAdapter()):
+        with patch("astra_backend.exchanges.venue_credentials", return_value=("key", "secret")), \
+             patch("astra_backend.exchanges.get_adapter", return_value=MockGateAdapter()):
             rows = sfl.fetch_gate_closed_trades(environment="demo")
 
         self.assertEqual(len(rows), 1)

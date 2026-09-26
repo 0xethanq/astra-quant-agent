@@ -85,9 +85,9 @@ class Rig:
         #    本发现的旁证是它真的会拦）；
         # ② 真 `validate_quote_geometry_and_rr` 的返回元数与本文件的桩不同。
         # 本文件要测的是**其后**的价格锚定 / 多所路由 / 直下闸门，故此处按 ok 隔离。
-        _listing = (patch("r20_backend.exchanges.listing.ensure_contract_listed",
+        _listing = (patch("astra_backend.exchanges.listing.ensure_contract_listed",
                           side_effect=self.listing_raises) if self.listing_raises
-                    else patch("r20_backend.exchanges.listing.ensure_contract_listed",
+                    else patch("astra_backend.exchanges.listing.ensure_contract_listed",
                                return_value=SimpleNamespace(ok=self.listing_ok,
                                                             reason=self.listing_reason)))
         with _listing, \
@@ -146,8 +146,8 @@ class PriceAnchorGateTest(unittest.TestCase):
         # 本类验的是**限价单**的穿价闸（"BUY 挂在现价上方即拒"）。市价单不按计划价
         # 成交、路径上会先把三价重锚到现价，穿价闸对它本就不适用 ⇒ 必须钉死限价模式，
         # 否则运维一切到 market，本类用例会因为"市价单不判穿价"而红（设计如此）。
-        with patch.dict(os.environ, {"R20_ORDER_MODE": "limit"}), \
-             patch("r20_backend.exchanges.listing.ensure_contract_listed",
+        with patch.dict(os.environ, {"ASTRA_ORDER_MODE": "limit"}), \
+             patch("astra_backend.exchanges.listing.ensure_contract_listed",
                    return_value=SimpleNamespace(ok=True, reason="")), \
              patch("scripts.order_risk.validate_quote_geometry_and_rr",
                    return_value=(True, "", 1.0)):
@@ -191,13 +191,13 @@ class PriceAnchorGateTest(unittest.TestCase):
 class MultiVenueRouteTest(unittest.TestCase):
     def _run(self, router, venue="binance"):
         rig = Rig(venue=venue, routing={"ok": True, "reservation": "res-9", "venue": venue})
-        # ⚠️ 必须 patch **真模块的属性**：代码写的是 `from r20_backend import execution_router`
+        # ⚠️ 必须 patch **真模块的属性**：代码写的是 `from astra_backend import execution_router`
         # ⇒ 一旦该模块被别处导入过，`from … import …` 走的是**包属性**，
         # `patch.dict(sys.modules, {...})` 塞的假模块**不会被用到**（单跑本文件时恰好没导入过，
         # 于是"单跑绿、全量红"）。这正是隔离类缺陷的典型形态。
-        import r20_backend.execution_router as real_router
+        import astra_backend.execution_router as real_router
         with patch.object(real_router, "open_protected_position", side_effect=router), \
-             patch("r20_backend.exchanges.listing.ensure_contract_listed",
+             patch("astra_backend.exchanges.listing.ensure_contract_listed",
                    return_value=SimpleNamespace(ok=True, reason="")), \
              patch("scripts.order_risk.validate_quote_geometry_and_rr",
                    return_value=(True, "", 1.0)):
@@ -279,7 +279,7 @@ class OkxDirectTest(unittest.TestCase):
     def test_order_mode_market_submits_market_order_with_none_px(self):
         okx = _Okx()
         rig = Rig(okx=okx)
-        with patch.dict(os.environ, {"R20_ORDER_MODE": "market"}):
+        with patch.dict(os.environ, {"ASTRA_ORDER_MODE": "market"}):
             with patch("scripts.order_risk.validate_quote_geometry_and_rr",
                        return_value=(True, "", 1.0)):
                 ok, _ = rig.run(venue_ctx={"notional_usdt": 1, "margin_usdt": 1})
@@ -301,7 +301,7 @@ class OkxDirectTest(unittest.TestCase):
         okx = _Okx()
         rig = Rig(okx=okx, price=100000.0, tp=105000.0, sl=95000.0, ticker="110000")
         ctx = {"notional_usdt": 1, "margin_usdt": 1}
-        with patch.dict(os.environ, {"R20_ORDER_MODE": "market"}):
+        with patch.dict(os.environ, {"ASTRA_ORDER_MODE": "market"}):
             with patch("scripts.order_risk.validate_quote_geometry_and_rr",
                        return_value=(True, "", 1.0)):
                 ok, why = rig.run(venue_ctx=ctx)
@@ -327,7 +327,7 @@ class OkxDirectTest(unittest.TestCase):
         """现价读不到 ⇒ 拒单（fail-closed）。退回计划价下单正是要消除的反挂形态。"""
         okx = _Okx()
         rig = Rig(okx=okx, price=100000.0, tp=105000.0, sl=95000.0, ticker="")
-        with patch.dict(os.environ, {"R20_ORDER_MODE": "market"}):
+        with patch.dict(os.environ, {"ASTRA_ORDER_MODE": "market"}):
             with patch("scripts.order_risk.validate_quote_geometry_and_rr",
                        return_value=(True, "", 1.0)):
                 ok, why = rig.run(venue_ctx={"notional_usdt": 1, "margin_usdt": 1})
@@ -345,7 +345,7 @@ class OkxDirectTest(unittest.TestCase):
         okx = _Okx()
         rig = Rig(okx=okx, price=100000.0, tp=105000.0, sl=95000.0, ticker="110000")
         ctx = {"notional_usdt": 1, "margin_usdt": 1}
-        with patch.dict(os.environ, {"R20_ORDER_MODE": "limit"}):
+        with patch.dict(os.environ, {"ASTRA_ORDER_MODE": "limit"}):
             with patch("scripts.order_risk.validate_quote_geometry_and_rr",
                        return_value=(True, "", 1.0)):
                 ok, why = rig.run(venue_ctx=ctx)
@@ -373,7 +373,7 @@ class DemoRescaleTest(unittest.TestCase):
     def _run(self, *, price, tp, sl, ticker, pos_side="long"):
         rig = Rig(price=price, tp=tp, sl=sl, ticker=ticker, simulated=True)
         rig.geometry = (True, "", 1.0)
-        with patch.dict(os.environ, {"R20_ORDER_MODE": "limit"}):
+        with patch.dict(os.environ, {"ASTRA_ORDER_MODE": "limit"}):
             return rig, rig.run(venue_ctx={"notional_usdt": 1, "margin_usdt": 1},
                                 pos_side=pos_side)
 
@@ -449,7 +449,7 @@ class RescaleFailureTraceTest(unittest.TestCase):
         from contextlib import redirect_stdout
         rig = Rig(price=100000.0, tp="不是数字", sl=95000.0, ticker="95000", simulated=True)
         buf = io.StringIO()
-        with patch.dict(os.environ, {"R20_ORDER_MODE": "limit"}):
+        with patch.dict(os.environ, {"ASTRA_ORDER_MODE": "limit"}):
             with redirect_stdout(buf):
                 ok, _ = rig.run(venue_ctx={"notional_usdt": 1, "margin_usdt": 1})
         self.assertTrue(ok, "重算失败不该阻断下单")
@@ -465,7 +465,7 @@ class LongStopPushBackTest(unittest.TestCase):
     def test_long_stop_above_entry_after_rescale_is_pushed_below(self):
         """重算把 SL 推到入场上方 ⇒ 必须按比例压回下方（否则多头的止损方向反了）。"""
         rig = Rig(price=100000.0, tp=105000.0, sl=101000.0, ticker="95000", simulated=True)
-        with patch.dict(os.environ, {"R20_ORDER_MODE": "limit"}):
+        with patch.dict(os.environ, {"ASTRA_ORDER_MODE": "limit"}):
             ok, _ = rig.run(venue_ctx={"notional_usdt": 1, "margin_usdt": 1})
         self.assertTrue(ok)
         _, _, _, kw = rig.okx.orders[0]

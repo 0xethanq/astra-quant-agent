@@ -25,7 +25,7 @@ from unittest.mock import MagicMock, patch
 
 from fastapi import HTTPException
 
-from r20_backend.routers import exchanges as R
+from astra_backend.routers import exchanges as R
 
 
 class SnapshotTest(unittest.TestCase):
@@ -47,7 +47,7 @@ class SnapshotTest(unittest.TestCase):
         p2.start()
         self.addCleanup(p2.stop)
         exc = RuntimeError("所不可用") if adapters_raise else None
-        p3 = patch("r20_backend.exchanges.get_adapter",
+        p3 = patch("astra_backend.exchanges.get_adapter",
                    side_effect=exc if exc else MagicMock())
         p3.start()
         self.addCleanup(p3.stop)
@@ -124,7 +124,7 @@ class VenueAccountsRouteTest(unittest.TestCase):
         with patch.object(R, "_venue_accounts_okx", return_value={}) as a, \
              patch.object(R, "_venue_accounts_gate", return_value={}), \
              patch.object(R, "_venue_accounts_binance", return_value={}), \
-             patch("r20_backend.portfolio_aggregator.aggregate_venue_accounts",
+             patch("astra_backend.portfolio_aggregator.aggregate_venue_accounts",
                    return_value={}):
             out = R.venue_accounts("  DEMO  ", None, None)
         self.assertEqual(out["environment"], "demo", "回执里的档位是归一后的值")
@@ -135,7 +135,7 @@ class VenueAccountsRouteTest(unittest.TestCase):
         with patch.object(R, "_venue_accounts_okx", return_value={"status": "ready"}) as a, \
              patch.object(R, "_venue_accounts_gate", return_value={"status": "ready"}) as b, \
              patch.object(R, "_venue_accounts_binance", return_value={"status": "ready"}) as c, \
-             patch("r20_backend.portfolio_aggregator.aggregate_venue_accounts",
+             patch("astra_backend.portfolio_aggregator.aggregate_venue_accounts",
                    return_value=sentinel) as agg:
             out = R.venue_accounts("live", None, None)
         self.assertEqual(sorted(out["venues"]), ["binance", "gate", "okx"])

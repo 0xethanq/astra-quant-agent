@@ -1,4 +1,4 @@
-"""本方在管仓位台账判别（`r20_backend/execution/own_records.py`）残余分支收口测试 —— 第 354 刀。
+"""本方在管仓位台账判别（`astra_backend/execution/own_records.py`）残余分支收口测试 —— 第 354 刀。
 
 本模块 242 行，是跨所实盘仓位是否属于量化程序在管的判别核心：
 - 台账文件路径自适应（`ledger_path`）：指定工作区目录时优先解析 `<workspace>/data/trading_ledger.json`；
@@ -12,7 +12,7 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-from r20_backend.execution.own_records import (
+from astra_backend.execution.own_records import (
     _norm_ex_side,
     _norm_ledger_side,
     _size_match,

@@ -1,4 +1,4 @@
-"""Custom R20 backup job runtime: archive, encrypt, verify, deliver and retain."""
+"""Custom ASTRA backup job runtime: archive, encrypt, verify, deliver and retain."""
 from __future__ import annotations
 import base64
 import fnmatch
@@ -38,10 +38,18 @@ LOCAL_DIR = BACKUPS / "local"
 SQLITE_DIR = BACKUPS / "sqlite"
 MANIFEST_DIR = BACKUPS / "manifests"
 BJ_TZ = timezone(timedelta(hours=8))
-MAGIC = b"R20GCM2\x00"
+#: 当前归档魔数（**写**路径）。
+#: ⚠️ 必须与 LEGACY_MAGIC **等长（8 字节）**：头部偏移 salt(16)/nonce(12)/tag(16)
+#:    都由 `len(MAGIC)` 推出，长度一变，老归档就按错误偏移去解。
+MAGIC = b"ASTRAGCM"
+#: 改名前的归档魔数（**只读**）。
+#: 2026-09-27 把内部代号 r20 全量改名 astra；用户手里已经存在的备份归档必须继续能解密，
+#: 否则"改名"会变成"备份全废"。这正是"改名"与"丢数据"的分界线。
+#: 何时可删：确认不再有任何旧魔数归档存在之后。
+LEGACY_MAGIC = b"R20GCM2\x00"
 MANDATORY_EXCLUDES = (
     ".git/**", ".env", ".okx/**", ".bypy/**", "backups/**", "*/backups/**", "logs/**",
-    "data/r20_admin.db*", "data/admin_auth.db*", "data/*.enc", "data/.*_key", "data/credentials/**",
+    "data/astra_admin.db*", "data/admin_auth.db*", "data/*.enc", "data/.*_key", "data/credentials/**",
     # 审计修复A3(2026-09-13)：凭证的第二落盘——LLM 明文键嵌在业务 JSON 里，
     # 旧名单（*.enc/.*_key 等文件名模式）挡不住。中期方案：键迁 secrets 后解禁。
     "data/llm_models.json", "data/llm_providers.json",
@@ -50,11 +58,11 @@ MANDATORY_EXCLUDES = (
 SCOPE_PATHS = {
     "data": ("data",),
     "scripts": ("scripts",),
-    # 第 143 刀：dashboard/ 已并入 r20_backend/。范围名**保持不变**（任务配置里存的就是这个
+    # 第 143 刀：dashboard/ 已并入 astra_backend/。范围名**保持不变**（任务配置里存的就是这个
     # 字符串，改名即接口破坏），只把路径指向新位置——否则只勾选该范围的任务会静默备份 0 文件。
-    "dashboard": ("r20_backend/dashboard_cache.py", "r20_backend/templates", "r20_backend/static"),
-    "r20_backend": ("r20_backend",),
-    "r20_gateway": ("r20_gateway",),
+    "dashboard": ("astra_backend/dashboard_cache.py", "astra_backend/templates", "astra_backend/static"),
+    "astra_backend": ("astra_backend",),
+    "astra_gateway": ("astra_gateway",),
     "tests": ("tests",),
     "recovery_guide": ("RECOVERY_GUIDE.md",),
     "agent_profile": ("SOUL.md", "PROFILE.md", "AGENTS.md", "MEMORY.md"),
@@ -68,7 +76,7 @@ def clean_stale_staging(max_age_seconds: int = 3600) -> int:
         return 0
     cleaned = 0
     now_ts = time.time()
-    for item in staging.glob("r20_backup_*"):
+    for item in staging.glob("astra_backup_*"):
         try:
             # 审计③(2026-09-13)：旧条件 `size==0 或 过期` 会把并发另一个备份任务
             # 「刚 mkstemp、还在写」的在途归档当垃圾 unlink。只按年龄清理，
@@ -107,9 +115,9 @@ def retain_local_archive(source: Path, retention: int, destination_dir: Path | N
     destination_dir.mkdir(parents=True, exist_ok=True)
     destination = destination_dir / source.name
     shutil.copy2(source, destination)
-    # 审计③(2026-09-13)：prune 必须按 job 隔离——旧实现对整个目录的 r20_backup_*
+    # 审计③(2026-09-13)：prune 必须按 job 隔离——旧实现对整个目录的 astra_backup_*
     # 排序截断，任务 B（retention=1）一跑就把任务 A 刚生成的最新归档裁掉，
-    # manifest 还报 success（灾备覆盖静默塌陷）。归档名 r20_backup_{safe_id}_{日期}_{时间}，
+    # manifest 还报 success（灾备覆盖静默塌陷）。归档名 astra_backup_{safe_id}_{日期}_{时间}，
     # 取前三段作本 job 专属前缀。
     _prefix = "_".join(source.name.split("_")[:3])
     prune((p for p in destination_dir.glob(f"{_prefix}_*") if p.is_file()), retention)
@@ -128,7 +136,7 @@ def sqlite_hot_backups(timestamp: str, retention: int, destination_dir: Path | N
         return created
 
     for source in data_dir.glob("*.db"):
-        if source.name == "r20_admin.db":
+        if source.name == "astra_admin.db":
             continue
         if source.name.endswith("-wal") or source.name.endswith("-shm"):
             continue
@@ -180,7 +188,7 @@ def create_archive(job: dict[str, Any], timestamp: str) -> tuple[Path, list[str]
     staging = BACKUPS / "staging"
     staging.mkdir(parents=True, exist_ok=True)
     safe_id = "".join(c for c in str(job.get("id", "backup")) if c.isalnum() or c in "-_")[:48]
-    path = staging / f"r20_backup_{safe_id}_{timestamp}.tar.gz"
+    path = staging / f"astra_backup_{safe_id}_{timestamp}.tar.gz"
     included: list[str] = []
     try:
         level = int(job.get("compression_level", 6))
@@ -244,7 +252,9 @@ def decrypt_archive(source: Path, key_env: str, destination: Path) -> Path:
     if not secret:
         raise RuntimeError(f"解密需要环境变量 {key_env}")
     with source.open("rb") as inp:
-        if inp.read(len(MAGIC)) != MAGIC:
+        header = inp.read(len(MAGIC))
+        # 双魔数识别：新魔数与**改名前的旧魔数**都接受（等长，故偏移不变）。
+        if header not in (MAGIC, LEGACY_MAGIC):
             raise RuntimeError("不是受支持的 AstraQuant AES-256-GCM 归档")
         salt, nonce, tag = inp.read(16), inp.read(12), inp.read(16)
         if len(salt) != 16 or len(nonce) != 12 or len(tag) != 16:
@@ -271,7 +281,7 @@ def verify_archive(path: Path, expected_sha256: str = "", key_env: str = "") -> 
     try:
         if path.name.endswith(".aes256"):
             BACKUPS.mkdir(parents=True, exist_ok=True)
-            fd, temp_name = tempfile.mkstemp(prefix="r20-verify-", suffix=".tar.gz", dir=BACKUPS)
+            fd, temp_name = tempfile.mkstemp(prefix="astra-verify-", suffix=".tar.gz", dir=BACKUPS)
             os.close(fd)
             temp = Path(temp_name)
             tar_path = decrypt_archive(path, key_env, temp)
@@ -380,12 +390,12 @@ def upload_webdav(source: Path, target: dict[str, Any]) -> dict[str, Any]:
 def deliver_target(source: Path, target: dict[str, Any]) -> dict[str, Any]:
     target_type = target.get("type")
     if target_type in {"s3", "oss", "webdav", "aliyundrive", "quark"}:
-        from r20_backend.net_security import validate_outbound_url
+        from astra_backend.net_security import validate_outbound_url
         target = {**target, "endpoint": validate_outbound_url(str(target.get("endpoint") or ""), allow_private=bool(target.get("allow_private_endpoint")))}
     if target_type == "baidu":
         if target.get("auth_mode", "bypy") == "oauth":
             return upload_baidu_oauth(source, target)
-        return upload_baidu(source, target.get("remote_path", "R20_Backups"), int(target.get("retries", 3)))
+        return upload_baidu(source, target.get("remote_path", "ASTRA_Backups"), int(target.get("retries", 3)))
     if target_type == "local":
         destination = (ROOT / str(target.get("path") or "backups/local")).resolve()
         if not destination.is_relative_to((ROOT / "backups").resolve()):

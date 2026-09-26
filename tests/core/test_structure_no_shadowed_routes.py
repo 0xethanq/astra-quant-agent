@@ -1,31 +1,31 @@
 """路由遮蔽（shadowed route）回归闸：钉住"改哪份才有效"。
 
 背景（结构优化阶段 1，commit 68254e9；阶段 2·B2 收尾继续）：
-本项目曾有两套路由层 —— r20_backend/routers/*（模块化）与 r20_backend/dashboard_cache.py（legacy 整包）。
-r20_backend/app.py 曾是「先 include_router(...) 再 mount("/", dashboard_app)」，
+本项目曾有两套路由层 —— astra_backend/routers/*（模块化）与 astra_backend/dashboard_cache.py（legacy 整包）。
+astra_backend/app.py 曾是「先 include_router(...) 再 mount("/", dashboard_app)」，
 Starlette 按注册顺序匹配，因此凡两边同路径同方法者一律 routers 生效，
-r20_backend/dashboard_cache.py 的同名 handler **函数体永不执行** —— 改它没有任何效果、也不报错。
+astra_backend/dashboard_cache.py 的同名 handler **函数体永不执行** —— 改它没有任何效果、也不报错。
 
 阶段 1 拆除了 15 条这类影子注册；阶段 2·B2 收尾把**剩下的整个外壳**（FastAPI 实例、
-4 个静态挂载、/ /doc /login /favicon.svg 四条路由）也搬出了 r20_backend/dashboard_cache.py：
-外壳件去了 r20_backend/web_shell.py，路由进了 routers/dashboard.py，
-r20_backend/dashboard_cache.py 自此是**纯库（0 条路由）**。本闸随之升级为两条更强的断言：
+4 个静态挂载、/ /doc /login /favicon.svg 四条路由）也搬出了 astra_backend/dashboard_cache.py：
+外壳件去了 astra_backend/web_shell.py，路由进了 routers/dashboard.py，
+astra_backend/dashboard_cache.py 自此是**纯库（0 条路由）**。本闸随之升级为两条更强的断言：
 
-  ① r20_backend/dashboard_cache.py 路由数必须为 **0**（纯库，任何 @app. 注册都是架构回退）；
+  ① astra_backend/dashboard_cache.py 路由数必须为 **0**（纯库，任何 @app. 注册都是架构回退）；
   ② 原先「仅此处生效」的 4 条路径必须仍在 router 层（删掉任何一条都会线上 404）。
 
 本测试把它固化为自动闸，防止今后再次踩进"改了没效果"的坑
 （这类缺陷最贵的地方不是报错，而是静默无效）。
 
 判定不做肉眼推断：用 AST 解析两条路由表（含 include 顺序与
-`from r20_backend.routers import (a_router, ...)` 括号多名称导入形态），
+`from astra_backend.routers import (a_router, ...)` 括号多名称导入形态），
 再用 Starlette 官方 compile_path 复现真实路径匹配。
 
 **方法必须参与判定**：同路径不同方法（GET 与 POST 的 /api/v1/admin/risk 等）
 不是影子，两条都真实可达 —— 本测试初版漏了方法，把二十多条同路径不同方法的
 路由误判成遮蔽，是一类典型假阳性。
 
-纯静态、无网络、不导入应用（避免导入 r20_backend.dashboard_cache 触发其 2s 后台线程真调 OKX）。
+纯静态、无网络、不导入应用（避免导入 astra_backend.dashboard_cache 触发其 2s 后台线程真调 OKX）。
 """
 from __future__ import annotations
 import ast
@@ -36,11 +36,11 @@ from pathlib import Path
 from starlette.routing import compile_path
 
 ROOT = Path(__file__).resolve().parents[2]
-APP_MAIN = ROOT / "r20_backend" / "app.py"
-DASH_APP = ROOT / "r20_backend" / "dashboard_cache.py"
-ROUTER_DIR = ROOT / "r20_backend" / "routers"
+APP_MAIN = ROOT / "astra_backend" / "app.py"
+DASH_APP = ROOT / "astra_backend" / "dashboard_cache.py"
+ROUTER_DIR = ROOT / "astra_backend" / "routers"
 
-# 原先「仅 r20_backend/dashboard_cache.py 定义、真实生效」的路由，B2 收尾后移入 routers/dashboard.py。
+# 原先「仅 astra_backend/dashboard_cache.py 定义、真实生效」的路由，B2 收尾后移入 routers/dashboard.py。
 # 删掉任何一条都会造成线上 404，故显式钉住（阶段 1 已逐条实测：/favicon.svg、/、/doc
 # 返回 200，/login 返回 307 → /admin/login；迁移后由 ShellRouteTests 再实测一次）。
 DASHBOARD_ONLY_LIVE = {
@@ -86,7 +86,7 @@ def _routes(path: Path, owner: str) -> list[Route]:
 
 
 def _router_include_order() -> list[str]:
-    """按注册顺序返回 routers 子模块名（与 r20_backend/app.py 的 include 顺序一致）。"""
+    """按注册顺序返回 routers 子模块名（与 astra_backend/app.py 的 include 顺序一致）。"""
     src = APP_MAIN.read_text(encoding="utf-8")
     tree = ast.parse(src)
 
@@ -97,10 +97,10 @@ def _router_include_order() -> list[str]:
 
     imported: list[str] = []
     for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom) and node.module == "r20_backend.routers":
+        if isinstance(node, ast.ImportFrom) and node.module == "astra_backend.routers":
             imported += [alias.name for alias in node.names]
     if not imported:
-        raise AssertionError("未解析到 r20_backend.routers 的导入清单，解析逻辑可疑")
+        raise AssertionError("未解析到 astra_backend.routers 的导入清单，解析逻辑可疑")
 
     mods: list[str] = []
     for name in order:
@@ -160,11 +160,11 @@ class NoShadowedRouteTests(unittest.TestCase):
         front = _front_routes()
         self.assertGreater(len(front), 50, f"前台路由仅 {len(front)} 条，疑似解析失败")
         dash = _routes(DASH_APP, "app")
-        # B2 收尾后 r20_backend/dashboard_cache.py 是纯库：0 条路由。若有人在这里重新注册 @app.*，
+        # B2 收尾后 astra_backend/dashboard_cache.py 是纯库：0 条路由。若有人在这里重新注册 @app.*，
         # 说明外壳又被绑回了库文件（会重新引入双层路由），故钉死为 0。
         self.assertEqual(
             len(dash), 0,
-            f"r20_backend/dashboard_cache.py 应为纯库（0 条路由），实际 {len(dash)} 条："
+            f"astra_backend/dashboard_cache.py 应为纯库（0 条路由），实际 {len(dash)} 条："
             f"{[p for _, _, p in dash]}",
         )
         # 那 4 条路径不能消失，只是换了归属（现由 routers/dashboard.py 注册）
@@ -182,7 +182,7 @@ class NoShadowedRouteTests(unittest.TestCase):
         self.assertEqual(
             hits,
             [],
-            "r20_backend/dashboard_cache.py 出现被遮蔽的路由（改了不会有任何效果、也不报错）：\n"
+            "astra_backend/dashboard_cache.py 出现被遮蔽的路由（改了不会有任何效果、也不报错）：\n"
             + "\n".join(hits)
             + "\n两条出路：① 删掉本文件里的重复注册，让 routers 独占该路径；\n"
               "② 若该 handler 本就必须在本文件提供（如 routers 反向委托它），"
@@ -226,7 +226,7 @@ class NoShadowedRouteTests(unittest.TestCase):
         for src, methods, pattern, _ in _front_routes():
             for d_methods, d_pattern in dash_paths:
                 if pattern == d_pattern and (methods & d_methods):
-                    clash.append(f"  {pattern} [{','.join(sorted(methods & d_methods))}] 同时在 {src} 与 r20_backend/dashboard_cache.py")
+                    clash.append(f"  {pattern} [{','.join(sorted(methods & d_methods))}] 同时在 {src} 与 astra_backend/dashboard_cache.py")
         self.assertEqual(clash, [], "同一路径同方法被两套路由层重复注册:\n" + "\n".join(clash))
 
     def test_router_layer_has_no_internal_shadow(self):

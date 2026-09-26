@@ -6,8 +6,8 @@
 
 | 表 | 位置 | 作用 |
 |---|---|---|
-| `MANAGED_KEYS` | `r20_backend/settings_store.py` | 后台设置接口可读写的键 |
-| `SECRET_KEYS` | `r20_gateway/secrets.py` | 加密密钥库里允许存的键 |
+| `MANAGED_KEYS` | `astra_backend/settings_store.py` | 后台设置接口可读写的键 |
+| `SECRET_KEYS` | `astra_gateway/secrets.py` | 加密密钥库里允许存的键 |
 | `RISK_ENV_KEYS` | `scripts/risk_constants.py` | 「风控管理页」写入、交易侧读取的键 |
 
 表里多一个**谁都不读**的键 ⇒ 操作者在后台改了它、系统毫无反应（配置假象，比没有更坏）。
@@ -34,10 +34,10 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-SCAN_DIRS = ("scripts", "r20_backend", "r20_gateway", "plugins")
+SCAN_DIRS = ("scripts", "astra_backend", "astra_gateway", "plugins")
 ENV_DICT_RECEIVERS = {"env", "environment", "env_vars", "_env", "env_map"}
 
-#: 凭证解析器的档位后缀（取自 `r20_backend/exchanges/registry.py::venue_credentials`）
+#: 凭证解析器的档位后缀（取自 `astra_backend/exchanges/registry.py::venue_credentials`）
 TIER_SUFFIXES = ("LIVE", "DEMO", "TESTNET", "SANDBOX")
 CREDENTIAL_FIELDS = ("API_KEY", "SECRET_KEY", "PASSPHRASE")
 
@@ -52,18 +52,18 @@ def _looks_like_key(name: str) -> bool:
 def _tables() -> dict:
     """三张表 → (键集合, 表所在文件, 表占用行区间)。"""
     tables = {}
-    ss = (ROOT / "r20_backend" / "settings_store.py").read_text(encoding="utf-8")
+    ss = (ROOT / "astra_backend" / "settings_store.py").read_text(encoding="utf-8")
     a = ss.index("MANAGED_KEYS = {")
     b = ss.index("}\n", a)
     tables["MANAGED_KEYS"] = (set(re.findall(r'"([A-Z][A-Z0-9_]+)"', ss[a:b])),
-                              "r20_backend/settings_store.py",
+                              "astra_backend/settings_store.py",
                               (ss[:a].count("\n") + 1, ss[:b].count("\n") + 1))
 
-    gw = (ROOT / "r20_gateway" / "secrets.py").read_text(encoding="utf-8")
+    gw = (ROOT / "astra_gateway" / "secrets.py").read_text(encoding="utf-8")
     a2 = gw.index("SECRET_KEYS = {")
     b2 = gw.index("}\n", a2)
     tables["SECRET_KEYS"] = (set(re.findall(r'"([A-Z][A-Z0-9_]+)"', gw[a2:b2])),
-                             "r20_gateway/secrets.py",
+                             "astra_gateway/secrets.py",
                              (gw[:a2].count("\n") + 1, gw[:b2].count("\n") + 1))
 
     rc = (ROOT / "scripts" / "risk_constants.py").read_text(encoding="utf-8")
@@ -186,13 +186,13 @@ class ConfigTablesAreConsumedTest(unittest.TestCase):
 
     def test_tier_pattern_is_not_a_rubber_stamp(self):
         """牙齿：与凭证档位无关的键不得被档位通道放行。"""
-        for not_cred in ("R20_NOTIFY_QQ_ENABLED", "R20_MAX_LEVERAGE", "LLM_MODEL",
-                         "R20_GATEWAY_DB", "FOO_API_KEY", "BINANCE_LIVE_URL", "OKX_LIVE"):
+        for not_cred in ("ASTRA_NOTIFY_QQ_ENABLED", "ASTRA_MAX_LEVERAGE", "LLM_MODEL",
+                         "ASTRA_GATEWAY_DB", "FOO_API_KEY", "BINANCE_LIVE_URL", "OKX_LIVE"):
             self.assertFalse(tier_pattern_match(not_cred), f"{not_cred} 不该被档位通道放行")
 
     def test_teeth_on_a_dead_table_key(self):
-        reads, literals = {"R20_EXISTING_KNOB": "x:1"}, {"R20_EXISTING_KNOB": "x:1"}
-        key = "R20_NOBODY_CONSUMES_ME"
+        reads, literals = {"ASTRA_EXISTING_KNOB": "x:1"}, {"ASTRA_EXISTING_KNOB": "x:1"}
+        key = "ASTRA_NOBODY_CONSUMES_ME"
         self.assertFalse(key in reads or tier_pattern_match(key) or key in literals,
                          "没人消费的表键必须被判为死键 ⇒ 门没有牙齿")
 

@@ -1,4 +1,4 @@
-"""Comprehensive health check and boundary tests for R20 backup system."""
+"""Comprehensive health check and boundary tests for ASTRA backup system."""
 from __future__ import annotations
 import io
 import json
@@ -12,9 +12,9 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-import r20_backend.app as app_module
-from r20_backend.admin_auth import AdminAuthStore
-import r20_backend.backup_store as store
+import astra_backend.app as app_module
+from astra_backend.admin_auth import AdminAuthStore
+import astra_backend.backup_store as store
 import scripts.backup_runtime as runtime
 from scripts.nightly_backup_and_clean import main as nightly_main
 
@@ -68,7 +68,7 @@ class BackupMethodTests(unittest.TestCase):
     def login(self) -> dict[str, str]:
         resp = self.client.post("/api/v1/admin/auth/login", json={"username": "admin", "password": "InitialAdmin123456"})
         self.assertEqual(resp.status_code, 200, resp.text)
-        return {"X-R20-Session": resp.json()["session_token"]}
+        return {"X-Astra-Session": resp.json()["session_token"]}
 
     def test_open_source_defaults_keep_local_enabled_and_cloud_opt_in(self):
         methods = store.load_backup_methods()
@@ -256,12 +256,12 @@ class BackupMethodTests(unittest.TestCase):
             headers=headers,
         )
         self.assertEqual(resp.status_code, 400)
-        self.assertIn("RESTORE R20", resp.json()["detail"])
+        self.assertIn("RESTORE ASTRA", resp.json()["detail"])
 
         # 2. Non-existent file
         resp = self.client.post(
             "/api/v1/admin/backups/restore",
-            json={"archive_name": "ghost.tar.gz", "confirmation": "RESTORE R20"},
+            json={"archive_name": "ghost.tar.gz", "confirmation": "RESTORE ASTRA"},
             headers=headers,
         )
         self.assertEqual(resp.status_code, 404)
@@ -269,7 +269,7 @@ class BackupMethodTests(unittest.TestCase):
         # 3. Path traversal in archive_name
         resp = self.client.post(
             "/api/v1/admin/backups/restore",
-            json={"archive_name": "../../etc/passwd", "confirmation": "RESTORE R20"},
+            json={"archive_name": "../../etc/passwd", "confirmation": "RESTORE ASTRA"},
             headers=headers,
         )
         self.assertEqual(resp.status_code, 400)
@@ -280,7 +280,7 @@ class BackupMethodTests(unittest.TestCase):
         corrupt_tar.write_bytes(b"not valid gz tar")
         resp = self.client.post(
             "/api/v1/admin/backups/restore",
-            json={"archive_name": "corrupted_archive.tar.gz", "confirmation": "RESTORE R20"},
+            json={"archive_name": "corrupted_archive.tar.gz", "confirmation": "RESTORE ASTRA"},
             headers=headers,
         )
         self.assertEqual(resp.status_code, 400)
@@ -296,7 +296,7 @@ class BackupMethodTests(unittest.TestCase):
 
         resp = self.client.post(
             "/api/v1/admin/backups/restore",
-            json={"archive_name": "slip.tar.gz", "confirmation": "RESTORE R20"},
+            json={"archive_name": "slip.tar.gz", "confirmation": "RESTORE ASTRA"},
             headers=headers,
         )
         self.assertEqual(resp.status_code, 400)
@@ -312,7 +312,7 @@ class BackupMethodTests(unittest.TestCase):
 
         resp = self.client.post(
             "/api/v1/admin/backups/restore",
-            json={"archive_name": "safe_restore.tar.gz", "confirmation": "RESTORE R20"},
+            json={"archive_name": "safe_restore.tar.gz", "confirmation": "RESTORE ASTRA"},
             headers=headers,
         )
         self.assertEqual(resp.status_code, 200, resp.text)
@@ -331,14 +331,14 @@ class BackupMethodTests(unittest.TestCase):
             tar.addfile(info, io.BytesIO(content))
 
         key = "SuperSecretEncryptionKey123!"
-        with patch.dict(os.environ, {"R20_TEST_ENC_KEY": key}):
-            enc_file = runtime.encrypt_archive(enc_plain, "R20_TEST_ENC_KEY")
+        with patch.dict(os.environ, {"ASTRA_TEST_ENC_KEY": key}):
+            enc_file = runtime.encrypt_archive(enc_plain, "ASTRA_TEST_ENC_KEY")
             self.assertTrue(enc_file.name.endswith(".aes256"))
 
             # Without key_env: returns 400
             resp_no_key = self.client.post(
                 "/api/v1/admin/backups/restore",
-                json={"archive_name": enc_file.name, "confirmation": "RESTORE R20", "key_env": "NON_EXISTENT_KEY_VAR"},
+                json={"archive_name": enc_file.name, "confirmation": "RESTORE ASTRA", "key_env": "NON_EXISTENT_KEY_VAR"},
                 headers=headers,
             )
             self.assertEqual(resp_no_key.status_code, 400)
@@ -346,7 +346,7 @@ class BackupMethodTests(unittest.TestCase):
             # With correct key_env: restores successfully
             resp_enc = self.client.post(
                 "/api/v1/admin/backups/restore",
-                json={"archive_name": enc_file.name, "confirmation": "RESTORE R20", "key_env": "R20_TEST_ENC_KEY"},
+                json={"archive_name": enc_file.name, "confirmation": "RESTORE ASTRA", "key_env": "ASTRA_TEST_ENC_KEY"},
                 headers=headers,
             )
             self.assertEqual(resp_enc.status_code, 200, resp_enc.text)
@@ -355,7 +355,7 @@ class BackupMethodTests(unittest.TestCase):
 
     def test_backup_job_execution_manifests_and_sqlite(self):
         # Create a sample database to verify sqlite hot backup
-        db_path = self.root / "data" / "r20_quant.db"
+        db_path = self.root / "data" / "astra_quant.db"
         conn = sqlite3.connect(db_path)
         conn.execute("CREATE TABLE orders (id INT, symbol TEXT)")
         conn.execute("INSERT INTO orders VALUES (1, 'BTC-USDT')")
@@ -393,7 +393,7 @@ class BackupMethodTests(unittest.TestCase):
 
         # Check retained local archive
         local_dir = self.root / "backups" / "local"
-        archives = list(local_dir.glob("r20_backup_*"))
+        archives = list(local_dir.glob("astra_backup_*"))
         self.assertTrue(len(archives) >= 1)
         verify = runtime.verify_archive(archives[0], expected_sha256=result["sha256"])
         self.assertTrue(verify["valid"])
@@ -415,7 +415,7 @@ class BackupMethodTests(unittest.TestCase):
         # 2. When staging has 0-byte or old file, clean_stale_staging removes it
         staging = self.root / "backups" / "staging"
         staging.mkdir(parents=True, exist_ok=True)
-        stale_empty = staging / "r20_backup_stale.tar.gz"
+        stale_empty = staging / "astra_backup_stale.tar.gz"
         stale_empty.write_bytes(b"")
         cleaned = runtime.clean_stale_staging(max_age_seconds=0)
         self.assertTrue(cleaned >= 1)

@@ -2,7 +2,7 @@
 
 先打印整个文件（87 行）再动笔。`X-Forwarded-For` 是**客户端可自填**的头：
 若无条件取最左值，攻击者带一个 `X-Forwarded-For: 8.8.8.8` 就能伪造来源、
-绕过按 IP 的登录限速与审计归因（`r20_admin_audit.jsonl` 的 `actor_ip` 正来自这里）。
+绕过按 IP 的登录限速与审计归因（`astra_admin_audit.jsonl` 的 `actor_ip` 正来自这里）。
 
 | 语义 | 口径 |
 |---|---|
@@ -12,7 +12,7 @@
 | ★ **绝不回退成可伪造的头值** | 无法判定时返回 `unknown`，而不是 XFF 里的任意值 |
 | 长度 | 返回值截到 64 字符、`user_agent` 截到 200（防超长头污染审计行）|
 | 地址清洗 | 去 IPv6 方括号与 `%zone` 后缀；非法地址当"不可信"而不是异常 |
-| 配置 | `R20_TRUSTED_PROXIES`（逗号分隔 CIDR）可覆盖默认网段；**非法 CIDR 跳过而不是崩** |
+| 配置 | `ASTRA_TRUSTED_PROXIES`（逗号分隔 CIDR）可覆盖默认网段；**非法 CIDR 跳过而不是崩** |
 """
 
 import ipaddress
@@ -21,7 +21,7 @@ import types
 import unittest
 from unittest import mock
 
-from r20_backend import client_ip as CI
+from astra_backend import client_ip as CI
 
 DEFAULT = CI._DEFAULT_TRUSTED
 
@@ -40,13 +40,13 @@ class TrustedNetworkTests(unittest.TestCase):
         self.assertIn("172.16.0.0/12", rendered)
 
     def test_env_override_replaces_the_defaults(self):
-        with mock.patch.dict(os.environ, {"R20_TRUSTED_PROXIES": "203.0.113.0/24"}):
+        with mock.patch.dict(os.environ, {"ASTRA_TRUSTED_PROXIES": "203.0.113.0/24"}):
             nets = CI._trusted_networks()
         self.assertEqual([str(n) for n in nets], ["203.0.113.0/24"])
 
     def test_blank_and_invalid_entries_are_skipped(self):
         with mock.patch.dict(os.environ,
-                             {"R20_TRUSTED_PROXIES": " , not-a-cidr , 10.0.0.0/8 ,, "}):
+                             {"ASTRA_TRUSTED_PROXIES": " , not-a-cidr , 10.0.0.0/8 ,, "}):
             nets = CI._trusted_networks()
         self.assertEqual([str(n) for n in nets], ["10.0.0.0/8"],
                          "非法 CIDR 必须跳过，不能让整个解析炸掉")
@@ -54,7 +54,7 @@ class TrustedNetworkTests(unittest.TestCase):
     def test_empty_env_falls_back_to_defaults(self):
         expected = {str(ipaddress.ip_network(chunk.strip(), strict=False))
                     for chunk in DEFAULT.split(",") if chunk.strip()}
-        with mock.patch.dict(os.environ, {"R20_TRUSTED_PROXIES": "   "}):
+        with mock.patch.dict(os.environ, {"ASTRA_TRUSTED_PROXIES": "   "}):
             rendered = {str(n) for n in CI._trusted_networks()}
         self.assertEqual(rendered, expected)
         self.assertIn("127.0.0.0/8", rendered)
@@ -130,7 +130,7 @@ class ClientIpTests(unittest.TestCase):
 
     def test_env_override_can_promote_a_public_proxy_to_trusted(self):
         req = _Request("203.0.113.9", {"x-forwarded-for": "8.8.8.8"})
-        with mock.patch.dict(os.environ, {"R20_TRUSTED_PROXIES": "203.0.113.0/24"}):
+        with mock.patch.dict(os.environ, {"ASTRA_TRUSTED_PROXIES": "203.0.113.0/24"}):
             self.assertEqual(CI.client_ip(req), "8.8.8.8",
                              "显式信任该代理后，转发头才被采信")
 

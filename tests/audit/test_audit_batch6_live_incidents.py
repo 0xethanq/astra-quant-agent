@@ -10,7 +10,7 @@
    修：回收接管同尺（新鲜意图保留 + 同向只保最新一条，其余收敛撤销）。
 ④ 台账 sync 静默死亡：subprocess "python3 …" shell 串（主机无裸 python3，
    rc=127 被 capture_output 吞）→ 台账 sync_full_ledger/db_manager 从不执行。
-   修：r20_backend/spawn.run_script（sys.executable + 非零必吼）六点接入。
+   修：astra_backend/spawn.run_script（sys.executable + 非零必吼）六点接入。
 """
 from __future__ import annotations
 
@@ -67,7 +67,7 @@ class TestIntentPerpetualFix(unittest.TestCase):
 
     def test_record_intent_purges_and_dedupes(self):
         import scripts.ai_factor_trader as aft
-        d = tempfile.mkdtemp(prefix="r20-b6-int-")
+        d = tempfile.mkdtemp(prefix="astra-b6-int-")
         f = os.path.join(d, "intents.json")
         now = int(time.time() * 1000)
         Path(f).write_text(json.dumps([   # 过期→清 / 保留 / 同键旧条目→被替换
@@ -211,8 +211,8 @@ class TestSpawnHygiene(unittest.TestCase):
         # 第七十八刀：以 spawn 为被测行为，离线守护下如实 skip（守卫在 spawn 前）。
         from tests.config_sandbox import skip_if_offline_suite
         skip_if_offline_suite(self)
-        from r20_backend.spawn import run_script
-        d = tempfile.mkdtemp(prefix="r20-b6-sp-")
+        from astra_backend.spawn import run_script
+        d = tempfile.mkdtemp(prefix="astra-b6-sp-")
         good = os.path.join(d, "good.py")
         bad = os.path.join(d, "bad.py")
         Path(good).write_text("import sys; print(sys.executable)")
@@ -232,8 +232,8 @@ class TestSpawnHygiene(unittest.TestCase):
         import re
         bad = []
         # 批7 教训：dashboard/ 曾被漏扫，其触发的台账 sync 同为裸 python3 静默死亡
-        for f in (list((ROOT / "scripts").glob("*.py")) + list((ROOT / "r20_backend").rglob("*.py"))
-                  + list((ROOT / "r20_backend").glob("dashboard_cache.py"))):
+        for f in (list((ROOT / "scripts").glob("*.py")) + list((ROOT / "astra_backend").rglob("*.py"))
+                  + list((ROOT / "astra_backend").glob("dashboard_cache.py"))):
             src = f.read_text(encoding="utf-8", errors="ignore")
             for m in re.finditer(r'subprocess\.run\(\s*f["\']python3 ', src):
                 line = src[:m.start()].count("\n") + 1

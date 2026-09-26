@@ -25,14 +25,14 @@ import scripts.okx_rest as okx_rest
 from scripts.okx_runtime import freeze_environment, unfreeze_environment
 
 DEMO_ENV = {
-    "R20_OKX_ENV": "demo",
+    "ASTRA_OKX_ENV": "demo",
     "OKX_DEMO_API_KEY": "DEMO_AK", "OKX_DEMO_SECRET_KEY": "DEMO_SK", "OKX_DEMO_PASSPHRASE": "DEMO_PP",
 }
 LIVE_ENV = {
-    "R20_OKX_ENV": "live",
+    "ASTRA_OKX_ENV": "live",
     "OKX_LIVE_API_KEY": "LIVE_AK", "OKX_LIVE_SECRET_KEY": "LIVE_SK", "OKX_LIVE_PASSPHRASE": "LIVE_PP",
 }
-UNCONFIGURED_ENV = {"R20_OKX_ENV": "demo"}  # 无任何键 → configured False
+UNCONFIGURED_ENV = {"ASTRA_OKX_ENV": "demo"}  # 无任何键 → configured False
 
 
 def _response(code="0", msg="", data=None):
@@ -456,7 +456,7 @@ class BrokerTagCoverageTest(unittest.TestCase):
 class NoOrderEndpointBypassTest(unittest.TestCase):
     """除 `scripts/okx_rest.py` 外，**任何生产模块**都不得自己拼产单端点的请求体。
 
-    起因（实测漏网）：`r20_backend/okx_trade_service.py::fast_close_confirmed`
+    起因（实测漏网）：`astra_backend/okx_trade_service.py::fast_close_confirmed`
     —— 后台「应急一键平仓」—— 自己拼了 `POST /api/v5/trade/close-position`，
     绕过了 `_with_broker_tag` ⇒ 那批成交不计经纪商归属。
 
@@ -476,7 +476,7 @@ class NoOrderEndpointBypassTest(unittest.TestCase):
     def test_only_the_shared_client_talks_to_order_endpoints(self):
         root = Path(okx_rest.__file__).resolve().parents[1]
         offenders = []
-        for base in ("scripts", "r20_backend", "r20_gateway"):
+        for base in ("scripts", "astra_backend", "astra_gateway"):
             for path in (root / base).rglob("*.py"):
                 if "__pycache__" in path.parts:
                     continue

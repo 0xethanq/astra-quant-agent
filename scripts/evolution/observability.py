@@ -43,7 +43,7 @@ from __future__ import annotations
 import datetime
 from typing import Dict, List, Optional
 
-from r20_backend.time_utils import parse_beijing
+from astra_backend.time_utils import parse_beijing
 
 __all__ = [
     "DYNAMICS_FIELDS",

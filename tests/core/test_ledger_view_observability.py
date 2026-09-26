@@ -11,7 +11,7 @@
 
 import unittest
 
-from r20_backend.dashboard_payload import ledger_view as LV
+from astra_backend.dashboard_payload import ledger_view as LV
 
 
 class ObservabilityTest(unittest.TestCase):
@@ -63,7 +63,7 @@ class MatchTradeSnapshotTest(unittest.TestCase):
         self.assertIsNone(out, "方向不一致 ⇒ 不匹配")
 
     def test_a_far_future_snapshot_is_not_causal(self):
-        from r20_backend.time_utils import beijing_text
+        from astra_backend.time_utils import beijing_text
         import time as _t
         future = beijing_text(_t.time() + 3600 * 3)
         out = LV.match_trade_snapshot(
@@ -73,7 +73,7 @@ class MatchTradeSnapshotTest(unittest.TestCase):
 
     def test_a_stale_snapshot_is_discarded(self):
         import time as _t
-        from r20_backend.time_utils import beijing_text
+        from astra_backend.time_utils import beijing_text
         old = beijing_text(_t.time() - 3600 * 24)
         out = LV.match_trade_snapshot(
             self._journal({"entryTime": old, "snapshot": {"v": 1}}),
@@ -82,7 +82,7 @@ class MatchTradeSnapshotTest(unittest.TestCase):
 
     def test_the_closest_candidate_within_the_window_wins(self):
         import time as _t
-        from r20_backend.time_utils import beijing_text
+        from astra_backend.time_utils import beijing_text
         now = _t.time()
         near = beijing_text(now - 60)
         far = beijing_text(now - 3600 * 3)

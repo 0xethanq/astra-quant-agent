@@ -19,8 +19,8 @@ import unittest
 import warnings
 from unittest import mock
 
-from r20_backend.exchanges import listing as L
-from r20_backend.exchanges import ExchangeCapabilityError
+from astra_backend.exchanges import listing as L
+from astra_backend.exchanges import ExchangeCapabilityError
 
 
 class ListingSnapshotTest(unittest.TestCase):

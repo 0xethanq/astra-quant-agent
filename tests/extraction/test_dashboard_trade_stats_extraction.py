@@ -1,4 +1,4 @@
-"""`r20_backend/dashboard_payload/trade_stats.py`（B3 第二十四刀）回归。
+"""`astra_backend/dashboard_payload/trade_stats.py`（B3 第二十四刀）回归。
 
 ## 这个测试在守什么
 
@@ -26,16 +26,17 @@ import sys
 import unittest
 from pathlib import Path
 
-from r20_backend.dashboard_payload.trade_stats import aggregate_trade_stats
+from astra_backend.dashboard_payload.trade_stats import aggregate_trade_stats
+from tests.extraction.rename_baseline import legacy_rev_path, normalize
 
-# 第 143 刀：本模块从 `dashboard/app.py` 迁到 `r20_backend/dashboard_cache.py`。
+# 第 143 刀：本模块从 `dashboard/app.py` 迁到 `astra_backend/dashboard_cache.py`。
 # **对拍基线必须按历史路径取**（旧 revision 里只有 dashboard/app.py），
 # LIVE 文件走新路径 —— 两者不可混用，否则基线取不到、对拍门必然失真。
 PRE_MOVE_PATH = "dashboard/app.py"
 
 ROOT = Path(__file__).resolve().parents[2]
-APP = ROOT / "r20_backend" / "dashboard_cache.py"
-MODULE = ROOT / "r20_backend" / "dashboard_payload" / "trade_stats.py"
+APP = ROOT / "astra_backend" / "dashboard_cache.py"
+MODULE = ROOT / "astra_backend" / "dashboard_payload" / "trade_stats.py"
 
 TODAY = "2026-09-14"
 
@@ -322,10 +323,10 @@ class WiringTest(unittest.TestCase):
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 for a in node.names:
-                    self.assertFalse(a.name.startswith("r20_backend.dashboard_cache"),
+                    self.assertFalse(a.name.startswith("astra_backend.dashboard_cache"),
                                      f"反向 import {a.name}")
             elif isinstance(node, ast.ImportFrom):
-                self.assertFalse((node.module or "").startswith("r20_backend.dashboard_cache"),
+                self.assertFalse((node.module or "").startswith("astra_backend.dashboard_cache"),
                                  f"反向 import {node.module}")
 
     def test_module_does_not_read_external_state(self):
@@ -368,10 +369,10 @@ def agg_field(got, name):
 
 
 def _agg_baseline_cycle() -> ast.FunctionDef:
-    r = subprocess.run(["git", "show", f"{AGG_PRE}:{PRE_MOVE_PATH}"],
+    r = subprocess.run(["git", "show", legacy_rev_path(f"{AGG_PRE}:{PRE_MOVE_PATH}")],
                        capture_output=True, text=True, cwd=str(ROOT))
     assert r.returncode == 0, f"基线取不到：{r.stderr[:200]}"
-    t = ast.parse(r.stdout)
+    t = ast.parse(normalize(r.stdout))
     return next(n for n in t.body if isinstance(n, ast.FunctionDef)
                 and n.name == "update_cache_cycle")
 
@@ -451,7 +452,7 @@ class AggregationStageTest(unittest.TestCase):
     # ---------- 行为例：累加顺序 + 除零分支 ----------
 
     def _run(self, *, bills, stats, total_eq=1100.0, initial=1000.0, pos_upl=25.0):
-        from r20_backend.dashboard_payload import trade_stats as TS
+        from astra_backend.dashboard_payload import trade_stats as TS
         return TS.aggregate_bills_and_metrics(
             bills_data=[], initial_capital_val=initial, reset_time_str="2026-09-15 00:00:00",
             today_bj_str="2026-09-15", total_eq=total_eq, total_pos_upl=pos_upl,

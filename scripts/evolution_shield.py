@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-R20 Evolution Shield & Anti-Poisoning Cognitive Guardian (evolution_shield.py)
+ASTRA Evolution Shield & Anti-Poisoning Cognitive Guardian (evolution_shield.py)
 -------------------------------------------------------------------------------
 Ensures AI Self-Evolution DOES NOT become a double-edged sword:
 1. Anti-Single-Event Bias / Outlier Rejection:

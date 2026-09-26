@@ -18,10 +18,10 @@ supervisor 每 10 秒探活/补拉，worker 抢 `flock` 后自我登记 PID。
 
 ## 封闭性（这个模块**真的会起进程、发信号**）
 
-- `subprocess.Popen` **全程打桩** —— 否则测试会真的拉起 `python -m r20_gateway.worker`；
+- `subprocess.Popen` **全程打桩** —— 否则测试会真的拉起 `python -m astra_gateway.worker`；
 - `os.kill` 在 `stop_supervisor` 用例里打桩 —— 否则可能 SIGTERM **线上那个 worker**；
 - `PID_FILE` / `LOCK_FILE` / `LOG_FILE` 三个路径常量**全部**改写到临时目录
-  （`PID_FILE` 默认就是线上 `data/r20_gateway.pid`，而线上 worker 正在写它）；
+  （`PID_FILE` 默认就是线上 `data/astra_gateway.pid`，而线上 worker 正在写它）；
 - `signal.signal` 打桩 —— `worker.run()` 会注册 SIGTERM/SIGINT 处理器，不能让它改掉测试进程的；
 - `_owned_pid` / `_thread` / `_stop` / `RUNNING` 四个模块全局逐用例快照还原。
 """
@@ -37,11 +37,11 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from r20_gateway import supervisor as SUP
-from r20_gateway import worker as WKR
-from r20_gateway.pidfile import PID_FILE as GATEWAY_PID_FILE
+from astra_gateway import supervisor as SUP
+from astra_gateway import worker as WKR
+from astra_gateway.pidfile import PID_FILE as GATEWAY_PID_FILE
 
-# ⚠️ 本文件**不许**出现 `"r20_gateway.pid"` 这个字符串字面量
+# ⚠️ 本文件**不许**出现 `"astra_gateway.pid"` 这个字符串字面量
 #（门禁 `test_path_literal_only_in_pidfile_module` 以 AST 扫描 tests/ 全树）。
 # 文件名一律从常量取 `.name`，锁文件名同理从两个模块的 `LOCK_FILE.name` 取。
 PID_NAME = GATEWAY_PID_FILE.name
@@ -115,7 +115,7 @@ class IsGatewayWorkerTests(_SupBase):
     def setUp(self):
         super().setUp()
         self.cmdline = self._start(mock.patch.object(
-            SUP.Path, "read_bytes", return_value=b"python\0-m\0r20_gateway.worker\0"))
+            SUP.Path, "read_bytes", return_value=b"python\0-m\0astra_gateway.worker\0"))
         real = Path.resolve
 
         def _resolve(self_, *a, **k):
@@ -170,7 +170,7 @@ class IsGatewayWorkerTests(_SupBase):
 
     def test_the_null_bytes_are_turned_into_spaces(self):
         self._live()
-        self.cmdline.return_value = b"python\x00-m\x00r20_gateway.worker\x00"
+        self.cmdline.return_value = b"python\x00-m\x00astra_gateway.worker\x00"
         self.assertIs(SUP._is_gateway_worker(4242), True)
 
 
@@ -373,7 +373,7 @@ class EnsureWorkerTests(_SupBase):
     def test_the_spawn_command_and_redirection(self):
         SUP.ensure_worker()
         args, kwargs = self.popen.call_args
-        self.assertEqual(args[0], [SUP.sys.executable, "-m", "r20_gateway.worker"])
+        self.assertEqual(args[0], [SUP.sys.executable, "-m", "astra_gateway.worker"])
         self.assertEqual(kwargs["cwd"], SUP.ROOT)
         self.assertIs(kwargs["stdin"], SUP.subprocess.DEVNULL)
         self.assertIs(kwargs["stderr"], SUP.subprocess.STDOUT)
@@ -444,7 +444,7 @@ class SupervisorLoopTests(_SupBase):
         thread = self._start(mock.patch.object(SUP.threading, "Thread"))
         SUP.start_supervisor()
         thread.assert_called_once()
-        self.assertEqual(thread.call_args[1]["name"], "r20-gateway-supervisor")
+        self.assertEqual(thread.call_args[1]["name"], "astra-gateway-supervisor")
         self.assertIs(thread.call_args[1]["daemon"], True)
         self.assertIs(thread.call_args[1]["target"], SUP._run)
         thread.return_value.start.assert_called_once()
@@ -631,11 +631,11 @@ class FormatMessageTests(unittest.TestCase):
         self.assertIn("【AstraQuant】开仓", WKR.format_message(self._row()))
 
     def test_a_title_already_carrying_the_brand_is_kept(self):
-        self.assertIn("【R20 风控】", WKR.format_message(self._row(title="【R20 风控】警告")))
+        self.assertIn("【ASTRA 风控】", WKR.format_message(self._row(title="【ASTRA 风控】警告")))
 
     def test_a_title_merely_containing_the_brand_is_also_kept(self):
-        out = WKR.format_message(self._row(title="前缀【R20】后缀"))
-        self.assertIn("前缀【R20】后缀", out)
+        out = WKR.format_message(self._row(title="前缀【ASTRA】后缀"))
+        self.assertIn("前缀【ASTRA】后缀", out)
         self.assertNotIn("【AstraQuant】前缀", out)
 
     def test_the_iso_t_separator_is_replaced_and_truncated(self):

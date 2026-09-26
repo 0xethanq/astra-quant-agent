@@ -1,6 +1,6 @@
 """US-002 venue_router 单测（全 mock，封闭三律：零网络/零凭证/零临时文件）。
 
-patch 模块绑定名：r20_backend.exchanges.listing.ensure_contract_listed
+patch 模块绑定名：astra_backend.exchanges.listing.ensure_contract_listed
 （venue_router 通过 `from .exchanges import listing` 绑定模块对象，
 patch 模块属性即可生效）。
 """
@@ -14,10 +14,10 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from r20_backend.venue_router import (  # noqa: E402
+from astra_backend.venue_router import (  # noqa: E402
     RouteDecision, route_signal, split_allocation, RouterConfig,
 )
-from r20_backend.exchanges import listing as listing_mod  # noqa: E402
+from astra_backend.exchanges import listing as listing_mod  # noqa: E402
 
 NOW = datetime(2026, 9, 11, 12, 0, 0, tzinfo=timezone.utc)
 NOW_ISO = "2026-09-11T12:00:00Z"
@@ -201,7 +201,7 @@ class TestVenuePoolGate(unittest.TestCase):
     """
 
     def test_pool_mismatch_rejected_as_venue_pool_and_falls_back(self):
-        from r20_backend.venue_routing import selection as sel
+        from astra_backend.venue_routing import selection as sel
         pool = {"binance": ["BTC"], "gate": ["BTC"], "okx": None}
         with patch.object(listing_mod, "ensure_contract_listed", _ok_listing), \
              patch.object(sel, "_venue_pool_assets", lambda v: pool.get(v)):
@@ -217,7 +217,7 @@ class TestVenuePoolGate(unittest.TestCase):
                 self.assertIn("准入币种清单", r["reason"])
 
     def test_asset_in_pool_passes(self):
-        from r20_backend.venue_routing import selection as sel
+        from astra_backend.venue_routing import selection as sel
         with patch.object(listing_mod, "ensure_contract_listed", _ok_listing), \
              patch.object(sel, "_venue_pool_assets", lambda v: ["BTC"]):
             d = route_signal(_signal(), [_cand("okx")], config=_cfg())
@@ -227,7 +227,7 @@ class TestVenuePoolGate(unittest.TestCase):
     def test_empty_or_absent_pool_does_not_restrict(self):
         """空清单/未配置 ≠ 新造一条拒绝理由（执行层才有「空池=停发」语义，
         OKX 直下路径更是没有池概念）。"""
-        from r20_backend.venue_routing import selection as sel
+        from astra_backend.venue_routing import selection as sel
         with patch.object(listing_mod, "ensure_contract_listed", _ok_listing), \
              patch.object(sel, "_venue_pool_assets", lambda v: None):
             d = route_signal(
@@ -241,8 +241,8 @@ class TestVenuePoolGate(unittest.TestCase):
         import json
         import tempfile
         from pathlib import Path
-        from r20_backend.exchanges import routing_policy as rp
-        from r20_backend.venue_routing import selection as sel
+        from astra_backend.exchanges import routing_policy as rp
+        from astra_backend.venue_routing import selection as sel
         with tempfile.TemporaryDirectory() as td:
             f = Path(td) / "venue_routing.json"
             f.write_text(json.dumps({"okx": {"assets": ["BTC", "eth", "btc"]}}),
@@ -408,7 +408,7 @@ class HealthWindowVsRefreshCadenceTest(unittest.TestCase):
         root = Path(__file__).resolve().parents[2]
         max_age = self._const(root / "scripts" / "ai_factor_trader.py",
                               "VENUE_HEALTH_MAX_AGE_S")
-        schedule = (root / "r20_backend" / "scheduler.py").read_text(encoding="utf-8")
+        schedule = (root / "astra_backend" / "scheduler.py").read_text(encoding="utf-8")
         import ast
         jobs = next(n for n in ast.parse(schedule).body if isinstance(n, ast.Assign)
                     and any(getattr(t, "id", None) == "JOBS" for t in n.targets))

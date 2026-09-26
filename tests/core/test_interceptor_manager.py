@@ -36,8 +36,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from r20_backend import interceptor_manager as IM
-from r20_backend import file_locks
+from astra_backend import interceptor_manager as IM
+from astra_backend import file_locks
 from scripts import instrument_pool, order_risk, risk_constants
 
 
@@ -56,14 +56,14 @@ class _Base(unittest.TestCase):
         return started
 
     def setUp(self):
-        self.tmp = Path(tempfile.mkdtemp(prefix="r20-interc-"))
+        self.tmp = Path(tempfile.mkdtemp(prefix="astra-interc-"))
         self.addCleanup(self._rmtree, self.tmp)
         self.plugins = self.tmp / "plugins" / "interceptors"
         self.config = self.tmp / "data" / "interceptor_plugins.json"
         self._start(mock.patch.object(IM, "PLUGINS_DIR", self.plugins))
         self._start(mock.patch.object(IM, "CONFIG_FILE", self.config))
         self.lock = self._start(mock.patch.object(file_locks, "file_lock"))
-        # 真实加载器会往 sys.modules 里塞 r20_plugin_*，统一清理
+        # 真实加载器会往 sys.modules 里塞 astra_plugin_*，统一清理
         self.addCleanup(self._purge_plugin_modules)
 
     def _rmtree(self, path):
@@ -71,7 +71,7 @@ class _Base(unittest.TestCase):
         shutil.rmtree(path, ignore_errors=True)
 
     def _purge_plugin_modules(self):
-        for name in [n for n in sys.modules if n.startswith("r20_plugin_")]:
+        for name in [n for n in sys.modules if n.startswith("astra_plugin_")]:
             sys.modules.pop(name, None)
 
     def _write_plugin(self, filename, source=None):
@@ -455,7 +455,7 @@ class LoadModuleTests(_Base):
         module = IM._load_module_from_file(path)
         self.assertEqual(module.VALUE, 7)
         self.assertIn(module.__name__, sys.modules)
-        self.assertTrue(module.__name__.startswith("r20_plugin_mine_"))
+        self.assertTrue(module.__name__.startswith("astra_plugin_mine_"))
 
     def test_module_name_includes_the_mtime_so_edits_reload(self):
         path = self._write_plugin("mine.py", "VALUE = 1\n")

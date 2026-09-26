@@ -20,7 +20,7 @@ import time
 import unittest
 from unittest import mock
 
-from r20_backend.dashboard_payload import ledger_view as LV
+from astra_backend.dashboard_payload import ledger_view as LV
 
 OLD_RESET = "2020-01-01 00:00:00"
 
@@ -59,9 +59,9 @@ class LedgerTailTest(unittest.TestCase):
         """★ 第 145 行：连文件时间都读不到 ⇒ **保守地**认为需要同步。"""
         self._sync_ready()
         self._write([], age_seconds=600)
-        with mock.patch("r20_backend.spawn.run_script") as runner, \
+        with mock.patch("astra_backend.spawn.run_script") as runner, \
                 mock.patch("os.path.getmtime", side_effect=OSError("权限")):
-            with mock.patch.dict("os.environ", {"R20_LEDGER_SYNC_DISABLED": ""}):
+            with mock.patch.dict("os.environ", {"ASTRA_LEDGER_SYNC_DISABLED": ""}):
                 LV.load_ledger_lifecycle_trades(self.ledger, self.dir.name, True, OLD_RESET)
         runner.assert_called_once()
 
@@ -70,8 +70,8 @@ class LedgerTailTest(unittest.TestCase):
         self._sync_ready()
         self._write([{"inst": "BTC-USDT-SWAP", "status": "holding",
                       "open_time": time.time()}], age_seconds=600)
-        with mock.patch("r20_backend.spawn.run_script", side_effect=RuntimeError("起不来")):
-            with mock.patch.dict("os.environ", {"R20_LEDGER_SYNC_DISABLED": ""}):
+        with mock.patch("astra_backend.spawn.run_script", side_effect=RuntimeError("起不来")):
+            with mock.patch.dict("os.environ", {"ASTRA_LEDGER_SYNC_DISABLED": ""}):
                 valid, table = LV.load_ledger_lifecycle_trades(
                     self.ledger, self.dir.name, True, OLD_RESET)
         self.assertEqual(len(table), 1, "同步失败不拖垮看板")

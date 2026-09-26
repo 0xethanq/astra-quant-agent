@@ -25,8 +25,8 @@ import time
 import unittest
 from unittest import mock
 
-from r20_backend.dashboard_payload import ledger_view as LV
-from r20_backend.dashboard_payload.readers import load_json_dict_disclosed
+from astra_backend.dashboard_payload import ledger_view as LV
+from astra_backend.dashboard_payload.readers import load_json_dict_disclosed
 
 OLD_RESET = "2020-01-01 00:00:00"
 

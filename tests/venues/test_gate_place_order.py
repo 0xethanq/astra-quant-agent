@@ -14,8 +14,8 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from r20_backend.exchanges.gate import GateAdapter, GateAPIError
-from r20_backend.exchanges.base import ExchangeCapabilityError
+from astra_backend.exchanges.gate import GateAdapter, GateAPIError
+from astra_backend.exchanges.base import ExchangeCapabilityError
 
 
 class _Base(unittest.TestCase):
@@ -138,7 +138,7 @@ class PlaceOrderTest(_Base):
         self.ad.place_order("BTC", "long", 1, reduce_only=True)
         body = self.sent[-1][3]
         self.assertTrue(body["reduce_only"])
-        self.assertTrue(body["text"].startswith("t-r20"), body["text"])
+        self.assertTrue(body["text"].startswith("t-astra"), body["text"])
         self.ad.place_order("BTC", "long", 1, text="my-tag")
         self.assertEqual(self.sent[-1][3]["text"], "my-tag", "调用方给的 text 优先")
         self._send(payload={"msg": "no id"})

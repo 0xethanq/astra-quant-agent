@@ -43,6 +43,6 @@ jobs:
 
       - name: Run Full Test Suite
         env:
-          R20_TESTING: "1"
+          ASTRA_TESTING: "1"
         run: |
           python -m unittest discover -s tests

@@ -1,4 +1,4 @@
-"""`r20_backend/redact.py` 凭证脱敏单一事实源（阶段 4·B3 第四十九刀）。
+"""`astra_backend/redact.py` 凭证脱敏单一事实源（阶段 4·B3 第四十九刀）。
 
 ## 修了什么
 
@@ -6,8 +6,8 @@
 
 | 位置 | 名字 | 消费者 |
 |---|---|---|
-| `r20_backend/settings_store.py` L65 | `mask(value, visible=4)` | 后台设置页（`routers/gateway/notifications.py`） |
-| `r20_backend/llm/util.py` L32 | `mask_secret(value, visible=4)` | LLM 配置页（`llm/store.py`、`llm_manager.py`） |
+| `astra_backend/settings_store.py` L65 | `mask(value, visible=4)` | 后台设置页（`routers/gateway/notifications.py`） |
+| `astra_backend/llm/util.py` L32 | `mask_secret(value, visible=4)` | LLM 配置页（`llm/store.py`、`llm_manager.py`） |
 
 函数体各 6 行、**逐字节相同**，签名一致；行为对拍 50 组用例**零差异**。
 
@@ -16,14 +16,14 @@
 边界），另一处不会跟着改 —— **后台设置页与 LLM 配置页会对密钥做不同强度的
 脱敏，弱的那一侧成为泄露面**。
 
-现收敛到 `r20_backend/redact.py::mask`，两个名字都转发到它。
+现收敛到 `astra_backend/redact.py::mask`，两个名字都转发到它。
 
 ## ⚠️ 为什么保留两个"壳"而不是直接别名
 
 两个消费方各保留**自己的**薄壳，而不是 `mask_secret = mask` 这种别名赋值：
 
 1. `tests/audit/test_audit_batch1_credentials_trust_boundary.py` 直接
-   `from r20_backend.settings_store import mask`；
+   `from astra_backend.settings_store import mask`；
 2. `tests/test_llm_seam_discipline.py` 的公开面清单里钉着 `"mask_secret"`；
 3. 本仓约定：`patch.object(模块, "名字")` 是重要接缝，别名赋值会让
    "门面全局"这个概念失效（见 `scripts/trader/signals.py` 模块文档）。
@@ -50,13 +50,13 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-MODULE = ROOT / "r20_backend" / "redact.py"
-SETTINGS_STORE = ROOT / "r20_backend" / "settings_store.py"
-LLM_UTIL = ROOT / "r20_backend" / "llm" / "util.py"
+MODULE = ROOT / "astra_backend" / "redact.py"
+SETTINGS_STORE = ROOT / "astra_backend" / "settings_store.py"
+LLM_UTIL = ROOT / "astra_backend" / "llm" / "util.py"
 
-from r20_backend.redact import MASK_STARS, mask  # noqa: E402
-from r20_backend.llm.util import mask_secret  # noqa: E402
-from r20_backend.settings_store import mask as store_mask  # noqa: E402
+from astra_backend.redact import MASK_STARS, mask  # noqa: E402
+from astra_backend.llm.util import mask_secret  # noqa: E402
+from astra_backend.settings_store import mask as store_mask  # noqa: E402
 
 
 class MaskSemanticsTest(unittest.TestCase):
@@ -95,7 +95,7 @@ class MaskSemanticsTest(unittest.TestCase):
 
     def test_secret_never_appears_whole(self):
         """核心安全性质：长密钥不得原样出现在输出里。"""
-        for secret in ("sk-live-abcdefghijklmnop", "x" * 64, "R20admin888888"):
+        for secret in ("sk-live-abcdefghijklmnop", "x" * 64, "ASTRAadmin888888"):
             out = mask(secret, visible=4)
             self.assertNotEqual(out, secret)
             if len(secret) > 8:
@@ -182,14 +182,14 @@ class IsMaskedContractTest(unittest.TestCase):
     """⚠️ 8 个星与 `is_masked` 是一对契约（脱敏读↔明文写回环防线）。"""
 
     def test_is_masked_recognises_our_output(self):
-        from r20_backend.settings_store import is_masked
+        from astra_backend.settings_store import is_masked
         for secret in ("abcdefg1234567", "sk-live-abcdefghijklmnop", "x" * 40):
             self.assertTrue(is_masked(mask(secret)),
                             f"is_masked 未识别 mask({secret!r}) 的产物")
 
     def test_changing_star_count_would_break_is_masked(self):
         """反证：若中段星数不是 8，`is_masked` 就认不出（故这个 8 不可改）。"""
-        from r20_backend.settings_store import is_masked
+        from astra_backend.settings_store import is_masked
         self.assertEqual(MASK_STARS, 8)
         self.assertFalse(is_masked("abcd" + "*" * 7 + "efgh"),
                          "7 连星不应被识别 —— 说明 8 这个数是有意义的")
@@ -197,7 +197,7 @@ class IsMaskedContractTest(unittest.TestCase):
 
     def test_is_masked_unchanged(self):
         """`is_masked` 本身不在本刀改动范围内（只确认它没被牵连）。"""
-        from r20_backend.settings_store import is_masked
+        from astra_backend.settings_store import is_masked
         self.assertFalse(is_masked(""))
         self.assertFalse(is_masked("https://oapi.example/hook?key=REAL"))
         self.assertFalse(is_masked("short*star"))
@@ -207,18 +207,18 @@ class IsMaskedContractTest(unittest.TestCase):
 
 class PublicSurfaceTest(unittest.TestCase):
     def test_settings_store_still_exports_mask(self):
-        import r20_backend.settings_store as ss
+        import astra_backend.settings_store as ss
         self.assertTrue(callable(ss.mask))
         self.assertTrue(callable(ss.mask_url))
         self.assertTrue(callable(ss.is_masked))
 
     def test_llm_manager_still_exports_mask_secret(self):
         """`test_llm_seam_discipline` 的公开面清单钉着 `mask_secret`。"""
-        import r20_backend.llm_manager as lm
+        import astra_backend.llm_manager as lm
         self.assertTrue(callable(getattr(lm, "mask_secret", None)))
 
     def test_llm_util_still_exports_mask_secret(self):
-        import r20_backend.llm.util as lu
+        import astra_backend.llm.util as lu
         self.assertTrue(callable(lu.mask_secret))
 
 

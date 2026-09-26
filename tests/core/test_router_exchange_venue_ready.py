@@ -15,7 +15,7 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
-from r20_backend.routers import exchanges as R
+from astra_backend.routers import exchanges as R
 
 
 class _Env:
@@ -60,17 +60,17 @@ class OkxRemainingBranchesTest(unittest.TestCase):
 
 class GateReadyTest(unittest.TestCase):
     def _run(self, acct, open_rows):
-        p = patch("r20_backend.exchanges.venue_credentials", return_value=("K", "S"))
+        p = patch("astra_backend.exchanges.venue_credentials", return_value=("K", "S"))
         p.start()
         self.addCleanup(p.stop)
-        p2 = patch("r20_backend.close_intent.adapter_environment", side_effect=lambda v, e: e)
+        p2 = patch("astra_backend.close_intent.adapter_environment", side_effect=lambda v, e: e)
         p2.start()
         self.addCleanup(p2.stop)
         ad = MagicMock()
         ad.account_snapshot.return_value = acct
         ad.positions.return_value = [{"size_signed": "1"}, {"size_signed": "0"}]
         ad.signed_request.return_value = open_rows
-        with patch("r20_backend.exchanges.get_adapter", return_value=ad):
+        with patch("astra_backend.exchanges.get_adapter", return_value=ad):
             return R._venue_accounts_gate("demo")
 
     def test_ready_receipt_names_the_tier_and_counts_only_nonzero_positions(self):
@@ -117,14 +117,14 @@ class BinanceReaderTest(unittest.TestCase):
             capabilities = _Caps()
         # ⚠️ 不能用 MagicMock(side_effect=...)：`MagicMock().capabilities` 会被**自动创建**成
         # 真值 Mock，根本不抛，于是探测"成功"了 —— 夹具骗了自己。这里用**属性真的会抛**的类型。
-        with patch("r20_backend.exchanges.binance.BinanceAdapter", new=_Adapter):
+        with patch("astra_backend.exchanges.binance.BinanceAdapter", new=_Adapter):
             out = R._venue_accounts_binance("demo")
         self.assertEqual(out["status"], "degraded")
         self.assertIn("能力表读取失败", out["reason"])
 
     def test_unsupported_account_surface_is_not_implemented(self):
         fake = _binance_adapter(False)
-        with patch("r20_backend.exchanges.binance.BinanceAdapter", new=fake):
+        with patch("astra_backend.exchanges.binance.BinanceAdapter", new=fake):
             out = R._venue_accounts_binance("demo")
         self.assertEqual(out["status"], "not_implemented")
         self.assertIn("未实装", out["reason"])
@@ -133,9 +133,9 @@ class BinanceReaderTest(unittest.TestCase):
 
     def test_unconfigured_credentials_short_circuit(self):
         fake = _binance_adapter(True)
-        with patch("r20_backend.exchanges.binance.BinanceAdapter", new=fake), \
-             patch("r20_backend.exchanges.venue_credentials", return_value=("", "")), \
-             patch("r20_backend.exchanges.get_adapter") as ga:
+        with patch("astra_backend.exchanges.binance.BinanceAdapter", new=fake), \
+             patch("astra_backend.exchanges.venue_credentials", return_value=("", "")), \
+             patch("astra_backend.exchanges.get_adapter") as ga:
             out = R._venue_accounts_binance("live")
         self.assertEqual(out["status"], "unavailable")
         self.assertIn("未发起任何请求", out["reason"])
@@ -147,9 +147,9 @@ class BinanceReaderTest(unittest.TestCase):
         ad.account_snapshot.return_value = {"equity_usdt": "88", "available_usdt": "77"}
         ad.positions.return_value = [{"size_signed": "2"}, {"size_signed": "0"}]
         ad.open_orders.return_value = [{"o": 1}, {"o": 2}]
-        with patch("r20_backend.exchanges.binance.BinanceAdapter", new=fake), \
-             patch("r20_backend.exchanges.venue_credentials", return_value=("K", "S")), \
-             patch("r20_backend.exchanges.get_adapter", return_value=ad) as ga:
+        with patch("astra_backend.exchanges.binance.BinanceAdapter", new=fake), \
+             patch("astra_backend.exchanges.venue_credentials", return_value=("K", "S")), \
+             patch("astra_backend.exchanges.get_adapter", return_value=ad) as ga:
             out = R._venue_accounts_binance("live")
         self.assertEqual(out["status"], "ready")
         self.assertEqual(ga.call_args.kwargs.get("environment"), "live")

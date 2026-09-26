@@ -65,7 +65,7 @@ class CleanStaleStagingTests(_Sandbox):
     def test_old_staging_files_are_removed(self):
         staging = self.root / "backups" / "staging"
         staging.mkdir(parents=True)
-        old = staging / "r20_backup_a_20260101.tar.gz"
+        old = staging / "astra_backup_a_20260101.tar.gz"
         old.write_bytes(b"old")
         os.utime(old, (time.time() - 7200, time.time() - 7200))
         self.assertEqual(br.clean_stale_staging(max_age_seconds=3600), 1)
@@ -75,7 +75,7 @@ class CleanStaleStagingTests(_Sandbox):
         # 审计③：旧条件「size==0 或 过期」会误删并发任务**正在写**的在途归档
         staging = self.root / "backups" / "staging"
         staging.mkdir(parents=True)
-        live = staging / "r20_backup_a_20260101.tar.gz"
+        live = staging / "astra_backup_a_20260101.tar.gz"
         live.write_bytes(b"")          # 刚 mkstemp、还没写内容
         self.assertEqual(br.clean_stale_staging(max_age_seconds=3600), 0)
         self.assertTrue(live.exists(), "在途空文件不许被当垃圾删掉")
@@ -93,7 +93,7 @@ class CleanStaleStagingTests(_Sandbox):
         # ★ 第 80 行 `pass` —— 单个条目查不动不许把整轮清理打挂
         staging = self.root / "backups" / "staging"
         staging.mkdir(parents=True)
-        (staging / "r20_backup_a_x.tar.gz").write_bytes(b"x")
+        (staging / "astra_backup_a_x.tar.gz").write_bytes(b"x")
 
         class _Bad:
             def is_file(self):
@@ -168,13 +168,13 @@ class RetainLocalArchiveTests(_Sandbox):
 
     def test_a_destination_outside_backups_is_refused(self):
         # ★ 第 106 行 —— 灾备归档不许写到 backups/ 之外
-        src = self._file("backups/staging/r20_backup_j_20260101.tar.gz")
+        src = self._file("backups/staging/astra_backup_j_20260101.tar.gz")
         with self.assertRaises(RuntimeError) as ctx:
             br.retain_local_archive(src, 3, self.root / "elsewhere")
         self.assertIn("必须位于 backups/ 目录下", str(ctx.exception))
 
     def test_archive_is_copied_into_the_destination(self):
-        src = self._file("backups/staging/r20_backup_j_20260101.tar.gz", b"payload")
+        src = self._file("backups/staging/astra_backup_j_20260101.tar.gz", b"payload")
         dest = br.retain_local_archive(src, 3, self.root / "backups" / "local")
         self.assertEqual(dest.read_bytes(), b"payload")
         self.assertTrue(src.exists(), "复制不是移动")
@@ -182,15 +182,15 @@ class RetainLocalArchiveTests(_Sandbox):
     def test_prune_is_scoped_to_the_same_job_prefix(self):
         # 审计③：任务 B（retention=1）跑一次不许裁掉任务 A 的最新归档
         now = time.time()
-        self._file("backups/local/r20_backup_a_20260101_0000.tar.gz", b"a1", mtime=now - 300)
-        self._file("backups/local/r20_backup_a_20260102_0000.tar.gz", b"a2", mtime=now - 200)
-        self._file("backups/local/r20_backup_B_20260101_0000.tar.gz", b"b1", mtime=now - 100)
-        src = self._file("backups/staging/r20_backup_B_20260103_0000.tar.gz", b"b2")
+        self._file("backups/local/astra_backup_a_20260101_0000.tar.gz", b"a1", mtime=now - 300)
+        self._file("backups/local/astra_backup_a_20260102_0000.tar.gz", b"a2", mtime=now - 200)
+        self._file("backups/local/astra_backup_B_20260101_0000.tar.gz", b"b1", mtime=now - 100)
+        src = self._file("backups/staging/astra_backup_B_20260103_0000.tar.gz", b"b2")
         br.retain_local_archive(src, 1, self.root / "backups" / "local")
         left = sorted(p.name for p in (self.root / "backups" / "local").glob("*.tar.gz"))
-        self.assertIn("r20_backup_a_20260102_0000.tar.gz", left, "任务 A 的最新归档要留着")
-        self.assertIn("r20_backup_B_20260103_0000.tar.gz", left, "任务 B 自己刚落盘的也要留")
-        self.assertNotIn("r20_backup_B_20260101_0000.tar.gz", left, "任务 B 的旧的才该裁")
+        self.assertIn("astra_backup_a_20260102_0000.tar.gz", left, "任务 A 的最新归档要留着")
+        self.assertIn("astra_backup_B_20260103_0000.tar.gz", left, "任务 B 自己刚落盘的也要留")
+        self.assertNotIn("astra_backup_B_20260101_0000.tar.gz", left, "任务 B 的旧的才该裁")
 
 
 class SqliteHotBackupTests(_Sandbox):
@@ -216,21 +216,21 @@ class SqliteHotBackupTests(_Sandbox):
 
     def test_admin_db_is_skipped(self):
         # ★ 第 132 行 —— admin 库含凭证，绝不进灾备包
-        self._make_db("r20_admin.db")
-        self._make_db("r20_quant.db")
+        self._make_db("astra_admin.db")
+        self._make_db("astra_quant.db")
         created = br.sqlite_hot_backups("20260101_0000", 3, self.root / "backups" / "sqlite")
-        self.assertEqual([p.name for p in created], ["r20_quant_20260101_0000.db"])
+        self.assertEqual([p.name for p in created], ["astra_quant_20260101_0000.db"])
 
     def test_wal_and_shm_sidecars_are_skipped(self):
         # ★ 第 134 行
-        (self.root / "data" / "r20_quant.db-wal").write_bytes(b"w")
-        (self.root / "data" / "r20_quant.db-shm").write_bytes(b"s")
-        self._make_db("r20_quant.db")
+        (self.root / "data" / "astra_quant.db-wal").write_bytes(b"w")
+        (self.root / "data" / "astra_quant.db-shm").write_bytes(b"s")
+        self._make_db("astra_quant.db")
         created = br.sqlite_hot_backups("20260101_0000", 3, self.root / "backups" / "sqlite")
         self.assertEqual(len(created), 1)
 
     def test_backup_is_a_usable_database(self):
-        self._make_db("r20_quant.db")
+        self._make_db("astra_quant.db")
         created = br.sqlite_hot_backups("20260101_0000", 3, self.root / "backups" / "sqlite")
         conn = sqlite3.connect(str(created[0]))
         try:
@@ -239,13 +239,13 @@ class SqliteHotBackupTests(_Sandbox):
             conn.close()
 
     def test_copied_database_is_owner_only(self):
-        self._make_db("r20_quant.db")
+        self._make_db("astra_quant.db")
         created = br.sqlite_hot_backups("20260101_0000", 3, self.root / "backups" / "sqlite")
         self.assertEqual(created[0].stat().st_mode & 0o777, 0o600)
 
     def test_readonly_uri_connect_failure_falls_back_to_a_plain_connect(self):
         # ★ 第 140 行 —— 只读 URI 打不开时回落普通连接（活动库也能热备）
-        self._make_db("r20_quant.db")
+        self._make_db("astra_quant.db")
         real_connect = sqlite3.connect
         calls = []
 
@@ -264,7 +264,7 @@ class SqliteHotBackupTests(_Sandbox):
 
     def test_backup_failure_removes_the_partial_file_and_raises(self):
         # ★ 第 153 行 —— 半截备份必须删掉，且**大声失败**（不许静默漏一个库）
-        self._make_db("r20_quant.db")
+        self._make_db("astra_quant.db")
 
         class _BadConn:
             def backup(self, other):
@@ -290,7 +290,7 @@ class SqliteHotBackupTests(_Sandbox):
         self.assertEqual(list(sqlite_dir.glob("*.db")), [], "半截文件要清掉")
 
     def test_prune_keeps_only_the_retention_window(self):
-        self._make_db("r20_quant.db")
+        self._make_db("astra_quant.db")
         sqlite_dir = self.root / "backups" / "sqlite"
         for stamp in ("20260101_0000", "20260102_0000", "20260103_0000"):
             br.sqlite_hot_backups(stamp, 2, sqlite_dir)
@@ -307,18 +307,18 @@ class DeadLineTests(_Sandbox):
     所以那个条件**恒为假**，`continue` **物理不可达**。
 
     > 与 `trader/venue_protection.py:521` 同一性质：这是"防御性代码写在了错误的位置"。
-    > 真正的 `-wal`/`-shm` 侧车文件（`r20_quant.db-wal`）**根本不会进入这个循环**，
+    > 真正的 `-wal`/`-shm` 侧车文件（`astra_quant.db-wal`）**根本不会进入这个循环**，
     > 所以它们也不会被热备份（那是另一件事，且现有行为是对的 —— 侧车由 SQLite
     > 的 `backup()` 在目标库里重建，不该被当独立库复制）。
     """
 
     def setUp(self):
         super().setUp()
-        (self.root / "data" / "r20_quant.db-wal").write_bytes(b"w")
-        (self.root / "data" / "r20_quant.db-shm").write_bytes(b"s")
+        (self.root / "data" / "astra_quant.db-wal").write_bytes(b"w")
+        (self.root / "data" / "astra_quant.db-shm").write_bytes(b"s")
 
     def test_no_filename_can_satisfy_both_conditions(self):
-        candidates = ["r20_quant.db", "r20_quant.db-wal", "r20_quant.db-shm",
+        candidates = ["astra_quant.db", "astra_quant.db-wal", "astra_quant.db-shm",
                       "x-wal", "x-shm", "x.db", "-wal", "a-wal.db"]
         for name in candidates:
             with self.subTest(name=name):
@@ -340,7 +340,7 @@ class DeadLineTests(_Sandbox):
 
     def test_the_wal_and_shm_sidecars_never_enter_the_loop(self):
         # 行为证据：侧车文件存在，但循环体只处理 `.db`
-        self.assertTrue((self.root / "data" / "r20_quant.db-wal").exists())
+        self.assertTrue((self.root / "data" / "astra_quant.db-wal").exists())
         self.assertEqual([p.name for p in (self.root / "data").glob("*.db")], [])
 
     def test_sidecars_are_not_copied_as_standalone_databases(self):
@@ -350,7 +350,7 @@ class DeadLineTests(_Sandbox):
 
     def test_the_admin_db_skip_next_to_it_is_reachable(self):
         # 对照：紧邻的第 132 行（跳过 admin 库）**是**可达的 —— 证明区别在 glob 模式
-        sqlite3.connect(str(self.root / "data" / "r20_admin.db")).close()
+        sqlite3.connect(str(self.root / "data" / "astra_admin.db")).close()
         self.assertEqual(br.sqlite_hot_backups("20260101_0000", 3,
                                                self.root / "backups" / "sqlite"), [])
 
@@ -369,7 +369,7 @@ class CreateArchiveTests(_Sandbox):
     def test_archive_contains_the_scope_root(self):
         path, included = br.create_archive(self._job(), "20260101_0000")
         self.assertEqual(included, ["data"])
-        self.assertTrue(path.name.startswith("r20_backup_nightly_"))
+        self.assertTrue(path.name.startswith("astra_backup_nightly_"))
         with tarfile.open(path) as tf:
             self.assertTrue(any(n.startswith("data/") for n in tf.getnames()))
 
@@ -378,12 +378,12 @@ class CreateArchiveTests(_Sandbox):
         self.assertEqual(path.stat().st_mode & 0o777, 0o600)
 
     def test_mandatory_excludes_are_always_applied(self):
-        (self.root / "data" / "r20_admin.db").write_bytes(b"creds")
+        (self.root / "data" / "astra_admin.db").write_bytes(b"creds")
         (self.root / "data" / "llm_models.json").write_text("{}", encoding="utf-8")
         path, _ = br.create_archive(self._job(), "20260101_0000")
         with tarfile.open(path) as tf:
             names = tf.getnames()
-        self.assertFalse(any("r20_admin.db" in n for n in names), "admin 库禁入")
+        self.assertFalse(any("astra_admin.db" in n for n in names), "admin 库禁入")
         self.assertFalse(any("llm_models.json" in n for n in names), "审计A3：LLM 明文键禁入")
 
     def test_job_level_excludes_are_applied(self):
@@ -453,7 +453,7 @@ class DeriveKeyTests(unittest.TestCase):
 
 
 class EncryptionRoundTripTests(_Sandbox):
-    KEY_ENV = "R20_TEST_BACKUP_KEY"
+    KEY_ENV = "ASTRA_TEST_BACKUP_KEY"
 
     def setUp(self):
         super().setUp()
@@ -473,6 +473,30 @@ class EncryptionRoundTripTests(_Sandbox):
     def test_the_encrypted_file_starts_with_the_magic_header(self):
         enc = br.encrypt_archive(self.src, self.KEY_ENV)
         self.assertTrue(enc.read_bytes().startswith(br.MAGIC))
+
+    def test_archives_written_before_the_rename_still_decrypt(self):
+        """⚠️ 2026-09-27「r20 → astra 全量改名」的数据兼容判据。
+
+        改名把归档魔数从旧值换成 `ASTRAGCM`。用户手里**已经存在**的备份归档带的是旧魔数
+        —— 若只认新魔数，它们会全部变成"不是受支持的归档"，即「改名 = 备份全废」。
+        本用例把新写的归档头部改回旧魔数，断言仍能正常解密。
+
+        关键前提：两个魔数**等长（8 字节）**，故 salt/nonce/tag 的偏移不变。
+        """
+        enc = br.encrypt_archive(self.src, self.KEY_ENV)
+        self.assertEqual(len(br.MAGIC), len(br.LEGACY_MAGIC),
+                         "双魔数必须等长，否则头部偏移会漂移、老归档按错误偏移解密")
+        raw = enc.read_bytes()
+        self.assertTrue(raw.startswith(br.MAGIC))
+        enc.write_bytes(br.LEGACY_MAGIC + raw[len(br.MAGIC):])
+        out = br.decrypt_archive(enc, self.KEY_ENV, self.root / "backups" / "legacy.tar.gz")
+        self.assertEqual(out.read_bytes(), b"PAYLOAD" * 100,
+                         "改名前的归档必须仍能解密（这是「改名」与「丢数据」的分界线）")
+
+    def test_both_known_magics_are_eight_bytes(self):
+        self.assertEqual(len(br.MAGIC), 8, "魔数长度是格式契约的一部分")
+        self.assertEqual(len(br.LEGACY_MAGIC), 8)
+        self.assertNotEqual(br.MAGIC, br.LEGACY_MAGIC, "新旧魔数必须不同，否则双读无意义")
 
     def test_both_artifacts_are_owner_only(self):
         enc = br.encrypt_archive(self.src, self.KEY_ENV)
@@ -497,7 +521,7 @@ class EncryptionRoundTripTests(_Sandbox):
 
     def test_a_wrong_magic_is_refused(self):
         # ★ 第 248 行
-        bad = self._file("backups/staging/not-r20.aes256", b"NOTMAGIC" + b"0" * 64)
+        bad = self._file("backups/staging/not-astra.aes256", b"NOTMAGIC" + b"0" * 64)
         with self.assertRaises(RuntimeError) as ctx:
             br.decrypt_archive(bad, self.KEY_ENV, self.root / "backups" / "out.tar.gz")
         self.assertIn("不是受支持的 AstraQuant AES-256-GCM 归档", str(ctx.exception))
@@ -607,13 +631,13 @@ class VerifyArchiveTests(_Sandbox):
         self.assertIn("特殊设备节点", str(ctx.exception))
 
     def test_an_encrypted_archive_is_decrypted_for_inspection_only(self):
-        secret_env = "R20_TEST_VERIFY_KEY"
+        secret_env = "ASTRA_TEST_VERIFY_KEY"
         with patch.dict(os.environ, {secret_env: "z" * 20}):
             enc = br.encrypt_archive(self.tarball, secret_env)
             report = br.verify_archive(enc, "", secret_env)
         self.assertTrue(report["valid"])
         self.assertTrue(report["encrypted"])
-        self.assertEqual(list((self.root / "backups").glob("r20-verify-*.tar.gz")), [],
+        self.assertEqual(list((self.root / "backups").glob("astra-verify-*.tar.gz")), [],
                          "临时解密文件必须清掉")
 
 
@@ -705,8 +729,8 @@ class DeliverTargetTests(_Sandbox):
 
     def setUp(self):
         super().setUp()
-        self.src = self._file("backups/staging/r20_backup_j_20260101.tar.gz", b"payload")
-        import r20_backend.net_security as net
+        self.src = self._file("backups/staging/astra_backup_j_20260101.tar.gz", b"payload")
+        import astra_backend.net_security as net
         self._net = net
         self._real_validate = net.validate_outbound_url
         p = patch.object(net, "validate_outbound_url", lambda url, **kw: url)
@@ -744,8 +768,8 @@ class DeliverTargetTests(_Sandbox):
         seen = {}
         with patch.object(br, "upload_baidu",
                           lambda s, rp, r: seen.update({"rp": rp, "r": r}) or {"ok": 1}):
-            br.deliver_target(self.src, {"type": "baidu", "remote_path": "R20"})
-        self.assertEqual(seen, {"rp": "R20", "r": 3})
+            br.deliver_target(self.src, {"type": "baidu", "remote_path": "ASTRA"})
+        self.assertEqual(seen, {"rp": "ASTRA", "r": 3})
 
     def test_baidu_oauth_mode_routes_to_the_oauth_uploader(self):
         # ★ 第 386/387 行
@@ -758,7 +782,7 @@ class DeliverTargetTests(_Sandbox):
 
     def test_cloud_targets_validate_their_endpoint(self):
         # ★ 第 384 行 —— 出站地址必须过 net_security 校验
-        import r20_backend.net_security as net
+        import astra_backend.net_security as net
         seen = {}
 
         def validate(url, allow_private=False):
@@ -874,11 +898,11 @@ class RunBackupJobTests(_Sandbox):
 
     def test_encryption_flag_is_recorded_when_enabled(self):
         # ★ 第 443/444 行
-        env = patch.dict(os.environ, {"R20_JOB_KEY": "k" * 24})
+        env = patch.dict(os.environ, {"ASTRA_JOB_KEY": "k" * 24})
         env.start()
         self.addCleanup(env.stop)
         result = br.run_backup_job(self._job(
-            encryption={"enabled": True, "key_env": "R20_JOB_KEY"}))
+            encryption={"enabled": True, "key_env": "ASTRA_JOB_KEY"}))
         self.assertTrue(result["encrypted"])
         self.assertTrue(result["archive"].endswith(".aes256"))
         self.assertEqual(result["status"], "success")
@@ -894,7 +918,7 @@ class RunBackupJobTests(_Sandbox):
         self.assertTrue(any("远端 500" in e for e in result["errors"]))
 
     def test_partial_status_when_sqlite_succeeds_but_a_target_fails(self):
-        (self.root / "data" / "r20_quant.db").write_bytes(b"")
+        (self.root / "data" / "astra_quant.db").write_bytes(b"")
         with patch.object(br, "deliver_target",
                           lambda s, t: {"success": False, "attempts": 1, "error": "x"}):
             result = br.run_backup_job(self._job(sqlite={"enabled": True, "retention": 3}))
@@ -921,7 +945,7 @@ class RunBackupJobTests(_Sandbox):
         self.assertFalse(result["temporary_cleaned"])
 
     def test_sqlite_backups_are_listed_relative_to_the_repo(self):
-        (self.root / "data" / "r20_quant.db").write_bytes(b"")
+        (self.root / "data" / "astra_quant.db").write_bytes(b"")
         result = br.run_backup_job(self._job(sqlite={"enabled": True, "retention": 3}))
         self.assertEqual(len(result["sqlite"]), 1)
         self.assertTrue(result["sqlite"][0].startswith("backups/sqlite/"))

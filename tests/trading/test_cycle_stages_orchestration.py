@@ -74,7 +74,7 @@ class UniverseStageTest(unittest.TestCase):
 
 class PersistStageTest(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(prefix="r20-persist-")
+        self.tmp = tempfile.TemporaryDirectory(prefix="astra-persist-")
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
         (self.root / "scripts").mkdir()
@@ -138,7 +138,7 @@ class _Env:
 
 class PreflightStageTest(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(prefix="r20-pre-")
+        self.tmp = tempfile.TemporaryDirectory(prefix="astra-pre-")
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
         (self.root / "scripts").mkdir()

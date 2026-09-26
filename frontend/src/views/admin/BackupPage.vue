@@ -18,8 +18,8 @@
  *   POST /api/v1/admin/backups/restore · /api/v1/admin/backups/upload
  *   GET  /api/v1/admin/backups/download/{name}?token=  ← **原生 fetch 双通道下载**，逐字保留
  *
- * ⚠️ 高危门禁逐字保留：立即备份需逐字 `BACKUP R20`；恢复需逐字 `RESTORE R20`（覆盖式不可撤销）。
- * ⚠️ 下载/上传走原生 `fetch`（带 `X-R20-Session` 头、Blob 与降级直链双通道、
+ * ⚠️ 高危门禁逐字保留：立即备份需逐字 `BACKUP ASTRA`；恢复需逐字 `RESTORE ASTRA`（覆盖式不可撤销）。
+ * ⚠️ 下载/上传走原生 `fetch`（带 `X-Astra-Session` 头、Blob 与降级直链双通道、
  *    FormData 上传）——这些都不经 `api()` 封装，本批**一字未动**。
  */
 import { fmtDateTime } from '../../utils/format';
@@ -148,18 +148,18 @@ async function save() {
 
 async function runNow() {
   // 批C(2026-09-13)：prompt() → 项目确认服务（移动端 prompt 常被浏览器弱化/难用），
-  // 短语仍由用户逐字输入，与后端 `BACKUP R20` 契约一致。
+  // 短语仍由用户逐字输入，与后端 `BACKUP ASTRA` 契约一致。
   const _ok = await ask({
     title: t('admin.backup.runNowTitle'),
     desc: t('admin.backup.runNowDesc'),
     danger: true,
-    confirmPhrase: 'BACKUP R20',
+    confirmPhrase: 'BACKUP ASTRA',
     okText: t('common.execute'),
   })
   if (!_ok) return
   busy.value = 'run'
   try {
-    const res = await api('/api/v1/admin/backups/run', { method: 'POST', body: JSON.stringify({ confirmation: 'BACKUP R20' }) })
+    const res = await api('/api/v1/admin/backups/run', { method: 'POST', body: JSON.stringify({ confirmation: 'BACKUP ASTRA' }) })
     toast.ok(t('admin.backup.runOk', undefined, { n: (res.output || '').length }))
     await load()
   } catch (e: any) {
@@ -174,14 +174,14 @@ async function downloadArchive(archiveName: string) {
   downloadingArchive.value = clean
   toast.ok(t('admin.backup.connecting', undefined, { file: clean }))
 
-  const token = auth.token || localStorage.getItem('r20.admin.session.id') || ''
+  const token = auth.token || localStorage.getItem('astra.admin.session.id') || ''
   const directUrl = `/api/v1/admin/backups/download/${encodeURIComponent(clean)}${token ? `?token=${encodeURIComponent(token)}` : ''}`
 
   try {
     // 双通道策略 1：通过 Fetch Blob 在内存中获取并检查状态
     const resp = await fetch(directUrl, {
       headers: {
-        ...(token ? { 'X-R20-Session': token } : {})
+        ...(token ? { 'X-Astra-Session': token } : {})
       }
     })
 
@@ -243,7 +243,7 @@ async function onFileSelected(e: Event) {
     const resp = await fetch('/api/v1/admin/backups/upload', {
       method: 'POST',
       headers: {
-        ...(auth.token ? { 'X-R20-Session': auth.token } : {})
+        ...(auth.token ? { 'X-Astra-Session': auth.token } : {})
       },
       body: formData
     })
@@ -264,12 +264,12 @@ async function onFileSelected(e: Event) {
 async function restoreArchive(archiveName: string) {
   const clean = archiveName.split('/').pop() || archiveName
   // 批C(2026-09-13)：prompt+alert → 项目确认服务。恢复备份是覆盖式破坏操作
-  // （解压覆盖当前配置/历史数据/策略），短语逐字输入，与后端 `RESTORE R20` 契约一致。
+  // （解压覆盖当前配置/历史数据/策略），短语逐字输入，与后端 `RESTORE ASTRA` 契约一致。
   const _ok = await ask({
     title: t('admin.backup.restoreConfirmTitle'),
     desc: t('admin.backup.restoreConfirmDesc', undefined, { file: clean }),
     danger: true,
-    confirmPhrase: 'RESTORE R20',
+    confirmPhrase: 'RESTORE ASTRA',
     okText: t('common.overwriteRestore'),
   })
   if (!_ok) return
@@ -279,7 +279,7 @@ async function restoreArchive(archiveName: string) {
       method: 'POST',
       body: JSON.stringify({
         archive_name: clean,
-        confirmation: 'RESTORE R20'
+        confirmation: 'RESTORE ASTRA'
       })
     })
     toast.ok(t('admin.backup.restoreOk', undefined, { file: clean, n: res.restored_count }))

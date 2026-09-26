@@ -2,8 +2,8 @@
 
 ## 为什么
 
-本会话连续吃到两次"范围缺根"的亏：配置扫描门只写了 `scripts/` + `r20_backend/`，
-而仓里还有 `r20_gateway/`（网关：凭证库/发布器/任务存储）与 `plugins/` ⇒
+本会话连续吃到两次"范围缺根"的亏：配置扫描门只写了 `scripts/` + `astra_backend/`，
+而仓里还有 `astra_gateway/`（网关：凭证库/发布器/任务存储）与 `plugins/` ⇒
 那些地方的违规**门看不见**（既可能是假绿，也可能是假警报）。
 
 本门把"扫描范围"本身变成受检对象：**任何**声明了 `SCAN_DIRS`/`SCAN_ROOTS`/`SOURCE_ROOTS`
@@ -99,7 +99,7 @@ class ScanScopeIsExplicitTest(unittest.TestCase):
     def test_meta_scan_is_not_vacuous(self):
         roots = code_roots()
         self.assertGreaterEqual(len(roots), 3, f"代码根只推出 {len(roots)} 个 ⇒ 推导失效：{roots}")
-        for must in ("scripts", "r20_backend"):
+        for must in ("scripts", "astra_backend"):
             self.assertIn(must, roots)
         gates = scanning_gates()
         self.assertGreaterEqual(len(gates), 8, f"只发现 {len(gates)} 个扫描门 ⇒ 发现逻辑失效")
@@ -116,9 +116,9 @@ class ScanScopeIsExplicitTest(unittest.TestCase):
 
     def test_teeth_on_a_partial_scope(self):
         """牙齿：只扫部分代码根的声明必须被判定为缺口。"""
-        roots = {"scripts", "r20_backend", "r20_gateway", "plugins"}
-        partial = {"scripts", "r20_backend"}
-        self.assertEqual(sorted(roots - partial), ["plugins", "r20_gateway"],
+        roots = {"scripts", "astra_backend", "astra_gateway", "plugins"}
+        partial = {"scripts", "astra_backend"}
+        self.assertEqual(sorted(roots - partial), ["astra_gateway", "plugins"],
                          "部分范围必须被识别出缺失的根 ⇒ 门没有牙齿")
 
 

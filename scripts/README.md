@@ -1,17 +1,17 @@
 # `scripts/` 导航
 
-本目录是 R20 的**运行时代码**：实盘 worker、后台守护进程、以及它们共用的库。
+本目录是 ASTRA 的**运行时代码**：实盘 worker、后台守护进程、以及它们共用的库。
 它**不是**一个 Python 包（没有 `__init__.py`），模块之间以
 `sys.path` 上的顶层名互相 `import`，同时也支持 `scripts.xxx` 双拼写
 （见本文末「双拼写」一节）。
 
-> ⚠️ **为什么要这份文档**：本目录根层有 **34 个 `.py`**，
+> ⚠️ **为什么要这份文档**：本目录根层有 **38 个 `.py`**，
 > 此前**没有任何 README**，其中 23 个在全仓文档里连一次都没被提到。
 > 新人（或下一个 Agent）只能靠逐个打开文件猜哪个是入口、哪个是库。
 >
 > 第六十六刀补上这份导航后，`tests/audit/test_directory_docs_current.py`
 > 会把「磁盘上的根层模块」与「本文档提到的模块」**双向对照**，
-> 漏登记或指向不存在的文件都会翻红 —— 与前几刀给 `r20_backend/` 加的是同一道闸。
+> 漏登记或指向不存在的文件都会翻红 —— 与前几刀给 `astra_backend/` 加的是同一道闸。
 
 ## 入口 / 调度（由外部按周期拉起）
 
@@ -24,7 +24,7 @@
 | `nightly_backup_and_clean.py` | 86 | 每日 02:00 | 跑配置好的备份作业 + 清理 |
 | `cleanup_disk.py` | 125 | 按需/定时 | 磁盘与日志清理 |
 | `generate_snapshots.py` | 102 | 定时 | 生成 `snapshots.json` 供前端曲线 |
-| `gateway_liveness.py` | 121 | 由 `r20_watchdog.sh gateway` 每 30s 调用 | 网关存活判据（**退出码即语义**：0 健康 / 1 进程不存在 / 2 心跳停更 / 3 心跳缺失）。判据是 worker 每轮循环写的存活心跳，而不是周期产物够不够新 —— 用户**可以合法关停交易**，那时周期产物本就不更新，用它当判据会造成误杀循环 |
+| `gateway_liveness.py` | 121 | 由 `astra_watchdog.sh gateway` 每 30s 调用 | 网关存活判据（**退出码即语义**：0 健康 / 1 进程不存在 / 2 心跳停更 / 3 心跳缺失）。判据是 worker 每轮循环写的存活心跳，而不是周期产物够不够新 —— 用户**可以合法关停交易**，那时周期产物本就不更新，用它当判据会造成误杀循环 |
 | `sync_web_data.py` | 346 | 由 `daemon_web_sync.py` 每轮调用 | 生成前端 `trading_data.json` 缓存（凭证未配则 **fail-closed**，绝不用 0 覆盖好缓存） |
 
 ## 交易核心
@@ -85,10 +85,12 @@
 | `backup_upload.py` | 282 | 备份上传目标：S3 / OSS / WebDAV / 百度网盘 |
 | `self_improvement_engine.py` | 782 | LLM 原生自省与策略演化引擎 |
 | `local_lock.py` | 114 | `file_lock` 的**本地兜底**实现（跨主机锁的降级路径） |
-| `qq_notifier.py` | 157 | 通知发布器，桥接 R20 网关 |
+| `qq_notifier.py` | 157 | 通知发布器，桥接 AstraQuant 网关 |
 | `db_manager.py` | 282 | SQLite 连接/建表管理 |
 | `debug_aggregate_orders.py` | 54 | **调试脚本**：聚合挂单排查 |
 | `debug_audit_bills.py` | 48 | **调试脚本**：账单审计排查 |
+| `tag_markers.py` | 71 | 交易所挂单的**归属标记**（新标记 + 改名前的旧标记归一）。改标记前必读：旧标记仍在交易所上，只认新标记会让云端棘轮静默失效 |
+| `migrate_r20_to_astra.py` | 292 | **一次性迁移工具**（`r20` → `astra`）：运行态文件原子改名 + 密文库键重映射。默认 dry-run，`--check` 供启动脚本做 fail-closed 前置检查 |
 
 ## ⚠️ 双拼写（改动 import 前必读）
 
@@ -111,10 +113,10 @@ from scripts.okx_rest import …  # 包路径名（仓库根在 sys.path 上）
 ## 判绿命令
 
 ```bash
-# 全量套件（当前基线见 r20_backend/README.md §6）
+# 全量套件（当前基线见 astra_backend/README.md §6）
 .venv/bin/python -m unittest discover -s tests -t .
 ```
 
 > 注意 `python -m tests.offline_suite` 会主动拦截未白名单的外部子进程
 > （`git` / `python` / `node` 等），那是守卫自身的产物，**不是回归**。
-> 详见 `r20_backend/README.md` §6。
+> 详见 `astra_backend/README.md` §6。

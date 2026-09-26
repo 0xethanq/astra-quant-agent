@@ -19,7 +19,7 @@ import unittest
 
 from pydantic import ValidationError
 
-from r20_backend import schemas as S
+from astra_backend import schemas as S
 
 
 class PromptProfileCreateNameTests(unittest.TestCase):

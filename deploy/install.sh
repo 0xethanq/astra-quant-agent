@@ -25,9 +25,9 @@ fi
 
 cat <<EOF
 
-R20 dependencies installed.
+ASTRA dependencies installed.
 Next:
-  1. Edit $ROOT/.env and keep R20_OKX_ENV=demo initially.
+  1. Edit $ROOT/.env and keep ASTRA_OKX_ENV=demo initially.
   2. Connect OKX with V5 API Keys (the only method):
      - Recommended: open /admin, account page, fill the DEMO (or LIVE) trio
        API Key / Secret Key / Passphrase. Stored Fernet-encrypted; blank fields

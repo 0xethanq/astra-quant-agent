@@ -33,9 +33,9 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from r20_backend import council_manager as CM
-from r20_backend import file_locks
-from r20_backend.council import debate, policy, presets, roster
+from astra_backend import council_manager as CM
+from astra_backend import file_locks
+from astra_backend.council import debate, policy, presets, roster
 
 
 def _roles(**overrides):
@@ -52,7 +52,7 @@ class _Base(unittest.TestCase):
         return started
 
     def setUp(self):
-        self.tmp = Path(tempfile.mkdtemp(prefix="r20-council-"))
+        self.tmp = Path(tempfile.mkdtemp(prefix="astra-council-"))
         self.addCleanup(shutil.rmtree, self.tmp, True)
         self.file = self.tmp / "council_config.json"
         self._start(mock.patch.object(CM, "COUNCIL_CONFIG_FILE", self.file))
@@ -73,7 +73,7 @@ class _Base(unittest.TestCase):
 
 
 class ReexportTests(unittest.TestCase):
-    """门面再导出而非搬空：审计/子进程靠 `from r20_backend.council_manager import X` 取用。"""
+    """门面再导出而非搬空：审计/子进程靠 `from astra_backend.council_manager import X` 取用。"""
 
     def test_constants_are_the_policy_objects(self):
         self.assertEqual(CM.DEFAULT_CONSENSUS_MODE, policy.DEFAULT_CONSENSUS_MODE)
@@ -99,7 +99,7 @@ class ReexportTests(unittest.TestCase):
         self.assertIs(CM._render_seat_prompt, debate._render_seat_prompt)
 
     def test_export_format_constants(self):
-        self.assertEqual(CM.COUNCIL_EXPORT_FORMAT, "r20-council-config")
+        self.assertEqual(CM.COUNCIL_EXPORT_FORMAT, "astra-council-config")
         self.assertEqual(CM.COUNCIL_EXPORT_VERSION, 1)
         self.assertEqual(CM._VALID_REASONING_EFFORTS,
                          {"none", "minimal", "low", "medium", "high"})
@@ -139,7 +139,7 @@ class LockDecoratorTests(_Base):
 
 class AtomicWriteTests(_Base):
     def test_writes_readable_utf8_json(self):
-        from r20_backend import council_manager as _cm
+        from astra_backend import council_manager as _cm
         target = self.tmp / "nested" / "out.json"
         with mock.patch.object(_cm, "COUNCIL_CONFIG_FILE", target):
             _cm._atomic_write_json(target, {"中文": 1, "b": 2})

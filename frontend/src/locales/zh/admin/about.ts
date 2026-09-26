@@ -28,7 +28,7 @@ export const zhAdminAbout = {
   confirmSubtitle: "关于 AstraQuant：执行 fast-forward 拉取最新主分支代码",
   confirmPrefix: "为防止误操作，请在下方输入确认短语",
   confirmSuffix: "：",
-  phrasePlaceholder: "请输入 UPDATE R20",
+  phrasePlaceholder: "请输入 UPDATE ASTRA",
   cancel: "取消",
   updating: "正在更新中...",
   confirmNow: "立即确认更新",

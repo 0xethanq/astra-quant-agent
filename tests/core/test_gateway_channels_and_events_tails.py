@@ -1,4 +1,4 @@
-"""网关通道适配器与事件模型（`r20_gateway/channels.py` & `events.py`）残余分支收口测试 —— 第 377 刀。
+"""网关通道适配器与事件模型（`astra_gateway/channels.py` & `events.py`）残余分支收口测试 —— 第 377 刀。
 
 本测试针对网关消息分发与事件模型：
 - 通道适配器向底层连接器发送与结果结构化（`NotificationChannelAdapter.send` 调用 `send_channel` 并返回 `DeliveryResult`）；
@@ -9,8 +9,8 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from r20_gateway.channels import DeliveryResult, NotificationChannelAdapter
-from r20_gateway.events import GatewayEvent
+from astra_gateway.channels import DeliveryResult, NotificationChannelAdapter
+from astra_gateway.events import GatewayEvent
 
 
 class GatewayChannelsAndEventsTailsTests(unittest.TestCase):
@@ -19,7 +19,7 @@ class GatewayChannelsAndEventsTailsTests(unittest.TestCase):
         adapter = NotificationChannelAdapter("wechat")
         self.assertEqual(adapter.channel_id, "wechat")
 
-        with patch("r20_gateway.channels.send_channel", return_value=(True, "ok_delivered")):
+        with patch("astra_gateway.channels.send_channel", return_value=(True, "ok_delivered")):
             res = adapter.send("risk alert message")
 
         self.assertIsInstance(res, DeliveryResult)

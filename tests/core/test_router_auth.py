@@ -30,8 +30,8 @@ from unittest import mock
 
 from fastapi import HTTPException
 
-from r20_backend.routers import auth as A
-from r20_backend.schemas import (
+from astra_backend.routers import auth as A
+from astra_backend.schemas import (
     AdminCreateRequest,
     AdminEnabledRequest,
     AdminLoginRequest,
@@ -147,7 +147,7 @@ class AuthRoutesTest(unittest.TestCase):
         self.store.validate_session.side_effect = lambda tok: (
             order.append("validate") or {"username": "root"})
         self.store.logout.side_effect = lambda tok: order.append("logout")
-        out = A.admin_logout(mock.Mock(), x_r20_session="tok")
+        out = A.admin_logout(mock.Mock(), x_astra_session="tok")
         self.assertEqual(out, {"logged_out": True})
         self.assertEqual(order, ["validate", "logout"], "先取证，后撤销")
         self.store.logout.assert_called_once_with("tok")
@@ -158,7 +158,7 @@ class AuthRoutesTest(unittest.TestCase):
 
     def test_logout_without_a_session_still_reports_logged_out_and_audits_nothing(self):
         self.store.validate_session.return_value = None
-        self.assertEqual(A.admin_logout(mock.Mock(), x_r20_session=None), {"logged_out": True})
+        self.assertEqual(A.admin_logout(mock.Mock(), x_astra_session=None), {"logged_out": True})
         # 缺失令牌按空串处理，撤销照发（幂等），但无人可记 ⇒ 不留痕
         self.store.logout.assert_called_once_with("")
         self.assertEqual(self.audits, [])
@@ -168,19 +168,19 @@ class AuthRoutesTest(unittest.TestCase):
         self.current_admin.return_value = {"id": 0, "username": "legacy-token",
                                            "role": "legacy"}
         with self.assertRaises(HTTPException) as ctx:
-            A.admin_me(x_r20_session="tok")
+            A.admin_me(x_astra_session="tok")
         self.assertEqual(ctx.exception.status_code, 401)
         self.assertIn("账号密码", ctx.exception.detail)
 
     def test_me_returns_the_user_object(self):
         self.current_admin.return_value = {"id": 3, "username": "alice", "role": "admin"}
-        self.assertEqual(A.admin_me(x_r20_session="tok"),
+        self.assertEqual(A.admin_me(x_astra_session="tok"),
                          {"user": {"id": 3, "username": "alice", "role": "admin"}})
 
     # ── users ─────────────────────────────────────────────
     def test_users_list_requires_superadmin_and_reports_current_id(self):
         self.store.list_users.return_value = [{"id": 1, "username": "root"}]
-        out = A.admin_users(x_r20_session="tok")
+        out = A.admin_users(x_astra_session="tok")
         self.superadmin.assert_called_once_with("tok")
         self.assertEqual(out, {"users": [{"id": 1, "username": "root"}], "current_user_id": 1})
 
@@ -189,7 +189,7 @@ class AuthRoutesTest(unittest.TestCase):
         with self.assertRaises(HTTPException) as ctx:
             A.create_admin_user(AdminCreateRequest(username="bob",
                                                    password="longpassword123"),
-                                x_r20_session="tok")
+                                x_astra_session="tok")
         self.assertEqual(ctx.exception.status_code, 400)
         self.assertEqual(self.audits, [], "失败**不**记 success 审计")
 
@@ -198,7 +198,7 @@ class AuthRoutesTest(unittest.TestCase):
         out = A.create_admin_user(AdminCreateRequest(username="bob",
                                                      password="longpassword123",
                                                      role="admin"),
-                                  x_r20_session="tok")
+                                  x_astra_session="tok")
         self.assertEqual(out, {"created": {"id": 2, "username": "bob", "role": "admin"}})
         args, _ = self.audits[0]
         self.assertEqual(args[0], "admin.user.create")
@@ -209,13 +209,13 @@ class AuthRoutesTest(unittest.TestCase):
     def test_enable_toggle_conflict_is_409(self):
         self.store.set_enabled.side_effect = ValueError("不能停用最后一个超管")
         with self.assertRaises(HTTPException) as ctx:
-            A.update_admin_enabled(2, AdminEnabledRequest(enabled=False), x_r20_session="tok")
+            A.update_admin_enabled(2, AdminEnabledRequest(enabled=False), x_astra_session="tok")
         self.assertEqual(ctx.exception.status_code, 409)
         self.assertEqual(self.audits, [])
 
     def test_enable_toggle_success_audits_and_returns_fresh_user(self):
         self.store.get_user.return_value = {"id": 2, "enabled": 1}
-        out = A.update_admin_enabled(2, AdminEnabledRequest(enabled=True), x_r20_session="tok")
+        out = A.update_admin_enabled(2, AdminEnabledRequest(enabled=True), x_astra_session="tok")
         self.store.set_enabled.assert_called_once_with(2, True, 1)
         self.assertEqual(out, {"user": {"id": 2, "enabled": 1}})
         self.assertEqual(self.audits[0][0][0], "admin.user.enabled")
@@ -224,7 +224,7 @@ class AuthRoutesTest(unittest.TestCase):
     def test_unlock_requires_the_exact_confirmation_phrase(self):
         with self.assertRaises(HTTPException) as ctx:
             A.unlock_admin_user(7, AdminUnlockRequest(confirmation="UNLOCK ADMIN 8"),
-                                x_r20_session="tok")
+                                x_astra_session="tok")
         self.assertEqual(ctx.exception.status_code, 400)
         self.assertIn("UNLOCK ADMIN 7", ctx.exception.detail)
         # 短语不符 ⇒ 一次解锁都没发生，也不留痕
@@ -234,7 +234,7 @@ class AuthRoutesTest(unittest.TestCase):
     def test_unlock_accepts_the_phrase_after_strip_upper_normalisation(self):
         self.store.get_user.return_value = {"id": 7, "enabled": 1}
         out = A.unlock_admin_user(7, AdminUnlockRequest(confirmation="  unlock admin 7  "),
-                                  x_r20_session="tok")
+                                  x_astra_session="tok")
         self.store.unlock_user.assert_called_once_with(7)
         self.assertEqual(out["user"]["id"], 7)
         self.assertEqual(self.audits[0][0][0], "admin.user.unlock")
@@ -243,7 +243,7 @@ class AuthRoutesTest(unittest.TestCase):
         self.store.unlock_user.side_effect = ValueError("查无此人")
         with self.assertRaises(HTTPException) as ctx:
             A.unlock_admin_user(99, AdminUnlockRequest(confirmation="UNLOCK ADMIN 99"),
-                                x_r20_session="tok")
+                                x_astra_session="tok")
         self.assertEqual(ctx.exception.status_code, 404)
 
     # ── password ──────────────────────────────────────────
@@ -253,7 +253,7 @@ class AuthRoutesTest(unittest.TestCase):
         with self.assertRaises(HTTPException) as ctx:
             A.update_admin_password(0, AdminPasswordRequest(current_password="old",
                                                             new_password="longpassword123"),
-                                    x_r20_session="tok")
+                                    x_astra_session="tok")
         self.assertEqual(ctx.exception.status_code, 401)
         self.store.change_password.assert_not_called()
 
@@ -262,7 +262,7 @@ class AuthRoutesTest(unittest.TestCase):
         with self.assertRaises(HTTPException) as ctx:
             A.update_admin_password(2, AdminPasswordRequest(current_password="old",
                                                             new_password="longpassword123"),
-                                    x_r20_session="tok")
+                                    x_astra_session="tok")
         self.assertEqual(ctx.exception.status_code, 403)
         self.store.change_password.assert_not_called()
 
@@ -272,7 +272,7 @@ class AuthRoutesTest(unittest.TestCase):
         with self.assertRaises(HTTPException) as ctx:
             A.update_admin_password(1, AdminPasswordRequest(current_password="wrong",
                                                             new_password="longpassword123"),
-                                    x_r20_session="tok")
+                                    x_astra_session="tok")
         self.assertEqual(ctx.exception.status_code, 403)
         self.assertIn("当前密码", ctx.exception.detail)
         self.store.change_password.assert_not_called()
@@ -281,7 +281,7 @@ class AuthRoutesTest(unittest.TestCase):
     def test_superadmin_resets_another_password_without_the_current_one(self):
         self.current_admin.return_value = {"id": 1, "username": "root", "role": "superadmin"}
         out = A.update_admin_password(2, AdminPasswordRequest(new_password="longpassword123"),
-                                      x_r20_session="tok")
+                                      x_astra_session="tok")
         # 超管改别人的密码：不索要旧密码 ⇒ 一次 verify 都不该有
         self.store.verify_password.assert_not_called()
         self.store.change_password.assert_called_once_with(2, "longpassword123")
@@ -297,7 +297,7 @@ class AuthRoutesTest(unittest.TestCase):
         with self.assertRaises(HTTPException) as ctx:
             A.update_admin_password(1, AdminPasswordRequest(current_password="old",
                                                             new_password="longpassword123"),
-                                    x_r20_session="tok")
+                                    x_astra_session="tok")
         self.assertEqual(ctx.exception.status_code, 400)
         self.assertEqual(self.audits, [])
 

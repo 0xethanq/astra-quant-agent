@@ -1,4 +1,4 @@
-"""大模型能力矩阵与API格式识别（`r20_backend/llm/capabilities.py`）全量分支收口测试 —— 第 360 刀。
+"""大模型能力矩阵与API格式识别（`astra_backend/llm/capabilities.py`）全量分支收口测试 —— 第 360 刀。
 
 本模块 64 行，负责大模型思考类型检测、多模态能力判定与 API 协议格式识别纯函数：
 - 思考推理类型识别（`_detect_reasoning_type`）：
@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import unittest
 
-from r20_backend.llm.capabilities import (
+from astra_backend.llm.capabilities import (
     _detect_api_format,
     _detect_capabilities,
     _detect_reasoning_type,

@@ -20,7 +20,7 @@ from unittest import mock
 
 from fastapi import HTTPException
 
-from r20_backend.routers import exchanges as R
+from astra_backend.routers import exchanges as R
 
 
 def _auth_off(test):
@@ -91,7 +91,7 @@ class VenueHealthTest(unittest.TestCase):
         _auth_off(self)
 
     def _status(self):
-        return R.admin_multi_exchange_status(x_r20_admin_token="t")
+        return R.admin_multi_exchange_status(x_astra_admin_token="t")
 
     def _write_health(self, payload):
         ( __import__("pathlib").Path(self.tmp.name) / "venue_health.json").write_text(
@@ -104,7 +104,7 @@ class VenueHealthTest(unittest.TestCase):
 
     def test_okx_section_is_completed_with_testnet_and_latency(self):
         self._write_health({"venues": {"okx": {"avg_ms": None}}})
-        with mock.patch("r20_backend.exchanges.diagnostics.diagnose_venue_connection",
+        with mock.patch("astra_backend.exchanges.diagnostics.diagnose_venue_connection",
                         return_value={"latency_ms": 42}):
             out = self._status()
         dumped = json.dumps(out, ensure_ascii=False, default=str)
@@ -113,7 +113,7 @@ class VenueHealthTest(unittest.TestCase):
 
     def test_latency_diagnosis_failure_is_swallowed(self):
         self._write_health({"venues": {"okx": {}}})
-        with mock.patch("r20_backend.exchanges.diagnostics.diagnose_venue_connection",
+        with mock.patch("astra_backend.exchanges.diagnostics.diagnose_venue_connection",
                         side_effect=RuntimeError("诊断也挂了")):
             out = self._status()
         self.assertIsInstance(out, dict, "诊断失败不影响整体响应")
@@ -151,13 +151,13 @@ class VenueAccountFallbackTest(unittest.TestCase):
     """★ 三态：`unavailable`（所不支持）≠ `degraded`（读失败/解析失败）。"""
 
     def _creds(self):
-        return mock.patch("r20_backend.exchanges.venue_credentials",
+        return mock.patch("astra_backend.exchanges.venue_credentials",
                           return_value=("k", "s"))
 
     def _run(self, fn, adapter):
         with self._creds(), \
                 mock.patch.object(R, "get_adapter", return_value=adapter, create=True), \
-                mock.patch("r20_backend.exchanges.get_adapter", return_value=adapter):
+                mock.patch("astra_backend.exchanges.get_adapter", return_value=adapter):
             return fn("demo")
 
     def test_gate_parse_failure_is_degraded(self):
@@ -173,7 +173,7 @@ class VenueAccountFallbackTest(unittest.TestCase):
 
     def test_binance_capability_error_is_unavailable_not_degraded(self):
         """★ 所能力缺失 ⇒ `unavailable`（**不可判定 ≠ 安全**，它与"读失败"是两回事）。"""
-        from r20_backend.exchanges import ExchangeCapabilityError
+        from astra_backend.exchanges import ExchangeCapabilityError
         out = self._run(R._venue_accounts_binance,
                         _PermissiveAdapter(capability_error=ExchangeCapabilityError("不支持逐仓")))
         self.assertEqual(out["status"], "unavailable")
@@ -192,7 +192,7 @@ class VenueAccountFallbackTest(unittest.TestCase):
 
     def test_missing_credentials_say_unavailable_without_any_request(self):
         """★ 凭证没配 ⇒ `unavailable` 且**明确写"未发起任何请求"**（不谎称试过了）。"""
-        with mock.patch("r20_backend.exchanges.venue_credentials",
+        with mock.patch("astra_backend.exchanges.venue_credentials",
                         return_value=("", "")), \
                 mock.patch.object(R, "get_adapter", create=True) as getter:
             out = R._venue_accounts_gate("demo")

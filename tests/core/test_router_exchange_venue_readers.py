@@ -14,7 +14,7 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
-from r20_backend.routers import exchanges as R
+from astra_backend.routers import exchanges as R
 
 
 class _Env:
@@ -100,10 +100,10 @@ class GateReaderTest(unittest.TestCase):
             seen["args"] = (venue, env)
             return ("K", "S")
 
-        p = patch("r20_backend.exchanges.venue_credentials", side_effect=_cred)
+        p = patch("astra_backend.exchanges.venue_credentials", side_effect=_cred)
         p.start()
         self.addCleanup(p.stop)
-        p2 = patch("r20_backend.close_intent.adapter_environment",
+        p2 = patch("astra_backend.close_intent.adapter_environment",
                    side_effect=lambda v, e: "sandbox" if e == "demo" else "live")
         p2.start()
         self.addCleanup(p2.stop)
@@ -111,7 +111,7 @@ class GateReaderTest(unittest.TestCase):
         adapter.account_snapshot.return_value = {"total": "1"}
         adapter.positions.return_value = []
         adapter.signed_request.return_value = []
-        with patch("r20_backend.exchanges.get_adapter", return_value=adapter) as ga:
+        with patch("astra_backend.exchanges.get_adapter", return_value=adapter) as ga:
             R._venue_accounts_gate("demo")
         self.assertEqual(seen["args"], ("gate", "sandbox"),
                          "凭证必须按档位轴（demo ⇒ sandbox）取")
@@ -119,33 +119,33 @@ class GateReaderTest(unittest.TestCase):
                          "适配器也起在 sandbox 档")
 
     def test_missing_credentials_short_circuit_before_any_adapter(self):
-        p = patch("r20_backend.exchanges.venue_credentials", return_value=("", ""))
+        p = patch("astra_backend.exchanges.venue_credentials", return_value=("", ""))
         p.start()
         self.addCleanup(p.stop)
-        p2 = patch("r20_backend.close_intent.adapter_environment",
+        p2 = patch("astra_backend.close_intent.adapter_environment",
                    side_effect=lambda v, e: e)
         p2.start()
         self.addCleanup(p2.stop)
-        with patch("r20_backend.exchanges.get_adapter") as ga:
+        with patch("astra_backend.exchanges.get_adapter") as ga:
             out = R._venue_accounts_gate("demo")
         self.assertEqual(out["status"], "unavailable")
         self.assertFalse(ga.called, "未配置时不得起适配器（更不得发请求）")
 
     def test_capability_error_is_unavailable_and_other_errors_are_degraded(self):
-        from r20_backend.exchanges import ExchangeCapabilityError
-        p = patch("r20_backend.exchanges.venue_credentials", return_value=("K", "S"))
+        from astra_backend.exchanges import ExchangeCapabilityError
+        p = patch("astra_backend.exchanges.venue_credentials", return_value=("K", "S"))
         p.start()
         self.addCleanup(p.stop)
-        p2 = patch("r20_backend.close_intent.adapter_environment",
+        p2 = patch("astra_backend.close_intent.adapter_environment",
                    side_effect=lambda v, e: e)
         p2.start()
         self.addCleanup(p2.stop)
-        with patch("r20_backend.exchanges.get_adapter",
+        with patch("astra_backend.exchanges.get_adapter",
                    side_effect=ExchangeCapabilityError("无此能力")):
             out = R._venue_accounts_gate("demo")
         self.assertEqual(out["status"], "unavailable")
         self.assertIn("账户面不可用", out["reason"])
-        with patch("r20_backend.exchanges.get_adapter", side_effect=RuntimeError("网络断")):
+        with patch("astra_backend.exchanges.get_adapter", side_effect=RuntimeError("网络断")):
             out2 = R._venue_accounts_gate("demo")
         self.assertEqual(out2["status"], "degraded")
         self.assertIn("网络断", out2["reason"])

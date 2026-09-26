@@ -7,18 +7,18 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import r20_backend.notifications as notifications
-import r20_backend.okx_trade_service as okx
+import astra_backend.notifications as notifications
+import astra_backend.okx_trade_service as okx
 import scripts.okx_rest as okx_rest
 import scripts.prompt_library as prompts
-from r20_gateway.events import GatewayEvent
-from r20_gateway.store import GatewayStore
+from astra_gateway.events import GatewayEvent
+from astra_gateway.store import GatewayStore
 from scripts.okx_runtime import OKXEnvironment
 
 
 class OKXV5Tests(unittest.TestCase):
     # V5 私有 HTTP 传输已并入 scripts.okx_rest 统一通道（okx_trade_service._request
-    # 是委托门面）；旧测试 patch r20_backend.okx_trade_service.urllib.request 的
+    # 是委托门面）；旧测试 patch astra_backend.okx_trade_service.urllib.request 的
     # 目标模块属性已不存在。迁移到统一通道真实 HTTP 边界：patch.object(
     # scripts.okx_rest, "urlopen")，断言签名头/v5 路径/sCode fail-closed 原意图不变。
     def _response(self, body):
@@ -62,12 +62,12 @@ class OKXV5Tests(unittest.TestCase):
 
 class ChannelBusinessCodeTests(unittest.TestCase):
     def test_wecom_http_200_error_is_failure(self):
-        env={"R20_WECHAT_WEBHOOK":"https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=x"}
-        with patch.object(notifications,"validate_outbound_url",return_value=env["R20_WECHAT_WEBHOOK"]), patch.object(notifications,"_post_json",return_value=(True,"HTTP 200",{"errcode":93000,"errmsg":"denied"})):
+        env={"ASTRA_WECHAT_WEBHOOK":"https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=x"}
+        with patch.object(notifications,"validate_outbound_url",return_value=env["ASTRA_WECHAT_WEBHOOK"]), patch.object(notifications,"_post_json",return_value=(True,"HTTP 200",{"errcode":93000,"errmsg":"denied"})):
             self.assertFalse(notifications.send_channel("wechat","x",env)[0])
 
     def test_telegram_http_200_error_is_failure(self):
-        env={"R20_TELEGRAM_BOT_TOKEN":"T","R20_TELEGRAM_CHAT_ID":"1"}
+        env={"ASTRA_TELEGRAM_BOT_TOKEN":"T","ASTRA_TELEGRAM_CHAT_ID":"1"}
         # 第七十八刀：`_post_json` 已假，但 telegram 分支发送前还调
         # `validate_outbound_url`（SSRF 防线，内部 getaddrinfo 真解析
         # api.telegram.org）—— 本用例验证的是**业务响应码判定**，
@@ -78,12 +78,12 @@ class ChannelBusinessCodeTests(unittest.TestCase):
             self.assertFalse(notifications.send_channel("telegram","x",env)[0])
 
     def test_qq_http_200_error_is_failure(self):
-        env={"R20_QQ_APP_ID":"A","R20_QQ_CLIENT_SECRET":"S","R20_QQ_OPENID":"O"}
+        env={"ASTRA_QQ_APP_ID":"A","ASTRA_QQ_CLIENT_SECRET":"S","ASTRA_QQ_OPENID":"O"}
         responses=[(True,"HTTP 200",{"access_token":"T"}),(True,"HTTP 200",{"code":11248,"message":"denied"})]
         with patch.object(notifications,"_post_json",side_effect=responses): self.assertFalse(notifications.send_channel("qq","x",env)[0])
 
     def test_diagnose_never_sends(self):
-        env={"R20_TELEGRAM_BOT_TOKEN":"T","R20_TELEGRAM_CHAT_ID":"1"}
+        env={"ASTRA_TELEGRAM_BOT_TOKEN":"T","ASTRA_TELEGRAM_CHAT_ID":"1"}
         with patch.object(notifications,"_post_json") as post:
             self.assertEqual(notifications.diagnose_channel("telegram",env)["status"],"ready"); post.assert_not_called()
 

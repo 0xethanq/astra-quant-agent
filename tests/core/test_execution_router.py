@@ -7,7 +7,7 @@
 |---|---|
 | ★ **分发前物理校验不可绕过** | 数值有限且为正 → 杠杆两端夹取 → 保证金夹取 → **跨所敞口闸门** → TP 宽度平滑 → `validate_quote_geometry_and_rr` 单一事实源；任一步 Fail ⇒ `ok=False` + 明确 `stage` |
 | ★ **开仓必须 100% 云端保护覆盖** | TP/SL 双腿挂成**并回读命中**才算成功；回读未见任一条 ⇒ `RuntimeError` ⇒ 走回滚 |
-| ★ **回滚是双段清理** | ①已知 `legs` 逐腿 best-effort 撤；②枚举残留触发单，**只撤带 `r20` 前缀的本系统单**（用户手单绝不触碰）；③撤入场单。三段结果都写进 `detail`，撤单失败**不改判**平仓/开仓结论 |
+| ★ **回滚是双段清理** | ①已知 `legs` 逐腿 best-effort 撤；②枚举残留触发单，**只撤带 `astra` 前缀的本系统单**（用户手单绝不触碰）；③撤入场单。三段结果都写进 `detail`，撤单失败**不改判**平仓/开仓结论 |
 | ★ **开闸由 registry 决定** | `require_execution` 未开闸一律抛 `ExchangeCapabilityError`（不吞、不转成 `ok=False`）；适配器自己抛的 `ExchangeCapabilityError` 也必须**原样冒泡**（三处都验）|
 | ★ **所池门禁真的有消费者** | 审计 P1-7：`dry_run` / `assets`（空池=不发单）/ `min_confidence` / `max_open` 逐条拦下并写明原因；池**读取失败只告警**（加固不制造新阻塞点）|
 | ★ **既有仓前置体检** | 探针失败 ⇒ 拒开；与调用方在管记录不符 ⇒ 拒开；无 `own_position` 时**不再默认宣称"外部仓"**，而是按台账判 `own/stale_closed/mismatch/ledger_unavailable` 并**在结果里写明判定** |
@@ -22,8 +22,8 @@ import types
 import unittest
 from unittest import mock
 
-from r20_backend import execution_router as ER
-from r20_backend.exchanges import listing, registry, routing_policy
+from astra_backend import execution_router as ER
+from astra_backend.exchanges import listing, registry, routing_policy
 from scripts.trader import brackets, venue_protection
 
 
@@ -310,15 +310,15 @@ class OpenLeverageMarginTests(_Base):
     def test_leverage_bounds_come_from_env_then_constants(self):
         self._start(mock.patch.object(ER, "MIN_LEVERAGE", 2.0))
         self._start(mock.patch.object(ER, "MAX_LEVERAGE", 5.0))
-        self._start(mock.patch.dict("os.environ", {"R20_MIN_LEVERAGE": "3",
-                                                   "R20_MAX_LEVERAGE": "4"}))
+        self._start(mock.patch.dict("os.environ", {"ASTRA_MIN_LEVERAGE": "3",
+                                                   "ASTRA_MAX_LEVERAGE": "4"}))
         self._open()
         self.assertEqual(self.lev.call_args[1]["min_leverage"], 3.0)
         self.assertEqual(self.lev.call_args[1]["max_leverage"], 4.0)
 
     def test_inverted_env_bounds_are_collapsed(self):
-        self._start(mock.patch.dict("os.environ", {"R20_MIN_LEVERAGE": "9",
-                                                   "R20_MAX_LEVERAGE": "4"}))
+        self._start(mock.patch.dict("os.environ", {"ASTRA_MIN_LEVERAGE": "9",
+                                                   "ASTRA_MAX_LEVERAGE": "4"}))
         self._open()
         self.assertEqual(self.lev.call_args[1]["min_leverage"], 4.0)
         self.assertEqual(self.lev.call_args[1]["max_leverage"], 4.0)
@@ -501,7 +501,7 @@ class OpenExecutionGateTests(_Base):
         self.require.assert_called_once_with("binance", environment="demo")
 
     def test_a_refused_gate_propagates(self):
-        from r20_backend.exchanges import ExchangeCapabilityError
+        from astra_backend.exchanges import ExchangeCapabilityError
         self.require.side_effect = ExchangeCapabilityError("未开闸")
         with self.assertRaises(ExchangeCapabilityError):
             self._open()
@@ -630,9 +630,9 @@ class OpenSizingTests(_Base):
         adapter.rows = []
         adapter._ = None
         # 本用例断言的是**限价**单的报单价已被对齐到 tick ⇒ 必须钉死下单模式。
-        # `R20_ORDER_MODE` 是运行期可改的运维设置（后台可切市价单，且会写 `.env`）；
+        # `ASTRA_ORDER_MODE` 是运行期可改的运维设置（后台可切市价单，且会写 `.env`）；
         # 不钉的话，运维一切到 market，这里就会因为"市价单本就不该带 px"而红。
-        with mock.patch.dict(os.environ, {"R20_ORDER_MODE": "limit"}):
+        with mock.patch.dict(os.environ, {"ASTRA_ORDER_MODE": "limit"}):
             out = ER.open_protected_position({**self.decision, "venue": "binance",
                                               "entry_price": 100.1234,
                                               "take_profit_price": 110.9876,
@@ -675,7 +675,7 @@ class OpenPrecheckTests(_Base):
         self.assertIn("既有持仓探针失败", out["detail"])
 
     def test_capability_error_from_the_probe_propagates(self):
-        from r20_backend.exchanges import ExchangeCapabilityError
+        from astra_backend.exchanges import ExchangeCapabilityError
         adapter = _FakeAdapter(venue="binance",
                                positions_raises=ExchangeCapabilityError("不支持"))
         with self.assertRaises(ExchangeCapabilityError):
@@ -866,7 +866,7 @@ class OpenPlacementTests(_Base):
         self.assertIn("设置杠杆失败", out["detail"])
 
     def test_capability_error_from_set_leverage_propagates(self):
-        from r20_backend.exchanges import ExchangeCapabilityError
+        from astra_backend.exchanges import ExchangeCapabilityError
         adapter = _FakeAdapter(venue="binance")
         adapter.rows = []
         adapter.set_leverage = mock.Mock(side_effect=ExchangeCapabilityError("不支持"))
@@ -894,7 +894,7 @@ class OpenPlacementTests(_Base):
         self.assertIn("入场委托提交失败", out["detail"])
 
     def test_capability_error_from_place_order_propagates(self):
-        from r20_backend.exchanges import ExchangeCapabilityError
+        from astra_backend.exchanges import ExchangeCapabilityError
         adapter = _FakeAdapter(venue="binance")
         adapter.rows = []
         adapter.place_order = mock.Mock(side_effect=ExchangeCapabilityError("不支持"))
@@ -984,12 +984,12 @@ class OpenProtectionTests(_Base):
         self.assertIn("TP腿 tp-1 撤销失败", out["detail"])
         self.assertEqual(out["stage"], "protective")
 
-    def test_only_r20_prefixed_residue_is_cancelled(self):
+    def test_only_astra_prefixed_residue_is_cancelled(self):
         residue = [{"id": "user-leg", "text": "user manual"},
-                   {"id": "r20-orphan", "text": "r20 tp"},
-                   {"id": "nested", "order": {"id": "r20-nested", "text": "R20 SL"}},
+                   {"id": "astra-orphan", "text": "astra tp"},
+                   {"id": "nested", "order": {"id": "astra-nested", "text": "ASTRA SL"}},
                    "not-a-dict",
-                   {"id": "", "text": "r20-nope"}]
+                   {"id": "", "text": "astra-nope"}]
         adapter = _FakeAdapter(venue="binance", open_orders=[], residue=residue)
         adapter.rows = []
         adapter.list_protective_orders = mock.Mock(return_value=[])
@@ -1003,12 +1003,12 @@ class OpenProtectionTests(_Base):
         out = self._open(adapter=adapter)
         cancelled = [c[1] for c in adapter.calls if isinstance(c, tuple)
                      and c[0] == "cancel_order"]
-        self.assertIn("r20-orphan", cancelled)
+        self.assertIn("astra-orphan", cancelled)
         self.assertIn("nested", cancelled,
                       "嵌套行取的是外层 id（`row.get('id')` 优先于 `row['order']['id']`）")
         self.assertNotIn("user-leg", cancelled)
         self.assertNotIn("", cancelled)
-        self.assertIn("孤儿触发单 r20-orphan 已撤", out["detail"])
+        self.assertIn("孤儿触发单 astra-orphan 已撤", out["detail"])
 
     def test_residue_enumeration_failure_is_reported(self):
         adapter = _FakeAdapter(venue="binance")

@@ -1,4 +1,4 @@
-"""Binance 算法条件单请求构建（`r20_backend/exchanges/binance_algo.py`）残余分支收口测试 —— 第 349 刀。
+"""Binance 算法条件单请求构建（`astra_backend/exchanges/binance_algo.py`）残余分支收口测试 —— 第 349 刀。
 
 本模块 183 行，是 Binance USDⓈ-M 条件委托（Algo Orders / OCO / 止盈止损）专线协议请求构建器：
 - 参数完整性与互斥防御：非 `closePosition` 条件单必须指定 `quantity`、`reduceOnly` 与持仓方向组合校验；
@@ -12,7 +12,7 @@ import sys
 import unittest
 from typing import Any
 
-from r20_backend.exchanges.binance_algo import BinanceAlgoRequestsMixin
+from astra_backend.exchanges.binance_algo import BinanceAlgoRequestsMixin
 
 
 class SneakyLegacyFieldPrice:

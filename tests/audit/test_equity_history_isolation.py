@@ -7,7 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-import r20_backend.routers.dashboard as dash
+import astra_backend.routers.dashboard as dash
 
 
 class EquityHistoryIsolationTests(unittest.TestCase):

@@ -203,7 +203,7 @@ class EndToEndSingleReadTest(unittest.TestCase):
         led = str(pathlib.Path(sync_web_data.LEDGER_JSON_FILE))
         # 先确认"我们面对的是生产目录"—— 若哪天它变成临时目录，本用例的安全
         # 假设就不再成立，应当显式知道（而不是静默地继续）。
-        self.assertTrue(str(prod).endswith("/data/dsh/home/r20/data"),
+        self.assertTrue(str(prod).endswith("/data/dsh/home/astra/data"),
                         f"DATA_DIR 不是预期中的生产目录: {prod}")
 
         real_open, seen, blocked = open, {}, []

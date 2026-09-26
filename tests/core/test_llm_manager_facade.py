@@ -1,6 +1,6 @@
 """LLM 门面：**每个薄壳都必须在调用时解析模块全局**（第二百六十七刀，开新面 llm_manager.py）。
 
-先打印整个文件（281 行）再动笔。结构优化阶段 2/B4 把实现迁去了 `r20_backend.llm.*`，
+先打印整个文件（281 行）再动笔。结构优化阶段 2/B4 把实现迁去了 `astra_backend.llm.*`，
 本文件只剩**薄壳**。薄壳存在的唯一理由，就是文档里反复写的那句：
 「调用时解析模块全局，测试沙箱 patch / 直接赋值必然生效」。
 
@@ -23,7 +23,7 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from unittest import mock
 
-from r20_backend import llm_manager as LM
+from astra_backend import llm_manager as LM
 
 
 class FacadeBase(unittest.TestCase):
@@ -35,7 +35,7 @@ class FacadeBase(unittest.TestCase):
         return started
 
     def setUp(self):
-        self.tmp = Path(tempfile.mkdtemp(prefix="r20-llmfacade-"))
+        self.tmp = Path(tempfile.mkdtemp(prefix="astra-llmfacade-"))
         self.addCleanup(shutil.rmtree, self.tmp, True)
         # 用哨兵对象代替路径：只要薄壳转发的是「当下这个全局」，断言就能一眼看出它有没有被提前捕获
         self.sentinel = object()

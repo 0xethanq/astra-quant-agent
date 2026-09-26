@@ -1,10 +1,10 @@
 """
-R20 物理拦截插件规范
+ASTRA 物理拦截插件规范
 ====================
 id: 02_confidence_gatekeeper
 name: 高置信度质量门禁
 version: 1.2.0
-author: R20 Official
+author: ASTRA Official
 description: 兼顾开单欲望与胜率质量。置信度低于 75% 强制 WAIT；高波动动量标的(Tier-2)维持 80% 门禁，按标的分级自适应而非写死币种名。
 tags: 置信度, 胜率优化, 官方预设
 """

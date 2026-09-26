@@ -30,12 +30,12 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 from fastapi.testclient import TestClient
 
-import r20_backend.app as app_module
-import r20_backend.settings_store as settings_store
-from r20_backend import policy_snapshot as ps
-from r20_backend.admin_auth import AdminAuthStore
-from r20_backend.schemas import PolicyRestoreRequest
-from r20_backend.exchanges import routing_policy
+import astra_backend.app as app_module
+import astra_backend.settings_store as settings_store
+from astra_backend import policy_snapshot as ps
+from astra_backend.admin_auth import AdminAuthStore
+from astra_backend.schemas import PolicyRestoreRequest
+from astra_backend.exchanges import routing_policy
 from scripts.risk_constants import RISK_ENV_KEYS
 
 RISK_KEYS = set(RISK_ENV_KEYS)
@@ -47,7 +47,7 @@ class _SandboxBase(unittest.TestCase):
     def setUp(self):
         from tests.config_sandbox import isolate_config
         self.root = isolate_config(self)
-        self.temp = tempfile.TemporaryDirectory(prefix="r20-b1-")
+        self.temp = tempfile.TemporaryDirectory(prefix="astra-b1-")
         self.addCleanup(self.temp.cleanup)
         # .env 不在 data/ 下，config_sandbox 不会替换 → 必须显式沙箱化
         self.env_file = Path(self.temp.name) / ".env"
@@ -55,7 +55,7 @@ class _SandboxBase(unittest.TestCase):
         p = patch.object(settings_store, "ENV_FILE", self.env_file)
         p.start(); self.addCleanup(p.stop)
         # 生产 .env 回灌隔离
-        import r20_backend.config as backend_config
+        import astra_backend.config as backend_config
         self.orig_loader = backend_config.load_dotenv
         backend_config.load_dotenv = lambda path: None
         self.addCleanup(lambda: setattr(backend_config, "load_dotenv", self.orig_loader))
@@ -96,25 +96,25 @@ class EnvWriteLockTests(_SandboxBase):
         # 沙箱里不需要真实 refresh_settings 的副作用
         p = patch.object(settings_store, "refresh_settings", lambda: None)
         p.start(); self.addCleanup(p.stop)
-        self.env_file.write_text("R20_MAX_LEVERAGE=5.0\nLLM_MODEL=old\n", encoding="utf-8")
+        self.env_file.write_text("ASTRA_MAX_LEVERAGE=5.0\nLLM_MODEL=old\n", encoding="utf-8")
 
     def test_concurrent_updates_do_not_lose_config(self):
         with patch.object(Path, "read_text", self._slow_read()):
-            t1 = threading.Thread(target=settings_store.update_env, args=({"R20_MAX_LEVERAGE": "7.0"},))
+            t1 = threading.Thread(target=settings_store.update_env, args=({"ASTRA_MAX_LEVERAGE": "7.0"},))
             t2 = threading.Thread(target=settings_store.update_env, args=({"LLM_MODEL": "new-model"},))
             t1.start(); time.sleep(0.05); t2.start(); t1.join(); t2.join()
         final = self.env_file.read_text(encoding="utf-8")
-        self.assertIn("R20_MAX_LEVERAGE=7.0", final, "风控保存被并发写静默丢弃（P0-2 回归）")
+        self.assertIn("ASTRA_MAX_LEVERAGE=7.0", final, "风控保存被并发写静默丢弃（P0-2 回归）")
         self.assertIn("LLM_MODEL=new-model", final, "通知/模型保存被并发写静默丢弃")
 
     def test_concurrent_update_and_remove_are_serialized(self):
-        self.env_file.write_text("R20_MAX_LEVERAGE=5.0\nLLM_MODEL=keep\n", encoding="utf-8")
+        self.env_file.write_text("ASTRA_MAX_LEVERAGE=5.0\nLLM_MODEL=keep\n", encoding="utf-8")
         with patch.object(Path, "read_text", self._slow_read()):
-            t1 = threading.Thread(target=settings_store.update_env, args=({"R20_MAX_LEVERAGE": "9.0"},))
+            t1 = threading.Thread(target=settings_store.update_env, args=({"ASTRA_MAX_LEVERAGE": "9.0"},))
             t2 = threading.Thread(target=settings_store.remove_env, args=({"LLM_MODEL"},))
             t1.start(); time.sleep(0.05); t2.start(); t1.join(); t2.join()
         final = self.env_file.read_text(encoding="utf-8")
-        self.assertIn("R20_MAX_LEVERAGE=9.0", final)
+        self.assertIn("ASTRA_MAX_LEVERAGE=9.0", final)
         self.assertNotIn("LLM_MODEL", final)
 
     def test_rmw_holds_process_lock_and_not_only_the_write(self):
@@ -127,11 +127,11 @@ class EnvWriteLockTests(_SandboxBase):
             return real_lock(target)
 
         with patch.object(settings_store, "file_lock", spy):
-            settings_store.update_env({"R20_MAX_LEVERAGE": "6.0"})
-            settings_store.remove_env({"R20_MAX_LEVERAGE"})
+            settings_store.update_env({"ASTRA_MAX_LEVERAGE": "6.0"})
+            settings_store.remove_env({"ASTRA_MAX_LEVERAGE"})
         self.assertEqual(len(entered), 2, "update_env/remove_env 必须各自持锁一次")
         self.assertTrue(all(str(settings_store.ENV_FILE) == e for e in entered))
-        source = (ROOT / "r20_backend" / "settings_store.py").read_text(encoding="utf-8")
+        source = (ROOT / "astra_backend" / "settings_store.py").read_text(encoding="utf-8")
         self.assertIn("with file_lock(ENV_FILE):", source)
 
 
@@ -258,7 +258,7 @@ class RouterMarginClampTests(_SandboxBase):
 
     @classmethod
     def setUpClass(cls):
-        from r20_backend.exchanges import listing as _listing
+        from astra_backend.exchanges import listing as _listing
         cls._lp = patch.object(_listing, "ensure_contract_listed",
                                lambda *a, **k: _listing.ListingCheck(
                                    ok=True, reason=None, checked_at="", source="cache"))
@@ -270,11 +270,11 @@ class RouterMarginClampTests(_SandboxBase):
 
     def setUp(self):
         super().setUp()
-        from r20_backend import execution_router as router
+        from astra_backend import execution_router as router
         self.router = router
         self._ambient = {k: v for k, v in os.environ.items()
-                         if k.startswith(("R20_GATE_TESTNET", "R20_GATE_EXECUTION",
-                                          "R20_BINANCE_TESTNET", "R20_BINANCE_DEMO_EXECUTION"))}
+                         if k.startswith(("ASTRA_GATE_TESTNET", "ASTRA_GATE_EXECUTION",
+                                          "ASTRA_BINANCE_TESTNET", "ASTRA_BINANCE_DEMO_EXECUTION"))}
         for k in self._ambient:
             os.environ.pop(k, None)
         self.addCleanup(lambda: os.environ.update(self._ambient))
@@ -284,7 +284,7 @@ class RouterMarginClampTests(_SandboxBase):
         p.start(); self.addCleanup(p.stop)
 
     def _stub_adapter(self):
-        from r20_backend.exchanges.gate import GateAdapter
+        from astra_backend.exchanges.gate import GateAdapter
 
         class _Stub(GateAdapter):
             """只打桩私有 IO / 规格 / 行情，保护单与名义额换算走真实基类实现。"""
@@ -307,7 +307,7 @@ class RouterMarginClampTests(_SandboxBase):
                 return []
 
             def fetch_instrument_spec(self, symbol, refresh=False):
-                from r20_backend.exchanges import InstrumentSpec
+                from astra_backend.exchanges import InstrumentSpec
                 return InstrumentSpec(venue="gate", inst_id="BTC_USDT", base="BTC",
                                       tick_size=0.1, step_size=0.0001, ct_val=0.0001, min_size=1)
 
@@ -343,7 +343,7 @@ class RouterMarginClampTests(_SandboxBase):
 
     def test_router_clamps_to_caller_equity_cap(self):
         ad = self._stub_adapter()
-        with patch.dict(os.environ, {"R20_GATE_EXECUTION": "1"}):
+        with patch.dict(os.environ, {"ASTRA_GATE_EXECUTION": "1"}):
             r = self.router.open_protected_position(
                 self._decision(max_margin_usdt=200.0), adapter=ad, price_ref=79000.0)
         self.assertTrue(r["ok"], r.get("detail"))
@@ -357,7 +357,7 @@ class RouterMarginClampTests(_SandboxBase):
     def test_router_applies_absolute_cap_even_without_caller_cap(self):
         ad = self._stub_adapter()
         with patch.object(self.router, "MAX_SINGLE_ASSET_MARGIN", 100.0), \
-             patch.dict(os.environ, {"R20_GATE_EXECUTION": "1"}):
+             patch.dict(os.environ, {"ASTRA_GATE_EXECUTION": "1"}):
             r = self.router.open_protected_position(
                 self._decision(), adapter=ad, price_ref=79000.0)
         self.assertTrue(r["ok"], r.get("detail"))
@@ -366,7 +366,7 @@ class RouterMarginClampTests(_SandboxBase):
 
     def test_router_keeps_margin_when_within_caps(self):
         ad = self._stub_adapter()
-        with patch.dict(os.environ, {"R20_GATE_EXECUTION": "1"}):
+        with patch.dict(os.environ, {"ASTRA_GATE_EXECUTION": "1"}):
             r = self.router.open_protected_position(
                 self._decision(margin_usdt=150.0, max_margin_usdt=200.0),
                 adapter=ad, price_ref=79000.0)
@@ -395,8 +395,8 @@ class PolicyPackageIdentityTests(_SandboxBase):
                                "timeout_seconds": 240.0, "updated_at": "t1",
                                "roles": {"cio": {"id": "cio", "enabled": True, "is_arbitrator": True,
                                                  "prompt": "p", "model_id": "m"}}},
-            "risk_config": {"R20_MAX_LEVERAGE": risk_leverage,
-                            "R20_MAX_DAILY_LOSS_USDT": 150.0},
+            "risk_config": {"ASTRA_MAX_LEVERAGE": risk_leverage,
+                            "ASTRA_MAX_DAILY_LOSS_USDT": 150.0},
             "venue_routing": {"preferred_venue": preferred, "routing_mode": "balanced"},
         }
 
@@ -425,13 +425,13 @@ class PolicyPackageIdentityTests(_SandboxBase):
     def test_restore_diff_names_the_failed_unit(self):
         archived = self._payload(risk_leverage=5.0)
         current = self._payload(risk_leverage=2.0)
-        self.assertEqual(ps.package_restore_diff(archived, current), ["risk_config.R20_MAX_LEVERAGE"])
+        self.assertEqual(ps.package_restore_diff(archived, current), ["risk_config.ASTRA_MAX_LEVERAGE"])
 
     def test_restore_diff_ignores_keys_absent_from_archive(self):
         """旧包不可能恢复「它诞生之后才新增的键」，这不算恢复失败（但要如实披露）。"""
         archived = self._payload()
         current = json.loads(json.dumps(archived))
-        current["risk_config"]["R20_NEW_KEY_AFTER_ARCHIVE"] = 1.0
+        current["risk_config"]["ASTRA_NEW_KEY_AFTER_ARCHIVE"] = 1.0
         self.assertEqual(ps.package_restore_diff(archived, current), [])
 
     def test_restore_diff_skips_units_absent_from_archive(self):
@@ -451,25 +451,25 @@ class PolicyPackageIdentityTests(_SandboxBase):
 
     # ── 端到端：归档 → 改风控 → 回滚 ──
     def test_archive_then_restore_round_trip_recovers_risk_config(self):
-        from r20_backend import risk_config
-        settings_store.update_env({"R20_MAX_LEVERAGE": "4.0"})
+        from astra_backend import risk_config
+        settings_store.update_env({"ASTRA_MAX_LEVERAGE": "4.0"})
         entry = ps.archive_current_policy(name="A", archive_dir=ps.ARCHIVE_DIR,
                                          root_dir=Path(self.root))
         self.assertTrue(entry.get("package_hash"))
-        settings_store.update_env({"R20_MAX_LEVERAGE": "2.0"})
-        self.assertEqual(risk_config.current_values()["R20_MAX_LEVERAGE"], 2.0)
+        settings_store.update_env({"ASTRA_MAX_LEVERAGE": "2.0"})
+        self.assertEqual(risk_config.current_values()["ASTRA_MAX_LEVERAGE"], 2.0)
 
         res = ps.restore_archived_policy(policy_hash=entry["package_hash"],
                                         archive_dir=ps.ARCHIVE_DIR, root_dir=Path(self.root))
         self.assertEqual(res["status"], "restored")
-        self.assertEqual(risk_config.current_values()["R20_MAX_LEVERAGE"], 4.0,
+        self.assertEqual(risk_config.current_values()["ASTRA_MAX_LEVERAGE"], 4.0,
                          "回滚没收复风控值")
 
     def test_two_risk_variants_do_not_overwrite_each_other(self):
-        settings_store.update_env({"R20_MAX_LEVERAGE": "4.0"})
+        settings_store.update_env({"ASTRA_MAX_LEVERAGE": "4.0"})
         first = ps.archive_current_policy(name="稳健", archive_dir=ps.ARCHIVE_DIR,
                                          root_dir=Path(self.root))
-        settings_store.update_env({"R20_MAX_LEVERAGE": "2.0"})
+        settings_store.update_env({"ASTRA_MAX_LEVERAGE": "2.0"})
         second = ps.archive_current_policy(name="激进", archive_dir=ps.ARCHIVE_DIR,
                                           root_dir=Path(self.root))
         self.assertNotEqual(first["package_hash"], second["package_hash"])
@@ -478,15 +478,15 @@ class PolicyPackageIdentityTests(_SandboxBase):
         index = ps.load_archive_index(archive_dir=ps.ARCHIVE_DIR)
         self.assertEqual(len(index), 2, "索引项被同 hash 覆盖，旧版本从列表消失")
 
-        from r20_backend import risk_config
+        from astra_backend import risk_config
         ps.restore_archived_policy(policy_hash=first["package_hash"],
                                    archive_dir=ps.ARCHIVE_DIR, root_dir=Path(self.root))
-        self.assertEqual(risk_config.current_values()["R20_MAX_LEVERAGE"], 4.0,
+        self.assertEqual(risk_config.current_values()["ASTRA_MAX_LEVERAGE"], 4.0,
                          "回滚第一版时恢复成了第二版的风控（版本标识未覆盖风控）")
 
     def test_legacy_hash_named_archive_still_restorable(self):
         """向后兼容：历史归档以 policy_hash 命名，索引两种标识都要能解析到。"""
-        settings_store.update_env({"R20_MAX_LEVERAGE": "4.0"})
+        settings_store.update_env({"ASTRA_MAX_LEVERAGE": "4.0"})
         package = ps.capture_full_strategy_package(root_dir=Path(self.root))
         legacy = Path(ps.ARCHIVE_DIR)
         legacy.mkdir(parents=True, exist_ok=True)
@@ -498,12 +498,12 @@ class PolicyPackageIdentityTests(_SandboxBase):
             "name": "legacy", "description": "", "author": "t", "archived_at": "2026-09-01 00:00:00",
             "summary": package["summary"], "archive_file": fname}], archive_dir=legacy)
 
-        settings_store.update_env({"R20_MAX_LEVERAGE": "2.0"})
+        settings_store.update_env({"ASTRA_MAX_LEVERAGE": "2.0"})
         res = ps.restore_archived_policy(policy_hash=package["policy_hash"],
                                         archive_dir=legacy, root_dir=Path(self.root))
         self.assertEqual(res["status"], "restored")
-        from r20_backend import risk_config
-        self.assertEqual(risk_config.current_values()["R20_MAX_LEVERAGE"], 4.0)
+        from astra_backend import risk_config
+        self.assertEqual(risk_config.current_values()["ASTRA_MAX_LEVERAGE"], 4.0)
 
 
 class PolicyRestoreRouteTests(_SandboxBase):
@@ -525,7 +525,7 @@ class PolicyRestoreRouteTests(_SandboxBase):
         res = self.client.post("/api/v1/admin/auth/login",
                                json={"username": "admin", "password": "InitialAdmin123456"})
         self.assertEqual(res.status_code, 200, res.text)
-        return {"X-R20-Session": res.json()["session_token"]}
+        return {"X-Astra-Session": res.json()["session_token"]}
 
     def test_schema_has_no_hash_attribute(self):
         """契约钉：hash 只是请求别名（model_validator 归一到 policy_hash），不是属性。"""
@@ -541,16 +541,16 @@ class PolicyRestoreRouteTests(_SandboxBase):
         self.assertIn('"policy_hash": p_hash', source)
 
     def test_successful_restore_returns_200_and_is_audited(self):
-        settings_store.update_env({"R20_MAX_LEVERAGE": "4.0"})
+        settings_store.update_env({"ASTRA_MAX_LEVERAGE": "4.0"})
         entry = ps.archive_current_policy(name="回滚点", archive_dir=ps.ARCHIVE_DIR,
                                          root_dir=Path(self.root))
-        settings_store.update_env({"R20_MAX_LEVERAGE": "2.0"})
+        settings_store.update_env({"ASTRA_MAX_LEVERAGE": "2.0"})
         audit_rows: list[tuple] = []
         # strategy 路由持有自己的 audit_record 绑定（from ... import record as ...），
         # patch app 模块的绑定拦不到，必须打路由模块。
         # 第九十六刀：strategy 拆包 ⇒ patch 目标必须落到**归属子模块**
         # （`policy.py` 持有自己的 audit_record 绑定；打包属性拦不到）
-        from r20_backend.routers.strategy import policy as strategy_policy
+        from astra_backend.routers.strategy import policy as strategy_policy
         with patch.object(strategy_policy, "audit_record",
                           lambda action, status, payload=None, **kw: audit_rows.append((action, status, payload))):
             res = self.client.post("/api/v1/admin/policy/restore",
@@ -558,8 +558,8 @@ class PolicyRestoreRouteTests(_SandboxBase):
                                    json={"policy_hash": entry["package_hash"]})
         self.assertEqual(res.status_code, 200, res.text)
         self.assertTrue(res.json().get("ok"), res.text)
-        from r20_backend import risk_config
-        self.assertEqual(risk_config.current_values()["R20_MAX_LEVERAGE"], 4.0)
+        from astra_backend import risk_config
+        self.assertEqual(risk_config.current_values()["ASTRA_MAX_LEVERAGE"], 4.0)
         restored = [row for row in audit_rows if row[0] == "policy.restore"]
         self.assertTrue(restored, "policy.restore 审计未落库")
         self.assertEqual(restored[0][1], "success")

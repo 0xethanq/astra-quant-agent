@@ -143,15 +143,15 @@ class CapturePolicySnapshotTests(unittest.TestCase):
             self.assertEqual(self._run()[3], "TOP")
 
     def test_backend_package_is_used_when_the_top_level_one_is_absent(self):
-        # ★ 第 33 行 —— 第一条 import 失败后回落 `r20_backend.policy_snapshot`
-        fake = self._module("r20_backend.policy_snapshot", {"policy_version": "BACKEND"})
+        # ★ 第 33 行 —— 第一条 import 失败后回落 `astra_backend.policy_snapshot`
+        fake = self._module("astra_backend.policy_snapshot", {"policy_version": "BACKEND"})
         with patch.dict(sys.modules, {"policy_snapshot": None,
-                                      "r20_backend.policy_snapshot": fake}):
+                                      "astra_backend.policy_snapshot": fake}):
             self.assertEqual(self._run()[3], "BACKEND")
 
     def test_both_imports_failing_yields_the_tagged_fallback(self):
         with patch.dict(sys.modules, {"policy_snapshot": None,
-                                      "r20_backend.policy_snapshot": None}):
+                                      "astra_backend.policy_snapshot": None}):
             policy_hash, snap, summary, version = self._run(
                 _get_system_version_tag=lambda: "v7.9.2")
         self.assertEqual(version, "v7.9.2@unknown")
@@ -465,7 +465,7 @@ class PersistVenueDecisionTests(unittest.TestCase):
 
     def _run(self):
         from contextlib import contextmanager
-        import r20_backend.file_locks as file_locks
+        import astra_backend.file_locks as file_locks
 
         @contextmanager
         def _no_lock(path):

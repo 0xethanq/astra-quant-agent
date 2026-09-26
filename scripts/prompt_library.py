@@ -16,7 +16,7 @@
 
 改造前只有一个文件，而它**被 git 跟踪**。于是用户一改提示词，工作区就脏了，
 而后台「更新」有一道「工作区存在未提交修改 ⇒ 409 拒绝更新」的闸
-（`r20_backend/routers/system.py`）—— 用户为了更新只能丢弃改动，丢的正是自己的
+（`astra_backend/routers/system.py`）—— 用户为了更新只能丢弃改动，丢的正是自己的
 提示词；`git pull` 再把仓库版本盖回来。表现出来就是用户报的那句
 「更新后预设提示词覆盖了用户的预设提示词」。
 
@@ -86,7 +86,7 @@ BASELINE_FILE = ROOT / "data" / "prompt_library.json"
 #:
 #: 为什么要分成两个文件（2026-09 实测事故）：单文件时代这个数据文件**被 git 跟踪**，
 #: 于是用户一在后台改提示词就把工作区弄脏，而后台「更新」有一道
-#: 「工作区存在未提交修改 ⇒ 409 拒绝更新」的闸（`r20_backend/routers/system.py`）。
+#: 「工作区存在未提交修改 ⇒ 409 拒绝更新」的闸（`astra_backend/routers/system.py`）。
 #: 用户为了更新只能丢弃改动 —— 丢弃的正是自己的提示词；`git pull` 再把仓库版本盖回来。
 #: 表现出来就是「更新后预设提示词覆盖了用户的预设提示词」。
 #:
@@ -256,11 +256,11 @@ TEMPLATE_VARIABLES_METADATA = [
 ]
 
 ALLOWED_VARIABLES = {item["key"] for item in TEMPLATE_VARIABLES_METADATA} | {"profile_name", "timestamp"}
-EXPORT_FORMAT = "r20-prompt-profile"
+EXPORT_FORMAT = "astra-prompt-profile"
 EXPORT_VERSION = 4
 _IMPORT_FORMAT_HINT = (
     "无法识别的提示词文件。请提供以下三种格式之一："
-    "(1) 标准导出包 {\"format\":\"r20-prompt-profile\",\"version\":4,\"profile\":{...}}（v1~v4 均可）；"
+    "(1) 标准导出包 {\"format\":\"astra-prompt-profile\",\"version\":4,\"profile\":{...}}（v1~v4 均可）；"
     "(2) 整库导出文件 {\"version\":2,\"active_profile_id\":\"...\",\"profiles\":{...}}，将导入其中的启用方案；"
     "(3) 裸方案对象（直接包含 pipelines 或 trading_system/trading_user/evolution_system/evolution_user 字段）。"
 )
@@ -478,10 +478,10 @@ def _module(module: dict[str, Any], index: int=0) -> dict[str, Any]:
 # 这里按「已导入的实例优先 → 点号形态 → 裸名」依次尝试，避免再引入第三份副本。
 _BASE_TEMPLATE_SOURCES: dict[str, tuple[str, tuple[str, ...]]] = {
     "trading_system": ("SYSTEM_PROMPT", ("scripts.ai_brain_trader", "ai_brain_trader")),
-    "trading_user": ("TRADING_USER_TEMPLATE", ("r20_backend.prompt_views",)),
+    "trading_user": ("TRADING_USER_TEMPLATE", ("astra_backend.prompt_views",)),
     "evolution_system": ("EVOLUTION_SYSTEM_PROMPT",
                          ("scripts.self_improvement_engine", "self_improvement_engine")),
-    "evolution_user": ("EVOLUTION_USER_TEMPLATE", ("r20_backend.prompt_views",)),
+    "evolution_user": ("EVOLUTION_USER_TEMPLATE", ("astra_backend.prompt_views",)),
 }
 _BASE_TEMPLATE_CACHE: dict[str, str] = {}
 
@@ -735,7 +735,7 @@ def _library_lock():
     （`mutate_instruments` → `save_instruments`），一旦走兜底分支会同线程自锁挂死。
     """
     try:
-        from r20_backend.file_locks import file_lock
+        from astra_backend.file_locks import file_lock
         return file_lock(LOCAL_FILE)
     except Exception:
         return local_file_lock(LOCAL_FILE)
@@ -1036,7 +1036,7 @@ def export_profile(profile_id: str) -> dict[str, Any]:
 def _normalize_import_source(payload: dict[str, Any]) -> tuple[dict[str, Any], str]:
     """Accept every shape users actually hold on disk and return (source, origin).
 
-    A) standard wrapper ``{"format": "r20-prompt-profile", "profile": {...}}`` (v1..v4)
+    A) standard wrapper ``{"format": "astra-prompt-profile", "profile": {...}}`` (v1..v4)
     B) whole-library export ``{"version": 2, "active_profile_id": ..., "profiles": {...}}``
     C) bare profile object (carries ``pipelines`` or any flat template key)
     """

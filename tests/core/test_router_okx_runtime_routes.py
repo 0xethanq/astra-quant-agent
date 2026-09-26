@@ -27,7 +27,7 @@ from unittest.mock import MagicMock, patch
 
 from fastapi import HTTPException
 
-from r20_backend.routers import exchanges as R
+from astra_backend.routers import exchanges as R
 
 
 class OkxRuntimeTest(unittest.TestCase):

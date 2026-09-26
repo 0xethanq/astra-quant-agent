@@ -109,7 +109,7 @@ def fetch_other_venue_positions(environment: str,
             # 审计 C3：档位轴必须经 ADAPTER_ENV 唯一映射（execution_router/manual
             # close 同源）——无档 get_adapter 走 legacy 布尔→未钉死域，generic LIVE
             # 键被打进错误沙盒域正是「跨所封顶每周期 INVALID_KEY 禁开仓」的根因。
-            from r20_backend.close_intent import adapter_environment as _adapter_env
+            from astra_backend.close_intent import adapter_environment as _adapter_env
             ad = venue_registry.get_adapter(name, environment=_adapter_env(name, environment or ""))
             rows = ad.positions() or []
             live = [p for p in rows if abs(float(p.get("size_signed") or 0)) > 1e-12]
@@ -156,7 +156,7 @@ def close_position_confirmed(inst_id: str, pos_side: str, before_size: float, ve
     target_venue = str(venue or "okx").lower()
     if target_venue != "okx":
         try:
-            from r20_backend import execution_router
+            from astra_backend import execution_router
             # 审计 C2：周期内冻结环境（okx_rest 按 current_environment 签名，读
             # selected 会在 demo↔live 中途切换时产生跨环境混合决策）
             env = current_environment()

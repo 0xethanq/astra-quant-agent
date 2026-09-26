@@ -10,7 +10,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from r20_backend.exchanges.binance import BinanceAdapter
+from astra_backend.exchanges.binance import BinanceAdapter
 
 
 class _Base(unittest.TestCase):
@@ -28,7 +28,7 @@ class _Base(unittest.TestCase):
             self.sent.append(kw)
             return {"algoId": "1"}
 
-        self._patcher = patch("r20_backend.exchanges.binance.send_protective_order",
+        self._patcher = patch("astra_backend.exchanges.binance.send_protective_order",
                               side_effect=_send)
         self._patcher.start()
         self.addCleanup(self._patcher.stop)
@@ -91,11 +91,11 @@ class MergedProtectionViewTest(_Base):
         """★ ID 一律 `str`：JSON Number 链路不保 int64 精度。"""
         out = self.ad.merged_protection_view(
             normal_open=[{"orderId": 9007199254740993,
-                          "origClientOrderId": "t-r20e1"}],
+                          "origClientOrderId": "t-astrae1"}],
             algo_open=[{"algoId": 9007199254740995, "clientAlgoId": 7}],
         )
         self.assertEqual(out["entries"][0]["orderId"], "9007199254740993")
-        self.assertEqual(out["entries"][0]["origClientOrderId"], "t-r20e1")
+        self.assertEqual(out["entries"][0]["origClientOrderId"], "t-astrae1")
         self.assertEqual(out["conditional"][0]["algoId"], "9007199254740995")
         self.assertEqual(out["conditional"][0]["clientAlgoId"], "7")
 

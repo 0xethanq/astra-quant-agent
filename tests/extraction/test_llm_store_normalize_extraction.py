@@ -1,6 +1,6 @@
 r"""LLM 配置库归一化抽取对拍门（B4 收尾·第一百零二刀）。
 
-`r20_backend/llm/store.py::init_llm_config`（202 行）里两块 → `llm/store_normalize.py`：
+`astra_backend/llm/store.py::init_llm_config`（202 行）里两块 → `llm/store_normalize.py`：
 `resolve_brain_provider_attribution`（主脑条目钉回其供应商）、
 `finalize_config_document`（韧性配置解析 + 组装 + 原子写盘，尾部返回透传）。
 
@@ -19,22 +19,23 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from tests.extraction.rename_baseline import legacy_rev_path, normalize
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 PRE = "3503466"                  # 本刀动工前最后提交（第一百刀收口）
-FACADE = ROOT / "r20_backend" / "llm" / "store.py"
-MOD = ROOT / "r20_backend" / "llm" / "store_normalize.py"
+FACADE = ROOT / "astra_backend" / "llm" / "store.py"
+MOD = ROOT / "astra_backend" / "llm" / "store_normalize.py"
 OWNER = "init_llm_config"
 SPECS = {"resolve_brain_provider_attribution": (26, 28), "finalize_config_document": (29, 40)}
 
 
 def _baseline_fn() -> ast.FunctionDef:
-    r = subprocess.run(["git", "show", f"{PRE}:r20_backend/llm/store.py"],
+    r = subprocess.run(["git", "show", legacy_rev_path(f"{PRE}:astra_backend/llm/store.py")],
                        capture_output=True, text=True, cwd=str(ROOT))
     assert r.returncode == 0, f"基线取不到：{r.stderr[:200]}"
-    return next(n for n in ast.parse(r.stdout).body
+    return next(n for n in ast.parse(normalize(r.stdout)).body
                 if isinstance(n, ast.FunctionDef) and n.name == OWNER)
 
 
@@ -124,7 +125,7 @@ class LlmStoreNormalizeVerbatimTest(unittest.TestCase):
     # ---------- 行为例 ----------
 
     def test_attribution_pins_model_to_its_provider_in_place(self):
-        from r20_backend.llm.store_normalize import resolve_brain_provider_attribution
+        from astra_backend.llm.store_normalize import resolve_brain_provider_attribution
         models = [{"id": "m-active", "provider_id": "p-b", "base_url": "https://stale"}]
         providers = [
             {"id": "p-a", "name": "A", "base_url": "https://a", "api_key": "ka"},
@@ -146,8 +147,8 @@ class LlmStoreNormalizeVerbatimTest(unittest.TestCase):
         self.assertEqual(models[0]["api_format"], "openai_chat")
 
     def test_finalize_clamps_attempts_and_sanitizes_fallback_chain(self):
-        from r20_backend.llm import policy
-        from r20_backend.llm.store_normalize import finalize_config_document
+        from astra_backend.llm import policy
+        from astra_backend.llm.store_normalize import finalize_config_document
         flat = [{"id": "m1"}, {"id": "m2"}, {"id": "m3"}]
         with tempfile.TemporaryDirectory() as td:
             target = Path(td) / "llm_models.json"
@@ -172,8 +173,8 @@ class LlmStoreNormalizeVerbatimTest(unittest.TestCase):
             self.assertEqual(json.loads(target.read_text(encoding="utf-8"))["active_model_id"], "m1")
 
     def test_finalize_self_heals_dirty_attempts(self):
-        from r20_backend.llm import policy
-        from r20_backend.llm.store_normalize import finalize_config_document
+        from astra_backend.llm import policy
+        from astra_backend.llm.store_normalize import finalize_config_document
         with tempfile.TemporaryDirectory() as td:
             cfg = finalize_config_document(
                 active_effort="low", active_m_id="m1", active_pid="", config_file=Path(td) / "x.json",

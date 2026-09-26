@@ -27,7 +27,7 @@ from unittest import mock
 
 from fastapi.responses import JSONResponse
 
-from r20_backend import dashboard_cache as DC
+from astra_backend import dashboard_cache as DC
 
 
 class _Base(unittest.TestCase):
@@ -48,8 +48,15 @@ class _Base(unittest.TestCase):
 
 class ConstantTests(unittest.TestCase):
     def test_directories_are_anchored_at_the_repo_root(self):
-        self.assertTrue(DC.BASE_DIR.endswith("r20"))
-        self.assertEqual(DC.DASHBOARD_DIR, DC.BASE_DIR + "/r20_backend")
+        # ⚠️ 原断言是 `DC.BASE_DIR.endswith("<检出目录名>")` —— 它钉的是**检出目录的名字**，
+        #    跟"目录锚在仓库根"这个意图无关；2026-09-27 全量改名把它一起改掉了，
+        #    于是它开始断言一个不存在的目录名。改为钉真正要的性质：BASE_DIR 存在、
+        #    且它就是 astra_backend 包的父目录。
+        import os
+        self.assertTrue(os.path.isdir(DC.BASE_DIR), f"BASE_DIR 不存在：{DC.BASE_DIR}")
+        self.assertEqual(os.path.abspath(DC.BASE_DIR),
+                         os.path.dirname(os.path.dirname(os.path.abspath(DC.__file__))))
+        self.assertEqual(DC.DASHBOARD_DIR, DC.BASE_DIR + "/astra_backend")
         self.assertEqual(DC.WORKSPACE_DIR, DC.BASE_DIR)
         self.assertEqual(DC.DATA_DIR, DC.BASE_DIR + "/data")
         self.assertEqual(DC.LOGS_DIR, DC.BASE_DIR + "/logs")
@@ -68,7 +75,7 @@ class ConstantTests(unittest.TestCase):
 
     def test_ledger_autosync_is_disabled_inside_the_test_sandbox(self):
         self.assertIs(DC.LEDGER_AUTOSYNC_ENABLED, False,
-                      "tests/__init__.py 在 import 前置了 R20_LEDGER_SYNC_DISABLED=1")
+                      "tests/__init__.py 在 import 前置了 ASTRA_LEDGER_SYNC_DISABLED=1")
 
     def test_target_instruments_are_preloaded(self):
         self.assertEqual(len(DC.TARGET_INSTRUMENTS), 9)
@@ -426,7 +433,7 @@ class UpdateCycleLiveTests(_Base):
         self._start(mock.patch.object(DC, "_global_env_axis", return_value="demo"))
 
     def _patch_llm(self, runtime=None, exc=None):
-        from r20_backend import llm_manager
+        from astra_backend import llm_manager
         if exc is not None:
             return self._start(mock.patch.object(llm_manager, "get_active_llm_runtime",
                                                  side_effect=exc))
@@ -503,7 +510,7 @@ class UpdateCycleLiveTests(_Base):
         self.assertEqual(self.metrics.call_args[1]["reset_time_str"], "2026-05-05")
 
     def test_ledger_today_stats_override_the_bills_figures(self):
-        from r20_backend.execution import circuit_breaker
+        from astra_backend.execution import circuit_breaker
         self._start(mock.patch.object(DC, "_core_load_ledger_lifecycle_trades",
                                       return_value=([{"trade_id": 1}], [{"row": 1}])))
         stats = self._start(mock.patch.object(
@@ -522,7 +529,7 @@ class UpdateCycleLiveTests(_Base):
         self.assertRegex(stats.call_args[0][2], r"^\d{4}-\d{2}-\d{2}$")
 
     def test_ledger_today_stats_failure_falls_back_to_bills(self):
-        from r20_backend.execution import circuit_breaker
+        from astra_backend.execution import circuit_breaker
         self._start(mock.patch.object(DC, "_core_load_ledger_lifecycle_trades",
                                       return_value=([{"trade_id": 1}], [])))
         self._start(mock.patch.object(circuit_breaker, "ledger_today_stats",
@@ -533,7 +540,7 @@ class UpdateCycleLiveTests(_Base):
                          "okx_bills_degraded")
 
     def test_env_axis_failure_degrades_to_an_empty_axis(self):
-        from r20_backend.execution import circuit_breaker
+        from astra_backend.execution import circuit_breaker
         self._start(mock.patch.object(DC, "_global_env_axis",
                                       side_effect=RuntimeError("环境轴坏了")))
         self._start(mock.patch.object(DC, "_core_load_ledger_lifecycle_trades",

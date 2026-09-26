@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-R20 AI Brain Six-Crypto Quantitative Trading Decision Engine (ai_brain_trader.py)
+ASTRA AI Brain Six-Crypto Quantitative Trading Decision Engine (ai_brain_trader.py)
 Batch ingests six crypto perpetuals into one macro-context LLM call.
 Maintains a validated live decision cache and durable Web audit history.
 """
@@ -9,7 +9,7 @@ import os
 import sys
 from pathlib import Path
 
-from r20_backend.math_utils import safe_float as _shared_safe_float
+from astra_backend.math_utils import safe_float as _shared_safe_float
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ROOT = Path(PROJECT_ROOT)
@@ -55,12 +55,12 @@ from typing import Dict, Any, List, Optional, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 try:
-    from r20_backend.config import settings as standalone_settings
+    from astra_backend.config import settings as standalone_settings
 except ImportError:
     standalone_settings = None
 
 try:
-    from r20_backend.version import __version__
+    from astra_backend.version import __version__
 except Exception:
     __version__ = "7.6.0"
 
@@ -75,7 +75,7 @@ from market_data_service import fetch_single_indicator, fetch_ticker, fetch_cand
 from scripts.brain.packages import fetch_single_instrument_package as _fetch_single_instrument_package
 # 结构优化阶段4·B3 第二块：跨所采集/健康度/提示词组装已搬入 scripts/brain/xvenue.py。
 # 依赖面较宽（适配器缝、safe_float、VENUE_HEALTH_FILE、atomic_write_json、_XV_HEALTH），
-# 全部走**调用期注入**，理由见该模块 docstring 与 r20_backend/README.md §5。
+# 全部走**调用期注入**，理由见该模块 docstring 与 astra_backend/README.md §5。
 from scripts.brain.prompt import (
     construct_full_market_prompt as _construct_full_market_prompt_impl,
 )
@@ -175,16 +175,16 @@ PROMPT_OVERRIDE_FILE = os.path.join(DATA_DIR, "system_prompt_override.txt")
 AI_BRAIN_LOCK_FILE = os.path.join(DATA_DIR, ".ai_brain_cycle.lock")
 DECISION_MAX_AGE_SECONDS = 300
 
-from r20_backend.version import __version__
+from astra_backend.version import __version__
 from instrument_pool import load_instruments
 from prompt_library import active_profile, append_layer, apply_module_layout
-from r20_gateway.telemetry import ModelCallTelemetry
+from astra_gateway.telemetry import ModelCallTelemetry
 from llm_credentials import get_cpa_client_config as _get_cpa_client_config  # noqa: E402
 
 TARGET_INSTRUMENTS = load_instruments()
 
 try:  # 跨所符号归一（审计 P2-12）：把 BINANCE:BTCUSDT / BTC_USDT / BTC 统一成 OKX 形态
-    from r20_backend.exchanges.base import canonical_base as _canonical_base_name
+    from astra_backend.exchanges.base import canonical_base as _canonical_base_name
 except Exception:  # pragma: no cover - scripts/ 直接运行时走兜底
     try:
         from exchanges.base import canonical_base as _canonical_base_name  # type: ignore
@@ -237,7 +237,7 @@ def single_brain_cycle(func):
 
 
 def safe_float(value: Any, default: float = 0.0) -> float:
-    """薄壳：转调单一事实源（`r20_backend.math_utils.safe_float`，第一百五十刀）。
+    """薄壳：转调单一事实源（`astra_backend.math_utils.safe_float`，第一百五十刀）。
 
     语义与既有实现逐条一致（`nan`/`±inf`/不可转 ⇒ `default`；`bool` 按 `float()`）——
     只是不再各写一份（三份等价实现的漂移代价是"因子与风控静默算出不同的数"）。
@@ -255,7 +255,7 @@ def is_same_direction_scale_request(position_side: str, action: str) -> bool:
 def get_cpa_client_config() -> Tuple[str, str]:
     """薄壳：调用时解析门面全局，使测试的 patch / 直接赋值生效。
 
-    实现已迁往 r20_backend.llm.credentials（结构优化阶段 4·B3 第四十六刀）。
+    实现已迁往 astra_backend.llm.credentials（结构优化阶段 4·B3 第四十六刀）。
     ⚠️ `standalone_settings` 必须**在这里**读取后传入 —— 门面全局会被测试
     patch / 原地 reload，子模块 import 期绑定会读到陈旧副本。
     """
@@ -511,7 +511,7 @@ _SYSTEM_JSON_CONTRACT = """==== 【严格 JSON 规范契约与完整输出骨架
 # ---------------------------------------------------------------------------
 # 跨所比对矩阵（Phase 2 · 币安/Gate 只读备源）
 # 纯证据增益：任何失败一律 fail-soft，绝不阻塞决策主循环。
-# 熔断开关 R20_XVENUE_PROMPT=0 时整段跳过（网络故障预案/测试封闭性）。
+# 熔断开关 ASTRA_XVENUE_PROMPT=0 时整段跳过（网络故障预案/测试封闭性）。
 # ---------------------------------------------------------------------------
 
 # 跨所取数健康度状态：**刻意留在门面**（不是实现细节）——

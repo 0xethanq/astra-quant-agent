@@ -4,7 +4,7 @@
 |---|---|
 | 数量 | `contracts <= 0` ⇒ **`ValueError`**（不下 0 张/负数单）|
 | 响应结构 | 非 dict ⇒ `BinanceAPIError(bad_response)` —— **不能确认受理就不许假装成功** |
-| 撤单目标 | **非数字 `order_id` 一律改走 `origClientOrderId`**（审计 D6：上游回退链会把 client text `t-r20e*` 当 order_id 传来，混族直传会被 `-2011` 拒撤 ⇒ **回滚漏网孤儿入场单裸挂**）|
+| 撤单目标 | **非数字 `order_id` 一律改走 `origClientOrderId`**（审计 D6：上游回退链会把 client text `t-astrae*` 当 order_id 传来，混族直传会被 `-2011` 拒撤 ⇒ **回滚漏网孤儿入场单裸挂**）|
 | 撤单状态 | **status 必须回显交易所真实值**（审计 D3：旧实现硬编码 `CANCELED`，抢撤竞态下响应实为 `FILLED` 也会被伪报撤成功）——「**受理 ≠ 撤掉**」|
 | 缺失状态 | ⇒ `UNKNOWN`（不是 `CANCELED`）|
 """
@@ -13,7 +13,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from r20_backend.exchanges.binance import BinanceAdapter, BinanceAPIError
+from astra_backend.exchanges.binance import BinanceAdapter, BinanceAPIError
 
 
 class _Base(unittest.TestCase):
@@ -52,11 +52,11 @@ class PlaceOrderTest(_Base):
         self.assertEqual(len(self.sent), 1, "护栏在**发出请求之后**（受理与否只能看回包）")
 
     def test_happy_path_normalises_the_order(self):
-        self._signed({"orderId": 123, "clientOrderId": "t-r20e1", "status": "NEW",
+        self._signed({"orderId": 123, "clientOrderId": "t-astrae1", "status": "NEW",
                       "price": "0", "origQty": "1", "executedQty": "0"})
         out = self.ad.place_order("BTC", "long", 1.0)
         self.assertEqual(out["order_id"], "123")
-        self.assertEqual(out["client_order_id"], "t-r20e1")
+        self.assertEqual(out["client_order_id"], "t-astrae1")
         self.assertEqual(out["status"], "NEW")
         self.assertEqual(out["side"], "buy", "side 归一化为小写 buy/sell")
         self.assertEqual(out["executedQty"], 0.0)
@@ -77,18 +77,18 @@ class CancelOrderTest(_Base):
         self.assertNotIn("origClientOrderId", params)
 
     def test_non_numeric_order_id_becomes_orig_client_order_id(self):
-        """★ 审计 D6：上游回退链会把 client text（`t-r20e*`，非数字）当 order_id 传来；
+        """★ 审计 D6：上游回退链会把 client text（`t-astrae*`，非数字）当 order_id 传来；
         Binance 只认纯数字 `orderId`，混族直传会被 `-2011` 拒撤 ⇒ **孤儿入场单裸挂**。"""
         self._signed({"orderId": 1, "status": "CANCELED"})
-        self.ad.cancel_order("BTC", order_id="t-r20e12345")
+        self.ad.cancel_order("BTC", order_id="t-astrae12345")
         params = self.sent[-1][2]
-        self.assertEqual(params["origClientOrderId"], "t-r20e12345")
+        self.assertEqual(params["origClientOrderId"], "t-astrae12345")
         self.assertNotIn("orderId", params)
 
     def test_explicit_client_order_id_is_honoured(self):
         self._signed({"orderId": 1, "status": "CANCELED"})
-        self.ad.cancel_order("BTC", client_order_id="t-r20sl9")
-        self.assertEqual(self.sent[-1][2]["origClientOrderId"], "t-r20sl9")
+        self.ad.cancel_order("BTC", client_order_id="t-astrasl9")
+        self.assertEqual(self.sent[-1][2]["origClientOrderId"], "t-astrasl9")
 
     def test_no_target_is_refused(self):
         """既没 order_id 也没 client_order_id ⇒ `ValueError`（**不猜撤哪张**）。"""

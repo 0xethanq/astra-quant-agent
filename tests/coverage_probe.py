@@ -9,7 +9,7 @@
 ## 用法（**仅供开发期自查**，不在门里跑）
 
     .venv/bin/python -m tests.coverage_probe \\
-        scripts/trader/venue_protection.py r20_backend/execution_router.py \\
+        scripts/trader/venue_protection.py astra_backend/execution_router.py \\
         -- tests/trading tests/venues -q
 
 注意两点，否则数字会骗人：
@@ -103,7 +103,7 @@ def arm_sticky_tracer(outer):
     整份基线被**静默截断**。
 
     症状极具误导性：同一份数据下，"超集范围"能报出比"子集范围"**更少**的命中
-    （实测 `r20_backend/exchanges/gate.py`：全量 `0/347`，只跑 `tests/venues` `305/347`）。
+    （实测 `astra_backend/exchanges/gate.py`：全量 `0/347`，只跑 `tests/venues` `305/347`）。
     **超集不可能更少** —— 见者即应怀疑探针本身，而不是去补测试。
 
     语义：`settrace(None)` ⇒ 重新装回 `outer`；`settrace(别的 tracer)` 照常放行
@@ -148,7 +148,7 @@ def run(targets: list, pytest_args: list) -> dict:
     # 那个文件时，它在测试内部**拆掉外层 tracer** ⇒ 其后所有文件一律记 0 行。
     #
     # 症状极具误导性：同一份数据下，"超集范围"能比"子集范围"报出**更少**的命中
-    # （实测 `r20_backend/exchanges/gate.py`：全量 0/347，只跑 tests/venues 305/347）。
+    # （实测 `astra_backend/exchanges/gate.py`：全量 0/347，只跑 tests/venues 305/347）。
     # **超集不可能更少** —— 见者即应怀疑探针本身，而不是去补测试。
     #
     # 修法：把 `settrace(None)` 改写为"重新装回我们的 tracer"；测试自己的
@@ -200,7 +200,7 @@ def main() -> int:
     report = run(targets, argv[split + 1:])
     print("\n=== 运行时覆盖率（目标文件；范围= 你给的 pytest 选择 ⇒ 下界）===")
     print(format_report(report))
-    Path("/tmp/r20_coverage_probe.json").write_text(
+    Path("/tmp/astra_coverage_probe.json").write_text(
         json.dumps(report, ensure_ascii=False), encoding="utf-8")
     return 0
 

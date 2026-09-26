@@ -43,6 +43,10 @@ git log --oneline --grep="第.*刀" -- frontend/package-lock.json → 0
 > 2026-09-26 追加：`websockets`（`websockets>=12.0`，容器化运行依赖，
 > 见 `eb946682`）。哈希基线已随之更新。
 
+> 2026-09-27 追加：改名 `r20 → astra` 时把 `requirements.txt` 的**表头注释**
+> 从 `R20 Quantum Trader Dependencies` 改为 `AstraQuant Dependencies`。
+> **依赖项零变动**（本轮只改标识符，没有增删任何第三方包），哈希基线随之更新。
+
 `frontend/package.json` 的 `dependencies`：
 `@tailwindcss/vite` `lucide-vue-next` `pinia` `tailwindcss` `vue`
 `vue-router` `klinecharts` `lightweight-charts`
@@ -65,8 +69,13 @@ BASELINE: dict[str, str] = {
     # 2026-09-26 更新：本仓 `eb946682`（容器化加固）有意补的 `websockets>=12.0`
     # （并去掉文件头 BOM），但该提交漏更新此处基线 ⇒ 此后本门一直红着。
     # 依赖清单已按本文件 docstring 的要求同步进「记录时的实际清单」一节。
+    # 2026-09-27 更新：`r20 → astra` 全量改名把文件**表头注释**从
+    # `R20 Quantum Trader Dependencies` 改成 `AstraQuant Dependencies`。
+    # ⚠️ 依赖清单本身**一个都没动**（无增、无删、无换版本）—— 只有第一行注释。
+    # 这正是本门"不要直接改哈希、先确认改动是计划内的"那条纪律要走的形式：
+    # 依赖未变，仅注释随品牌改名，故基线随之更新。
     "requirements.txt":
-        "38e467026d65a1f5df4760484a72bc3efee7f5f856dcb100566f5cd126f61a4a",
+        "fcb6c397cdaf2e710aa5c1d303dd5e42a524f81e71f7b8c566e2c37d57e38a7e",
     "frontend/package.json":
         "a558a88f9e1704e639cfb57fa37d98968b8fed052c9b47c9bfc9a6cd44269eb6",
 }
@@ -105,7 +114,7 @@ class DependencyManifestUnchangedTest(unittest.TestCase):
         - 本仓大量模块是**按 basename** 导入的（`from instrument_pool import …`、
           `from db_manager import …`）—— 因为 `scripts/` 本身在 `sys.path` 上。
           手写名单没列 `scripts/*.py` 的模块名 → 全被判成第三方。
-        - 漏了真实存在的 `r20_gateway/` 包。
+        - 漏了真实存在的 `astra_gateway/` 包。
 
         故改为**推导**：
 
@@ -156,13 +165,13 @@ class DependencyManifestUnchangedTest(unittest.TestCase):
         stdlib = set(getattr(_sys, "stdlib_module_names", ()))
 
         # ⚠️ 推导还漏一类：**子包按 basename 导入**。
-        #    门面里写 `from r20_backend.schedule_store import …`，
+        #    门面里写 `from astra_backend.schedule_store import …`，
         #    但子包内部写 `from schedule_store import …`（因为父目录在 sys.path 上）。
         #    故把所有"含 __init__.py 的目录名"也加进本地集合。
         #    ⚠️ 注意 `rglob("__init__.py")` 的 `d` 就是**包目录本身**
         #    （`__init__.py` 在包里，不在它的父目录里）—— 第一版写成
         #    `d.parent.name in (...)` 于是只捞到仓根一层，仍误报。
-        for sub in ("r20_backend", "scripts", "r20_gateway"):
+        for sub in ("astra_backend", "scripts", "astra_gateway"):
             base = ROOT / sub
             local.add(sub)
             if not base.is_dir():
@@ -187,7 +196,7 @@ class DependencyManifestUnchangedTest(unittest.TestCase):
         }
 
         unknown: dict[str, set] = {}
-        for sub in ("r20_backend", "scripts", "r20_gateway"):
+        for sub in ("astra_backend", "scripts", "astra_gateway"):
             base = ROOT / sub
             if not base.is_dir():
                 continue
@@ -226,7 +235,7 @@ class DependencyManifestUnchangedTest(unittest.TestCase):
             _sys.path.insert(0, sys_path)
 
         count = 0
-        for f in (ROOT / "r20_backend").rglob("*.py"):
+        for f in (ROOT / "astra_backend").rglob("*.py"):
             tree = ast.parse(f.read_text(encoding="utf-8"))
             count += sum(1 for n in ast.walk(tree)
                          if isinstance(n, (ast.Import, ast.ImportFrom)))

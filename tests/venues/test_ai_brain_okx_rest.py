@@ -34,10 +34,10 @@ import scripts.okx_rest as okx_rest
 from scripts.okx_runtime import freeze_environment, unfreeze_environment
 
 DEMO_ENV = {
-    "R20_OKX_ENV": "demo",
+    "ASTRA_OKX_ENV": "demo",
     "OKX_DEMO_API_KEY": "DEMO_AK", "OKX_DEMO_SECRET_KEY": "DEMO_SK", "OKX_DEMO_PASSPHRASE": "DEMO_PP",
 }
-UNCONFIGURED_ENV = {"R20_OKX_ENV": "demo"}  # 无任何键 → configured False
+UNCONFIGURED_ENV = {"ASTRA_OKX_ENV": "demo"}  # 无任何键 → configured False
 
 
 def _response(code="0", msg="", data=None):

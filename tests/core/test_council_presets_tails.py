@@ -1,4 +1,4 @@
-"""投委会预设套件与角色模板复位（`r20_backend/council/presets.py`）残余分支收口测试 —— 第 355 刀。
+"""投委会预设套件与角色模板复位（`astra_backend/council/presets.py`）残余分支收口测试 —— 第 355 刀。
 
 本模块 65 行，是多角色 AI 投委会预设模板与套件复位装配核心：
 - 可用预设列表提取（`get_available_presets`）：返回系统全量内置预设列表；
@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import unittest
 
-from r20_backend.council.presets import (
+from astra_backend.council.presets import (
     apply_preset_suite,
     get_available_presets,
     reset_role_template,

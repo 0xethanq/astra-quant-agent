@@ -9,7 +9,7 @@
 
 import unittest
 
-from r20_backend.exchanges.binance import (
+from astra_backend.exchanges.binance import (
     interpret_dual_side_position, BinanceAPIError, BinanceAdapter,
 )
 

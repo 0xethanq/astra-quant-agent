@@ -10,7 +10,7 @@
 
 ## 判据（AST，精确到块内）
 
-`tests/`、`scripts/`、`r20_backend/` 下任何 `if __name__ == '__main__'` 的**块体内**
+`tests/`、`scripts/`、`astra_backend/` 下任何 `if __name__ == '__main__'` 的**块体内**
 不得出现 `def`/`async def`/`class`（块内定义在 pytest 导入时**永不执行** ⇒ 静默不收集）。
 
 ⚠️ 反过来说：定义出现在该 `if` **之后**（模块级）是**无害**的 —— pytest 是 import 模块，
@@ -35,7 +35,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-SCAN_ROOTS = ("tests", "scripts", "r20_backend", "r20_gateway", "plugins")
+SCAN_ROOTS = ("tests", "scripts", "astra_backend", "astra_gateway", "plugins")
 DEF_NODES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
 
 

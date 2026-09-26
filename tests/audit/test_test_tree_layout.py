@@ -8,7 +8,7 @@ r"""测试树布局门（第一百三十八刀）。
    pydantic/requests 一票依赖连锁崩（报错却是 `cannot import name 'BaseModel'`，极难定位）；
 2. `tests/dashboard/` —— 因为目录里有 `__init__.py`（常规包），它在 `sys.path` 上
    **优先于仓库根的 `dashboard/`**（常规包胜过命名空间包）⇒ 任何"从 tests/ 起的脚本"
-   再 `import r20_backend.dashboard_cache` 都会 `ModuleNotFoundError`。
+   再 `import astra_backend.dashboard_cache` 都会 `ModuleNotFoundError`。
 
 两者都不是测试逻辑问题，而是**目录命名**问题，且症状离病因很远。故用门钉死：
 `tests/` 下的域目录名**不得**与标准库模块名或仓库顶层包名重名。

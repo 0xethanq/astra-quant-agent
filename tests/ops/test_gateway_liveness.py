@@ -125,7 +125,7 @@ class TestWatchdogWiring:
     """看门狗的 gateway 模式必须真的调用本判据（否则判据写得再好也没人用）。"""
 
     def test_watchdog_gateway_mode_uses_this_module(self):
-        src = (ROOT / "scripts" / "r20_watchdog.sh").read_text(encoding="utf-8")
+        src = (ROOT / "scripts" / "astra_watchdog.sh").read_text(encoding="utf-8")
         assert "gateway_liveness.py" in src, "看门狗不再调用存活判据"
         assert "--timeout" in src and "--heartbeat" in src, "调用时没把心跳路径/窗口传进去"
 
@@ -133,7 +133,7 @@ class TestWatchdogWiring:
         """生产路径必须用**默认** fragment：一旦把它当参数传，那条命令行就会出现在
         /proc 里，判据会匹配到自己 ⇒ 永远返回"进程存在"、卡死永不触发。
         （本文件第一版正是栽在这个自匹配上。）"""
-        src = (ROOT / "scripts" / "r20_watchdog.sh").read_text(encoding="utf-8")
+        src = (ROOT / "scripts" / "astra_watchdog.sh").read_text(encoding="utf-8")
         call = src[src.index("gateway_liveness.py"):]
         call = call[:call.index("\n", call.index("--timeout"))]
         assert "--fragment" not in call, (
@@ -145,8 +145,8 @@ class TestWatchdogWiring:
         共用一把锁时，第二个容器里的看门狗一启动就 "already running" 退出 ——
         那台就彻底没人看护了（正是本次要修的那类"静默失效"）。
         """
-        src = (ROOT / "scripts" / "r20_watchdog.sh").read_text(encoding="utf-8")
-        assert ".r20_watchdog.gateway.lock" in src, "网关模式没有独立锁文件"
+        src = (ROOT / "scripts" / "astra_watchdog.sh").read_text(encoding="utf-8")
+        assert ".astra_watchdog.gateway.lock" in src, "网关模式没有独立锁文件"
 
     def test_shutdown_only_kills_what_this_mode_manages(self):
         """停止信号只该收掉**本模式在管**的进程。
@@ -155,7 +155,7 @@ class TestWatchdogWiring:
         问题被掩盖；但同机同时跑后端 + 一个网关模式看门狗时，停后者会顺手杀掉共享的后端
         （本地验证时真实发生过：后端被杀、约一分钟才被生产看门狗拉起）。
         """
-        src = (ROOT / "scripts" / "r20_watchdog.sh").read_text(encoding="utf-8")
+        src = (ROOT / "scripts" / "astra_watchdog.sh").read_text(encoding="utf-8")
         body = src[src.index("shutdown() {"):]
         body = body[:body.index("\n}")]
         assert 'if [ "$MODE" = "gateway" ]' in body, (
@@ -167,22 +167,22 @@ class TestWatchdogWiring:
     def test_watchdog_forwards_stop_signals(self):
         """容器里它可能是 PID 1，而内核会让 PID 1 忽略未装处理函数的 SIGTERM ⇒
         不装 trap 则 `docker stop` 会等满 10 秒超时才 SIGKILL，受管进程拿不到优雅退出。"""
-        src = (ROOT / "scripts" / "r20_watchdog.sh").read_text(encoding="utf-8")
+        src = (ROOT / "scripts" / "astra_watchdog.sh").read_text(encoding="utf-8")
         assert "trap shutdown TERM INT" in src, "看门狗没装停止信号处理"
 
     def test_watchdog_does_not_block_signals_behind_one_long_sleep(self):
         """bash 只在前台命令结束后才执行 trap ⇒ 一整段 `sleep 30` 会把 SIGTERM
         最多推迟 30 秒，超过 Docker 的 10 秒宽限。必须拆短。"""
-        src = (ROOT / "scripts" / "r20_watchdog.sh").read_text(encoding="utf-8")
+        src = (ROOT / "scripts" / "astra_watchdog.sh").read_text(encoding="utf-8")
         assert "for _ in 1 2 3 4 5 6; do sleep 5; done" in src, "长 sleep 会拖住停止信号"
         assert "    sleep 30\n" not in src, "还留着整段 sleep 30"
 
 
 class TestHeartbeatWriter:
-    """心跳写入端（`r20_gateway/worker.py`）的两条硬要求。"""
+    """心跳写入端（`astra_gateway/worker.py`）的两条硬要求。"""
 
     def test_worker_writes_heartbeat_every_loop_and_right_after_taking_the_lock(self):
-        src = (ROOT / "r20_gateway" / "worker.py").read_text(encoding="utf-8")
+        src = (ROOT / "astra_gateway" / "worker.py").read_text(encoding="utf-8")
         assert "write_heartbeat()" in src
         loop = src[src.index("while RUNNING:"):]
         assert "write_heartbeat()" in loop, "循环里没写心跳 ⇒ 判据永远判陈旧"
@@ -193,7 +193,7 @@ class TestHeartbeatWriter:
 
     def test_heartbeat_write_failure_never_breaks_scheduling(self, tmp_path):
         """心跳写不进去（磁盘满/权限）远不如"调度因此停摆"严重 ⇒ 必须吞掉异常。"""
-        from r20_gateway import worker as w
+        from astra_gateway import worker as w
 
         # 指向一个不可能写入的路径：父级是文件
         blocker = tmp_path / "blocker"
@@ -202,7 +202,7 @@ class TestHeartbeatWriter:
 
     def test_heartbeat_round_trips_through_the_probe(self, tmp_path):
         """写入端与判据端必须能对上（两处各写一份路径常量是漂移温床）。"""
-        from r20_gateway import worker as w
+        from astra_gateway import worker as w
 
         hb = tmp_path / "hb"
         assert w.write_heartbeat(hb) is True

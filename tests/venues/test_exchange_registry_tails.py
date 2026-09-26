@@ -1,4 +1,4 @@
-"""交易所适配器注册表（`r20_backend/exchanges/registry.py`）残余分支收口测试 —— 第 353 刀。
+"""交易所适配器注册表（`astra_backend/exchanges/registry.py`）残余分支收口测试 —— 第 353 刀。
 
 本模块 264 行，是交易所适配器统一注册、执行开闸校验、凭据原子档位解析与合约符号纯映射核心：
 - 凭证解析容错（`venue_credentials`）：密钥库读取异常自愈、半配档位（仅有 Key 或仅有 Secret）跳过并降级至下一档位；
@@ -11,7 +11,7 @@ from __future__ import annotations
 import unittest
 from unittest.mock import MagicMock, patch
 
-from r20_backend.exchanges.registry import (
+from astra_backend.exchanges.registry import (
     ExchangeCapabilityError,
     native_symbol_pure,
     require_execution,
@@ -26,7 +26,7 @@ class ExchangeRegistryTailsTests(unittest.TestCase):
     # -------------------------------------------------------------------------
     def test_venue_credentials_secrets_load_exception_returns_empty(self):
         # 密钥加载异常时捕获并返回 ("", "") (lines 158-159)
-        with patch("r20_gateway.secrets.load_secrets", side_effect=RuntimeError("secrets vault locked")):
+        with patch("astra_gateway.secrets.load_secrets", side_effect=RuntimeError("secrets vault locked")):
             self.assertEqual(venue_credentials("gate", "sandbox"), ("", ""))
 
     def test_venue_credentials_half_configured_tier_skipped(self):
@@ -36,7 +36,7 @@ class ExchangeRegistryTailsTests(unittest.TestCase):
             "GATE_API_KEY": "fallback_key",
             "GATE_SECRET_KEY": "fallback_secret",
         }
-        with patch("r20_gateway.secrets.load_secrets", return_value=secrets):
+        with patch("astra_gateway.secrets.load_secrets", return_value=secrets):
             creds = venue_credentials("gate", "sandbox")
             self.assertEqual(creds, ("fallback_key", "fallback_secret"))
 
@@ -50,12 +50,12 @@ class ExchangeRegistryTailsTests(unittest.TestCase):
 
     def test_venue_passphrase_secrets_load_exception_returns_empty(self):
         # 密钥库异常时捕获并安全返回空串 (lines 192-193)
-        with patch("r20_gateway.secrets.load_secrets", side_effect=RuntimeError("vault error")):
+        with patch("astra_gateway.secrets.load_secrets", side_effect=RuntimeError("vault error")):
             self.assertEqual(venue_passphrase("okx", "sandbox"), "")
 
     def test_venue_passphrase_no_environment_reads_default_key(self):
         # 未指定环境档位时直接读取默认 OKX_PASSPHRASE (line 206)
-        with patch("r20_gateway.secrets.load_secrets", return_value={"OKX_PASSPHRASE": "test_passphrase_123"}):
+        with patch("astra_gateway.secrets.load_secrets", return_value={"OKX_PASSPHRASE": "test_passphrase_123"}):
             self.assertEqual(venue_passphrase("okx", None), "test_passphrase_123")
 
     # -------------------------------------------------------------------------
@@ -69,8 +69,8 @@ class ExchangeRegistryTailsTests(unittest.TestCase):
         mock_adapter.capabilities.supports_orders = False
         mock_adapter.environment = "live"
 
-        with patch("r20_backend.exchanges.registry.get_adapter", return_value=mock_adapter):
-            with patch("r20_backend.exchanges.registry.execution_open", return_value=True):
+        with patch("astra_backend.exchanges.registry.get_adapter", return_value=mock_adapter):
+            with patch("astra_backend.exchanges.registry.execution_open", return_value=True):
                 with self.assertRaises(ExchangeCapabilityError) as ctx:
                     require_execution("okx", "live")
                 self.assertIn("supports_orders=False，适配器未实装下单", str(ctx.exception))

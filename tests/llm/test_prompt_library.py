@@ -93,7 +93,7 @@ class PromptLibraryTests(unittest.TestCase):
     def test_import_and_export_roundtrip(self):
         created = library.create_profile("导出测试方案", "导出测试说明", source_id="stable")
         exported = library.export_profile(created["id"])
-        self.assertEqual(exported["format"], "r20-prompt-profile")
+        self.assertEqual(exported["format"], "astra-prompt-profile")
         self.assertEqual(exported["version"], 4)
         self.assertIn("pipelines", exported["profile"])
         self.assertEqual(exported["profile_id"], created["id"])
@@ -109,7 +109,7 @@ class PromptLibraryTests(unittest.TestCase):
         lib_before = library.load_library()
         count_before = len(lib_before["profiles"])
         bad_payload = {
-            "format": "r20-prompt-profile",
+            "format": "astra-prompt-profile",
             "version": 3,
             "profile": {
                 "name": "恶意方案",

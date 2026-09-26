@@ -1,4 +1,4 @@
-"""仿真回放引擎（`r20_backend/sandbox/replay.py`）残余分支收口测试 —— 第 368 刀。
+"""仿真回放引擎（`astra_backend/sandbox/replay.py`）残余分支收口测试 —— 第 368 刀。
 
 本模块 197 行，负责回测沙箱确定性历史回放驱动、逐 K 线策略调用与绩效指标计算：
 - 指标结构序列化（`ReplayMetrics.to_dict()` 转为完整字典输出）；
@@ -9,8 +9,8 @@ from __future__ import annotations
 import unittest
 
 # 优先导入 exchanges 避免模块级循环引用
-import r20_backend.exchanges  # noqa: F401
-from r20_backend.sandbox.replay import PointInTimeReplayEngine, ReplayMetrics
+import astra_backend.exchanges  # noqa: F401
+from astra_backend.sandbox.replay import PointInTimeReplayEngine, ReplayMetrics
 
 
 class SandboxReplayTailsTests(unittest.TestCase):

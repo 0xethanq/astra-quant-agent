@@ -1,8 +1,8 @@
-"""`r20_backend/README.md` 里的测试基线数字必须与实测同量级（结构优化阶段 4·B3 第六十四刀）。
+"""`astra_backend/README.md` 里的测试基线数字必须与实测同量级（结构优化阶段 4·B3 第六十四刀）。
 
 ## 为什么需要它
 
-`r20_backend/README.md` §6 写着"每次拆分后必须过的两道闸"，
+`astra_backend/README.md` §6 写着"每次拆分后必须过的两道闸"，
 里面有一行基线数字：
 
 ```
@@ -41,7 +41,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-README = ROOT / "r20_backend" / "README.md"
+README = ROOT / "astra_backend" / "README.md"
 TESTS = ROOT / "tests"
 
 #: README 里基线数字的写法：`当前基线：1333 例 OK`
@@ -79,7 +79,7 @@ class ReadmeBaselineTest(unittest.TestCase):
         text = README.read_text(encoding="utf-8")
         self.assertRegex(
             text, BASELINE_RE,
-            "r20_backend/README.md §6 里应保留 `当前基线：NNNN 例 OK` 这一行 —— "
+            "astra_backend/README.md §6 里应保留 `当前基线：NNNN 例 OK` 这一行 —— "
             "它是新人判断'多少例算正常'的唯一依据")
         self.assertIn("unittest discover", text, "§6 应给出判绿命令")
 
@@ -95,7 +95,7 @@ class ReadmeBaselineTest(unittest.TestCase):
         lo, hi = actual * (1 - TOLERANCE), actual * (1 + TOLERANCE)
         self.assertTrue(
             lo <= documented <= hi,
-            f"r20_backend/README.md 的基线数字已漂移："
+            f"astra_backend/README.md 的基线数字已漂移："
             f"写的是 {documented} 例，实际约 {actual} 例"
             f"（允许 ±{int(TOLERANCE * 100)}%）—— 请更新 §6 那一行")
 

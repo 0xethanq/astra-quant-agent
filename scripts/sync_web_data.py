@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate local R20 dashboard cache without an external console dependency."""
+"""Generate local ASTRA dashboard cache without an external console dependency."""
 
 import os
 import sys
@@ -12,7 +12,7 @@ if str(_PROJECT_ROOT) not in sys.path:
 if str(_THIS_DIR) not in sys.path:
     sys.path.insert(0, str(_THIS_DIR))
 
-from r20_backend.time_utils import beijing_day
+from astra_backend.time_utils import beijing_day
 import json
 from typing import Any, Dict, Optional
 import time

@@ -6,7 +6,7 @@
 
 | 实现 | 位置 | 用途 |
 |---|---|---|
-| `canonical_base` | `r20_backend/exchanges/base.py` | 面板/因子/符号归一（共用最多）|
+| `canonical_base` | `astra_backend/exchanges/base.py` | 面板/因子/符号归一（共用最多）|
 | `_canonical_base_name`（= `canonical_base` 的别名）| `scripts/ai_brain_trader.py` | 池映射 |
 | `_base_of` | `scripts/trader/venue_protection.py` | 保护腿覆盖判定 |
 | `leg_base` | `scripts/trader/venue_protection.py` | 腿归属（第一百八十九刀由 `_leg_symbol` 更名）|
@@ -79,8 +79,8 @@ def compare_extractors(extractors, spellings) -> list:
 
 class BaseNameConsistencyTest(unittest.TestCase):
     def test_three_extractors_agree_on_real_spellings(self):
-        from r20_backend.exchanges.base import canonical_base
-        from r20_backend.execution.own_records import canonical_inst
+        from astra_backend.exchanges.base import canonical_base
+        from astra_backend.execution.own_records import canonical_inst
         from scripts.trader.venue_protection import _base_of, leg_base
         disagreements = compare_extractors(
             [("canonical_base", canonical_base),
@@ -120,7 +120,7 @@ class BaseNameConsistencyTest(unittest.TestCase):
 
     def test_documented_expectations(self):
         """显式期望值：三处**一起**回退也会被抓（避免"一致地错"）。"""
-        from r20_backend.exchanges.base import canonical_base
+        from astra_backend.exchanges.base import canonical_base
         from scripts.trader.venue_protection import _base_of
         for raw, want in [s for s in SPELLINGS if isinstance(s, tuple)]:
             self.assertEqual(canonical_base(raw), want, f"canonical_base({raw!r}) 应得 {want!r}")

@@ -34,7 +34,7 @@ export interface VenueAccount {
   reason: string
 }
 
-const ENV_KEY = 'r20.venueAccounts.environment'
+const ENV_KEY = 'astra.venueAccounts.environment'
 
 export const useVenueAccountsStore = defineStore('venueAccounts', () => {
   const environment = ref<VenueEnv>(localStorage.getItem(ENV_KEY) === 'live' ? 'live' : 'demo')

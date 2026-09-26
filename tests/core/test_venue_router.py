@@ -5,7 +5,7 @@
 
 | 语义 | 口径 |
 |---|---|
-| ★ **门面是再导出而非搬空** | `_hard_filters`/`_score`/`_balanced_pick`/`_parse_iso_utc` 必须是**子模块同一个函数对象** —— `tests/audit/test_cross_process_hash_determinism.py` 在**子进程**里 `from r20_backend.venue_router import _balanced_pick`，一旦门面自建副本，跨进程确定性就名存实亡 |
+| ★ **门面是再导出而非搬空** | `_hard_filters`/`_score`/`_balanced_pick`/`_parse_iso_utc` 必须是**子模块同一个函数对象** —— `tests/audit/test_cross_process_hash_determinism.py` 在**子进程**里 `from astra_backend.venue_router import _balanced_pick`，一旦门面自建副本，跨进程确定性就名存实亡 |
 | ★ **硬筛淘汰必留痕** | 每条淘汰进 `rejected` 并带 `stage`；`__FAILOPEN__`/`__NOTE__` 是**注记不淘汰**（分别进 reasons）；全灭 ⇒ `ALL_REJECTED`，无候选 ⇒ `NO_CANDIDATES` |
 | ★ **滞回只救现任** | 挑战者领先比例 `(现任分-最低分)/|现任分|` **严格小于**阈值才保留现任；现任即最低分 ⇒ 不触发；现任不在评分集中 ⇒ 不触发；分母有 `1e-9` 地板防零除 |
 | ★ **均衡用 sha256 而非 `hash()`** | 原因见文件内审计 D7 注释（`hash()` 受 `PYTHONHASHSEED` 随机化 ⇒ 跨进程轮入不同所）；本刀钉"同一 canonical 恒定同结果"且**加仓+现任在场时不做均衡** |
@@ -27,8 +27,8 @@ import hashlib
 import unittest
 from unittest import mock
 
-from r20_backend import venue_router as VR
-from r20_backend.venue_routing import selection as SEL
+from astra_backend import venue_router as VR
+from astra_backend.venue_routing import selection as SEL
 
 
 def _cand(venue, **extra):

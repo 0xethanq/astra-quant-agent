@@ -38,7 +38,7 @@ def clamp_ai_leverage(ai_lever, *, min_leverage, max_leverage, inst_lever_cap):
       这是原实现的行为（池文件是本地可信配置），此处**原样保留**，不擅自"修好"。
 
     参数全部入参，不在 import 期绑定风控常量 —— 门面会被
-    `pin_baseline_risk_env()` 原地重载（`r20_backend/README.md` §5）。
+    `pin_baseline_risk_env()` 原地重载（`astra_backend/README.md` §5）。
     """
     lev = min(max(ai_lever, float(min_leverage or 0.0) or 1.0),
               float(max_leverage or 20.0))

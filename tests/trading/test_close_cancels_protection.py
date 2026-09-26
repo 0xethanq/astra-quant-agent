@@ -11,7 +11,7 @@
 1. **先核验归零**：未确认归零绝不撤腿（撤早了，还在保护中的仓就裸了）；
 2. **该合约必须整体归零**（任何方向都没仓）：Gate 账户实测 `position_mode=dual`，
    双向持仓下平掉空头时多头的保护腿仍在保护**多头**，按合约撤会误伤；
-3. **只撤可证明属于本系统的腿**（`matched` / Gate `t-r20` 标签）：
+3. **只撤可证明属于本系统的腿**（`matched` / Gate `t-astra` 标签）：
    归属不可判定的腿可能是**用户手单**，撤错不可逆。
 """
 from __future__ import annotations
@@ -66,10 +66,10 @@ class SelectorTest(unittest.TestCase):
                          r["ids"], "同合约上**别的仓**（平多）的腿不因平掉空头而撤")
 
     def test_tagged_orphan_is_selectable_but_untagged_is_not(self):
-        tagged = _gate_leg("BTC_USDT", "t-r20sl75064327", "close_short", 81320.0, "g-sl")
+        tagged = _gate_leg("BTC_USDT", "t-astrasl75064327", "close_short", 81320.0, "g-sl")
         untagged = _leg("BTCUSDT", "STOP_MARKET", "buy", 1.0, 50000.0, "btc-no-tag")
         r = select_legs_to_cancel_after_close({"base": "BTC"}, [tagged, untagged], [])
-        self.assertIn("g-sl", r["ids"], "Gate 带 t-r20 标签 ⇒ 可证明是我们的")
+        self.assertIn("g-sl", r["ids"], "Gate 带 t-astra 标签 ⇒ 可证明是我们的")
         self.assertNotIn("btc-no-tag", r["ids"], "无标签且无台账 ⇒ 归属不可判定，绝不撤")
 
     def test_not_touched_are_reported_not_silently_dropped(self):
@@ -86,7 +86,7 @@ class SelectorTest(unittest.TestCase):
     def test_gate_full_close_leg_matches_without_size(self):
         """Gate 整仓平腿 size=0，但覆盖全部 ⇒ 平掉该仓后应可撤。"""
         pos = {"base": "BTC", "side": "short", "size_signed": -5.0}
-        leg = _gate_leg("BTC_USDT", "t-r20sl1", "close_short", 81320.0, "g1")
+        leg = _gate_leg("BTC_USDT", "t-astrasl1", "close_short", 81320.0, "g1")
         r = select_legs_to_cancel_after_close(pos, [leg], [])
         self.assertEqual(r["ids"], ["g1"])
 
@@ -129,7 +129,7 @@ class RouterCloseTest(unittest.TestCase):
             self.cancelled.append(kw.get("algo_id"))
 
     def setUp(self):
-        from r20_backend import execution_router
+        from astra_backend import execution_router
         self.er = execution_router
         self._p1 = patch.object(self.er, "require_execution", lambda *a, **k: None)
         self._p2 = patch.object(self.er, "CLOSE_FLAT_POLL_SLEEP", 0.0)
@@ -198,9 +198,9 @@ class RouterCloseTest(unittest.TestCase):
 
         接线层此前只读扁平 `l.get("symbol")` ⇒ **所有 Gate 腿被静默排除** ⇒
         "平仓后撤掉可证明属于自己的腿"这条链从未覆盖 Gate（线上遗留腿与该结论一致）。
-        本用例用带 `t-r20` 标签的 Gate 腿钉住它现在真的能进选择并被撤。
+        本用例用带 `t-astra` 标签的 Gate 腿钉住它现在真的能进选择并被撤。
         """
-        gate_leg = _gate_leg("UNI_USDT", "t-r20sl75064327", "close_short", 9.025, "gate-sl")
+        gate_leg = _gate_leg("UNI_USDT", "t-astrasl75064327", "close_short", 9.025, "gate-sl")
         ad = self._Ad(legs=[gate_leg])
         r = self._close(ad, venue="gate")
         self.assertTrue(r["ok"], r["detail"])
@@ -209,8 +209,8 @@ class RouterCloseTest(unittest.TestCase):
 
     def test_other_symbols_still_never_reach_the_selection(self):
         """放宽字段读取后**不得**把别的币的腿也拉进来（撤错不可逆）。"""
-        mine = _gate_leg("UNI_USDT", "t-r20sl1", "close_short", 9.025, "gate-mine")
-        other = _gate_leg("BTC_USDT", "t-r20sl2", "close_short", 81320.0, "gate-other")
+        mine = _gate_leg("UNI_USDT", "t-astrasl1", "close_short", 9.025, "gate-mine")
+        other = _gate_leg("BTC_USDT", "t-astrasl2", "close_short", 81320.0, "gate-other")
         ad = self._Ad(legs=[mine, other])
         r = self._close(ad, venue="gate")
         self.assertTrue(r["ok"], r["detail"])
@@ -232,7 +232,7 @@ class CancelFailureBranchesTest(unittest.TestCase):
     """
 
     def setUp(self):
-        from r20_backend import execution_router
+        from astra_backend import execution_router
         self.er = execution_router
         self._p1 = patch.object(self.er, "require_execution", lambda *a, **k: None)
         self._p2 = patch.object(self.er, "CLOSE_FLAT_POLL_SLEEP", 0.0)
@@ -303,7 +303,7 @@ class CancelFailureBranchesTest(unittest.TestCase):
     def test_ledger_read_failure_still_cancels_matched_legs(self):
         """台账读不到 ⇒ 退化成「只有 tag/持仓证据」，但**不因此放弃**已证明属于自己的腿。"""
         ad = RouterCloseTest._Ad()
-        with patch("r20_backend.execution.own_records.read_ledger_rows",
+        with patch("astra_backend.execution.own_records.read_ledger_rows",
                    side_effect=RuntimeError("ledger boom")):
             r = self._close(ad)
         self.assertEqual(ad.cancelled, ["uni-sl", "uni-tp"],
@@ -311,7 +311,7 @@ class CancelFailureBranchesTest(unittest.TestCase):
 
     def test_pool_read_failure_is_only_a_warning(self):
         """所池读取失败：按无限制继续（不制造新的阻塞点），但**必须真的告警**。"""
-        with patch("r20_backend.exchanges.routing_policy.load_venue_pool",
+        with patch("astra_backend.exchanges.routing_policy.load_venue_pool",
                    side_effect=RuntimeError("pool boom")):
             buf = io.StringIO()
             with redirect_stdout(buf):

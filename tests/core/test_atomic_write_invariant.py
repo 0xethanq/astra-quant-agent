@@ -34,7 +34,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-SCAN_ROOTS = (ROOT / "scripts", ROOT / "r20_backend", ROOT / "r20_gateway", ROOT / "plugins")
+SCAN_ROOTS = (ROOT / "scripts", ROOT / "astra_backend", ROOT / "astra_gateway", ROOT / "plugins")
 
 ATOMIC_NAME = re.compile(r"^_?atomic_write")
 SENSITIVE = (

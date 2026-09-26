@@ -1,4 +1,4 @@
-"""看板基础读取原语（`r20_backend/dashboard_payload/readers.py`）残余分支收口测试 —— 第 370 刀。
+"""看板基础读取原语（`astra_backend/dashboard_payload/readers.py`）残余分支收口测试 —— 第 370 刀。
 
 本模块 120 行，负责看板安全只读加载、坏数据告警披露与行尾切片：
 - 保留行尾空格模式（`read_text_lines` 在 `strip=False` 时仅剔除换行符 `\n`，保留行内首尾有效空白字符）。
@@ -9,12 +9,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from r20_backend.dashboard_payload.readers import read_text_lines
+from astra_backend.dashboard_payload.readers import read_text_lines
 
 
 class DashboardReadersTailsTests(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(prefix="r20_readers_tails_")
+        self.tmp = tempfile.TemporaryDirectory(prefix="astra_readers_tails_")
         self.addCleanup(self.tmp.cleanup)
         self.tmp_path = Path(self.tmp.name)
 

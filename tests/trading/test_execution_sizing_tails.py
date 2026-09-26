@@ -1,4 +1,4 @@
-"""仓位测算与下单步长量化（`r20_backend/execution/sizing.py`）残余分支收口测试 —— 第 371 刀。
+"""仓位测算与下单步长量化（`astra_backend/execution/sizing.py`）残余分支收口测试 —— 第 371 刀。
 
 本模块 44 行，负责持仓规模测算、单笔风险预算与交易所步长量化：
 - 非法输入张数量化容错（`quantize_size` 接收非法非数值字符串时捕获 `(TypeError, ValueError)` 安全回退 0.0）。
@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import unittest
 
-from r20_backend.execution.sizing import quantize_size
+from astra_backend.execution.sizing import quantize_size
 
 
 class ExecutionSizingTailsTests(unittest.TestCase):

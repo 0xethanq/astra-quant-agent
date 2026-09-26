@@ -23,7 +23,7 @@ class SubmitProtectedLimitOrderTests(unittest.TestCase):
         # US-007 接线后 submit 会先走 listing gate（真实 urlopen）并落意图文件——
         # 本文件只测风控逻辑，统一封死两条新缝（律①/③）：
         import tempfile
-        from r20_backend.exchanges import listing as _listing
+        from astra_backend.exchanges import listing as _listing
         patcher = patch.object(
             _listing, "ensure_contract_listed",
             lambda venue, environment, contract: _listing.ListingCheck(
@@ -41,12 +41,12 @@ class SubmitProtectedLimitOrderTests(unittest.TestCase):
                            lambda inst_id=None, **kw: {"last": "100.0"})
         tp_.start()
         self.addCleanup(tp_.stop)
-        # 下单模式必须钉死：`R20_ORDER_MODE` 是**运行期可改**的运维设置
+        # 下单模式必须钉死：`ASTRA_ORDER_MODE` 是**运行期可改**的运维设置
         # （后台「账户与标的」可在限价/市价间切换，且它会写进 `.env`）。
         # 本文件断言的是**限价**语义（`px` 有值、`ord_type == "limit"`），
         # 不钉模式就会变成"跟着运维的档位红绿" —— 2026-09 实测：运维切到
         # market 后本文件两条用例当场翻红，而代码其实没坏。
-        mode = patch.dict(os.environ, {"R20_ORDER_MODE": "limit"})
+        mode = patch.dict(os.environ, {"ASTRA_ORDER_MODE": "limit"})
         mode.start()
         self.addCleanup(mode.stop)
 

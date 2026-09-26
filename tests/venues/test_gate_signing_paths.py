@@ -20,7 +20,7 @@ import unittest
 from unittest.mock import patch
 from urllib.error import HTTPError
 
-from r20_backend.exchanges.gate import GateAdapter, GateAPIError
+from astra_backend.exchanges.gate import GateAdapter, GateAPIError
 
 
 class _Resp:
@@ -54,7 +54,7 @@ class _Base(unittest.TestCase):
             if isinstance(payload, Exception):
                 raise payload
             return _Resp(payload)
-        p = patch("r20_backend.exchanges.gate.urlopen", side_effect=_open)
+        p = patch("astra_backend.exchanges.gate.urlopen", side_effect=_open)
         p.start()
         self.addCleanup(p.stop)
         return self.ad
@@ -159,9 +159,9 @@ class AccountSnapshotTest(_Base):
         self.assertEqual(out["venue"], "gate")
 
     def test_missing_credentials_are_reported(self):
-        from r20_backend.exchanges import ExchangeCapabilityError
+        from astra_backend.exchanges import ExchangeCapabilityError
         self._keys.stop()
-        with patch("r20_backend.exchanges.registry.venue_credentials", return_value=("", "")):
+        with patch("astra_backend.exchanges.registry.venue_credentials", return_value=("", "")):
             with self.assertRaises(ExchangeCapabilityError):
                 GateAdapter._keys(self.ad)
 

@@ -1,4 +1,4 @@
-"""看板因子视图装配（`r20_backend/dashboard_payload/factors_view.py`）残余分支收口测试 —— 第 362 刀。
+"""看板因子视图装配（`astra_backend/dashboard_payload/factors_view.py`）残余分支收口测试 —— 第 362 刀。
 
 本模块 141 行，负责操盘看板标的因子列表、AI 决策研判与多维度信号提取：
 - 状态与因子库文件非迭代格式容错（`state_data` / `lib_data` 的 `instruments` 键为非列表脏数据时安全捕获 pass，不影响其他标的装配）。
@@ -10,12 +10,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from r20_backend.dashboard_payload.factors_view import build_factors_list
+from astra_backend.dashboard_payload.factors_view import build_factors_list
 
 
 class DashboardFactorsViewTailsTests(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(prefix="r20_dashboard_factors_view_tails_")
+        self.tmp = tempfile.TemporaryDirectory(prefix="astra_dashboard_factors_view_tails_")
         self.addCleanup(self.tmp.cleanup)
         self.tmp_path = Path(self.tmp.name)
         self.dec_file = self.tmp_path / "decisions.json"

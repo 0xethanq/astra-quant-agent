@@ -14,7 +14,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from r20_backend import council_manager as cm
+from astra_backend import council_manager as cm
 
 
 class CouncilPresetAlignmentTests(unittest.TestCase):
@@ -62,7 +62,7 @@ class CouncilPresetAlignmentTests(unittest.TestCase):
         """参谋报价单格式强制在运行时模板(代码层)，任何定制/导入的角色提示词都绕不开。
 
         定位方式说明（结构优化阶段 2 / B5）：这些运行时模板原在 council_manager.py，
-        拆分后随辩论引擎迁到 r20_backend/council/debate.py。断言强度保持不变，
+        拆分后随辩论引擎迁到 astra_backend/council/debate.py。断言强度保持不变，
         改为在整个 **council 运行时源码** 里检索 —— 比钉单一文件更稳（代码再搬家也不会
         让本用例误报），并加防空断言避免"读空文件也算通过"。
         """
@@ -147,7 +147,7 @@ class CouncilImportExportTests(unittest.TestCase):
         # 两个常量罩不住副作用链 —— `llm_manager.init_llm_config` 是**调用期**
         # 解析模块全局（薄壳注释自己写着"patch / 直接赋值必然生效"），
         # 所以这里必须把它一起换掉。
-        import r20_backend.llm_manager as lm
+        import astra_backend.llm_manager as lm
         self._lm = lm
         self._orig_llm_file = lm.LLM_CONFIG_FILE
         lm.LLM_CONFIG_FILE = Path(self._tmp.name) / "llm_models.json"
@@ -164,7 +164,7 @@ class CouncilImportExportTests(unittest.TestCase):
             "roles": cm.DEFAULT_PRESET_TEMPLATES,
         })
         pkg = cm.export_council_config()
-        self.assertEqual(pkg["format"], "r20-council-config")
+        self.assertEqual(pkg["format"], "astra-council-config")
         self.assertEqual(set(pkg["config"]["roles"]), set(cm.DEFAULT_PRESET_TEMPLATES))
 
         # 改坏现配置后导入还原

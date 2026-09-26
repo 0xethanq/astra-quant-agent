@@ -20,7 +20,7 @@
 ## 可以直接导入的
 
 `calc_*`（6 个）与 `effective_risk_per_trade` / `quantize_size` 都来自
-`r20_backend.execution` —— 与门面**同一个对象**，因此
+`astra_backend.execution` —— 与门面**同一个对象**，因此
 `test_audit_config_p1_alignment` 的 `assertIs(getattr(trader, name), getattr(sizing, name))`
 照旧成立。`calculate_multi_timeframe` 保持原样在函数内延迟导入
 （它来自 `calculus_engine`，测试环境里不一定可导入）。
@@ -30,7 +30,7 @@ import os
 import urllib
 import warnings
 
-from r20_backend.execution import (
+from astra_backend.execution import (
     calc_atr,
     calc_bollinger_squeeze,
     calc_ema,

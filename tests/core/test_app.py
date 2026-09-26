@@ -5,7 +5,7 @@
 
 | 语义 | 口径 |
 |---|---|
-| ★ **没配令牌就是 503，不是 403** | 后台未设 `R20_SETUP_TOKEN`/`R20_ADMIN_TOKEN` ⇒ 503「尚未设置」；配了但对不上 ⇒ 403「令牌无效」。两者混为一谈会让运维查错方向 |
+| ★ **没配令牌就是 503，不是 403** | 后台未设 `ASTRA_SETUP_TOKEN`/`ASTRA_ADMIN_TOKEN` ⇒ 503「尚未设置」；配了但对不上 ⇒ 403「令牌无效」。两者混为一谈会让运维查错方向 |
 | ★ **恒定时间比较** | 走 `hmac.compare_digest`（不能退化成 `==`，否则是计时侧信道）|
 | ★ **会话优先于旧令牌** | `current_admin` 先验会话；会话无效时，旧令牌**仅在该部署还没有用户时**才放行（返回 `legacy-token`）；一旦有用户，旧令牌立刻失效 |
 | ★ **`REQUEST_SESSION` 必须复位** | 中间件在 `finally` 里 reset —— 不复位会把某个请求的会话泄漏给后续请求（上下文变量随任务复用）|
@@ -27,10 +27,10 @@ from fastapi import HTTPException
 from pydantic import ValidationError
 from starlette.requests import Request
 
-from r20_backend import app as A
-from r20_backend import dashboard_cache as DC
-from r20_backend.dependencies import REQUEST_SESSION
-from r20_backend.settings_store import EnvValueError
+from astra_backend import app as A
+from astra_backend import dashboard_cache as DC
+from astra_backend.dependencies import REQUEST_SESSION
+from astra_backend.settings_store import EnvValueError
 from scripts import evolution_shield as ES
 from scripts import instrument_pool as IP
 
@@ -43,7 +43,7 @@ def _settings(admin_token="", setup_token=""):
 def _request(path="/api/v1/admin/memory", session=None, method="GET"):
     headers = []
     if session is not None:
-        headers.append((b"x-r20-session", str(session).encode()))
+        headers.append((b"x-astra-session", str(session).encode()))
     return Request({"type": "http", "method": method, "path": path,
                     "raw_path": path.encode(), "query_string": b"",
                     "headers": headers, "scheme": "http",
@@ -696,7 +696,7 @@ class AppWiringTests(unittest.TestCase):
         `from ... import require_admin_token`，AST 抽不到 → 隔离作用域 NameError
         → 23 个内存路由用例全红（历史上真发生过）。本用例把它钉在 app.py 里。"""
         self.assertTrue(callable(A.require_admin_token))
-        self.assertEqual(A.require_admin_token.__module__, "r20_backend.app")
+        self.assertEqual(A.require_admin_token.__module__, "astra_backend.app")
 
     def test_static_assets_are_mounted(self):
         mounts = [getattr(r, "path", None) for r in A.app.routes

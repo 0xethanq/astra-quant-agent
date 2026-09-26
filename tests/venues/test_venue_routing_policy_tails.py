@@ -1,4 +1,4 @@
-"""多所路由分配策略（`r20_backend/exchanges/routing_policy.py`）残余分支收口测试 —— 第 345 刀。
+"""多所路由分配策略（`astra_backend/exchanges/routing_policy.py`）残余分支收口测试 —— 第 345 刀。
 
 本模块 308 行，是多所平权资产池、路由模式与首选场所持久化配置核心：
 - 资产白名单规范化（`_normalize_assets`）：空值防御与非字符串丢弃；
@@ -14,7 +14,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from r20_backend.exchanges.routing_policy import (
+from astra_backend.exchanges.routing_policy import (
     _gate_execution_ready,
     _normalize_assets,
     _read_raw_routing,
@@ -28,13 +28,13 @@ from r20_backend.exchanges.routing_policy import (
 
 class VenueRoutingPolicyTailsTests(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(prefix="r20_routing_policy_tails_")
+        self.tmp = tempfile.TemporaryDirectory(prefix="astra_routing_policy_tails_")
         self.addCleanup(self.tmp.cleanup)
         self.tmp_path = Path(self.tmp.name)
         self.test_routing_file = self.tmp_path / "venue_routing.json"
 
         # 严防测试向生产 data/venue_routing.json 写入
-        p = patch("r20_backend.exchanges.routing_policy.ROUTING_FILE", self.test_routing_file)
+        p = patch("astra_backend.exchanges.routing_policy.ROUTING_FILE", self.test_routing_file)
         p.start()
         self.addCleanup(p.stop)
 
@@ -88,8 +88,8 @@ class VenueRoutingPolicyTailsTests(unittest.TestCase):
     # -------------------------------------------------------------------------
     def test_gate_execution_ready_secrets_exception_returns_false(self):
         # 读取加密密钥抛出异常时捕获并安全返回 False (line 172)
-        with patch("r20_backend.exchanges.routing_policy.execution_open", return_value=True):
-            with patch("r20_gateway.secrets.load_secrets", side_effect=RuntimeError("decrypt error")):
+        with patch("astra_backend.exchanges.routing_policy.execution_open", return_value=True):
+            with patch("astra_gateway.secrets.load_secrets", side_effect=RuntimeError("decrypt error")):
                 self.assertFalse(_gate_execution_ready())
 
     # -------------------------------------------------------------------------

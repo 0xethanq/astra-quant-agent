@@ -110,7 +110,7 @@ function exportCsv() {
   const blob = new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `r20-ledger-${fmtDate(new Date())}.csv`;
+  a.download = `astra-ledger-${fmtDate(new Date())}.csv`;
   a.click();
   URL.revokeObjectURL(a.href);
   toast.ok(t('dash.ledger.exported'));

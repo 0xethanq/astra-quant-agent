@@ -37,11 +37,11 @@ from unittest import mock
 
 import websockets
 
-from r20_backend import audit as AUDIT
-from r20_backend import notifications as NOTIF
-from r20_backend import qq_gateway_daemon as QG
-from r20_backend import settings_store as SS
-from r20_gateway import secrets as SEC
+from astra_backend import audit as AUDIT
+from astra_backend import notifications as NOTIF
+from astra_backend import qq_gateway_daemon as QG
+from astra_backend import settings_store as SS
+from astra_gateway import secrets as SEC
 
 _BJ = datetime.timezone(datetime.timedelta(hours=8))
 
@@ -264,24 +264,24 @@ class CredentialTests(unittest.TestCase):
         self.addCleanup(mock.patch.stopall)
 
     def test_all_three_values_are_returned(self):
-        self.env.return_value = {"R20_QQ_APP_ID": "app-1",
-                                 "R20_QQ_CLIENT_SECRET": "secret-1",
-                                 "R20_QQ_OPENID": "openid-1"}
+        self.env.return_value = {"ASTRA_QQ_APP_ID": "app-1",
+                                 "ASTRA_QQ_CLIENT_SECRET": "secret-1",
+                                 "ASTRA_QQ_OPENID": "openid-1"}
         self.assertEqual(QG._get_credentials(), ("app-1", "secret-1", "openid-1"))
 
     def test_missing_values_become_empty_strings(self):
         self.assertEqual(QG._get_credentials(), ("", "", ""))
 
     def test_values_are_stripped(self):
-        self.env.return_value = {"R20_QQ_APP_ID": "  app-1  ",
-                                 "R20_QQ_CLIENT_SECRET": "  s  ",
-                                 "R20_QQ_OPENID": "  o  "}
+        self.env.return_value = {"ASTRA_QQ_APP_ID": "  app-1  ",
+                                 "ASTRA_QQ_CLIENT_SECRET": "  s  ",
+                                 "ASTRA_QQ_OPENID": "  o  "}
         self.assertEqual(QG._get_credentials(), ("app-1", "s", "o"))
 
     def test_whitespace_only_values_collapse_to_empty(self):
-        self.env.return_value = {"R20_QQ_APP_ID": "   ",
-                                 "R20_QQ_CLIENT_SECRET": "   ",
-                                 "R20_QQ_OPENID": "   "}
+        self.env.return_value = {"ASTRA_QQ_APP_ID": "   ",
+                                 "ASTRA_QQ_CLIENT_SECRET": "   ",
+                                 "ASTRA_QQ_OPENID": "   "}
         self.assertEqual(QG._get_credentials(), ("", "", ""))
 
 
@@ -402,12 +402,12 @@ class SaveOpenidTests(_Base):
 
     def test_the_secret_store_gets_the_openid(self):
         QG._save_openid("app-1", "openid-1")
-        self.save.assert_called_once_with({"R20_QQ_OPENID": "openid-1"})
+        self.save.assert_called_once_with({"ASTRA_QQ_OPENID": "openid-1"})
 
     def test_the_env_gets_both_values(self):
         QG._save_openid("app-1", "openid-1")
-        self.update.assert_called_once_with({"R20_QQ_APP_ID": "app-1",
-                                             "R20_QQ_OPENID": "openid-1"})
+        self.update.assert_called_once_with({"ASTRA_QQ_APP_ID": "app-1",
+                                             "ASTRA_QQ_OPENID": "openid-1"})
 
     def test_an_audit_record_is_written(self):
         QG._save_openid("app-1", "openid-1")
@@ -551,7 +551,7 @@ class SessionHandshakeTests(_SessionBase):
         self.assertEqual(ws.sent[0]["d"]["intents"],
                          (1 << 0) | (1 << 12) | (1 << 25) | (1 << 30))
         self.assertEqual(ws.sent[0]["d"]["shard"], [0, 1])
-        self.assertEqual(ws.sent[0]["d"]["properties"]["$device"], "r20")
+        self.assertEqual(ws.sent[0]["d"]["properties"]["$device"], "astra")
 
     def test_the_heartbeat_interval_is_logged_in_seconds(self):
         self._run([_hello(interval=30000), _READY])

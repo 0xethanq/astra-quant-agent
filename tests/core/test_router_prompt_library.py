@@ -17,8 +17,8 @@ from unittest import mock
 
 from fastapi import HTTPException
 
-from r20_backend.routers.strategy import prompts as P
-from r20_backend.schemas import PromptLibraryUpdate
+from astra_backend.routers.strategy import prompts as P
+from astra_backend.schemas import PromptLibraryUpdate
 
 REQUIRED_KEYS = sorted(["trading_system", "trading_user", "evolution_system",
                         "evolution_user"])
@@ -62,7 +62,7 @@ class PromptLibraryGetTest(unittest.TestCase):
         with mock.patch("scripts.ai_brain_trader.SYSTEM_PROMPT", "SYS", create=True), \
                 mock.patch("scripts.self_improvement_engine.EVOLUTION_SYSTEM_PROMPT",
                            "EVO", create=True):
-            out = P.prompt_library(x_r20_session="t")
+            out = P.prompt_library(x_astra_session="t")
         self.assertEqual(out["preview_mode"], "template_only_not_runtime")
         self.assertEqual(out["transport"], "python-direct")
 
@@ -71,7 +71,7 @@ class PromptLibraryGetTest(unittest.TestCase):
         with mock.patch("scripts.ai_brain_trader.SYSTEM_PROMPT", "SYS", create=True), \
                 mock.patch("scripts.self_improvement_engine.EVOLUTION_SYSTEM_PROMPT",
                            "EVO", create=True):
-            out = P.prompt_library(x_r20_session="t")
+            out = P.prompt_library(x_astra_session="t")
         self.assertEqual(sorted(out["base_templates"]), REQUIRED_KEYS)
         self.assertEqual(sorted(out["pipelines"]), REQUIRED_KEYS)
         self.assertEqual(sorted(out["effective_templates"]), REQUIRED_KEYS)
@@ -84,7 +84,7 @@ class PromptLibraryGetTest(unittest.TestCase):
         with mock.patch("scripts.ai_brain_trader.SYSTEM_PROMPT", "SYS", create=True), \
                 mock.patch("scripts.self_improvement_engine.EVOLUTION_SYSTEM_PROMPT",
                            "EVO", create=True):
-            P.prompt_library(x_r20_session="t")
+            P.prompt_library(x_astra_session="t")
         labels = dict(self.calls)
         self.assertEqual(labels["trading_system"], "交易 System")
         self.assertEqual(labels["trading_user"], "交易 User")
@@ -94,7 +94,7 @@ class PromptLibraryGetTest(unittest.TestCase):
     def test_failure_is_500(self):
         self._run(load_library=mock.Mock(side_effect=RuntimeError("库坏了")))
         with self.assertRaises(HTTPException) as ctx:
-            P.prompt_library(x_r20_session="t")
+            P.prompt_library(x_astra_session="t")
         self.assertEqual(ctx.exception.status_code, 500)
 
 
@@ -129,7 +129,7 @@ class PromptLibraryUpdateTest(unittest.TestCase):
         with mock.patch.object(P, "load_library",
                                return_value={"active_style": "old"}, create=True), \
                 mock.patch.object(P, "save_library", saver, create=True):
-            return P.update_prompt_library(self._payload(), x_r20_session="t")
+            return P.update_prompt_library(self._payload(), x_astra_session="t")
 
     def test_custom_layer_is_stripped_and_saved(self):
         saver = mock.Mock()

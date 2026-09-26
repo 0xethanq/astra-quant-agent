@@ -2,14 +2,14 @@ r"""网关 pid 文件收敛 + 双读 bug 修复门（第一百一十八刀）。
 
 ## 背景
 
-`data/r20_gateway.pid` 原先在 4 处各自拼路径；其中两个 router 写成
+`data/astra_gateway.pid` 原先在 4 处各自拼路径；其中两个 router 写成
 
     pid = int(f.read_text().strip()) if f.exists() and f.read_text().strip().isdigit() else 0
 
 **同一个文件读两次**：两次读之间文件被改写（或第二次读失败）会抛 `ValueError`/`OSError`
 变成 500，`exists()` → `read_text()` 之间也是 TOCTOU 窗口。
 本包 `supervisor.current_pid()` 早就是正确写法（单次读 + 捕获 `(OSError, ValueError)`）
-—— 说明那两处是复制粘贴退化。现在统一到 `r20_gateway/pidfile.py`。
+—— 说明那两处是复制粘贴退化。现在统一到 `astra_gateway/pidfile.py`。
 
 ## 本门钉两件事
 
@@ -33,11 +33,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from r20_gateway.pidfile import PID_FILE, process_running, read_pid  # noqa: E402
+from astra_gateway.pidfile import PID_FILE, process_running, read_pid  # noqa: E402
 
 ROUTERS = [
-    ROOT / "r20_backend" / "routers" / "gateway" / "gateway_ops.py",
-    ROOT / "r20_backend" / "routers" / "system.py",
+    ROOT / "astra_backend" / "routers" / "gateway" / "gateway_ops.py",
+    ROOT / "astra_backend" / "routers" / "system.py",
 ]
 
 
@@ -48,7 +48,7 @@ class PidfileStructureTest(unittest.TestCase):
         ⚠️ 原先这一例用 `subprocess.run(["git", "grep", ...])` 实现，被离线套件
         （`tests/offline_suite.py`）的"外部子进程"守卫拦下 —— 守卫只放行
         `git show <rev>:<path>` 与 `git rev-parse --short <ref>` 两种形状，拦得对。
-        改为**纯 AST 扫描**：找 `"r20_gateway.pid"` 字符串常量，跳过文档字符串
+        改为**纯 AST 扫描**：找 `"astra_gateway.pid"` 字符串常量，跳过文档字符串
         （`ast.Expr(Constant)`），因此注释/文档里提到该路径不会被误判。
         """
         def is_docstring(node) -> bool:
@@ -56,14 +56,19 @@ class PidfileStructureTest(unittest.TestCase):
                 and isinstance(node.value.value, str)
 
         offenders = []
-        roots = [ROOT / d for d in ("r20_backend", "r20_gateway", "scripts", "tests")]
+        roots = [ROOT / d for d in ("astra_backend", "astra_gateway", "scripts", "tests")]
         for root in roots:
             if not root.exists():
                 continue
             for path in sorted(root.rglob("*.py")):
-                if path.name == "pidfile.py" and path.parent.name == "r20_gateway":
+                if path.name == "pidfile.py" and path.parent.name == "astra_gateway":
                     continue
                 if path == Path(__file__).resolve():   # 本门自身必须引用该字面量才能断言
+                    continue
+                # ⚠️ 白名单：`scripts/migrate_r20_to_astra.py`（2026-09-27 一次性迁移工具）
+                #    的**职责本身**就是按新旧名字搬迁 pid/lock/心跳文件 —— 它必须同时写出
+                #    两个名字。它不是运行时容器，不参与"路径常量单一来源"那条约束。
+                if path.name == "migrate_r20_to_astra.py":
                     continue
                 try:
                     tree = ast.parse(path.read_text(encoding="utf-8"))
@@ -71,13 +76,13 @@ class PidfileStructureTest(unittest.TestCase):
                     continue
                 doc_values = {id(n.value) for n in ast.walk(tree) if is_docstring(n)}
                 for node in ast.walk(tree):
-                    if isinstance(node, ast.Constant) and node.value == "r20_gateway.pid" \
+                    if isinstance(node, ast.Constant) and node.value == "astra_gateway.pid" \
                             and id(node) not in doc_values:
                         offenders.append(f"{path.relative_to(ROOT)}:{node.lineno}")
         self.assertEqual(offenders, [], "路径字面量必须只留在 pidfile.py 的代码里（其余处一律 import 常量）")
 
     def test_pid_file_points_at_data_dir(self):
-        self.assertEqual(PID_FILE.name, "r20_gateway.pid")
+        self.assertEqual(PID_FILE.name, "astra_gateway.pid")
         self.assertEqual(PID_FILE.parent.name, "data")
         self.assertEqual(PID_FILE.parent.parent, ROOT)
 
@@ -94,7 +99,7 @@ class PidfileStructureTest(unittest.TestCase):
                                   "不得再出现'同一文件读两次'的写法")
 
     def test_helpers_are_the_only_pid_logic(self):
-        tree = ast.parse((ROOT / "r20_gateway" / "pidfile.py").read_text(encoding="utf-8"))
+        tree = ast.parse((ROOT / "astra_gateway" / "pidfile.py").read_text(encoding="utf-8"))
         fns = {n.name for n in tree.body if isinstance(n, ast.FunctionDef)}
         self.assertLessEqual({"read_pid", "process_running"}, fns)
 
@@ -149,12 +154,12 @@ class ProcessRunningTest(unittest.TestCase):
     def test_permission_error_means_not_running(self):
         """无权限判为未运行是**原有语义**（原实现 `except OSError: pass`）。"""
         from unittest.mock import patch
-        with patch("r20_gateway.pidfile.os.kill", side_effect=PermissionError(1, "denied")):
+        with patch("astra_gateway.pidfile.os.kill", side_effect=PermissionError(1, "denied")):
             self.assertFalse(process_running(1234))
 
     def test_other_oserrors_mean_not_running(self):
         from unittest.mock import patch
-        with patch("r20_gateway.pidfile.os.kill", side_effect=ProcessLookupError()):
+        with patch("astra_gateway.pidfile.os.kill", side_effect=ProcessLookupError()):
             self.assertFalse(process_running(1234))
 
 

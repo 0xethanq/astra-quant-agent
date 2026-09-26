@@ -25,6 +25,7 @@ import subprocess
 import sys
 import unittest
 from pathlib import Path
+from tests.extraction.rename_baseline import legacy_rev_path, normalize
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
@@ -37,10 +38,10 @@ MODS = {"merge_lifecycle_trades": ROOT / "scripts" / "ledger" / "merge.py"}
 
 
 def _baseline_fn() -> ast.FunctionDef:
-    r = subprocess.run(["git", "show", f"{PRE}:scripts/sync_full_ledger.py"],
+    r = subprocess.run(["git", "show", legacy_rev_path(f"{PRE}:scripts/sync_full_ledger.py")],
                        capture_output=True, text=True, cwd=str(ROOT))
     assert r.returncode == 0, f"基线取不到：{r.stderr[:200]}"
-    return next(n for n in ast.parse(r.stdout).body
+    return next(n for n in ast.parse(normalize(r.stdout)).body
                 if isinstance(n, ast.FunctionDef) and n.name == OWNER)
 
 

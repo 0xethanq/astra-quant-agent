@@ -10,9 +10,9 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-import r20_backend.app as app_module
-from r20_backend import exchanges as ex
-from r20_backend.admin_auth import AdminAuthStore
+import astra_backend.app as app_module
+from astra_backend import exchanges as ex
+from astra_backend.admin_auth import AdminAuthStore
 
 
 _SANDBOX_SCOPE = None
@@ -23,12 +23,12 @@ def setUpModule():
 
     这些端点会经 `config.refresh_settings()` 读配置，而链路上有两个**调用期**取模块全局的读取点
     —— 由生产读守卫指出的 `读取点`（不是猜的）：`scripts/okx_runtime.py:17` 的 `_load_dotenv()`
-    读 `ROOT / ".env"`，以及 `r20_backend/config.py:57` 的 `load_dotenv(ROOT / ".env")`。
+    读 `ROOT / ".env"`，以及 `astra_backend/config.py:57` 的 `load_dotenv(ROOT / ".env")`。
     临时目录里没有 `.env` ⇒ 两者都直接返回（不读生产、不覆盖 os.environ）；
     各用例自己的 `patch.dict(os.environ, …)` 照旧生效。
     """
     global _SANDBOX_SCOPE
-    import r20_backend.config as config
+    import astra_backend.config as config
     import scripts.okx_runtime as okx_runtime
     tmp = tempfile.TemporaryDirectory()
     patchers = [patch.object(config, "ROOT", Path(tmp.name)),
@@ -97,7 +97,7 @@ class MultiExchangeApiTests(unittest.TestCase):
                 "gate_testnet": False, "gate_api_key": "   "})
         self.assertEqual(r.status_code, 200, r.text)
         self.assertEqual(saved, {"BINANCE_API_KEY": "BN_KEY", "BINANCE_SECRET_KEY": "BN_SEC"})
-        self.assertEqual(env_writes, {"R20_GATE_TESTNET": "0"})   # 空串=不保存；未提供=不写
+        self.assertEqual(env_writes, {"ASTRA_GATE_TESTNET": "0"})   # 空串=不保存；未提供=不写
         self.assertEqual(cleared["n"], 1)
 
     def test_gate_execution_toggle_requires_exact_phrase(self):
@@ -114,7 +114,7 @@ class MultiExchangeApiTests(unittest.TestCase):
             r2 = self.client.put("/api/v1/admin/multi-exchange", json={
                 "gate_execution": True, "confirmation": "OPEN GATE EXECUTION"})
             self.assertEqual(r2.status_code, 200, r2.text)
-            self.assertEqual(env_writes, {"R20_GATE_EXECUTION": "1"})
+            self.assertEqual(env_writes, {"ASTRA_GATE_EXECUTION": "1"})
 
     def test_binance_execution_toggle_requires_exact_phrase(self):
         # US-005: 币安开闸必须精确短语 OPEN BINANCE EXECUTION
@@ -130,7 +130,7 @@ class MultiExchangeApiTests(unittest.TestCase):
             r2 = self.client.put("/api/v1/admin/multi-exchange", json={
                 "binance_execution": True, "confirmation": "OPEN BINANCE EXECUTION"})
             self.assertEqual(r2.status_code, 200, r2.text)
-            self.assertEqual(env_writes, {"R20_BINANCE_EXECUTION": "1"})
+            self.assertEqual(env_writes, {"ASTRA_BINANCE_EXECUTION": "1"})
 
     def test_execution_status_field_exposed_in_get(self):
         with patch.object(ex, "venue_credentials", lambda v: ("", "")), \
@@ -163,12 +163,12 @@ class MultiExchangeRbacTests(MultiExchangeApiTests):
 
 class RegistryTestnetAndCredentialsTests(unittest.TestCase):
     def setUp(self):
-        # 封闭三律：宿主 .env 的 R20_GATE_TESTNET=1 会在 import 期进 os.environ，
+        # 封闭三律：宿主 .env 的 ASTRA_GATE_TESTNET=1 会在 import 期进 os.environ，
         # 「未声明开关时保持实盘」的断言必须排除 ambient 旗标（各用例自设旗标用 patch.dict 不受影响）。
         self._flag_guard = patch.dict(os.environ, {
             k: "0" for k in list(os.environ)
-            if k.startswith(("R20_BINANCE_TESTNET", "R20_GATE_TESTNET",
-                             "R20_OKX_ENV", "R20_OKX_TESTNET"))}, clear=False)
+            if k.startswith(("ASTRA_BINANCE_TESTNET", "ASTRA_GATE_TESTNET",
+                             "ASTRA_OKX_ENV", "ASTRA_OKX_TESTNET"))}, clear=False)
         self._flag_guard.start()
         self.addCleanup(self._flag_guard.stop)
 
@@ -176,10 +176,10 @@ class RegistryTestnetAndCredentialsTests(unittest.TestCase):
         ex.clear_instances()
 
     def test_testnet_flag_switches_base_url(self):
-        with patch.dict(os.environ, {"R20_BINANCE_TESTNET": "1"}):
+        with patch.dict(os.environ, {"ASTRA_BINANCE_TESTNET": "1"}):
             ex.clear_instances()
             self.assertEqual(ex.get_adapter("binance").base_url, "https://demo-fapi.binance.com")
-        with patch.dict(os.environ, {"R20_BINANCE_TESTNET": "0"}):
+        with patch.dict(os.environ, {"ASTRA_BINANCE_TESTNET": "0"}):
             ex.clear_instances()
             self.assertEqual(ex.get_adapter("binance").base_url, "https://fapi.binance.com")
         # gate 未声明开关时保持实盘
@@ -187,14 +187,14 @@ class RegistryTestnetAndCredentialsTests(unittest.TestCase):
         self.assertEqual(ex.get_adapter("gate").base_url, "https://api.gateio.ws")
 
     def test_venue_credentials_read_from_secret_store(self):
-        import r20_gateway.secrets as gw_secrets
+        import astra_gateway.secrets as gw_secrets
         with patch.object(gw_secrets, "load_secrets",
                           lambda: {"GATE_API_KEY": "gk", "GATE_SECRET_KEY": "gs"}):
             self.assertEqual(ex.venue_credentials("gate"), ("gk", "gs"))
             self.assertEqual(ex.venue_credentials("binance"), ("", ""))
 
     def test_secret_keys_whitelist_contains_venue_keys(self):
-        from r20_gateway.secrets import SECRET_KEYS
+        from astra_gateway.secrets import SECRET_KEYS
         for k in (
             "BINANCE_API_KEY", "BINANCE_SECRET_KEY",
             "BINANCE_LIVE_API_KEY", "BINANCE_LIVE_SECRET_KEY",
@@ -208,9 +208,9 @@ class RegistryTestnetAndCredentialsTests(unittest.TestCase):
             self.assertIn(k, SECRET_KEYS)
 
     def test_managed_env_keys_registered(self):
-        from r20_backend.settings_store import MANAGED_KEYS
+        from astra_backend.settings_store import MANAGED_KEYS
         for k in (
-            "R20_BINANCE_TESTNET", "R20_GATE_TESTNET",
+            "ASTRA_BINANCE_TESTNET", "ASTRA_GATE_TESTNET",
             "BINANCE_LIVE_API_KEY", "BINANCE_DEMO_API_KEY",
             "GATE_LIVE_API_KEY", "GATE_DEMO_API_KEY",
         ):
@@ -265,7 +265,7 @@ class SixAccountCredentialsAndDiagnosticsTests(MultiExchangeApiTests):
         self.assertGreaterEqual(cleared["n"], 1)
 
     def test_venue_credentials_isolation_and_fallback(self):
-        import r20_gateway.secrets as gw_secrets
+        import astra_gateway.secrets as gw_secrets
         # 1. 独立配置时精确分流
         store_sample = {
             "BINANCE_LIVE_API_KEY": "bn_live_k",
@@ -311,7 +311,7 @@ class SixAccountCredentialsAndDiagnosticsTests(MultiExchangeApiTests):
             self.assertEqual(ex.venue_passphrase("okx", "demo"), "okx_legacy_p")
 
     def test_status_endpoint_reports_6_account_readiness(self):
-        import r20_gateway.secrets as gw_secrets
+        import astra_gateway.secrets as gw_secrets
         store = {
             "BINANCE_LIVE_API_KEY": "K",
             "BINANCE_LIVE_SECRET_KEY": "S",
@@ -336,7 +336,7 @@ class SixAccountCredentialsAndDiagnosticsTests(MultiExchangeApiTests):
             self.assertFalse(acc["okx"]["live"]["has_api_key"])
 
     def test_diagnostics_public_ping_fallback_when_no_credentials(self):
-        from r20_backend.exchanges import diagnostics
+        from astra_backend.exchanges import diagnostics
         mock_http = lambda url, **k: (200, {"serverTime": 1720000000000}, {})
         with patch.object(diagnostics, "_default_http_call", mock_http):
             res = diagnostics.diagnose_venue_connection(
@@ -351,10 +351,10 @@ class SixAccountCredentialsAndDiagnosticsTests(MultiExchangeApiTests):
         """封闭契约（2026-09-11 worktree 门禁红固化）：无钉文件时，gate sandbox
         诊断的域名探测必须走注入 http_client（零真实 DNS），且不落钉文件——
         生产 caller=urlopen 行为不变；预检通道绝不污染持久化择优。"""
-        from r20_backend.exchanges import diagnostics
+        from astra_backend.exchanges import diagnostics
         import tempfile
         from pathlib import Path
-        from r20_backend.exchanges import env_profiles
+        from astra_backend.exchanges import env_profiles
 
         probed: list = []
         def spy_call(url, **k):
@@ -374,7 +374,7 @@ class SixAccountCredentialsAndDiagnosticsTests(MultiExchangeApiTests):
                              "诊断预检不得写钉文件（persist=False）")
 
     def test_diagnostics_verify_credentials_before_saving_success(self):
-        from r20_backend.exchanges import diagnostics
+        from astra_backend.exchanges import diagnostics
 
         # 1. OKX 鉴权成功 (code: "0")
         okx_call = lambda url, **k: (200, {"code": "0", "data": [{"totalEq": "1000"}]}, {})
@@ -408,7 +408,7 @@ class SixAccountCredentialsAndDiagnosticsTests(MultiExchangeApiTests):
         self.assertIn("Gate SANDBOX 凭证鉴权成功", res_gt["message"])
 
     def test_diagnostics_verify_credentials_auth_failure_handling(self):
-        from r20_backend.exchanges import diagnostics
+        from astra_backend.exchanges import diagnostics
 
         # OKX 业务码非0
         okx_fail = lambda url, **k: (200, {"code": "50111", "msg": "API key doesn't exist"}, {})
@@ -431,7 +431,7 @@ class SixAccountCredentialsAndDiagnosticsTests(MultiExchangeApiTests):
         self.assertIn("INVALID_KEY", res_gt["message"])
 
     def test_diagnostics_endpoint_via_http_api(self):
-        from r20_backend.exchanges import diagnostics
+        from astra_backend.exchanges import diagnostics
         mock_ok = lambda *a, **k: {
             "ok": True, "venue": "binance", "environment": "live",
             "authenticated": True, "mode": "authenticated",

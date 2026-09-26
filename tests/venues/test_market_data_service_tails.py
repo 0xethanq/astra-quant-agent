@@ -58,7 +58,7 @@ class _Sandbox(unittest.TestCase):
             p.start()
             self.addCleanup(p.stop)
         # 备源默认关闭，避免任何真实网络/适配器调用；用到的用例自行打开
-        ev = patch.dict("os.environ", {"R20_ALT_VENUE_FALLBACK": "0"})
+        ev = patch.dict("os.environ", {"ASTRA_ALT_VENUE_FALLBACK": "0"})
         ev.start()
         self.addCleanup(ev.stop)
         rd = patch.object(mds, "REST_FALLBACK_ENABLED", False, create=True)
@@ -245,11 +245,11 @@ class AltVenueAllowedTests(unittest.TestCase):
         # 离线/测试熔断开关：=0 时备源路径完全不发网络请求
         for value in ("0", "off", "OFF", "false", "False", " off "):
             with self.subTest(value=value):
-                with patch.dict("os.environ", {"R20_ALT_VENUE_FALLBACK": value}):
+                with patch.dict("os.environ", {"ASTRA_ALT_VENUE_FALLBACK": value}):
                     self.assertFalse(mds._alt_venue_allowed())
 
     def test_a_truthy_value_keeps_it_on(self):
-        with patch.dict("os.environ", {"R20_ALT_VENUE_FALLBACK": "1"}):
+        with patch.dict("os.environ", {"ASTRA_ALT_VENUE_FALLBACK": "1"}):
             self.assertTrue(mds._alt_venue_allowed())
 
 
@@ -259,7 +259,7 @@ class GetVenueAdapterTests(unittest.TestCase):
         root = str(Path(mds.__file__).resolve().parents[1])
         stripped = [p for p in sys.path if p != root]
         with patch.object(sys, "path", stripped), \
-             patch("r20_backend.exchanges.get_adapter", return_value="ADAPTER") as ga:
+             patch("astra_backend.exchanges.get_adapter", return_value="ADAPTER") as ga:
             self.assertEqual(mds._get_venue_adapter("binance"), "ADAPTER")
             self.assertIn(root, sys.path)
             ga.assert_called_once_with("binance")
@@ -267,7 +267,7 @@ class GetVenueAdapterTests(unittest.TestCase):
     def test_an_existing_root_entry_is_not_duplicated(self):
         root = str(Path(mds.__file__).resolve().parents[1])
         before = list(sys.path)
-        with patch("r20_backend.exchanges.get_adapter", return_value="A"):
+        with patch("astra_backend.exchanges.get_adapter", return_value="A"):
             mds._get_venue_adapter("gate")
         self.assertEqual(sys.path, before, "已在 path 上时不许重复插入")
 
@@ -298,7 +298,7 @@ class _FakeAdapter:
 
 class AltVenueTickerTests(_Sandbox, unittest.TestCase):
     def _run(self, adapter):
-        with patch.dict("os.environ", {"R20_ALT_VENUE_FALLBACK": "1"}), \
+        with patch.dict("os.environ", {"ASTRA_ALT_VENUE_FALLBACK": "1"}), \
              patch.object(mds, "_get_venue_adapter", return_value=adapter):
             return mds._alt_venue_ticker("BTC-USDT-SWAP")
 
@@ -325,7 +325,7 @@ class AltVenueTickerTests(_Sandbox, unittest.TestCase):
         self.assertIsNone(self._run(_FakeAdapter(ticker={"last": 0})))
 
     def test_the_kill_switch_short_circuits(self):
-        with patch.dict("os.environ", {"R20_ALT_VENUE_FALLBACK": "0"}):
+        with patch.dict("os.environ", {"ASTRA_ALT_VENUE_FALLBACK": "0"}):
             self.assertIsNone(mds._alt_venue_ticker("BTC-USDT-SWAP"))
 
     def test_missing_optional_fields_become_empty_strings(self):
@@ -337,7 +337,7 @@ class AltVenueTickerTests(_Sandbox, unittest.TestCase):
 
 class AltVenueCandlesTests(_Sandbox, unittest.TestCase):
     def _run(self, adapter):
-        with patch.dict("os.environ", {"R20_ALT_VENUE_FALLBACK": "1"}), \
+        with patch.dict("os.environ", {"ASTRA_ALT_VENUE_FALLBACK": "1"}), \
              patch.object(mds, "_get_venue_adapter", return_value=adapter):
             return mds._alt_venue_candles("BTC-USDT-SWAP", "1H", 5)
 
@@ -361,13 +361,13 @@ class AltVenueCandlesTests(_Sandbox, unittest.TestCase):
         self.assertEqual(self._run(_FakeAdapter(candles=[])), [])
 
     def test_the_kill_switch_short_circuits(self):
-        with patch.dict("os.environ", {"R20_ALT_VENUE_FALLBACK": "0"}):
+        with patch.dict("os.environ", {"ASTRA_ALT_VENUE_FALLBACK": "0"}):
             self.assertEqual(mds._alt_venue_candles("X", "1H", 5), [])
 
 
 class AltVenueFundingTests(_Sandbox, unittest.TestCase):
     def _run(self, adapter):
-        with patch.dict("os.environ", {"R20_ALT_VENUE_FALLBACK": "1"}), \
+        with patch.dict("os.environ", {"ASTRA_ALT_VENUE_FALLBACK": "1"}), \
              patch.object(mds, "_get_venue_adapter", return_value=adapter):
             return mds._alt_funding_rate("BTC-USDT-SWAP")
 
@@ -388,7 +388,7 @@ class AltVenueFundingTests(_Sandbox, unittest.TestCase):
 
     def test_the_kill_switch_short_circuits(self):
         # ★ 第 324/325 行
-        with patch.dict("os.environ", {"R20_ALT_VENUE_FALLBACK": "0"}):
+        with patch.dict("os.environ", {"ASTRA_ALT_VENUE_FALLBACK": "0"}):
             self.assertIsNone(mds._alt_funding_rate("BTC-USDT-SWAP"))
 
 

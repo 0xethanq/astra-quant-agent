@@ -28,6 +28,7 @@ import unittest
 from pathlib import Path
 
 from scripts.ledger.okx_history import build_okx_trade
+from tests.extraction.rename_baseline import legacy_rev_path, normalize
 
 ROOT = Path(__file__).resolve().parents[2]
 FACADE = ROOT / "scripts" / "sync_full_ledger.py"
@@ -347,7 +348,7 @@ class SourceIdentityTest(unittest.TestCase):
         import textwrap
         try:
             out = subprocess.run(
-                ["git", "show", f"{self.PRE_EXTRACTION_REV}:{self.FACADE_REL}"],
+                ["git", "show", legacy_rev_path(f"{self.PRE_EXTRACTION_REV}:{self.FACADE_REL}")],
                 capture_output=True, text=True, check=True, cwd=str(ROOT)).stdout
         except Exception as exc:                                   # noqa: BLE001
             raise unittest.SkipTest(f"取不到历史版本 —— {exc}")
@@ -504,7 +505,7 @@ class WiringTest(unittest.TestCase):
 
         **断言必须看 AST 而不是文本**：子模块的文档串里"提到"了 `_pos_id_seen`
         这个词（解释序号为何由调用方传入），文本断言会因此假红 —— 这正是
-        `r20_backend/README.md` §7 记的那类锚点陷阱：文档提及 ≠ 代码存在。
+        `astra_backend/README.md` §7 记的那类锚点陷阱：文档提及 ≠ 代码存在。
         """
         facade_tree = ast.parse(FACADE.read_text(encoding="utf-8"))
         sub_tree = ast.parse(SUBMODULE.read_text(encoding="utf-8"))

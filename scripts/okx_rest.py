@@ -12,7 +12,7 @@ Design contract (mission/okx-cli-removal, US-001):
   the removed ``okx`` command line and never touches child processes.
 - Fail-closed: any private call with an unconfigured credential group raises
   ``OKXNotConfigured`` *before* a network request is made.
-- Signature口径 identical to ``r20_backend.okx_trade_service._request``:
+- Signature口径 identical to ``astra_backend.okx_trade_service._request``:
   prehash = timestamp + method + request_path + body, HMAC-SHA256 keyed with the
   secret then base64; demo mode adds ``x-simulated-trading: 1``.
 - Returns the payload ``data`` list (``[]`` when empty). Envelope ``code`` or row
@@ -82,7 +82,7 @@ def _with_broker_tag(params: dict[str, Any], tag: str | None) -> dict[str, Any]:
     那些成交就没带标记。抽成一处后由 `tests` 的"每个产单端点都必须带 tag"兜住。
 
     取值优先级：显式实参 > 环境变量 `OKX_BROKER_TAG` > 硬编码默认值
-    （`scripts/okx_rest.py` 就是权威来源；`r20_backend/config.py` 里那个同名字段
+    （`scripts/okx_rest.py` 就是权威来源；`astra_backend/config.py` 里那个同名字段
     只是**上报用**，改它不会生效）。
     """
     broker_tag = tag if tag is not None else effective_broker_tag()

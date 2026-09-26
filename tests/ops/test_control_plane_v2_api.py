@@ -4,10 +4,10 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 from fastapi.testclient import TestClient
-import r20_backend.app as app_module
-import r20_backend.backup_store as backups
+import astra_backend.app as app_module
+import astra_backend.backup_store as backups
 import scripts.prompt_library as prompts
-from r20_backend.admin_auth import AdminAuthStore
+from astra_backend.admin_auth import AdminAuthStore
 
 
 class ControlPlaneV2ApiTests(unittest.TestCase):
@@ -18,7 +18,7 @@ class ControlPlaneV2ApiTests(unittest.TestCase):
         prompts.BASELINE_FILE=root/"prompt_library.json"; prompts.LOCAL_FILE=root/"prompt_library.local.json"; backups.CONFIG_FILE=root/"backup_methods.json"
         self.client=TestClient(app_module.app)
         response=self.client.post('/api/v1/admin/auth/login',json={'username':'admin','password':'InitialAdmin123456'})
-        self.headers={'X-R20-Session':response.json()['session_token']}
+        self.headers={'X-Astra-Session':response.json()['session_token']}
 
     def tearDown(self):
         app_module.admin_auth=self.original_auth; prompts.BASELINE_FILE, prompts.LOCAL_FILE=self.original_prompt; backups.CONFIG_FILE=self.original_backup; self.temp.cleanup()

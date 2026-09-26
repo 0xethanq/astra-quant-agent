@@ -28,7 +28,7 @@ const store = useDashboardStore();
 const { t } = useI18n();
 
 // 工位全屏/聚焦模式持久化
-const isFocusMode = useLocalStorage('r20_matrix_focus_mode', false);
+const isFocusMode = useLocalStorage('astra_matrix_focus_mode', false);
 
 const chart = ref<InstanceType<typeof ChartWorkstation> | null>(null);
 

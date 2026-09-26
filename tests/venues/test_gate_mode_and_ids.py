@@ -12,7 +12,7 @@ Binance `dualSidePosition` 布尔），合并枚举迟早会把 `dual` 与 `long
 
 import unittest
 
-from r20_backend.exchanges.gate import (
+from astra_backend.exchanges.gate import (
     interpret_position_mode, GateAPIError, _normalize_gate_ids,
 )
 

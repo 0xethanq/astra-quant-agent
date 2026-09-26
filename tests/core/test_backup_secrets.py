@@ -25,7 +25,7 @@ from unittest import mock
 
 from cryptography.fernet import Fernet
 
-from r20_backend import backup_secrets as BS
+from astra_backend import backup_secrets as BS
 
 SECRET = "AKIA-SUPER-SECRET-VALUE"
 
@@ -37,10 +37,10 @@ class _Base(unittest.TestCase):
         return started
 
     def setUp(self):
-        self.tmp = Path(tempfile.mkdtemp(prefix="r20-bsecret-"))
+        self.tmp = Path(tempfile.mkdtemp(prefix="astra-bsecret-"))
         self.addCleanup(shutil.rmtree, self.tmp, True)
-        self.key_file = self.tmp / "data" / ".r20_backup_secret_key"
-        self.store_file = self.tmp / "data" / "r20_backup_secrets.enc"
+        self.key_file = self.tmp / "data" / ".astra_backup_secret_key"
+        self.store_file = self.tmp / "data" / "astra_backup_secrets.enc"
         self._start(mock.patch.object(BS, "KEY_FILE", self.key_file))
         self._start(mock.patch.object(BS, "STORE_FILE", self.store_file))
 
@@ -57,13 +57,13 @@ class AtomicWriteTests(_Base):
         BS._atomic(self.store_file, b"payload")
         self.assertEqual(self.store_file.read_bytes(), b"payload")
         self.assertEqual(self.store_file.stat().st_mode & 0o777, 0o600)
-        self.assertEqual(list(self.store_file.parent.glob(".r20_backup_secrets.enc-*")), [])
+        self.assertEqual(list(self.store_file.parent.glob(".astra_backup_secrets.enc-*")), [])
 
     def test_failed_replace_cleans_the_temp_file(self):
         with mock.patch.object(BS.os, "replace", side_effect=OSError("磁盘满了")):
             with self.assertRaises(OSError):
                 BS._atomic(self.store_file, b"payload")
-        self.assertEqual(list(self.store_file.parent.glob(".r20_backup_secrets.enc-*")), [],
+        self.assertEqual(list(self.store_file.parent.glob(".astra_backup_secrets.enc-*")), [],
                          "失败路径不得留下半截临时文件")
 
 

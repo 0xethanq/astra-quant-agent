@@ -35,8 +35,8 @@ class OfflineGuard:
         """
         result = {}
         for root in self.roots:
-            paths = {root / '.env', root / 'data/.r20_secret_key',
-                     root / 'data/r20_secrets.enc'}
+            paths = {root / '.env', root / 'data/.astra_secret_key',
+                     root / 'data/astra_secrets.enc'}
             # Active services in the original workspace may update their caches
             # concurrently. Monitor all JSON configuration in THIS worktree;
             # original-workspace credentials are monitored without reading them.
@@ -118,7 +118,7 @@ class OfflineGuard:
             allowed = (executable == 'uname' and tokens[1:] == ['-p']) or (
                 executable == 'grep' and tokens[1:] == [
                     '-rn', 'gemini-3.8-flash-high', '--include=*.py',
-                    '--include=*.ts', '--include=*.vue', 'r20_backend',
+                    '--include=*.ts', '--include=*.vue', 'astra_backend',
                     'scripts', 'frontend/src']) or (
                 executable in ('python3', 'python', Path(sys.executable).name)
                 and len(tokens) == 3 and tokens[1] == '-c'

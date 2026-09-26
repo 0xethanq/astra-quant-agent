@@ -25,7 +25,7 @@
 | `max_margin_equity_ratio` | 权益占比硬顶 |
 
 `risk_constants` 的值在 `.env` 改参后由**门面重载**刷新；子模块 import 期绑定
-就会变成过期快照 —— 这正是 `r20_backend/README.md` §5 的铁律。
+就会变成过期快照 —— 这正是 `astra_backend/README.md` §5 的铁律。
 **不是风格问题：提示词里的风控口径与执行层不一致，会让模型按不存在的空间规划。**
 
 ### 门面内部函数（保持单一实现）
@@ -323,7 +323,7 @@ def construct_full_market_prompt(packages: List[Dict[str, Any]], pos_summary: st
     }
     _sys_ver = system_version
     profile = active_profile()
-    policy_ver = (policy_snapshot or {}).get("policy_version") or os.getenv("R20_VERSION", f"v{_sys_ver}")
+    policy_ver = (policy_snapshot or {}).get("policy_version") or os.getenv("ASTRA_VERSION", f"v{_sys_ver}")
     policy_hash = (policy_snapshot or {}).get("policy_hash") or ""
     runtime_vars.update({
         "timestamp": now_bj_str, "timezone": "Asia/Shanghai",

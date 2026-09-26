@@ -22,9 +22,9 @@ import types
 import unittest
 from unittest.mock import patch
 
-from r20_backend.routers import exchanges as R
+from astra_backend.routers import exchanges as R
 
-PKG = "r20_backend.exchanges"
+PKG = "astra_backend.exchanges"
 
 
 class StatusAggregationTest(unittest.TestCase):

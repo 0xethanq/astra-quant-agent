@@ -110,7 +110,7 @@ stubFetch(async (url, opts) => {
 });
 const got = await http('/api/x');
 check('返回解析后的 JSON', got && got.ok === 1, JSON.stringify(got));
-check('带上会话头 X-R20-Session', captured.opts.headers['X-R20-Session'] === 'tok-1');
+check('带上会话头 X-Astra-Session', captured.opts.headers['X-Astra-Session'] === 'tok-1');
 check('带上 Content-Type', captured.opts.headers['Content-Type'] === 'application/json');
 check('默认无 method（GET）', captured.opts.method === undefined);
 

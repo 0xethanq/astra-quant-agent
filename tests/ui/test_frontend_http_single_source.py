@@ -3,7 +3,7 @@
 ## 修了什么
 
 `frontend/src/composables/useApi.ts` 原先**内联复刻**了
-`frontend/src/api/http.ts` 里的整个 fetch 流程（拼 `X-R20-Session` 会话头 →
+`frontend/src/api/http.ts` 里的整个 fetch 流程（拼 `X-Astra-Session` 会话头 →
 解析响应 → 401 登出 → FastAPI `detail` 归一）。两份拷贝**已经漂移**：
 
 | 行为 | `api/http.ts` | 旧 `useApi` |
@@ -89,7 +89,7 @@ def _code(p: Path) -> str:
     """只保留**可执行代码**：去掉块注释、行注释与文档字符串。
 
     ⚠️ 本刀第一版直接扫原文，于是：
-      ① `useApi.ts` 的**文档**里解释了"原先自己拼 `X-R20-Session`" →
+      ① `useApi.ts` 的**文档**里解释了"原先自己拼 `X-Astra-Session`" →
          被 `assertNotIn` 当成"仍在拼会话头"；
       ② `http.ts` 的**头部注释**写着"迁移自旧 useApi()" →
          被"不得 import useApi"的断言命中。
@@ -114,7 +114,7 @@ class SingleImplementationTest(unittest.TestCase):
 
     def test_use_api_does_not_build_session_header_itself(self):
         """会话头只应由 `http.ts` 拼一次。"""
-        self.assertNotIn("X-R20-Session", _code(USE_API_TS),
+        self.assertNotIn("X-Astra-Session", _code(USE_API_TS),
                          "useApi 自己拼了会话头 —— 会话逻辑应只有 http.ts 一处")
 
     def test_use_api_does_not_duplicate_detail_normalisation(self):

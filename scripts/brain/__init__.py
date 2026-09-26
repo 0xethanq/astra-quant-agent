@@ -5,7 +5,7 @@
 
 - 门面保留同名薄壳与全部被测试钉住的字面量；
 - 被测试 patch 的全局（路径、行情函数、可替换依赖）一律**调用期注入**，
-  绝不在子模块 import 期烘焙 —— 原因见 `r20_backend/README.md` §5 与
+  绝不在子模块 import 期烘焙 —— 原因见 `astra_backend/README.md` §5 与
   `tests/risk_test_env.py::pin_baseline_risk_env()` 的重载名单；
 - 新增模块进本子包，不再往门面堆。
 

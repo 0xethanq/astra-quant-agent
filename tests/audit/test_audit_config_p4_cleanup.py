@@ -13,9 +13,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import r20_backend.app  # noqa: F401  预导入：沙箱只重定向已加载模块
-import r20_backend.execution_router  # noqa: F401
-import r20_backend.routers.risk  # noqa: F401
+import astra_backend.app  # noqa: F401  预导入：沙箱只重定向已加载模块
+import astra_backend.execution_router  # noqa: F401
+import astra_backend.routers.risk  # noqa: F401
 import scripts.ai_brain_trader  # noqa: F401
 import scripts.instrument_pool  # noqa: F401
 import scripts.prompt_library  # noqa: F401
@@ -37,15 +37,15 @@ class _Base(unittest.TestCase):
 
 
 class EnvInjectionTests(_Base):
-    """P2-7：.env 里值带换行就等于追加新键（可伪造 R20_BINANCE_EXECUTION=1）。"""
+    """P2-7：.env 里值带换行就等于追加新键（可伪造 ASTRA_BINANCE_EXECUTION=1）。"""
 
     def setUp(self):
         super().setUp()
-        import r20_backend.settings_store as ss
+        import astra_backend.settings_store as ss
         self.ss = ss
         self.env_file = self.root / ".env"
         self.env_file.parent.mkdir(parents=True, exist_ok=True)
-        self.env_file.write_text("R20_MAX_LEVERAGE=5.0\n", encoding="utf-8")
+        self.env_file.write_text("ASTRA_MAX_LEVERAGE=5.0\n", encoding="utf-8")
         # ⚠️ 原实现 `addCleanup(setattr, self.ss, "ENV_FILE", self.ss.ENV_FILE)` 有 bug：
         # addCleanup 的**实参是立即求值**的，而上一行已经把 ENV_FILE 改成了临时路径
         # ⇒ 清理时又把**临时路径**写回去，`settings_store.ENV_FILE` 从此永久指向一个
@@ -58,25 +58,25 @@ class EnvInjectionTests(_Base):
     def test_newline_in_value_is_rejected_and_file_untouched(self):
         before = self.env_file.read_text(encoding="utf-8")
         with self.assertRaises(self.ss.EnvValueError):
-            self.ss.update_env({"R20_MAX_LEVERAGE": "5\nR20_BINANCE_EXECUTION=1"})
+            self.ss.update_env({"ASTRA_MAX_LEVERAGE": "5\nASTRA_BINANCE_EXECUTION=1"})
         self.assertEqual(self.env_file.read_text(encoding="utf-8"), before)
         self.assertNotIn("BINANCE_EXECUTION", self.env_file.read_text(encoding="utf-8"))
 
     def test_carriage_return_and_nul_rejected(self):
-        for bad in ("5\r\nR20_GATE_EXECUTION=1", "5\x00"):
+        for bad in ("5\r\nASTRA_GATE_EXECUTION=1", "5\x00"):
             with self.assertRaises(self.ss.EnvValueError):
-                self.ss.update_env({"R20_MAX_LEVERAGE": bad})
+                self.ss.update_env({"ASTRA_MAX_LEVERAGE": bad})
 
     def test_normal_write_still_works(self):
-        self.ss.update_env({"R20_MAX_LEVERAGE": "7.5"})
-        self.assertIn("R20_MAX_LEVERAGE=7.5", self.env_file.read_text(encoding="utf-8"))
+        self.ss.update_env({"ASTRA_MAX_LEVERAGE": "7.5"})
+        self.assertIn("ASTRA_MAX_LEVERAGE=7.5", self.env_file.read_text(encoding="utf-8"))
 
     def test_remove_env_rejects_illegal_key_name(self):
         with self.assertRaises(self.ss.EnvValueError):
             self.ss.remove_env({"BAD KEY\nEVIL=1"})
 
     def test_route_maps_env_value_error_to_400(self):
-        import r20_backend.app as app_mod
+        import astra_backend.app as app_mod
         handlers = getattr(app_mod.app, "exception_handlers", {}) or {}
         self.assertIn(self.ss.EnvValueError, handlers, "EnvValueError 必须映射为 400，而不是裸 500")
 
@@ -86,7 +86,7 @@ class RoutingAssetsTests(_Base):
 
     def setUp(self):
         super().setUp()
-        from r20_backend.exchanges import routing_policy
+        from astra_backend.exchanges import routing_policy
         self.rp = routing_policy
         self.file = self.root / "data" / "venue_routing.json"
         self.file.parent.mkdir(parents=True, exist_ok=True)
@@ -115,7 +115,7 @@ class LeverageFloorTests(_Base):
 
     def setUp(self):
         super().setUp()
-        import r20_backend.execution_router as er
+        import astra_backend.execution_router as er
         from scripts.risk_constants import MAX_LEVERAGE, MIN_LEVERAGE
         self.er = er
         self.min_lev, self.max_lev = MIN_LEVERAGE, MAX_LEVERAGE
@@ -129,7 +129,7 @@ class LeverageFloorTests(_Base):
         decision = {"asset": "BTC", "action": "BUY_LONG", "margin_usdt": 50.0, "leverage": 1.0,
                     "entry_price": 79000.0, "take_profit_price": 82000.0, "stop_loss_price": 77000.0}
         with patch.object(self.er, "_load_venue_pool_soft", lambda venue: {}), \
-             patch.dict(os.environ, {"R20_GATE_EXECUTION": "1"}):
+             patch.dict(os.environ, {"ASTRA_GATE_EXECUTION": "1"}):
             result = self.er.open_protected_position(decision, adapter=ad, max_margin_usdt=1000.0)
         leverage_calls = [c for c in ad.calls if c[0] == "leverage"]
         self.assertTrue(leverage_calls or result.get("stage") in {"risk_gate", "margin", "exposure", "precheck"},
@@ -141,8 +141,8 @@ class LeverageFloorTests(_Base):
     def test_per_instrument_cap_tightens_global_upper(self):
         self.assertLessEqual(min(self.max_lev, 3.0), self.max_lev)
         # 结构优化阶段 4·B3 第三十八刀：杠杆夹取实现已迁至
-        # `r20_backend/execution/risk_gates.py`（`clamp_leverage`），定位随之改到那里。
-        src = (ROOT / "r20_backend" / "execution" / "risk_gates.py").read_text(encoding="utf-8")
+        # `astra_backend/execution/risk_gates.py`（`clamp_leverage`），定位随之改到那里。
+        src = (ROOT / "astra_backend" / "execution" / "risk_gates.py").read_text(encoding="utf-8")
         self.assertIn('decision.get("max_leverage")', src,
                       "调用方给的池内杠杆上限必须被并入夹取")
 
@@ -258,7 +258,7 @@ class LockedRmwTests(_Base):
     """P2-6：四个 JSON 的 load→改→save 无锁 → 并发保存丢更新。"""
 
     def test_file_lock_is_reentrant_within_thread(self):
-        from r20_backend.file_locks import file_lock, lock_is_held
+        from astra_backend.file_locks import file_lock, lock_is_held
         target = self.root / "data" / "probe.json"
         with file_lock(target):
             self.assertTrue(lock_is_held(target))
@@ -303,10 +303,10 @@ class LockedRmwTests(_Base):
             self.assertIn(name, src)
 
     def test_council_and_llm_writers_hold_the_lock(self):
-        council = (ROOT / "r20_backend" / "council_manager.py").read_text(encoding="utf-8")
+        council = (ROOT / "astra_backend" / "council_manager.py").read_text(encoding="utf-8")
         self.assertIn("@_locked_council\ndef save_council_config", council)
         self.assertIn("with file_lock(COUNCIL_CONFIG_FILE):", council)
-        llm = (ROOT / "r20_backend" / "llm_manager.py").read_text(encoding="utf-8")
+        llm = (ROOT / "astra_backend" / "llm_manager.py").read_text(encoding="utf-8")
         self.assertIn("with file_lock(LLM_CONFIG_FILE):", llm)
 
 
@@ -344,15 +344,15 @@ class PerInstrumentParamTests(_Base):
 
 
 class ExposureCapTests(_Base):
-    """P2-1：R20_MAX_TOTAL_EXPOSURE_USDT 自 US-005 起可写可存但零消费者。"""
+    """P2-1：ASTRA_MAX_TOTAL_EXPOSURE_USDT 自 US-005 起可写可存但零消费者。"""
 
     def test_key_is_in_single_source_of_truth(self):
         from scripts.risk_constants import DEFAULTS, RISK_ENV_KEYS
-        self.assertIn("R20_MAX_TOTAL_EXPOSURE_USDT", DEFAULTS)
-        self.assertIn("R20_MAX_TOTAL_EXPOSURE_USDT", RISK_ENV_KEYS)
+        self.assertIn("ASTRA_MAX_TOTAL_EXPOSURE_USDT", DEFAULTS)
+        self.assertIn("ASTRA_MAX_TOTAL_EXPOSURE_USDT", RISK_ENV_KEYS)
 
     def test_router_refuses_when_projected_exposure_exceeds_cap(self):
-        import r20_backend.execution_router as er
+        import astra_backend.execution_router as er
 
         class _Ad:
             environment = "demo"
@@ -383,14 +383,14 @@ class ExposureCapTests(_Base):
                       "必须是闸门给出的敞口理由，而不是异常兜底")
 
     def test_cap_zero_means_unlimited(self):
-        import r20_backend.execution_router as er
+        import astra_backend.execution_router as er
         with patch.object(er, "TOTAL_EXPOSURE_CAP", 0.0):
             # 结构优化阶段 4·B3 第三十八刀：敞口闸门实现已迁至
-            # `r20_backend/execution/risk_gates.py`（`check_total_exposure`），
+            # `astra_backend/execution/risk_gates.py`（`check_total_exposure`），
             # 故定位随之改到那里。语义不变：0 / 负数 = 不限制（与其余风控键一致）——
             # 现在写成早退形式 `if exposure_cap <= 0: return None`。
-            src = (ROOT / "r20_backend" / "execution" / "risk_gates.py").read_text(encoding="utf-8")
-            router_src = (ROOT / "r20_backend" / "execution_router.py").read_text(encoding="utf-8")
+            src = (ROOT / "astra_backend" / "execution" / "risk_gates.py").read_text(encoding="utf-8")
+            router_src = (ROOT / "astra_backend" / "execution_router.py").read_text(encoding="utf-8")
         self.assertIn("if exposure_cap <= 0:", src,
                       "0 必须表示不限制（与其余风控键语义一致）")
         self.assertIn("_check_total_exposure(", router_src,
@@ -402,22 +402,22 @@ class HighRiskConfirmationTests(_Base):
 
     def setUp(self):
         super().setUp()
-        from r20_backend import risk_config
+        from astra_backend import risk_config
         self.rc = risk_config
 
     def test_thresholds_cover_the_audited_extremes(self):
         hits = self.rc.high_risk_changes({
-            "R20_SINGLE_ASSET_EQUITY_RATIO": 1.0,
-            "R20_DAILY_LOSS_EQUITY_RATIO": 0.5,
+            "ASTRA_SINGLE_ASSET_EQUITY_RATIO": 1.0,
+            "ASTRA_DAILY_LOSS_EQUITY_RATIO": 0.5,
         })
         self.assertEqual({h["key"] for h in hits},
-                         {"R20_SINGLE_ASSET_EQUITY_RATIO", "R20_DAILY_LOSS_EQUITY_RATIO"})
+                         {"ASTRA_SINGLE_ASSET_EQUITY_RATIO", "ASTRA_DAILY_LOSS_EQUITY_RATIO"})
 
     def test_normal_values_pass_without_confirmation(self):
         self.assertEqual(self.rc.high_risk_changes({
-            "R20_SINGLE_ASSET_EQUITY_RATIO": 0.30,
-            "R20_DAILY_LOSS_EQUITY_RATIO": 0.05,
-            "R20_MAX_LEVERAGE": 5.0,
+            "ASTRA_SINGLE_ASSET_EQUITY_RATIO": 0.30,
+            "ASTRA_DAILY_LOSS_EQUITY_RATIO": 0.05,
+            "ASTRA_MAX_LEVERAGE": 5.0,
         }), [])
 
     def test_schema_ships_thresholds_and_phrase(self):
@@ -429,20 +429,20 @@ class HighRiskConfirmationTests(_Base):
 
     def test_route_rejects_extreme_without_phrase(self):
         from fastapi.testclient import TestClient
-        import r20_backend.app as app_mod
-        from r20_backend.routers import risk as risk_router
+        import astra_backend.app as app_mod
+        from astra_backend.routers import risk as risk_router
         client = TestClient(app_mod.app)
         with patch.object(risk_router, "require_superadmin", lambda *a, **k: {"username": "t"}), \
              patch.object(risk_router, "audit_record", lambda *a, **k: None), \
              patch.object(risk_router, "update_env", lambda values: None):
-            res = client.post("/api/v1/admin/risk", json={"values": {"R20_SINGLE_ASSET_EQUITY_RATIO": 1.0}})
+            res = client.post("/api/v1/admin/risk", json={"values": {"ASTRA_SINGLE_ASSET_EQUITY_RATIO": 1.0}})
         self.assertEqual(res.status_code, 400)
         self.assertIn(self.rc.HIGH_RISK_PHRASE, res.json()["detail"])
 
     def test_route_accepts_extreme_with_phrase(self):
         from fastapi.testclient import TestClient
-        import r20_backend.app as app_mod
-        from r20_backend.routers import risk as risk_router
+        import astra_backend.app as app_mod
+        from astra_backend.routers import risk as risk_router
         client = TestClient(app_mod.app)
         calls: list[dict] = []
         with patch.object(risk_router, "require_superadmin", lambda *a, **k: {"username": "t"}), \
@@ -450,7 +450,7 @@ class HighRiskConfirmationTests(_Base):
              patch.object(risk_router, "refresh_settings", lambda: None), \
              patch.object(risk_router, "update_env", lambda values: calls.append(values)):
             res = client.post("/api/v1/admin/risk", json={
-                "values": {"R20_SINGLE_ASSET_EQUITY_RATIO": 1.0},
+                "values": {"ASTRA_SINGLE_ASSET_EQUITY_RATIO": 1.0},
                 "confirmation": self.rc.HIGH_RISK_PHRASE,
             })
         self.assertEqual(res.status_code, 200, res.text)
@@ -462,7 +462,7 @@ class CouncilBudgetTests(_Base):
 
     def setUp(self):
         super().setUp()
-        import r20_backend.council_manager as cm
+        import astra_backend.council_manager as cm
         self.cm = cm
 
     def test_timeout_is_clamped_at_both_ends(self):
@@ -475,7 +475,7 @@ class CouncilBudgetTests(_Base):
         self.assertLess(self.cm.MAX_COUNCIL_TIMEOUT, 600.0)
 
     def test_schema_default_matches_engine_default(self):
-        from r20_backend.schemas import CouncilConfigUpdateRequest
+        from astra_backend.schemas import CouncilConfigUpdateRequest
         field = CouncilConfigUpdateRequest.model_fields["timeout_seconds"]
         self.assertEqual(float(field.default), self.cm.DEFAULT_COUNCIL_TIMEOUT)
         bounds = {type(m).__name__: m for m in (field.metadata or [])}
@@ -505,11 +505,11 @@ class DocsAndExampleDriftTests(_Base):
 
     def test_env_example_lists_the_missing_risk_keys(self):
         text = (ROOT / "env.example").read_text(encoding="utf-8")
-        for key in ("R20_MIN_LEVERAGE", "R20_PORTFOLIO_RISK_BUDGET_USDT", "R20_MAX_TOTAL_EXPOSURE_USDT"):
+        for key in ("ASTRA_MIN_LEVERAGE", "ASTRA_PORTFOLIO_RISK_BUDGET_USDT", "ASTRA_MAX_TOTAL_EXPOSURE_USDT"):
             self.assertIn(f"{key}=", text, f"env.example 缺 {key}")
 
     def test_risk_schema_covers_every_single_source_key(self):
-        from r20_backend import risk_config
+        from astra_backend import risk_config
         schema_keys = {p["key"] for p in risk_config.schema()["params"]}
         missing = sorted(set(risk_config.DEFAULTS) - schema_keys)
         self.assertEqual(missing, [], f"风控页 schema 未覆盖单一事实源的键: {missing}")
@@ -526,7 +526,7 @@ class DocsAndExampleDriftTests(_Base):
             self.assertNotIn(needle, text, "docs 页不得写死风控项数（会随 schema 漂移）")
 
     def test_env_example_matches_managed_keys_risk_subset(self):
-        from r20_backend.settings_store import MANAGED_KEYS
+        from astra_backend.settings_store import MANAGED_KEYS
         from scripts.risk_constants import RISK_ENV_KEYS
         text = (ROOT / "env.example").read_text(encoding="utf-8")
         missing = [k for k in RISK_ENV_KEYS if k in MANAGED_KEYS and f"{k}=" not in text]
@@ -540,32 +540,32 @@ class ConfigEffectMatrixTests(_Base):
 
     # key → 引擎执行点源码指纹（该键被真正消费的位置）
     ENFORCERS = {
-        "R20_MAX_TOTAL_EXPOSURE_USDT": ("r20_backend/execution_router.py", "TOTAL_EXPOSURE_CAP"),
-        "R20_MAX_LEVERAGE": ("r20_backend/execution_router.py", "MAX_LEVERAGE"),
-        "R20_MIN_LEVERAGE": ("r20_backend/execution_router.py", "MIN_LEVERAGE"),
-        "R20_MAX_SINGLE_ASSET_MARGIN_USDT": ("r20_backend/execution_router.py", "MAX_SINGLE_ASSET_MARGIN"),
-        "R20_PORTFOLIO_RISK_BUDGET_USDT": ("scripts/ai_brain_trader.py", "PORTFOLIO_RISK_BUDGET_USDT"),
-        "R20_MAX_CONCURRENT_POSITIONS": ("scripts/risk_constants.py", "effective_max_positions"),
-        "R20_MAX_SAME_DIRECTION_POSITIONS": ("scripts/risk_constants.py", "MAX_SAME_DIRECTION_POSITIONS"),
-        "R20_MAX_MARGIN_EQUITY_RATIO": ("r20_backend/execution_router.py", "MAX_MARGIN_EQUITY_RATIO"),
-        "R20_SINGLE_ASSET_EQUITY_RATIO": ("scripts/risk_constants.py", "SINGLE_ASSET_EQUITY_RATIO"),
-        "R20_RISK_PER_TRADE_RATIO": ("scripts/risk_constants.py", "RISK_PER_TRADE_RATIO"),
-        "R20_MIN_RISK_REWARD": ("scripts/risk_constants.py", "MIN_RISK_REWARD_RATIO"),
-        "R20_MIN_ENTRY_CONFIDENCE": ("scripts/risk_constants.py", "MIN_ENTRY_CONFIDENCE"),
-        "R20_MAX_DAILY_LOSS_USDT": ("scripts/risk_constants.py", "effective_daily_loss_limit"),
-        "R20_DAILY_LOSS_EQUITY_RATIO": ("scripts/risk_constants.py", "DAILY_LOSS_EQUITY_RATIO"),
-        "R20_TIME_STOP_HOURS": ("scripts/risk_constants.py", "TIME_STOP_HOURS"),
-        "R20_TIME_STOP_ATR_BAND": ("scripts/risk_constants.py", "TIME_STOP_ATR_BAND"),
-        "R20_STOP_COOLDOWN_MINUTES": ("scripts/risk_constants.py", "STOP_COOLDOWN_MINUTES"),
-        "R20_MAX_SCALE_IN_COUNT": ("scripts/risk_constants.py", "MAX_SCALE_IN_COUNT"),
-        "R20_MIN_SCALE_IN_PROFIT_RATIO": ("scripts/risk_constants.py", "MIN_SCALE_IN_PROFIT_RATIO"),
-        "R20_MIN_SCALE_IN_CONFIDENCE": ("scripts/risk_constants.py", "MIN_SCALE_IN_CONFIDENCE"),
-        "R20_SCALE_OUT_ENABLED": ("scripts/trader/scale_out.py", "SCALE_OUT_ENABLED"),
-        "R20_SCALE_OUT_RATIO": ("scripts/trader/scale_out.py", "SCALE_OUT_RATIO"),
-        "R20_SCALE_OUT_TRIGGER_ATR": ("scripts/trader/scale_out.py", "SCALE_OUT_TRIGGER_ATR"),
-        "R20_MAX_RISK_REWARD": ("scripts/risk_constants.py", "MAX_RISK_REWARD_RATIO"),
-        "R20_STOP_LOSS_ATR_MULT": ("scripts/risk_constants.py", "STOP_LOSS_ATR_MULT"),
-        "R20_MAX_TAKE_PROFIT_ATR": ("scripts/risk_constants.py", "MAX_TAKE_PROFIT_ATR"),
+        "ASTRA_MAX_TOTAL_EXPOSURE_USDT": ("astra_backend/execution_router.py", "TOTAL_EXPOSURE_CAP"),
+        "ASTRA_MAX_LEVERAGE": ("astra_backend/execution_router.py", "MAX_LEVERAGE"),
+        "ASTRA_MIN_LEVERAGE": ("astra_backend/execution_router.py", "MIN_LEVERAGE"),
+        "ASTRA_MAX_SINGLE_ASSET_MARGIN_USDT": ("astra_backend/execution_router.py", "MAX_SINGLE_ASSET_MARGIN"),
+        "ASTRA_PORTFOLIO_RISK_BUDGET_USDT": ("scripts/ai_brain_trader.py", "PORTFOLIO_RISK_BUDGET_USDT"),
+        "ASTRA_MAX_CONCURRENT_POSITIONS": ("scripts/risk_constants.py", "effective_max_positions"),
+        "ASTRA_MAX_SAME_DIRECTION_POSITIONS": ("scripts/risk_constants.py", "MAX_SAME_DIRECTION_POSITIONS"),
+        "ASTRA_MAX_MARGIN_EQUITY_RATIO": ("astra_backend/execution_router.py", "MAX_MARGIN_EQUITY_RATIO"),
+        "ASTRA_SINGLE_ASSET_EQUITY_RATIO": ("scripts/risk_constants.py", "SINGLE_ASSET_EQUITY_RATIO"),
+        "ASTRA_RISK_PER_TRADE_RATIO": ("scripts/risk_constants.py", "RISK_PER_TRADE_RATIO"),
+        "ASTRA_MIN_RISK_REWARD": ("scripts/risk_constants.py", "MIN_RISK_REWARD_RATIO"),
+        "ASTRA_MIN_ENTRY_CONFIDENCE": ("scripts/risk_constants.py", "MIN_ENTRY_CONFIDENCE"),
+        "ASTRA_MAX_DAILY_LOSS_USDT": ("scripts/risk_constants.py", "effective_daily_loss_limit"),
+        "ASTRA_DAILY_LOSS_EQUITY_RATIO": ("scripts/risk_constants.py", "DAILY_LOSS_EQUITY_RATIO"),
+        "ASTRA_TIME_STOP_HOURS": ("scripts/risk_constants.py", "TIME_STOP_HOURS"),
+        "ASTRA_TIME_STOP_ATR_BAND": ("scripts/risk_constants.py", "TIME_STOP_ATR_BAND"),
+        "ASTRA_STOP_COOLDOWN_MINUTES": ("scripts/risk_constants.py", "STOP_COOLDOWN_MINUTES"),
+        "ASTRA_MAX_SCALE_IN_COUNT": ("scripts/risk_constants.py", "MAX_SCALE_IN_COUNT"),
+        "ASTRA_MIN_SCALE_IN_PROFIT_RATIO": ("scripts/risk_constants.py", "MIN_SCALE_IN_PROFIT_RATIO"),
+        "ASTRA_MIN_SCALE_IN_CONFIDENCE": ("scripts/risk_constants.py", "MIN_SCALE_IN_CONFIDENCE"),
+        "ASTRA_SCALE_OUT_ENABLED": ("scripts/trader/scale_out.py", "SCALE_OUT_ENABLED"),
+        "ASTRA_SCALE_OUT_RATIO": ("scripts/trader/scale_out.py", "SCALE_OUT_RATIO"),
+        "ASTRA_SCALE_OUT_TRIGGER_ATR": ("scripts/trader/scale_out.py", "SCALE_OUT_TRIGGER_ATR"),
+        "ASTRA_MAX_RISK_REWARD": ("scripts/risk_constants.py", "MAX_RISK_REWARD_RATIO"),
+        "ASTRA_STOP_LOSS_ATR_MULT": ("scripts/risk_constants.py", "STOP_LOSS_ATR_MULT"),
+        "ASTRA_MAX_TAKE_PROFIT_ATR": ("scripts/risk_constants.py", "MAX_TAKE_PROFIT_ATR"),
     }
 
     def test_every_knob_has_an_enforcer(self):
@@ -614,7 +614,7 @@ class ConfigEffectMatrixTests(_Base):
         self.assertEqual(stale, [], f"生效提示词残留旧硬编码: {stale}")
 
     def test_risk_page_schema_covers_every_knob(self):
-        from r20_backend import risk_config
+        from astra_backend import risk_config
         from scripts.risk_constants import RISK_ENV_KEYS
         schema_keys = {p["key"] for p in risk_config.schema()["params"]}
         self.assertEqual(sorted(set(RISK_ENV_KEYS) - schema_keys), [], "风控页缺可配置项")

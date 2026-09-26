@@ -1,4 +1,4 @@
-"""`r20_backend/dashboard_payload/order_view.py`（B3 第二十三刀）回归。
+"""`astra_backend/dashboard_payload/order_view.py`（B3 第二十三刀）回归。
 
 ## 这个测试在守什么
 
@@ -25,12 +25,12 @@ import random
 import unittest
 from pathlib import Path
 
-from r20_backend.dashboard_payload.order_view import collect_pending_order_rows
+from astra_backend.dashboard_payload.order_view import collect_pending_order_rows
 
 ROOT = Path(__file__).resolve().parents[2]
-APP = ROOT / "r20_backend" / "dashboard_cache.py"
-MODULE = ROOT / "r20_backend" / "dashboard_payload" / "order_view.py"
-COLLECT = ROOT / "r20_backend" / "dashboard_payload" / "collect.py"   # 第九十四刀：相位 1 现住此
+APP = ROOT / "astra_backend" / "dashboard_cache.py"
+MODULE = ROOT / "astra_backend" / "dashboard_payload" / "order_view.py"
+COLLECT = ROOT / "astra_backend" / "dashboard_payload" / "collect.py"   # 第九十四刀：相位 1 现住此
 
 TZ = datetime.timezone(datetime.timedelta(hours=8))
 
@@ -515,10 +515,10 @@ class WiringTest(unittest.TestCase):
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 for a in node.names:
-                    self.assertFalse(a.name.startswith("r20_backend.dashboard_cache"),
+                    self.assertFalse(a.name.startswith("astra_backend.dashboard_cache"),
                                      f"反向 import {a.name}")
             elif isinstance(node, ast.ImportFrom):
-                self.assertFalse((node.module or "").startswith("r20_backend.dashboard_cache"),
+                self.assertFalse((node.module or "").startswith("astra_backend.dashboard_cache"),
                                  f"反向 import {node.module}")
 
 

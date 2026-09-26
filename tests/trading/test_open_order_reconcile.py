@@ -5,7 +5,7 @@
 律① 一切交易所调用停在 HTTP 边界——patch `scripts.okx_rest.urlopen`
     （import 时绑定别名，patch 位置即生效位置），零真实网络、零真实凭证、零真实下单。
 律② 凭证注入用真实 freeze_environment(假键)，测试受控环境对象。
-律③ 不触碰 r20_backend/**、frontend/**、okx_runtime.py、registry、data/**、.env；
+律③ 不触碰 astra_backend/**、frontend/**、okx_runtime.py、registry、data/**、.env；
     本地意图文件路径 patch 到 tempfile，绝不写真实 data/**。
 """
 from __future__ import annotations
@@ -32,7 +32,7 @@ import scripts.okx_rest as okx_rest
 from scripts.okx_runtime import freeze_environment, unfreeze_environment
 
 DEMO_ENV = {
-    "R20_OKX_ENV": "demo",
+    "ASTRA_OKX_ENV": "demo",
     "OKX_DEMO_API_KEY": "DEMO_AK", "OKX_DEMO_SECRET_KEY": "DEMO_SK", "OKX_DEMO_PASSPHRASE": "DEMO_PP",
 }
 
@@ -221,7 +221,7 @@ class SubmitListingGateTests(_EnvFreezeMixin, unittest.TestCase):
 
     def setUp(self):
         super().setUp()
-        from r20_backend.exchanges import listing
+        from astra_backend.exchanges import listing
         listing._CACHE.clear()  # 隔离 TTL 缓存：每组用例独立的目录态
 
     def _okx_router(self, ok_order=True):
@@ -247,7 +247,7 @@ class SubmitListingGateTests(_EnvFreezeMixin, unittest.TestCase):
         })
         okx = self._okx_router()
         buf = io.StringIO()
-        with patch.object(okx_rest, "urlopen", okx),              patch("r20_backend.exchanges.listing.urlopen", listing_router),              patch.object(trader, "fetch_ticker", return_value=None),              redirect_stdout(buf):
+        with patch.object(okx_rest, "urlopen", okx),              patch("astra_backend.exchanges.listing.urlopen", listing_router),              patch.object(trader, "fetch_ticker", return_value=None),              redirect_stdout(buf):
             ok, reason = trader.submit_protected_limit_order(
                 "SUI-USDT-SWAP", "sell", "short", 1.0, 1.0, 0.9, 1.1)
         self.assertFalse(ok)
@@ -267,9 +267,9 @@ class SubmitListingGateTests(_EnvFreezeMixin, unittest.TestCase):
         # 它在下面刻意把 `fetch_ticker` 打成 None（现价不可用），而市价单
         # 必须按现价锚定保护价、读不到就 fail-closed 拒单 —— 那是设计如此，
         # 不该被这个"目录闸"用例当成回归（2026-09 实测：不钉档位即红）。
-        with patch.dict(os.environ, {"R20_ORDER_MODE": "limit"}), \
+        with patch.dict(os.environ, {"ASTRA_ORDER_MODE": "limit"}), \
              patch.object(okx_rest, "urlopen", okx), \
-             patch("r20_backend.exchanges.listing.urlopen", listing_router), \
+             patch("astra_backend.exchanges.listing.urlopen", listing_router), \
              patch.object(trader, "fetch_ticker", return_value=None), \
              redirect_stdout(buf), \
              self.assertWarns(UserWarning):  # listing 模块 fail-open 时发 warn

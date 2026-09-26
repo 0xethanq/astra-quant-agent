@@ -1,4 +1,4 @@
-"""面板缓存持久化与 STALE 兜底注入（`r20_backend/dashboard_payload/cache.py`）全量分支收口测试 —— 第 352 刀。
+"""面板缓存持久化与 STALE 兜底注入（`astra_backend/dashboard_payload/cache.py`）全量分支收口测试 —— 第 352 刀。
 
 本模块 135 行，负责操盘看板缓存读取、原子持久化落盘与 STALE 模式本地数据注入：
 - 缓存读取容错（`load_persisted_dashboard_cache`）：空路径/不存在文件自愈、非实质快照过滤与合法快照解析；
@@ -17,7 +17,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from r20_backend.dashboard_payload.cache import (
+from astra_backend.dashboard_payload.cache import (
     _inject_local_data_into_stale,
     load_persisted_dashboard_cache,
     persist_dashboard_cache,
@@ -26,7 +26,7 @@ from r20_backend.dashboard_payload.cache import (
 
 class DashboardCachePayloadTailsTests(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(prefix="r20_dashboard_cache_tails_")
+        self.tmp = tempfile.TemporaryDirectory(prefix="astra_dashboard_cache_tails_")
         self.addCleanup(self.tmp.cleanup)
         self.tmp_path = Path(self.tmp.name)
         self.cache_file = self.tmp_path / "dashboard_cache.json"

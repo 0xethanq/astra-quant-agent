@@ -18,16 +18,16 @@ from unittest.mock import Mock, patch
 
 from fastapi.testclient import TestClient
 
-# 封闭三律：r20_backend.dashboard_cache 在模块导入时即启动 2s 周期后台刷新线程（update_cache_cycle
-# → okx_rest 真调 OKX 私有面；r20_backend startup 还会二次点火）。本模块的用例会
+# 封闭三律：astra_backend.dashboard_cache 在模块导入时即启动 2s 周期后台刷新线程（update_cache_cycle
+# → okx_rest 真调 OKX 私有面；astra_backend startup 还会二次点火）。本模块的用例会
 # `TestClient(app)` 触发 lifespan 再点火一次 ⇒ 本模块期间把循环体钉成 no-op。
 #
 # ⚠️ 第一百二十五刀：**改成模块作用域**（`setUpModule`/`tearDownModule`）。
 # 此前是在**模块导入期永久替换**（进程内不恢复），后果是整个测试进程里
-# `r20_backend.dashboard_cache.update_cache_cycle` 都成了 no-op —— 任何**真调它**的
+# `astra_backend.dashboard_cache.update_cache_cycle` 都成了 no-op —— 任何**真调它**的
 # 用例只会拿到空 `CACHE_DATA`（第 29 刀实测：`tests/ui/test_protection_gap_reaches_data_health.py`
 # 整包跑 `KeyError('data_health')`，单独跑却通过）。本模块结束后即还原。
-import r20_backend.dashboard_cache as _dashboard_app
+import astra_backend.dashboard_cache as _dashboard_app
 _ORIGINAL_UPDATE_CACHE_CYCLE = _dashboard_app.update_cache_cycle
 
 
@@ -40,11 +40,11 @@ def tearDownModule():
     _dashboard_app.update_cache_cycle = _ORIGINAL_UPDATE_CACHE_CYCLE
     _dashboard_app.stop_dashboard_background_worker()
 
-import r20_backend.app as app_module
-from r20_backend.admin_auth import AdminAuthStore
+import astra_backend.app as app_module
+from astra_backend.admin_auth import AdminAuthStore
 import scripts.okx_rest as okx_rest
 import scripts.okx_runtime as okx_runtime
-import r20_backend.exchanges as exchanges_pkg
+import astra_backend.exchanges as exchanges_pkg
 
 CONTRACT_KEYS = {"status", "equity", "available", "positions_count",
                  "open_orders_count", "last_sync_ms", "reason"}
@@ -109,17 +109,17 @@ class VenueAccountsEndpointTests(unittest.TestCase):
         r = self.client.post("/api/v1/admin/auth/login",
                              json={"username": "admin", "password": "InitialAdmin123456"})
         self.assertEqual(r.status_code, 200, r.text)
-        self.auth = {"X-R20-Session": r.json()["session_token"]}
+        self.auth = {"X-Astra-Session": r.json()["session_token"]}
         # 全 HTTP 边界哨兵：任何真实出网调用即炸（封闭三律·律①）
         self.net_sentry = Mock(side_effect=AssertionError("FORBIDDEN real HTTP"))
         patcher = patch.object(okx_rest, "urlopen", self.net_sentry)
         patcher.start()
         self.addCleanup(patcher.stop)
-        gate_mod = __import__("r20_backend.exchanges.gate", fromlist=["gate"])
+        gate_mod = __import__("astra_backend.exchanges.gate", fromlist=["gate"])
         p2 = patch.object(gate_mod, "urlopen", self.net_sentry)
         p2.start()
         self.addCleanup(p2.stop)
-        bn_mod = __import__("r20_backend.exchanges.binance", fromlist=["binance"])
+        bn_mod = __import__("astra_backend.exchanges.binance", fromlist=["binance"])
         p3 = patch.object(bn_mod, "urlopen", self.net_sentry)
         p3.start()
         self.addCleanup(p3.stop)
@@ -286,7 +286,7 @@ class VenueAccountsEndpointTests(unittest.TestCase):
         self.net_sentry.assert_not_called()
 
     def test_gate_capability_error_maps_unavailable(self):
-        from r20_backend.exchanges.base import ExchangeCapabilityError
+        from astra_backend.exchanges.base import ExchangeCapabilityError
         ga = Mock(side_effect=ExchangeCapabilityError("Gate 沙盒档位不可用：探测全失败"))
         with patch.object(okx_runtime, "current_environment",
                           return_value=SimpleNamespace(mode="demo", configured=False)):

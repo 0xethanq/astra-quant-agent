@@ -1,7 +1,7 @@
 r"""gateway 路由拆分对拍门（结构整理 B8·第九十七刀）。
 
-`r20_backend/routers/gateway.py`（977 行 / 34 路由）按资源拆成包
-`r20_backend/routers/gateway/`（channels / gateway_ops / notifications / backups
+`astra_backend/routers/gateway.py`（977 行 / 34 路由）按资源拆成包
+`astra_backend/routers/gateway/`（channels / gateway_ops / notifications / backups
 + `_shared.py`）。安全属性与 strategy 拆包同款：**路由表一字不变**。
 
 ## ⚠️ 路径归一化（本门特有）
@@ -18,13 +18,14 @@ import subprocess
 import sys
 import unittest
 from pathlib import Path
+from tests.extraction.rename_baseline import legacy_rev_path, normalize
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 PRE = "ec3fbd7"                       # 本刀动工前最后提交（第九十六刀收口）
-BASELINE = "r20_backend/routers/gateway.py"
-PKG = ROOT / "r20_backend" / "routers" / "gateway"
+BASELINE = "astra_backend/routers/gateway.py"
+PKG = ROOT / "astra_backend" / "routers" / "gateway"
 INCLUDE_ORDER = ("channels", "gateway_ops", "notifications", "backups")
 
 
@@ -46,7 +47,7 @@ def _routes_in(src: str) -> list:
 
 
 def _baseline_routes() -> list:
-    r = subprocess.run(["git", "show", f"{PRE}:{BASELINE}"],
+    r = subprocess.run(["git", "show", legacy_rev_path(f"{PRE}:{BASELINE}")],
                        capture_output=True, text=True, cwd=str(ROOT))
     assert r.returncode == 0, f"基线取不到：{r.stderr[:200]}"
     return _routes_in(r.stdout)
@@ -62,7 +63,7 @@ class GatewayRouterSplitTest(unittest.TestCase):
         self.assertEqual(got, want, "路由表（路径/方法/处理器名/顺序）与拆分前不一致")
 
     def test_live_openapi_route_surface_unchanged(self):
-        from r20_backend.app import app
+        from astra_backend.app import app
         spec = app.openapi()
         live, tags = set(), {}
         for path, ops in spec["paths"].items():
@@ -95,7 +96,7 @@ class GatewayRouterSplitTest(unittest.TestCase):
         self.assertIn("router = APIRouter()", src, "聚合器不得再加 tags")
 
     def test_old_module_path_still_importable(self):
-        from r20_backend.routers.gateway import router
+        from astra_backend.routers.gateway import router
         self.assertEqual(len(router.routes), len(INCLUDE_ORDER), "应有 4 个子路由句柄")
         self.assertTrue(all(type(r).__name__ == "_IncludedRouter" for r in router.routes))
 

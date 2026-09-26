@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from r20_backend.policy_snapshot import (  # noqa: E402
+from astra_backend.policy_snapshot import (  # noqa: E402
     DEFAULT_BASE_VERSION,
     compute_layout_hash,
     compute_file_hash,

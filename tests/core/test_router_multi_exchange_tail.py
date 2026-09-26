@@ -23,7 +23,7 @@ from unittest.mock import MagicMock, patch
 
 from fastapi import HTTPException
 
-from r20_backend.routers import exchanges as R
+from astra_backend.routers import exchanges as R
 
 
 def _payload(**over):
@@ -62,10 +62,10 @@ class WriteTailTest(unittest.TestCase):
             return None, exc
 
     def test_illegal_routing_mode_is_400_with_allowed_values(self):
-        # ⚠️ 不能 `patch("r20_backend.exchanges.routing_policy")`：它是**惰性子模块**，
+        # ⚠️ 不能 `patch("astra_backend.exchanges.routing_policy")`：它是**惰性子模块**，
         # 包 `__init__` 里没有这个属性 ⇒ mock 直接 AttributeError。改为补丁**子模块的函数**，
         # 并读**真实**的 VALID_ROUTING_MODES（顺带验证 detail 报的就是真实允许值）。
-        from r20_backend.exchanges import routing_policy as RP
+        from astra_backend.exchanges import routing_policy as RP
         allowed = list(RP.VALID_ROUTING_MODES)
         with patch.object(RP, "save_routing_mode", return_value=False):
             _out, exc = self._call(routing_mode="乱写")
@@ -74,7 +74,7 @@ class WriteTailTest(unittest.TestCase):
         self.assertIn(allowed[0], exc.detail, "detail 要报**真实允许值**")
 
     def test_legal_routing_mode_and_preferred_venue_are_persisted(self):
-        from r20_backend.exchanges import routing_policy as RP
+        from astra_backend.exchanges import routing_policy as RP
         with patch.object(RP, "save_routing_mode", return_value=True) as srm, \
              patch.object(RP, "save_preferred_venue") as spv:
             out, exc = self._call(routing_mode="auto", preferred_venue="okx",
@@ -87,7 +87,7 @@ class WriteTailTest(unittest.TestCase):
 
     def test_a_failing_cache_clear_is_swallowed_and_reported_as_success(self):
         """⚠️ **实测发现（列待议）**：实例清理失败被静默吞，响应仍是 `ok: True`。"""
-        with patch("r20_backend.exchanges.clear_instances",
+        with patch("astra_backend.exchanges.clear_instances",
                    side_effect=RuntimeError("清理失败")):
             out, exc = self._call(okx_demo_api_key="K1")
         self.assertIsNone(exc)
@@ -119,7 +119,7 @@ class TestConnectionRouteTest(unittest.TestCase):
                                      timeout=8.0, **({} if ok else {}))
 
     def _run(self, result):
-        p = patch("r20_backend.exchanges.diagnostics.diagnose_venue_connection",
+        p = patch("astra_backend.exchanges.diagnostics.diagnose_venue_connection",
                   return_value=result)
         diag = p.start()
         self.addCleanup(p.stop)

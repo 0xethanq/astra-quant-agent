@@ -1,4 +1,4 @@
-"""Tests for Macro Market Regime Auto-Detection Engine (R20 v8.0.0)."""
+"""Tests for Macro Market Regime Auto-Detection Engine (ASTRA v8.0.0)."""
 from __future__ import annotations
 
 import unittest

@@ -1,4 +1,4 @@
-# R20 告警规则（指标中枢的"会响"入口）
+# ASTRA 告警规则（指标中枢的"会响"入口）
 #
 # 每条规则都对应一次**真实发生过**的故障形态，不是凭空设的阈值：
 #   · 第 137 刀：行情取数静默失败 30 小时 ⇒ 主脑 P0 拦截、零新仓、零信号
@@ -13,12 +13,12 @@
 #
 # 校验（部署机上）：promtool check rules alerts.yml
 groups:
-  - name: r20-metrics-availability
+  - name: astra-metrics-availability
     rules:
       # 只盯 required="1"：可选源（如公共行情流探测）平时并不常驻，若也算故障，
       # 告警会**永远在响** —— 永远在响的告警等于没有告警（运维会学会忽略它）。
-      - alert: R20MetricsSourceMissing
-        expr: r20_metrics_source_ok{required="1"} == 0
+      - alert: ASTRAMetricsSourceMissing
+        expr: astra_metrics_source_ok{required="1"} == 0
         for: 10m
         labels:
           severity: warning
@@ -26,19 +26,19 @@ groups:
           summary: "必需指标数据源缺失：{{ $labels.source }}"
           description: "该源连续 10 分钟取不到数（0=数据缺失，不代表系统故障）。先看后端日志与对应文件是否存在。可选源（required=\"0\"，如行情流探测）不在此告警内 —— 它平时不常驻，算进去会让告警永远在响。"
 
-      - alert: R20BackendDown
-        expr: up{job="r20-backend"} == 0
+      - alert: ASTRABackendDown
+        expr: up{job="astra-backend"} == 0
         for: 3m
         labels:
           severity: critical
         annotations:
-          summary: "R20 后端指标端点抓取失败"
-          description: "抓取失败 ≥3 分钟：进程挂了、端口不通，或指标端点鉴权失败（401 时说明 X-R20-Admin-Token 失效/未注入）。"
+          summary: "ASTRA 后端指标端点抓取失败"
+          description: "抓取失败 ≥3 分钟：进程挂了、端口不通，或指标端点鉴权失败（401 时说明 X-Astra-Admin-Token 失效/未注入）。"
 
-  - name: r20-market-data
+  - name: astra-market-data
     rules:
-      - alert: R20MarketDataSnapshotStale
-        expr: r20_market_data_snapshot_age_seconds > 2700
+      - alert: ASTRAMarketDataSnapshotStale
+        expr: astra_market_data_snapshot_age_seconds > 2700
         for: 5m
         labels:
           severity: critical
@@ -46,8 +46,8 @@ groups:
           summary: "行情取数健康快照 45 分钟未更新"
           description: "worker 周期为 15 分钟，快照超过 45 分钟未更新说明周期没有在跑（进程消失/卡死）——这是第 137 刀那类事故的先行信号。"
 
-      - alert: R20MarketDataFetchFailures
-        expr: increase(r20_market_data_call_failures_total[15m]) > 0
+      - alert: ASTRAMarketDataFetchFailures
+        expr: increase(astra_market_data_call_failures_total[15m]) > 0
         for: 5m
         labels:
           severity: warning
@@ -55,8 +55,8 @@ groups:
           summary: "行情取数失败：{{ $labels.kind }}"
           description: "近 15 分钟出现取数失败。注意双域直连每个 host 都算一次尝试，故单次逻辑取数可能计 2 次。"
 
-      - alert: R20MarketDataNoRecentSuccess
-        expr: r20_market_data_last_success_age_seconds > 1800
+      - alert: ASTRAMarketDataNoRecentSuccess
+        expr: astra_market_data_last_success_age_seconds > 1800
         for: 10m
         labels:
           severity: critical
@@ -64,8 +64,8 @@ groups:
           summary: "行情取数 30 分钟无成功：{{ $labels.kind }}"
           description: "该 kind 距上次成功超过 30 分钟。若它是 ticker/candles 这类必需链路，主脑会因数据无效而停止开新仓。"
 
-      - alert: R20MarketDataLatencyHigh
-        expr: r20_market_data_latency_p95_seconds > 3
+      - alert: ASTRAMarketDataLatencyHigh
+        expr: astra_market_data_latency_p95_seconds > 3
         for: 15m
         labels:
           severity: warning
@@ -73,12 +73,12 @@ groups:
           summary: "行情取数尾延时劣化：{{ $labels.kind }}"
           description: "p95 > 3s 持续 15 分钟。超时上限 3.5s、失败前先出现尾延时抬升，故这是失败的前兆。"
 
-  - name: r20-market-stream
+  - name: astra-market-stream
     rules:
       # 只读探测：**没部署时这些序列根本不存在**，故这些告警不会误报 ——
       # "没跑"与"跑了但坏了"必须能区分（前者不该打扰人，后者必须吵醒人）。
-      - alert: R20MarketStreamParseErrors
-        expr: increase(r20_market_stream_parse_errors_total[15m]) > 0
+      - alert: ASTRAMarketStreamParseErrors
+        expr: increase(astra_market_stream_parse_errors_total[15m]) > 0
         for: 5m
         labels:
           severity: warning
@@ -86,8 +86,8 @@ groups:
           summary: "行情流帧解析失败：{{ $labels.venue }}"
           description: "上游改了字段/频道格式，或我们读错了字段。解析失败会让该所流失去意义（REST 取数不受影响）。"
 
-      - alert: R20MarketStreamSilent
-        expr: r20_market_stream_tick_age_seconds > 90
+      - alert: ASTRAMarketStreamSilent
+        expr: astra_market_stream_tick_age_seconds > 90
         for: 5m
         labels:
           severity: critical
@@ -95,8 +95,8 @@ groups:
           summary: "行情流已静默：{{ $labels.venue }}"
           description: "该所曾收到过 tick，但已 90 秒没有新 tick（连接可能还在）。Binance JSON 订阅实测就是这个形态：应答成功、永不推数据 —— 只看连接状态会以为一切正常。"
 
-      - alert: R20MarketStreamConnectErrors
-        expr: increase(r20_market_stream_errors_total[15m]) > 2
+      - alert: ASTRAMarketStreamConnectErrors
+        expr: increase(astra_market_stream_errors_total[15m]) > 2
         for: 5m
         labels:
           severity: warning
@@ -104,10 +104,10 @@ groups:
           summary: "行情流连接/订阅错误：{{ $labels.venue }}"
           description: "含『已连接但零数据帧』。Gate 连错域、合约名拼错都会走到这里（实测：现货域不接受 futures.tickers）。"
 
-  - name: r20-venues
+  - name: astra-venues
     rules:
-      - alert: R20VenueInstrumentsFailing
-        expr: r20_venue_instruments_failed > 0
+      - alert: ASTRAVenueInstrumentsFailing
+        expr: astra_venue_instruments_failed > 0
         for: 30m
         labels:
           severity: warning
@@ -115,8 +115,8 @@ groups:
           summary: "场所取数不完整：{{ $labels.venue }}"
           description: "该所连续 30 分钟有标的取数失败。跨所封顶按场所计仓位，行情不完整的场所不应作为决策依据。"
 
-      - alert: R20VenueHealthStale
-        expr: time() - r20_venue_health_updated_timestamp_seconds > 2700
+      - alert: ASTRAVenueHealthStale
+        expr: time() - astra_venue_health_updated_timestamp_seconds > 2700
         for: 5m
         labels:
           severity: warning
@@ -124,14 +124,14 @@ groups:
           summary: "场所健康快照过期"
           description: "venue_health.json 超过 45 分钟未更新（写入方与行情快照同一个 worker 周期）。"
 
-  - name: r20-model-and-risk
+  - name: astra-model-and-risk
     rules:
-      - alert: R20ModelCallFailureRate
+      - alert: ASTRAModelCallFailureRate
         expr: |
           (
-            increase(r20_model_calls_total[1h]) > 5
+            increase(astra_model_calls_total[1h]) > 5
             and
-            increase(r20_model_calls_successful_total[1h]) / increase(r20_model_calls_total[1h]) < 0.8
+            increase(astra_model_calls_successful_total[1h]) / increase(astra_model_calls_total[1h]) < 0.8
           )
         for: 15m
         labels:
@@ -140,11 +140,11 @@ groups:
           summary: "大模型调用成功率 <80%（近 1 小时）"
           description: "样本量 >5 次才判（避免夜里 1 次失败就吼）。连续失败会走 AI 健康告警并禁止复用旧指令。"
 
-      - alert: R20RiskLimitMissing
-        expr: count(r20_risk_limit) < 10
+      - alert: ASTRARiskLimitMissing
+        expr: count(astra_risk_limit) < 10
         for: 30m
         labels:
           severity: warning
         annotations:
           summary: "风控旋钮暴露不全（少于 10 个）"
-          description: "r20_risk_limit 是白名单读取，取不到的键会跳过而不是补 0。数量骤降说明 risk_constants 改名/导入失败 —— 编一个不存在的阈值比不报更危险。"
+          description: "astra_risk_limit 是白名单读取，取不到的键会跳过而不是补 0。数量骤降说明 risk_constants 改名/导入失败 —— 编一个不存在的阈值比不报更危险。"

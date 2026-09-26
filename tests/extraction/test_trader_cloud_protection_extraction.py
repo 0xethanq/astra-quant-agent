@@ -18,6 +18,7 @@ import types
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+from tests.extraction.rename_baseline import legacy_rev_path, normalize
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
@@ -36,7 +37,7 @@ MOVED = ROOT / "scripts" / "trader" / "cloud_protection.py"
 #
 # `amend_venue_stop_loss` 枚举现存 SL 触发单时，旧实现只读 `row["order"]["text"]`
 # / `row["text"]` / `row["type"]`。Gate 的 `price_orders` 把标签放在
-# `row["initial"]["text"]`（Gate 原生结构），于是 `t-r20sl*` 标签**扫不到** ⇒
+# `row["initial"]["text"]`（Gate 原生结构），于是 `t-astrasl*` 标签**扫不到** ⇒
 # 旧 SL 单不被识别、棘轮时既不 amend 也不撤 ⇒ 云端止损单逐轮堆积
 # （宽松旧单可能先于新单触发，正是本函数注释里点名要防的那个场景）。
 # 修复 = 多读一层 `initial.text`。
@@ -48,10 +49,18 @@ MOVED = ROOT / "scripts" / "trader" / "cloud_protection.py"
 # ---------------------------------------------------------------------------
 _DELTA_BLOCKS = (
     (
+        # 2026-09-27「r20 → astra 全量改名」追加的一层：归属标记**双认**。
+        # 变动点 = 把拼出来的 text 过一遍 `normalize_legacy_markers()`
+        # （见 `scripts/tag_markers.py`）。**不是搬运事故**：改名那一刻交易所上还挂着
+        # 改名前创建的保护腿，其 `initial.text` 是 `t-r20sl…`；只认新标记会把它们判成
+        # "不是我们的" ⇒ 云端棘轮对老仓位**静默失效**（不报错，只是不再收紧/续期）。
+        # 下方 old_block 仍是**真正的抽取前形态**（aa6d4e0 之前），故本块现为
+        # "当前形态 ↔ 抽取前形态"一条直达替换；历史两次变更都记在上面这段注释里。
         '            _init = row.get("initial")\n'
-        '            text = (str(_order.get("text") or "") if isinstance(_order, dict) else "") \\\n'
-        '                + (str(_init.get("text") or "") if isinstance(_init, dict) else "") \\\n'
-        '                + str(row.get("text") or "") + str(row.get("type") or "")\n',
+        '            text = normalize_legacy_markers(\n'
+        '                (str(_order.get("text") or "") if isinstance(_order, dict) else "")\n'
+        '                + (str(_init.get("text") or "") if isinstance(_init, dict) else "")\n'
+        '                + str(row.get("text") or "") + str(row.get("type") or ""))\n',
         '            text = (str(_order.get("text") or "") if isinstance(_order, dict) else "") \\\n'
         '                + str(row.get("text") or "") + str(row.get("type") or "")\n',
     ),
@@ -75,10 +84,10 @@ def _normalised_moved_tree() -> ast.Module:
 
 
 def _old_tree() -> ast.Module:
-    r = subprocess.run(["git", "show", f"{PRE}:scripts/ai_factor_trader.py"],
+    r = subprocess.run(["git", "show", legacy_rev_path(f"{PRE}:scripts/ai_factor_trader.py")],
                        capture_output=True, text=True, cwd=str(ROOT))
     assert r.returncode == 0, f"基线取不到：{r.stderr[:200]}"
-    return ast.parse(r.stdout)
+    return ast.parse(normalize(r.stdout))
 
 
 def _get_func(tree: ast.Module, name: str) -> ast.FunctionDef:
@@ -109,7 +118,7 @@ class CloudProtectionVerbatimTest(unittest.TestCase):
     def test_initial_text_layer_is_actually_read(self):
         """正向断言：Gate 的 `initial.text` 层必须被读到（aa6d4e0）。
 
-        这一层是「`t-r20sl*` 标签能不能被扫到」的唯一通路；一旦被删掉，
+        这一层是「`t-astrasl*` 标签能不能被扫到」的唯一通路；一旦被删掉，
         旧 SL 单不被识别 ⇒ 棘轮既不 amend 也不撤 ⇒ 云端止损单逐轮堆积。
         """
         moved = MOVED.read_text(encoding="utf-8")
@@ -124,13 +133,13 @@ class CloudProtectionVerbatimTest(unittest.TestCase):
         ad = types.SimpleNamespace(
             # Gate 形状：标签只在 initial.text 里，order/text/type 都为空
             list_protective_orders=lambda sym: [
-                {"id": "sl-old", "initial": {"text": "t-r20sl-btc"}}],
+                {"id": "sl-old", "initial": {"text": "t-astrasl-btc"}}],
             cancel_price_order=lambda oid: cancelled.append(oid),
             attach_protective_orders=lambda *a, **k: {"sl": "sl-new"})
         ok, note = cp.amend_venue_stop_loss(ad, "BTC_USDT", "long", 78000.0, 3.0)
         self.assertTrue(ok, note)
         self.assertIn("sl-old", cancelled,
-                      "initial.text 里的 t-r20sl 标签没被认出 ⇒ 旧 SL 单不会被清理")
+                      "initial.text 里的 t-astrasl 标签没被认出 ⇒ 旧 SL 单不会被清理")
 
     def test_delta_whitelist_actually_notices_undocumented_edits(self):
         """自检：白名单之外的一行改动必须被 `_body_dump` 看见。"""

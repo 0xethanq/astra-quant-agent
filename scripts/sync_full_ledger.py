@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-R20 Authentic OKX Positions-History Ledger Synchronizer (sync_full_ledger.py)
+ASTRA Authentic OKX Positions-History Ledger Synchronizer (sync_full_ledger.py)
 Directly reads OKX official `account positions-history` & `account positions` API.
 Eliminates bills heuristic split-error, accurately records real position-level trades!
 """
@@ -20,11 +20,11 @@ import scripts.okx_rest as okx_rest
 import scripts.okx_runtime as okx_runtime
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-#: ⚠️ `R20_DATA_DIR` 是**测试沙箱专用环境变量**（由 tests/config_sandbox.isolate_config
+#: ⚠️ `ASTRA_DATA_DIR` 是**测试沙箱专用环境变量**（由 tests/config_sandbox.isolate_config
 #: 设置、由 `run_script` 拉起的子进程继承）：跑测试时把 data/ 写入重定向到沙箱，
 #: **生产从不设置该变量 → 取值与原先逐位相同**。修复"测试经子进程写生产文件"
 #: 的泄漏（§88/§91.6），不改任何业务行为。
-DATA_DIR = os.environ.get("R20_DATA_DIR") or os.path.join(WORKSPACE_DIR, "data")
+DATA_DIR = os.environ.get("ASTRA_DATA_DIR") or os.path.join(WORKSPACE_DIR, "data")
 LEDGER_JSON_FILE = os.path.join(DATA_DIR, "trading_ledger.json")
 LEDGER_SYNC_STATUS_FILE = os.path.join(DATA_DIR, "ledger_sync_status.json")
 
@@ -160,7 +160,7 @@ def _sqlite_traded_names():
     names = set()
     try:
         import sqlite3
-        db = os.path.join(DATA_DIR, "r20_quant.db")
+        db = os.path.join(DATA_DIR, "astra_quant.db")
         if os.path.exists(db):
             con = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
             for (inst,) in con.execute("SELECT DISTINCT inst FROM trades"):
@@ -177,7 +177,7 @@ def allowed_inst_ids(existing_ledger_trades=None):
     修复(2026-09-09)：此前重建仅认当前池，用户从池中删除币种后，下一次同步
     会把该币种的全部已平仓历史从 trading_ledger.json 抹掉（SQLite 仍在，但页面
     台账消失）；持仓中途删币还会让在途仓位在台账里隐身。历史是交易所事实，
-    不随池配置消亡；噪声过滤（拦截 R20 从未交易过的手动单）由并集继续保证。
+    不随池配置消亡；噪声过滤（拦截 ASTRA 从未交易过的手动单）由并集继续保证。
     """
     allowed = {item["instId"] for item in TARGET_INSTRUMENTS}
     names = _sqlite_traded_names()
@@ -261,7 +261,7 @@ def _resolve_trade_leverage(
     if not lever or lever <= 0:
         try:
             from scripts.risk_constants import MIN_LEVERAGE
-            lever = int(float(os.getenv("R20_MIN_LEVERAGE", "") or MIN_LEVERAGE or 3.0))
+            lever = int(float(os.getenv("ASTRA_MIN_LEVERAGE", "") or MIN_LEVERAGE or 3.0))
         except Exception:
             lever = 3
     return max(1, int(lever))
@@ -273,7 +273,7 @@ def fetch_binance_closed_trades(environment: str = "demo", tz_bj=None) -> list:
         tz_bj = datetime.timezone(datetime.timedelta(hours=8))
     out = []
     try:
-        from r20_backend.exchanges import get_adapter, venue_credentials
+        from astra_backend.exchanges import get_adapter, venue_credentials
         ak, sk = venue_credentials("binance", environment)
         if not (ak and sk):
             # 未配置私有凭证（仅提供免密公共行情），无账户台账可同步，安全跳过
@@ -399,7 +399,7 @@ def fetch_gate_closed_trades(environment: str = "sandbox", tz_bj=None) -> list:
         tz_bj = datetime.timezone(datetime.timedelta(hours=8))
     out = []
     try:
-        from r20_backend.exchanges import get_adapter, venue_credentials
+        from astra_backend.exchanges import get_adapter, venue_credentials
         ak, sk = venue_credentials("gate", environment)
         if not (ak and sk):
             # 未配置私有凭证（仅提供免密公共行情），无账户台账可同步，安全跳过
@@ -537,7 +537,7 @@ def _history_truncated_in_scope(truncated, oldest_ms, reset_time, tz_bj):
 
 def _other_venue_live_positions(env_axis):
     """binance/gate 活动持仓，归一成与 OKX 同形的字段（与仪表盘同一事实源：
-    r20_backend.exchanges.get_adapter）。
+    astra_backend.exchanges.get_adapter）。
 
     批E(2026-09-13·用户报「台账和活动持仓对不上」)：台账 holding 行原本**只由
     okx_rest.positions() 生成**（builder 全源 OKX V5），于是活动持仓面板显示 6 条
@@ -549,7 +549,7 @@ def _other_venue_live_positions(env_axis):
     items: list = []
     ok_venues: set = set()
     try:
-        from r20_backend.exchanges import get_adapter
+        from astra_backend.exchanges import get_adapter
     except Exception:
         return items, ok_venues
     for v_name in ("binance", "gate"):
@@ -745,15 +745,15 @@ def build_lifecycle_ledger():
     _allow_alt_only = False
     if not env.configured:
         try:
-            raw_flag = str(os.environ.get("R20_ALLOW_ALT_ONLY_SYNC", "")).strip().lower()
+            raw_flag = str(os.environ.get("ASTRA_ALLOW_ALT_ONLY_SYNC", "")).strip().lower()
             if raw_flag in ("1", "true", "yes"):
-                from r20_backend.exchanges import venue_credentials
+                from astra_backend.exchanges import venue_credentials
                 _allow_alt_only = any(
                     bool(venue_credentials(v, getattr(env, "mode", "live"))[0]) for v in ("binance", "gate")
                 )
             else:
-                from r20_backend.exchanges.routing_policy import load_preferred_venue
-                from r20_backend.exchanges import venue_credentials
+                from astra_backend.exchanges.routing_policy import load_preferred_venue
+                from astra_backend.exchanges import venue_credentials
                 pref = load_preferred_venue()
                 if pref in ("binance", "gate"):
                     ak, sk = venue_credentials(pref, getattr(env, "mode", "live"))

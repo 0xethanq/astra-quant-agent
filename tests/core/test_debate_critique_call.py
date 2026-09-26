@@ -13,7 +13,7 @@ system prompt 必须写明这是**第二轮「同行方案交叉漏洞质询」*
 import unittest
 from unittest.mock import patch
 
-from r20_backend.council.debate import _call_single_trader_critique
+from astra_backend.council.debate import _call_single_trader_critique
 
 SPEC = {"name": "老李", "prompt": "席位身份", "temperature": 0.1}
 
@@ -27,11 +27,11 @@ def _resolved():
 class CritiqueCallTest(unittest.TestCase):
     def setUp(self):
         self.seen = {}
-        self.p_render = patch("r20_backend.council.debate._render_seat_prompt",
+        self.p_render = patch("astra_backend.council.debate._render_seat_prompt",
                               return_value="渲染身份")
         self.render_mock = self.p_render.start()
         self.addCleanup(self.p_render.stop)
-        p = patch("r20_backend.llm_manager.get_active_llm_runtime",
+        p = patch("astra_backend.llm_manager.get_active_llm_runtime",
                   return_value={"model": "M-active"})
         p.start()
         self.addCleanup(p.stop)
@@ -40,7 +40,7 @@ class CritiqueCallTest(unittest.TestCase):
         def _exec(**kw):
             self.seen["exec"] = kw
             return "质询正文", "思考", {}, 2.0
-        p = patch("r20_backend.llm_manager.execute_llm_request", side_effect=_exec)
+        p = patch("astra_backend.llm_manager.execute_llm_request", side_effect=_exec)
         p.start()
         self.addCleanup(p.stop)
         kwargs = dict(role_id="trader_b", role_spec=dict(SPEC), my_proposal="我的方案正文",

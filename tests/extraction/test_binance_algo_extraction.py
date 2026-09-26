@@ -2,7 +2,7 @@
 
 ## 抽了什么
 
-`r20_backend/exchanges/binance.py`（754 行）里有一簇形态完全不同的代码：
+`astra_backend/exchanges/binance.py`（754 行）里有一簇形态完全不同的代码：
 **US-004 Algo Service 双轨契约构造器** —— 5 个 `@classmethod` +
 1 个 workingType 校验 + 3 个类常量（`ALGO_ORDER_PATH` / `ALGO_TYPES` /
 `WORKING_TYPES`）。
@@ -11,7 +11,7 @@
 但它夹在"公共行情端点"与"私有签名面"之间，读代码时容易被当成网络层的一部分。
 实测（传递纯度扫描）该文件**没有任何模块级路径常量**，这簇是纯的。
 
-外提到 `r20_backend/exchanges/binance_algo.py`（`BinanceAlgoRequestsMixin`），
+外提到 `astra_backend/exchanges/binance_algo.py`（`BinanceAlgoRequestsMixin`），
 `binance.py` **754 → 638 行**。
 
 ## ⚠️ 为什么用 **mixin** 而不是"搬成自由函数"
@@ -51,12 +51,13 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-FACADE = ROOT / "r20_backend" / "exchanges" / "binance.py"
-MIXIN = ROOT / "r20_backend" / "exchanges" / "binance_algo.py"
-PKG_INIT = ROOT / "r20_backend" / "exchanges" / "__init__.py"
+FACADE = ROOT / "astra_backend" / "exchanges" / "binance.py"
+MIXIN = ROOT / "astra_backend" / "exchanges" / "binance_algo.py"
+PKG_INIT = ROOT / "astra_backend" / "exchanges" / "__init__.py"
 
-from r20_backend.exchanges.binance import BinanceAdapter  # noqa: E402
-from r20_backend.exchanges.binance_algo import BinanceAlgoRequestsMixin  # noqa: E402
+from astra_backend.exchanges.binance import BinanceAdapter  # noqa: E402
+from astra_backend.exchanges.binance_algo import BinanceAlgoRequestsMixin  # noqa: E402
+from tests.extraction.rename_baseline import legacy_rev_path, normalize
 
 def _nodedoc(src: str) -> str:
     """把所有字符串字面量（含文档串）与 `#` 注释替换成等长空白，只留代码骨架。
@@ -109,7 +110,7 @@ class AccessShapeTest(unittest.TestCase):
         self.ad = BinanceAdapter(environment="demo")
 
     def test_class_attributes_resolve_on_the_adapter(self):
-        from r20_backend.exchanges import binance
+        from astra_backend.exchanges import binance
         for c in CONSTS:
             with self.subTest(const=c):
                 self.assertTrue(hasattr(BinanceAdapter, c), f"BinanceAdapter 缺 {c}")
@@ -298,7 +299,7 @@ class VerbatimCopyTest(unittest.TestCase):
 
     def test_moved_bodies_match_pre_extraction(self):
         import subprocess
-        old = subprocess.run(["git", "show", f"{self.PRE}:r20_backend/exchanges/binance.py"],
+        old = subprocess.run(["git", "show", legacy_rev_path(f"{self.PRE}:astra_backend/exchanges/binance.py")],
                              capture_output=True, text=True, cwd=str(ROOT))
         self.assertEqual(old.returncode, 0, old.stderr)
         new = MIXIN.read_text(encoding="utf-8")

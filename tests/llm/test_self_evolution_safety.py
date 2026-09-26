@@ -31,10 +31,10 @@ class SelfEvolutionSafetyTests(unittest.TestCase):
         self.urlopen = self.start_patch(patch("urllib.request.urlopen", side_effect=AssertionError("HTTP forbidden")))
         dependencies = {}
         for name, attrs in {
-            "r20_backend.config": {"settings": None},
+            "astra_backend.config": {"settings": None},
             "instrument_pool": {"load_instruments": Mock(return_value=[{"name": "BTC"}])},
             "prompt_library": {"active_profile": Mock(), "apply_module_layout": Mock()},
-            "r20_gateway.telemetry": {"ModelCallTelemetry": Mock()},
+            "astra_gateway.telemetry": {"ModelCallTelemetry": Mock()},
             "qq_notifier": {"notify_evolution_report": Mock()},
         }.items():
             module = ModuleType(name)
@@ -345,7 +345,7 @@ class UnifiedMemoryTests(unittest.TestCase):
 
     def test_backend_handlers_audit_crud_without_app_import(self):
         # Compile only reviewed endpoint functions: no app startup/auth/config reads.
-        source = Path(__file__).resolve().parents[2] / "r20_backend" / "app.py"
+        source = Path(__file__).resolve().parents[2] / "astra_backend" / "app.py"
         tree = ast.parse(source.read_text())
         names = {"_memory_service_call", "get_admin_memory", "add_admin_memory_item",
                  "delete_admin_memory_item", "update_admin_memory_all",

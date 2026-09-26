@@ -50,8 +50,8 @@ RUN pip install --no-cache-dir --upgrade pip && \
 COPY --from=frontend-builder /build/dist /app/frontend/dist
 
 # 复制应用代码
-COPY r20_backend/ /app/r20_backend/
-COPY r20_gateway/ /app/r20_gateway/
+COPY astra_backend/ /app/astra_backend/
+COPY astra_gateway/ /app/astra_gateway/
 COPY scripts/ /app/scripts/
 COPY deploy/ /app/deploy/
 COPY docs/ /app/docs/

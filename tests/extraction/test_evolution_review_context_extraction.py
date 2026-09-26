@@ -20,6 +20,7 @@ import subprocess
 import sys
 import unittest
 from pathlib import Path
+from tests.extraction.rename_baseline import legacy_rev_path, normalize
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
@@ -32,10 +33,10 @@ SPECS = {"summarize_closed_trades": (3, 10), "build_host_constitution": (20, 20)
 
 
 def _baseline_fn() -> ast.FunctionDef:
-    r = subprocess.run(["git", "show", f"{PRE}:scripts/self_improvement_engine.py"],
+    r = subprocess.run(["git", "show", legacy_rev_path(f"{PRE}:scripts/self_improvement_engine.py")],
                        capture_output=True, text=True, cwd=str(ROOT))
     assert r.returncode == 0, f"基线取不到：{r.stderr[:200]}"
-    return next(n for n in ast.parse(r.stdout).body
+    return next(n for n in ast.parse(normalize(r.stdout)).body
                 if isinstance(n, ast.FunctionDef) and n.name == OWNER)
 
 
@@ -196,10 +197,10 @@ class ParseReviewJsonTest(unittest.TestCase):
     OWNER = "call_llm_evolution_review"
 
     def _baseline(self) -> ast.FunctionDef:
-        r = subprocess.run(["git", "show", f"{self.PRE}:scripts/self_improvement_engine.py"],
+        r = subprocess.run(["git", "show", legacy_rev_path(f"{self.PRE}:scripts/self_improvement_engine.py")],
                            capture_output=True, text=True, cwd=str(ROOT))
         assert r.returncode == 0, f"基线取不到：{r.stderr[:200]}"
-        return next(n for n in ast.parse(r.stdout).body
+        return next(n for n in ast.parse(normalize(r.stdout)).body
                     if isinstance(n, ast.FunctionDef) and n.name == self.OWNER)
 
     def test_segment_is_ast_identical_to_baseline(self):
@@ -285,10 +286,10 @@ class NormalizeAssetMultipliersTest(unittest.TestCase):
     OWNER = "run_self_evolution"
 
     def _baseline(self) -> ast.FunctionDef:
-        r = subprocess.run(["git", "show", f"{self.PRE}:scripts/self_improvement_engine.py"],
+        r = subprocess.run(["git", "show", legacy_rev_path(f"{self.PRE}:scripts/self_improvement_engine.py")],
                            capture_output=True, text=True, cwd=str(ROOT))
         assert r.returncode == 0, f"基线取不到：{r.stderr[:200]}"
-        return next(n for n in ast.parse(r.stdout).body
+        return next(n for n in ast.parse(normalize(r.stdout)).body
                     if isinstance(n, ast.FunctionDef) and n.name == self.OWNER)
 
     def test_segment_is_ast_identical_to_baseline(self):
@@ -338,14 +339,14 @@ class NormalizeAssetMultipliersTest(unittest.TestCase):
 
     def _norm(self, llm_review, targets=("BTC", "ETH")):
         from scripts.evolution.review_context import normalize_asset_multipliers
-        from r20_backend.math_utils import clamp
+        from astra_backend.math_utils import clamp
         return normalize_asset_multipliers(TARGET_INSTRUMENTS=list(targets), clamp=clamp,
                                            llm_review=llm_review)
 
     def test_facade_clamp_is_the_math_utils_one(self):
         """门面的 `clamp` 只是别名（名字必须留在门面：`patch.object(模块,"clamp")` 是既有接缝）。"""
         src = (ROOT / "scripts" / "self_improvement_engine.py").read_text(encoding="utf-8")
-        self.assertIn("from r20_backend.math_utils import clamp as _clamp", src)
+        self.assertIn("from astra_backend.math_utils import clamp as _clamp", src)
         self.assertIn("return _clamp(value, lower, upper, default)", src)
 
     def test_only_pool_assets_and_default_one(self):

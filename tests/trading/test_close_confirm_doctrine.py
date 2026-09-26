@@ -139,10 +139,10 @@ class OtherVenueCloseConfirmTest(unittest.TestCase):
                 raise raises
             return router_result if router_result is not None else {"ok": True}
 
-        # ⚠️ 只打**真实模块上的属性**：`from r20_backend import execution_router` 走的是
+        # ⚠️ 只打**真实模块上的属性**：`from astra_backend import execution_router` 走的是
         # **包属性**（一旦该模块被导入过，包属性就赢过 sys.modules 替换）⇒
         # `patch.dict(sys.modules, …)` 对这种导入**无效**（本仓踩过：单文件绿、全量红）。
-        with patch("r20_backend.execution_router.close_position", _close, create=True):
+        with patch("astra_backend.execution_router.close_position", _close, create=True):
             ok, detail = close_position_confirmed(
                     "BTC-USDT-SWAP", "long", 10.0, "gate",
                     okx_rest=_OkxRest(),

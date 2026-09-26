@@ -25,7 +25,7 @@
 | `venue_registry` / `current_environment` / `amend_venue_stop_loss` | 多所路径 |
 
 全部**调用期注入**：门面会被 `pin_baseline_risk_env()` 原地重载，
-import 期绑定会变成过期快照（`r20_backend/README.md` §5）。
+import 期绑定会变成过期快照（`astra_backend/README.md` §5）。
 
 > 平仓置信度阈值 **85 是原实现里的字面量**（不是 `risk_constants` 常量，全仓查无
 > `AI_CLOSE_CONFIDENCE_MIN`）。本次搬运**刻意保持字面量不变** —— 重构不得改业务阈值。
@@ -111,7 +111,7 @@ def execute_ai_position_management(real_pos_dict, trackers, timestamp_full, exec
             old_sl = 0.0
             if pos_venue != "okx":
                 try:
-                    from r20_backend.close_intent import adapter_environment as _sl_env
+                    from astra_backend.close_intent import adapter_environment as _sl_env
                     ad = venue_registry.get_adapter(pos_venue,
                         environment=_sl_env(pos_venue, str(current_environment().mode)))  # 审计 C2+C3
                     # 审计 C3（后半）：棘轮而非堆单——原生改单优先，回退先挂新再撤旧

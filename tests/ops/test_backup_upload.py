@@ -155,7 +155,7 @@ class CalculateSha256Tests(_TempFileMixin, unittest.TestCase):
 class CredentialsTests(unittest.TestCase):
     def test_uses_credential_ref_when_present(self):
         seen = []
-        import r20_backend.backup_secrets as secrets
+        import astra_backend.backup_secrets as secrets
         with patch.object(secrets, "load_credentials",
                           lambda ref: seen.append(ref) or {"k": "v"}):
             self.assertEqual(bu._credentials({"id": 1, "credential_ref": "custom:ref"}),
@@ -164,7 +164,7 @@ class CredentialsTests(unittest.TestCase):
 
     def test_falls_back_to_backup_prefixed_id(self):
         seen = []
-        import r20_backend.backup_secrets as secrets
+        import astra_backend.backup_secrets as secrets
         with patch.object(secrets, "load_credentials",
                           lambda ref: seen.append(ref) or {}):
             self.assertEqual(bu._credentials({"id": 42}), {})
@@ -172,7 +172,7 @@ class CredentialsTests(unittest.TestCase):
 
     def test_blank_credential_ref_falls_back_to_id(self):
         seen = []
-        import r20_backend.backup_secrets as secrets
+        import astra_backend.backup_secrets as secrets
         with patch.object(secrets, "load_credentials",
                           lambda ref: seen.append(ref) or {}):
             bu._credentials({"id": 7, "credential_ref": ""})
@@ -181,7 +181,7 @@ class CredentialsTests(unittest.TestCase):
 
 class UrlencodedJsonTests(unittest.TestCase):
     def _call(self, payload, *, data=None, status_raw=None):
-        import r20_backend.net_security as net
+        import astra_backend.net_security as net
         seen = {}
         raw = status_raw if status_raw is not None else json.dumps(payload).encode()
 
@@ -231,7 +231,7 @@ class UrlencodedJsonTests(unittest.TestCase):
 
 class MultipartUploadTests(unittest.TestCase):
     def _call(self, payload):
-        import r20_backend.net_security as net
+        import astra_backend.net_security as net
         seen = {}
 
         def fake_urlopen(request, timeout=None):
@@ -252,7 +252,7 @@ class MultipartUploadTests(unittest.TestCase):
         self.assertIn(b'name="file"', seen["body"])
         self.assertIn(b'filename="db.sqlite"', seen["body"])
         self.assertIn(b"BINARY", seen["body"])
-        self.assertTrue(seen["content_type"].startswith("multipart/form-data; boundary=----R20"))
+        self.assertTrue(seen["content_type"].startswith("multipart/form-data; boundary=----ASTRA"))
 
     def test_errno_nonzero_raises(self):
         with self.assertRaises(RuntimeError) as ctx:
@@ -446,7 +446,7 @@ class UploadWebdavTests(_TempFileMixin, unittest.TestCase):
     def _run(self, *, remote_path="daily", username="u", password="p",
              mkcol_statuses=None, put_status=201, endpoint="https://dav.example.com"):
         import http.client
-        import r20_backend.net_security as net
+        import astra_backend.net_security as net
         mkcol_statuses = mkcol_statuses or {}
         requests = []
 
@@ -645,13 +645,13 @@ class UploadBaiduOauthTests(_TempFileMixin, unittest.TestCase):
                 return uploaded_script.pop(0)
             return {"md5": hashlib.md5(content).hexdigest()}
 
-        import r20_backend.backup_secrets as secrets
+        import astra_backend.backup_secrets as secrets
         saved = []
         with patch.object(secrets, "save_credentials",
                           lambda ref, payload: saved.append((ref, payload))), \
              patch("builtins.open", open):
             result = bu.upload_baidu_oauth(
-                path, {"id": 1, "remote_path": "R20_Backups"},
+                path, {"id": 1, "remote_path": "ASTRA_Backups"},
                 _credentials=lambda t: creds,
                 _urlencoded_json=fake_urlencoded,
                 _multipart_upload=fake_multipart)
@@ -660,7 +660,7 @@ class UploadBaiduOauthTests(_TempFileMixin, unittest.TestCase):
     def test_happy_path_precreate_upload_create(self):
         result, calls, _ = self._run()
         self.assertTrue(result["success"])
-        self.assertEqual(result["destination"], "/apps/R20QuantumTrader/R20_Backups/db.sqlite")
+        self.assertEqual(result["destination"], "/apps/AstraQuantumTrader/ASTRA_Backups/db.sqlite")
         kinds = [c[0] for c in calls]
         self.assertEqual(kinds, ["urlencoded", "urlencoded", "multipart", "urlencoded"])
         # ★ 安全断言：token 端点必须走 POST body，凭证绝不进 query string
@@ -716,7 +716,7 @@ class UploadBaiduOauthTests(_TempFileMixin, unittest.TestCase):
         self.assertEqual(saved, [])
 
     def test_empty_remote_path_silently_falls_back_to_default_dir(self):
-        import r20_backend.backup_secrets as secrets
+        import astra_backend.backup_secrets as secrets
         path = self.make_file("db.sqlite", b"A")
         calls = []
 
@@ -735,14 +735,14 @@ class UploadBaiduOauthTests(_TempFileMixin, unittest.TestCase):
                 _urlencoded_json=fake_urlencoded,
                 _multipart_upload=lambda *a, **k: {"md5": hashlib.md5(b"A").hexdigest()})
         # ⚠️ 实测行为（与直觉相反，本刀仅记录，**未改**）：
-        # `str(target.get("remote_path") or "R20_Backups")` 里**空串是假值**，
+        # `str(target.get("remote_path") or "ASTRA_Backups")` 里**空串是假值**，
         # 于是 `remote_path=""` 无法表达"放到应用根目录"，会被**静默**替换成默认目录
-        # R20_Backups。调用方目前**没有任何写法**能真正落到 /apps/R20QuantumTrader/。
+        # ASTRA_Backups。调用方目前**没有任何写法**能真正落到 /apps/AstraQuantumTrader/。
         self.assertEqual(result["destination"],
-                         "/apps/R20QuantumTrader/R20_Backups/db.sqlite")
+                         "/apps/AstraQuantumTrader/ASTRA_Backups/db.sqlite")
         # 预创建载荷里的 path 同样落在默认目录下（不是应用根）
         self.assertEqual(calls[1][1]["path"],
-                         "/apps/R20QuantumTrader/R20_Backups/db.sqlite")
+                         "/apps/AstraQuantumTrader/ASTRA_Backups/db.sqlite")
 
     def test_multiple_chunks_are_uploaded_in_order(self):
         blob = b"B" * (4 * 1024 * 1024 + 3)

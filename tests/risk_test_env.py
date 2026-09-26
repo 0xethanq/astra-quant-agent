@@ -1,7 +1,7 @@
 """风控测试环境隔离助手。
 
-背景：scripts/risk_constants.py 在 import 时执行 load_dotenv(.env) 并读取 R20_* 环境变量；
-r20_backend.config 的模块级 load_dotenv 会强制覆盖 os.environ。生产 .env 当前挂在
+背景：scripts/risk_constants.py 在 import 时执行 load_dotenv(.env) 并读取 ASTRA_* 环境变量；
+astra_backend.config 的模块级 load_dotenv 会强制覆盖 os.environ。生产 .env 当前挂在
 「进取」套件（4 笔同向 / 3% 单笔风险 / 8% 日亏）时，全量 discover 里先被 import 的
 测试会把激进值带进进程环境，risk_constants / ai_factor_trader / ai_brain_trader 在
 import 期烘焙这些值 → 断言基线语义的风控测试随机翻红（单独跑绿、全量跑红）。
@@ -29,7 +29,7 @@ def pin_baseline_risk_env() -> None:
     snapshot = {k: os.environ.get(k) for k in rc.RISK_ENV_KEYS}
 
     try:
-        import r20_backend.config as cfg
+        import astra_backend.config as cfg
         orig_loader = cfg.load_dotenv
         cfg.load_dotenv = lambda _path: None  # 重载期间禁止 .env 覆盖基线
     except Exception:

@@ -13,7 +13,7 @@ import re
 import unittest
 from datetime import datetime, timezone
 
-from r20_backend.time_utils import (BJ_TZ, EPOCH_MS_THRESHOLD, beijing_day, beijing_text,
+from astra_backend.time_utils import (BJ_TZ, EPOCH_MS_THRESHOLD, beijing_day, beijing_text,
                                     parse_beijing, to_millis, to_seconds)
 
 _SEVEN_DAYS_MS = 7 * 24 * 3600 * 1000

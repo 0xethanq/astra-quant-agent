@@ -10,22 +10,22 @@ import os
 import unittest
 from unittest.mock import patch
 
-from r20_backend import execution_router as router
-from r20_backend.exchanges import ExchangeCapabilityError
-from r20_backend.exchanges.gate import GateAdapter
+from astra_backend import execution_router as router
+from astra_backend.exchanges import ExchangeCapabilityError
+from astra_backend.exchanges.gate import GateAdapter
 
 
 _LISTING_PATCHES = []
 
 def setUpModule():
-    """封闭三律（同 fa417ee）：宿主 .env 注入的 ambient R20_* 旗标
-    （如 R20_GATE_TESTNET=1）会把环境解析到 sandbox 档，令用例自设的
-    R20_GATE_EXECUTION=1（live 档旗标）错配失效——执行环境只由各用例自己的
+    """封闭三律（同 fa417ee）：宿主 .env 注入的 ambient ASTRA_* 旗标
+    （如 ASTRA_GATE_TESTNET=1）会把环境解析到 sandbox 档，令用例自设的
+    ASTRA_GATE_EXECUTION=1（live 档旗标）错配失效——执行环境只由各用例自己的
     patch.dict 决定，ambient 旗标一律排除。"""
     _backup = {k: v for k, v in os.environ.items()
-               if k.startswith(("R20_BINANCE_TESTNET", "R20_GATE_TESTNET",
-                                "R20_GATE_EXECUTION", "R20_GATE_DEMO_EXECUTION",
-                                "R20_OKX_ENV", "R20_OKX_TESTNET"))}
+               if k.startswith(("ASTRA_BINANCE_TESTNET", "ASTRA_GATE_TESTNET",
+                                "ASTRA_GATE_EXECUTION", "ASTRA_GATE_DEMO_EXECUTION",
+                                "ASTRA_OKX_ENV", "ASTRA_OKX_TESTNET"))}
     for k in _backup:
         os.environ.pop(k, None)
 
@@ -37,7 +37,7 @@ def setUpModule():
     # US-007 listing gate 已接入 open_protected_position（fail-open）：本文件只测
     # 路由/保护语义，合约目录对账由 test_listing_gate + trader 接线用例覆盖——
     # 模块级钉 ok=True，杜绝 _StubAdapter 路径外的真网目录拉取。
-    from r20_backend.exchanges import listing as _listing
+    from astra_backend.exchanges import listing as _listing
     _lp = patch.object(_listing, "ensure_contract_listed",
                        lambda *a, **k: _listing.ListingCheck(
                            ok=True, reason=None, checked_at="", source="cache"))
@@ -111,7 +111,7 @@ class _StubAdapter(GateAdapter):
         return list(self._positions_rows)
 
     def fetch_instrument_spec(self, symbol, refresh=False):
-        from r20_backend.exchanges import InstrumentSpec
+        from astra_backend.exchanges import InstrumentSpec
         return InstrumentSpec(venue="gate", inst_id="BTC_USDT", base="BTC",
                               tick_size=0.1, step_size=0.0001, ct_val=0.0001,
                               min_size=1)
@@ -183,8 +183,8 @@ class TestRouter(unittest.TestCase):
     def test_open_long_full_sequence(self):
         ad = _StubAdapter()
         # 钉死限价模式：本用例断言 place 的价格是限价（市价单模式下 px 本就为 None）。
-        # `R20_ORDER_MODE` 由后台写 `.env`，属运行期可变的运维设置。
-        with patch.dict(os.environ, {"R20_GATE_EXECUTION": "1", "R20_ORDER_MODE": "limit"}):
+        # `ASTRA_ORDER_MODE` 由后台写 `.env`，属运行期可变的运维设置。
+        with patch.dict(os.environ, {"ASTRA_GATE_EXECUTION": "1", "ASTRA_ORDER_MODE": "limit"}):
             r = router.open_protected_position(_decision(), adapter=ad,
                                                price_ref=79000.0)
         self.assertTrue(r["ok"], r.get("detail"))
@@ -198,7 +198,7 @@ class TestRouter(unittest.TestCase):
 
     def test_short_signed_size(self):
         ad = _StubAdapter()
-        with patch.dict(os.environ, {"R20_GATE_EXECUTION": "1"}):
+        with patch.dict(os.environ, {"ASTRA_GATE_EXECUTION": "1"}):
             r = router.open_protected_position(
                 _decision(action="SELL_SHORT", take_profit_price=75000.0,
                           stop_loss_price=80500.0),
@@ -209,7 +209,7 @@ class TestRouter(unittest.TestCase):
 
     def test_geometry_rejected_before_any_execution(self):
         ad = _StubAdapter()
-        with patch.dict(os.environ, {"R20_GATE_EXECUTION": "1"}):
+        with patch.dict(os.environ, {"ASTRA_GATE_EXECUTION": "1"}):
             r = router.open_protected_position(
                 _decision(stop_loss_price=79500.0),  # 多头止损>入场，几何非法
                 adapter=ad, price_ref=79000.0)
@@ -219,7 +219,7 @@ class TestRouter(unittest.TestCase):
 
     def test_nan_margin_rejected(self):
         ad = _StubAdapter()
-        with patch.dict(os.environ, {"R20_GATE_EXECUTION": "1"}):
+        with patch.dict(os.environ, {"ASTRA_GATE_EXECUTION": "1"}):
             r = router.open_protected_position(_decision(margin_usdt=float("nan")),
                                                adapter=ad, price_ref=79000.0)
         self.assertFalse(r["ok"])
@@ -228,7 +228,7 @@ class TestRouter(unittest.TestCase):
 
     def test_attach_failure_cancels_entry(self):
         ad = _StubAdapter(fail_attach=True)
-        with patch.dict(os.environ, {"R20_GATE_EXECUTION": "1"}):
+        with patch.dict(os.environ, {"ASTRA_GATE_EXECUTION": "1"}):
             r = router.open_protected_position(_decision(), adapter=ad, price_ref=79000.0)
         self.assertFalse(r["ok"])
         self.assertEqual(r["stage"], "protective")
@@ -237,7 +237,7 @@ class TestRouter(unittest.TestCase):
 
     def test_verify_gap_cancels_entry(self):
         ad = _StubAdapter(fail_verify=True)
-        with patch.dict(os.environ, {"R20_GATE_EXECUTION": "1"}):
+        with patch.dict(os.environ, {"ASTRA_GATE_EXECUTION": "1"}):
             r = router.open_protected_position(_decision(), adapter=ad, price_ref=79000.0)
         self.assertFalse(r["ok"])
         self.assertEqual(r["stage"], "protective")
@@ -245,7 +245,7 @@ class TestRouter(unittest.TestCase):
 
     def test_leverage_failure_stops_before_entry(self):
         ad = _StubAdapter(fail_leverage=True)
-        with patch.dict(os.environ, {"R20_GATE_EXECUTION": "1"}):
+        with patch.dict(os.environ, {"ASTRA_GATE_EXECUTION": "1"}):
             r = router.open_protected_position(_decision(), adapter=ad, price_ref=79000.0)
         self.assertFalse(r["ok"])
         self.assertEqual(r["stage"], "leverage")
@@ -253,7 +253,7 @@ class TestRouter(unittest.TestCase):
 
     def test_min_notional_rejected(self):
         ad = _StubAdapter()
-        with patch.dict(os.environ, {"R20_GATE_EXECUTION": "1"}):
+        with patch.dict(os.environ, {"ASTRA_GATE_EXECUTION": "1"}):
             r = router.open_protected_position(_decision(margin_usdt=0.5), adapter=ad,
                                                price_ref=79000.0)
         self.assertFalse(r["ok"])
@@ -262,7 +262,7 @@ class TestRouter(unittest.TestCase):
     def test_price_aligned_to_tick(self):
         # tick 0.1 下 79000.04 必须对齐为 79000.0 再下单（防 Gate PRICE_INVALID）
         ad = _StubAdapter()
-        with patch.dict(os.environ, {"R20_GATE_EXECUTION": "1", "R20_ORDER_MODE": "limit"}):
+        with patch.dict(os.environ, {"ASTRA_GATE_EXECUTION": "1", "ASTRA_ORDER_MODE": "limit"}):
             r = router.open_protected_position(
                 _decision(entry_price=79000.04, take_profit_price=85000.07,
                           stop_loss_price=77000.02), adapter=ad, price_ref=79000.0)
@@ -271,7 +271,7 @@ class TestRouter(unittest.TestCase):
 
     def test_price_ref_missing_falls_back_to_ticker(self):
         ad = _StubAdapter()
-        with patch.dict(os.environ, {"R20_GATE_EXECUTION": "1"}):
+        with patch.dict(os.environ, {"ASTRA_GATE_EXECUTION": "1"}):
             r = router.open_protected_position(_decision(), adapter=ad)
         self.assertTrue(r["ok"], r.get("detail"))
         self.assertEqual(r["ref_price"], 79000.0)
@@ -281,7 +281,7 @@ class TestRouter(unittest.TestCase):
             with self.assertRaises(ExchangeCapabilityError):
                 router.close_position("BTC", adapter=_StubAdapter())
         ad = _StubAdapter()
-        with patch.dict(os.environ, {"R20_GATE_EXECUTION": "1"}):
+        with patch.dict(os.environ, {"ASTRA_GATE_EXECUTION": "1"}):
             r = router.close_position("BTC", adapter=ad)
         self.assertTrue(r["ok"])
         self.assertIn(("close", "BTC"), ad.calls)
@@ -295,7 +295,7 @@ class TestRouter(unittest.TestCase):
                 return {"venue": "gate", "symbol": symbol, "closed": False,
                         "reason": "多行持仓/双向同存，拒绝盲平"}
         ad = _NotClosed()
-        with patch.dict(os.environ, {"R20_GATE_EXECUTION": "1"}):
+        with patch.dict(os.environ, {"ASTRA_GATE_EXECUTION": "1"}):
             r = router.close_position("BTC", adapter=ad, pos_side="long")
         self.assertFalse(r["ok"])
         self.assertIn("拒绝盲平", r["detail"])
@@ -305,7 +305,7 @@ class TestExternalPositionPrecheck(unittest.TestCase):
     """US-009：开仓前同合约既有仓探针——外部/不符=连坐拒开，探针失败=fail-closed。"""
 
     def _env(self):
-        return patch.dict(os.environ, {"R20_GATE_EXECUTION": "1"})
+        return patch.dict(os.environ, {"ASTRA_GATE_EXECUTION": "1"})
 
     def test_foreign_position_rejects_entry(self):
         ad = _StubAdapter(positions_rows=[{"base": "BTC", "side": "long",

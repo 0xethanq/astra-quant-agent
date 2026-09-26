@@ -21,8 +21,8 @@ import types
 import unittest
 from unittest import mock
 
-from r20_backend import execution_router as ER
-from r20_backend.execution import own_records
+from astra_backend import execution_router as ER
+from astra_backend.execution import own_records
 from scripts.trader import venue_protection
 
 
@@ -390,7 +390,7 @@ class ClosePositionTests(_Base):
         self.assertEqual(self.require.call_args[1]["environment"], "sandbox")
 
     def test_refused_gate_propagates(self):
-        from r20_backend.exchanges import ExchangeCapabilityError
+        from astra_backend.exchanges import ExchangeCapabilityError
         self.require.side_effect = ExchangeCapabilityError("未开闸")
         with self.assertRaises(ExchangeCapabilityError):
             self._close()
@@ -401,7 +401,7 @@ class ClosePositionTests(_Base):
         self.assertIn("平仓失败", out["detail"])
 
     def test_capability_error_from_the_adapter_propagates(self):
-        from r20_backend.exchanges import ExchangeCapabilityError
+        from astra_backend.exchanges import ExchangeCapabilityError
         with self.assertRaises(ExchangeCapabilityError):
             self._close(adapter=_adapter(raises=ExchangeCapabilityError("不支持")))
 
@@ -566,8 +566,8 @@ class ImportFallbackTests(unittest.TestCase):
         import sys
         from pathlib import Path
         src = Path(ER.__file__).read_text(encoding="utf-8")
-        ns = {"__name__": "r20_execution_router_fallback_probe",
-              "__file__": ER.__file__, "__package__": "r20_backend"}
+        ns = {"__name__": "astra_execution_router_fallback_probe",
+              "__file__": ER.__file__, "__package__": "astra_backend"}
         with mock.patch.dict(sys.modules, modules):
             exec(compile(src, ER.__file__, "exec"), ns)
         return ns

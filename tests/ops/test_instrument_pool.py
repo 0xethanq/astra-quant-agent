@@ -58,7 +58,7 @@ class _Sandbox(unittest.TestCase):
         self.addCleanup(pr.stop)
         # ⚠️ `sync_instruments_state` 末尾会 `threading.Thread(...).start()`。
         #    若让它真起线程，**patch 早已退出**、线程才执行 ⇒ 会拿真实 ROOT 去拉起
-        #    生产脚本（本刀实测到过：日志里出现 `/data/dsh/home/r20/scripts/…`）。
+        #    生产脚本（本刀实测到过：日志里出现 `/data/dsh/home/astra/scripts/…`）。
         #    这里把 `Thread` 换成"start 即同步执行"，让后台路径确定且零副作用。
         self._install_sync_thread()
 
@@ -162,11 +162,11 @@ class LeverageCapTests(unittest.TestCase):
 
     def test_an_unimportable_risk_constants_falls_back_to_the_factory_band(self):
         # ★ 第 94 行 —— `from scripts.risk_constants import ...` 抛 ⇒ (2.0, 5.0)。
-        # ⚠️ 环境变量优先于回落常量（`os.getenv("R20_MIN_LEVERAGE")`）⇒
+        # ⚠️ 环境变量优先于回落常量（`os.getenv("ASTRA_MIN_LEVERAGE")`）⇒
         #    必须把它清掉，否则会读到**别的测试留下的**值（本刀在全量里就因此在
         #    单独跑绿、合起来红 —— 典型的测试顺序依赖）。
         clean = {k: v for k, v in os.environ.items()
-                 if k not in ("R20_MIN_LEVERAGE", "R20_MAX_LEVERAGE")}
+                 if k not in ("ASTRA_MIN_LEVERAGE", "ASTRA_MAX_LEVERAGE")}
         with patch.dict(sys.modules, {"scripts.risk_constants": None}), \
              patch.dict(os.environ, clean, clear=True):
             self.assertEqual(ip.derive_instrument_leverage_cap("tier_2_momentum"), 3)
@@ -416,25 +416,25 @@ class ValidatePoolItemsTests(unittest.TestCase):
 class LeverageRealignTests(_Sandbox, unittest.TestCase):
     def test_a_cap_below_the_global_floor_is_realigned(self):
         self._write_pool([self._item(tier="tier_2_momentum", max_leverage=1)])
-        with patch.dict(os.environ, {"R20_MIN_LEVERAGE": "2", "R20_MAX_LEVERAGE": "5"}):
+        with patch.dict(os.environ, {"ASTRA_MIN_LEVERAGE": "2", "ASTRA_MAX_LEVERAGE": "5"}):
             out = ip.load_instruments()
         self.assertEqual(out[0]["max_leverage"], 3)
 
     def test_a_cap_above_the_global_ceiling_is_realigned(self):
         self._write_pool([self._item(tier="tier_2_momentum", max_leverage=99)])
-        with patch.dict(os.environ, {"R20_MIN_LEVERAGE": "2", "R20_MAX_LEVERAGE": "5"}):
+        with patch.dict(os.environ, {"ASTRA_MIN_LEVERAGE": "2", "ASTRA_MAX_LEVERAGE": "5"}):
             out = ip.load_instruments()
         self.assertEqual(out[0]["max_leverage"], 3)
 
     def test_a_bluechip_not_tracking_the_ceiling_is_realigned(self):
         self._write_pool([self._item(tier="tier_1_bluechip", max_leverage=2)])
-        with patch.dict(os.environ, {"R20_MIN_LEVERAGE": "2", "R20_MAX_LEVERAGE": "5"}):
+        with patch.dict(os.environ, {"ASTRA_MIN_LEVERAGE": "2", "ASTRA_MAX_LEVERAGE": "5"}):
             out = ip.load_instruments()
         self.assertEqual(out[0]["max_leverage"], 5)
 
     def test_a_compliant_cap_is_left_untouched(self):
         self._write_pool([self._item(tier="tier_2_momentum", max_leverage=3)])
-        with patch.dict(os.environ, {"R20_MIN_LEVERAGE": "2", "R20_MAX_LEVERAGE": "5"}):
+        with patch.dict(os.environ, {"ASTRA_MIN_LEVERAGE": "2", "ASTRA_MAX_LEVERAGE": "5"}):
             out = ip.load_instruments()
         self.assertEqual(out[0]["max_leverage"], 3)
 
@@ -451,7 +451,7 @@ class LeverageRealignTests(_Sandbox, unittest.TestCase):
     def test_an_inverted_global_range_is_clamped_without_crashing(self):
         # ★ 第 264 行 —— 下限高于上限时把下限压到上限
         self._write_pool([self._item(tier="tier_2_momentum", max_leverage=3)])
-        with patch.dict(os.environ, {"R20_MIN_LEVERAGE": "9", "R20_MAX_LEVERAGE": "5"}):
+        with patch.dict(os.environ, {"ASTRA_MIN_LEVERAGE": "9", "ASTRA_MAX_LEVERAGE": "5"}):
             out = ip.load_instruments()
         self.assertLessEqual(out[0]["max_leverage"], 5)
 
@@ -460,7 +460,7 @@ class LeverageRealignTests(_Sandbox, unittest.TestCase):
         self._write_pool([self._item(tier="tier_2_momentum", max_leverage=3)])
         with patch.dict(sys.modules, {"scripts.risk_constants": None}), \
              patch.dict(os.environ, {}, clear=False):
-            for key in ("R20_MIN_LEVERAGE", "R20_MAX_LEVERAGE"):
+            for key in ("ASTRA_MIN_LEVERAGE", "ASTRA_MAX_LEVERAGE"):
                 os.environ.pop(key, None)
             out = ip.load_instruments()
         self.assertEqual(out[0]["max_leverage"], 3)
@@ -469,19 +469,19 @@ class LeverageRealignTests(_Sandbox, unittest.TestCase):
 # ───────────────────── 锁与写入 ─────────────────────
 class PoolLockTests(_Sandbox, unittest.TestCase):
     def test_the_backend_lock_is_preferred(self):
-        import r20_backend.file_locks as fl
+        import astra_backend.file_locks as fl
         sentinel = object()
         with patch.object(fl, "file_lock", lambda p: sentinel):
             self.assertIs(ip._pool_lock(), sentinel)
 
     def test_an_unavailable_backend_lock_falls_back_to_the_local_lock(self):
         # ★ 第 296 行 —— 绝不在"锁不可用"时静默放行
-        with patch.dict(sys.modules, {"r20_backend.file_locks": None}):
+        with patch.dict(sys.modules, {"astra_backend.file_locks": None}):
             self.assertIs(ip._pool_lock().__class__, local_file_lock(ip.POOL_FILE).__class__)
 
     def test_the_fallback_lock_is_reentrant(self):
         # 兜底不可重入会让 `mutate_instruments` 在锁内调 `save_instruments` 时自锁挂死
-        with patch.dict(sys.modules, {"r20_backend.file_locks": None}):
+        with patch.dict(sys.modules, {"astra_backend.file_locks": None}):
             with ip._pool_lock():
                 with ip._pool_lock():
                     reentered = True

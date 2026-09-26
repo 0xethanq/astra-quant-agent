@@ -26,7 +26,7 @@ if str(_PROJECT_ROOT) not in sys.path:
 
 import scripts.ai_factor_trader as trader
 import shutil
-from r20_backend import risk_reservation
+from astra_backend import risk_reservation
 
 
 def _utc_stamp(seconds_ago: float) -> str:

@@ -1,4 +1,4 @@
-"""`r20_backend/council/role_normalizer.py`（B3 第二十八刀）回归。
+"""`astra_backend/council/role_normalizer.py`（B3 第二十八刀）回归。
 
 ## 这个测试在守什么
 
@@ -32,7 +32,7 @@ import random
 import unittest
 from pathlib import Path
 
-from r20_backend.council.role_normalizer import (
+from astra_backend.council.role_normalizer import (
     ROLE_KEYWORD_ALIASES,
     build_alias_candidates,
     normalize_decisions,
@@ -41,8 +41,8 @@ from r20_backend.council.role_normalizer import (
 )
 
 ROOT = Path(__file__).resolve().parents[2]
-MODULE = ROOT / "r20_backend" / "council" / "role_normalizer.py"
-DEBATE = ROOT / "r20_backend" / "council" / "debate.py"
+MODULE = ROOT / "astra_backend" / "council" / "role_normalizer.py"
+DEBATE = ROOT / "astra_backend" / "council" / "debate.py"
 
 KEYS = ["trader_trend", "trader_momentum", "trader_quant"]
 ROLES = {k: {"name": n} for k, n in zip(KEYS, ["趋势跟踪", "动能突破", "量化套利"])}

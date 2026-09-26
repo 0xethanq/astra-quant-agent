@@ -21,10 +21,10 @@ ROOT = Path(__file__).resolve().parents[2]
 class _Base(unittest.TestCase):
     def setUp(self):
         # 先导入再隔离（isolate_config 只重定向已导入模块里的 data/ 路径）
-        import r20_backend.app  # noqa: F401
+        import astra_backend.app  # noqa: F401
         import scripts.instrument_pool  # noqa: F401
         self.root = isolate_config(self)
-        from r20_backend.routers import risk as risk_router
+        from astra_backend.routers import risk as risk_router
         self.risk = risk_router
 
     def _audits(self):
@@ -43,8 +43,8 @@ class TrackerKeyTests(_Base):
     def test_holdings_report_uses_cache_positions(self):
         cache = {"positions": [{"instId": "ALGO-USDT-SWAP", "venue": "binance", "pos": "6431.5"}],
                  "data_health": {"cache_age_seconds": 1}}
-        with patch.dict("sys.modules", {}), patch("r20_backend.dashboard_cache.CACHE_DATA", cache, create=True):
-            import r20_backend.dashboard_cache as dash
+        with patch.dict("sys.modules", {}), patch("astra_backend.dashboard_cache.CACHE_DATA", cache, create=True):
+            import astra_backend.dashboard_cache as dash
             with patch.object(dash, "CACHE_DATA", cache):
                 report = self.risk._holdings_report("ALGO-USDT-SWAP", {})
         self.assertTrue(report["held_live"])
@@ -52,7 +52,7 @@ class TrackerKeyTests(_Base):
         self.assertIsNone(report["holdings_unknown"])
 
     def test_stale_cache_is_unknown_not_empty(self):
-        import r20_backend.dashboard_cache as dash
+        import astra_backend.dashboard_cache as dash
         cache = {"positions": [], "data_health": {"cache_age_seconds": 600}}
         with patch.object(dash, "CACHE_DATA", cache):
             report = self.risk._holdings_report("DOGE-USDT-SWAP", {})
@@ -61,7 +61,7 @@ class TrackerKeyTests(_Base):
         self.assertFalse(report["held"], "过期快照不得被当作「无持仓」")
 
     def test_missing_positions_key_is_unknown(self):
-        import r20_backend.dashboard_cache as dash
+        import astra_backend.dashboard_cache as dash
         with patch.object(dash, "CACHE_DATA", {"data_health": {"cache_age_seconds": 0}}):
             report = self.risk._holdings_report("DOGE-USDT-SWAP", {})
         self.assertIn("缺失", report["holdings_unknown"] or "")
@@ -95,7 +95,7 @@ class DeleteGuardRouteTests(_Base):
         p3.start(); self.addCleanup(p3.stop)
 
     def _models(self):
-        from r20_backend.schemas import InstrumentDeleteRequest
+        from astra_backend.schemas import InstrumentDeleteRequest
         return InstrumentDeleteRequest
 
     def _delete(self, inst_id, confirmation=None, with_body=True):
@@ -108,7 +108,7 @@ class DeleteGuardRouteTests(_Base):
         return [item["instId"] for item in rows]
 
     def _live(self, positions, age=1):
-        import r20_backend.dashboard_cache as dash
+        import astra_backend.dashboard_cache as dash
         cache = {"positions": positions, "data_health": {"cache_age_seconds": age}}
         return patch.object(dash, "CACHE_DATA", cache)
 
@@ -191,13 +191,13 @@ class CouncilConfigGateTests(_Base):
 
     def setUp(self):
         super().setUp()
-        import r20_backend.council_manager as cm
+        import astra_backend.council_manager as cm
         self.cm = cm
         self.config_file = Path(cm.COUNCIL_CONFIG_FILE)
         # 模型库：只登记一个模型，便于断言"未登记"
         self.registry = {"models": [{"id": "glm-5.3-flash", "base_url": "u", "api_key": "k", "api_format": "openai_chat"}],
                          "active_reasoning_effort": "medium"}
-        import r20_backend.llm_manager as llm
+        import astra_backend.llm_manager as llm
         p = patch.object(llm, "load_llm_config", lambda **k: self.registry)
         p.start(); self.addCleanup(p.stop)
 
@@ -278,7 +278,7 @@ class CouncilConfigGateTests(_Base):
 
     def test_config_route_exposes_model_health(self):
         # 第九十六刀：议会端点现住 strategy/council.py ⇒ patch/调用都指向它
-        from r20_backend.routers.strategy import council as strategy_council
+        from astra_backend.routers.strategy import council as strategy_council
         self._write({"consensus_mode": "standard",
                      "roles": {"cio": {"id": "cio", "is_arbitrator": True, "model_id": "qwen3.8-flash"}}})
         with patch.object(strategy_council, "require_admin_header", lambda *a, **k: {"username": "t"}):
@@ -292,7 +292,7 @@ class VenuePoolGateTests(_Base):
 
     @classmethod
     def setUpClass(cls):
-        from r20_backend.exchanges import listing as _listing
+        from astra_backend.exchanges import listing as _listing
         cls._lp = patch.object(_listing, "ensure_contract_listed",
                                lambda *a, **k: _listing.ListingCheck(ok=True, reason=None, checked_at="", source="cache"))
         cls._lp.start()
@@ -303,15 +303,15 @@ class VenuePoolGateTests(_Base):
 
     def setUp(self):
         super().setUp()
-        from r20_backend import execution_router as router
-        from r20_backend.exchanges.gate import GateAdapter
+        from astra_backend import execution_router as router
+        from astra_backend.exchanges.gate import GateAdapter
         self.router = router
         self._ambient = {k: v for k, v in os.environ.items()
-                         if k.startswith(("R20_GATE_TESTNET", "R20_GATE_EXECUTION"))}
-        os.environ.pop("R20_GATE_TESTNET", None)
-        os.environ["R20_GATE_EXECUTION"] = "1"
+                         if k.startswith(("ASTRA_GATE_TESTNET", "ASTRA_GATE_EXECUTION"))}
+        os.environ.pop("ASTRA_GATE_TESTNET", None)
+        os.environ["ASTRA_GATE_EXECUTION"] = "1"
         def _restore_env():
-            for k in ("R20_GATE_EXECUTION", "R20_GATE_TESTNET"):
+            for k in ("ASTRA_GATE_EXECUTION", "ASTRA_GATE_TESTNET"):
                 os.environ.pop(k, None)
             os.environ.update(self._ambient)
 
@@ -339,7 +339,7 @@ class VenuePoolGateTests(_Base):
                 return list(self._positions)
 
             def fetch_instrument_spec(self, symbol, refresh=False):
-                from r20_backend.exchanges import InstrumentSpec
+                from astra_backend.exchanges import InstrumentSpec
                 return InstrumentSpec(venue="gate", inst_id="BTC_USDT", base="BTC",
                                       tick_size=0.1, step_size=0.0001, ct_val=0.0001, min_size=1)
 
@@ -452,7 +452,7 @@ class VenuePoolGateTests(_Base):
     def test_pool_is_read_from_the_routing_file(self):
         """集成口径：不 patch 机制函数，直接写一份临时 venue_routing.json 验证真读文件。"""
         import json as _json
-        import r20_backend.exchanges.routing_policy as rp
+        import astra_backend.exchanges.routing_policy as rp
         routing = self.root / "data" / "venue_routing.json"
         routing.parent.mkdir(parents=True, exist_ok=True)
         routing.write_text(_json.dumps({"preferred_venue": "auto", "routing_mode": "balanced",
@@ -544,7 +544,7 @@ class RollbackConstitutionReviewTests(_Base):
     """P1-8b：策略回滚写记忆曾只做 schema 校验，宪法门禁被绕过。"""
 
     def test_restored_poison_lesson_is_flagged(self):
-        from r20_backend.policy_snapshot import _review_restored_lessons
+        from astra_backend.policy_snapshot import _review_restored_lessons
         lessons = [
             {"id": "ok", "rule_text": "浮盈 0.8R 保本移损，锁死胜率下限", "sample_size": 30},
             {"id": "bad", "rule_text": "把单笔杠杆从 5x 提升至 20x 提高资金效率", "sample_size": 30},
@@ -557,7 +557,7 @@ class RollbackConstitutionReviewTests(_Base):
         self.assertEqual(report["marked"], 2)
 
     def test_missing_reviewer_is_disclosed_not_faked(self):
-        from r20_backend.policy_snapshot import _review_restored_lessons
+        from astra_backend.policy_snapshot import _review_restored_lessons
         with patch.dict("sys.modules", {"evolution_shield": None}):
             report = _review_restored_lessons([{"id": "x", "rule_text": "任意"}])
         self.assertIn("reviewer_error", report)
@@ -569,7 +569,7 @@ class CouncilPromptRenderingTests(_Base):
 
     def setUp(self):
         super().setUp()
-        import r20_backend.council_manager as cm
+        import astra_backend.council_manager as cm
         self.cm = cm
 
     def test_known_variables_render(self):
@@ -629,8 +629,8 @@ class CouncilTestDebateContextTests(_Base):
 
     def test_debate_prompt_uses_live_snapshot_and_marks_missing(self):
         import json as _json
-        from r20_backend.routers.strategy import council as strategy_council   # 第九十六刀：议会端点现住此
-        import r20_backend.dashboard_cache as dash
+        from astra_backend.routers.strategy import council as strategy_council   # 第九十六刀：议会端点现住此
+        import astra_backend.dashboard_cache as dash
 
         snap = self.root / "data" / "factor_library_snapshot.json"
         snap.parent.mkdir(parents=True, exist_ok=True)
@@ -656,7 +656,7 @@ class CouncilTestDebateContextTests(_Base):
              patch.object(strategy_council, "ROOT", self.root), \
              patch.object(dash, "CACHE_DATA", cache), \
              patch.object(strategy_council, "audit_record", lambda *a, **k: None), \
-             patch("r20_backend.council_manager.execute_council_debate", fake_debate), \
+             patch("astra_backend.council_manager.execute_council_debate", fake_debate), \
              patch.object(strategy_council, "load_council_config" if hasattr(strategy_council, "load_council_config") else "refresh_settings", lambda *a, **k: {}, create=True):
             payload = strategy_council.admin_test_council_debate(cls)
         prompt = captured.get("market_prompt", "")
@@ -681,8 +681,8 @@ class CouncilTestDebateContextTests(_Base):
             self.assertNotIn(literal, code, f"测试辩论路由又出现编造字面量 {literal}")
 
     def test_missing_sources_are_declared_not_fabricated(self):
-        from r20_backend.routers.strategy import council as strategy_council   # 第九十六刀：议会端点现住此
-        import r20_backend.dashboard_cache as dash
+        from astra_backend.routers.strategy import council as strategy_council   # 第九十六刀：议会端点现住此
+        import astra_backend.dashboard_cache as dash
         captured = {}
 
         def fake_debate(**kwargs):
@@ -693,7 +693,7 @@ class CouncilTestDebateContextTests(_Base):
         with patch.object(strategy_council, "require_admin_header", lambda *a, **k: {"username": "t"}), \
              patch.object(strategy_council, "ROOT", self.root), \
              patch.object(dash, "CACHE_DATA", {}), \
-             patch("r20_backend.council_manager.execute_council_debate", fake_debate):
+             patch("astra_backend.council_manager.execute_council_debate", fake_debate):
             payload = strategy_council.admin_test_council_debate(cls)
         prompt = captured.get("market_prompt", "")
         self.assertIn("不可用", prompt)

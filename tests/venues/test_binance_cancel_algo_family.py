@@ -9,7 +9,7 @@
 
 import unittest
 
-from r20_backend.exchanges.binance import BinanceAdapter
+from astra_backend.exchanges.binance import BinanceAdapter
 
 
 class _Base(unittest.TestCase):

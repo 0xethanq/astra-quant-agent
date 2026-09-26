@@ -1,4 +1,4 @@
-"""策略快照文件锁与原子 I/O 原语（`r20_backend/policy/io.py`）残余分支收口测试 —— 第 358 刀。
+"""策略快照文件锁与原子 I/O 原语（`astra_backend/policy/io.py`）残余分支收口测试 —— 第 358 刀。
 
 本模块 77 行，是策略快照存储原子写与多进程索引互斥锁核心：
 - `fcntl` 模块跨平台导入降级（Windows/受限环境 `fcntl = None` 兼容）；
@@ -14,12 +14,12 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import r20_backend.policy.io as io_mod
+import astra_backend.policy.io as io_mod
 
 
 class PolicyIOTailsTests(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(prefix="r20_policy_io_tails_")
+        self.tmp = tempfile.TemporaryDirectory(prefix="astra_policy_io_tails_")
         self.addCleanup(self.tmp.cleanup)
         self.tmp_path = Path(self.tmp.name)
 
@@ -36,14 +36,14 @@ class PolicyIOTailsTests(unittest.TestCase):
             return orig_import(name, *args, **kwargs)
 
         with patch("builtins.__import__", side_effect=fake_import):
-            if "r20_backend.policy.io" in sys.modules:
-                del sys.modules["r20_backend.policy.io"]
+            if "astra_backend.policy.io" in sys.modules:
+                del sys.modules["astra_backend.policy.io"]
             try:
-                mod = importlib.import_module("r20_backend.policy.io")
+                mod = importlib.import_module("astra_backend.policy.io")
                 self.assertIsNone(mod.fcntl)
             finally:
                 # 复原原始模块引用
-                sys.modules["r20_backend.policy.io"] = io_mod
+                sys.modules["astra_backend.policy.io"] = io_mod
 
     def test_index_lock_fallback_when_fcntl_is_none(self):
         # fcntl 为 None 时降级为纯线程锁，不生成 .index.lock 文件 (lines 44-46)

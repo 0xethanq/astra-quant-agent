@@ -20,7 +20,7 @@ import threading
 import unittest
 from unittest import mock
 
-from r20_backend import close_intent as CI
+from astra_backend import close_intent as CI
 
 
 class _AdapterBase:
@@ -176,18 +176,18 @@ class PeekAndConsumeTests(_IntentBase):
 
 class CredentialFingerprintTests(_IntentBase):
     def test_current_fingerprint_uses_the_venue_credentials(self):
-        vc = self._start(mock.patch("r20_backend.exchanges.venue_credentials",
+        vc = self._start(mock.patch("astra_backend.exchanges.venue_credentials",
                                     return_value=("APIKEY", "SECRET")))
-        cf = self._start(mock.patch("r20_backend.exchanges.identity.credential_fingerprint",
+        cf = self._start(mock.patch("astra_backend.exchanges.identity.credential_fingerprint",
                                     return_value="FP"))
         self.assertEqual(CI._current_credential_fp("binance", "demo"), "FP")
         vc.assert_called_once_with("binance", "demo")
         cf.assert_called_once_with("APIKEY")
 
     def test_credential_lookup_failure_falls_back_to_an_empty_key(self):
-        self._start(mock.patch("r20_backend.exchanges.venue_credentials",
+        self._start(mock.patch("astra_backend.exchanges.venue_credentials",
                                side_effect=RuntimeError("凭证库坏了")))
-        cf = self._start(mock.patch("r20_backend.exchanges.identity.credential_fingerprint",
+        cf = self._start(mock.patch("astra_backend.exchanges.identity.credential_fingerprint",
                                     return_value="EMPTY-FP"))
         self.assertEqual(CI._current_credential_fp("gate", "sandbox"), "EMPTY-FP")
         cf.assert_called_once_with("")
@@ -197,7 +197,7 @@ class FastCloseGuardTests(_IntentBase):
     """预检阶段：这些失败都必须发生在 `consume` **之前**。"""
 
     def _adapter(self, adapter):
-        self._start(mock.patch("r20_backend.exchanges.get_adapter",
+        self._start(mock.patch("astra_backend.exchanges.get_adapter",
                                return_value=adapter))
         return adapter
 
@@ -270,7 +270,7 @@ class FastCloseGuardTests(_IntentBase):
 class FastCloseSizeTests(_IntentBase):
     def _run(self, adapter, **intent_over):
         token, confirmation = self._new(**intent_over)
-        self._start(mock.patch("r20_backend.exchanges.get_adapter",
+        self._start(mock.patch("astra_backend.exchanges.get_adapter",
                                return_value=adapter))
         return CI.venue_fast_close("binance", "demo", token, confirmation)
 
@@ -304,7 +304,7 @@ class FastCloseSizeTests(_IntentBase):
     def test_short_positions_are_supported(self):
         token, confirmation = self._new(pos_side="short")
         adapter = _AdapterWithSide([_row(size_signed=-2.0)])
-        self._start(mock.patch("r20_backend.exchanges.get_adapter",
+        self._start(mock.patch("astra_backend.exchanges.get_adapter",
                                return_value=adapter))
         out = CI.venue_fast_close("binance", "demo", token, confirmation)
         self.assertEqual(out["posSide"], "short")
@@ -319,7 +319,7 @@ class FastCloseSizeTests(_IntentBase):
 class FastCloseExecutionTests(_IntentBase):
     def _run(self, adapter, **intent_over):
         token, confirmation = self._new(**intent_over)
-        self._start(mock.patch("r20_backend.exchanges.get_adapter",
+        self._start(mock.patch("astra_backend.exchanges.get_adapter",
                                return_value=adapter))
         return CI.venue_fast_close("binance", "demo", token, confirmation)
 
@@ -344,7 +344,7 @@ class FastCloseExecutionTests(_IntentBase):
         self._run(adapter)
         with mock.patch("inspect.signature", side_effect=ValueError("builtin")):
             token, confirmation = self._new()
-            self._start(mock.patch("r20_backend.exchanges.get_adapter",
+            self._start(mock.patch("astra_backend.exchanges.get_adapter",
                                    return_value=_AdapterWithSide([_row()])))
             out = CI.venue_fast_close("binance", "demo", token, confirmation)
         self.assertEqual(out["status"], "confirmed_closed")
@@ -375,7 +375,7 @@ class FastCloseExecutionTests(_IntentBase):
     def test_token_is_consumed_only_after_all_prechecks_pass(self):
         adapter = _AdapterWithSide([_row()])
         token, confirmation = self._new()
-        self._start(mock.patch("r20_backend.exchanges.get_adapter",
+        self._start(mock.patch("astra_backend.exchanges.get_adapter",
                                return_value=adapter))
         self.assertIsNotNone(CI.peek(token))
         CI.venue_fast_close("binance", "demo", token, confirmation)
@@ -384,7 +384,7 @@ class FastCloseExecutionTests(_IntentBase):
     def test_gate_uses_the_sandbox_adapter_environment(self):
         adapter = _AdapterWithSide([_row()])
         token, confirmation = self._new(venue="gate", environment="demo")
-        getter = self._start(mock.patch("r20_backend.exchanges.get_adapter",
+        getter = self._start(mock.patch("astra_backend.exchanges.get_adapter",
                                         return_value=adapter))
         out = CI.venue_fast_close("gate", "demo", token, confirmation)
         self.assertEqual(out["status"], "confirmed_closed")

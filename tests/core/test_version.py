@@ -22,7 +22,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from r20_backend import version as V
+from astra_backend import version as V
 
 
 class VersionConstantTests(unittest.TestCase):

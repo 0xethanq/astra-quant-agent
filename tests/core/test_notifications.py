@@ -12,11 +12,11 @@
 | 兼容符号 | `send_qq_message` 保留给老策略脚本：任一通道 accepted 即为 True |
 
 ⚠️ 如实登记一处**刻意不覆盖**的行：`_env` 第 **37** 行（真实
-`r20_gateway.secrets.load_secrets()`）。原因是 `tests/__init__.py` 的会话沙箱会把
+`astra_gateway.secrets.load_secrets()`）。原因是 `tests/__init__.py` 的会话沙箱会把
 `notifications.ROOT` 改写成临时配置目录，于是第 35 行的
 `ROOT == Path(__file__).resolve().parents[1]` 在测试里**恒为假**；要走到第 37 行，
-只能把 ROOT 掰回代码根，而那会**读线上 `.env` 与 `data/r20_secrets.enc`** ——
-实测会触发本仓的「生产配置依赖」守卫告警（严格模式 `R20_TESTS_STRICT_READS=1` 下直接失败）：
+只能把 ROOT 掰回代码根，而那会**读线上 `.env` 与 `data/astra_secrets.enc`** ——
+实测会触发本仓的「生产配置依赖」守卫告警（严格模式 `ASTRA_TESTS_STRICT_READS=1` 下直接失败）：
 
     [tests] ⚠️ 生产配置依赖：… 读了线上 .env（读取点 notifications.py:27）
             —— 它的内容会塑造决策 ⇒ 结果随线上配置漂移。
@@ -38,7 +38,7 @@ import urllib.parse
 from pathlib import Path
 from unittest import mock
 
-from r20_backend import notifications as N
+from astra_backend import notifications as N
 
 
 class _Resp:
@@ -58,28 +58,28 @@ class _Resp:
 
 class EnvTests(unittest.TestCase):
     def setUp(self):
-        self.tmp = Path(tempfile.mkdtemp(prefix="r20-notify-"))
+        self.tmp = Path(tempfile.mkdtemp(prefix="astra-notify-"))
         self.addCleanup(shutil.rmtree, self.tmp, True)
 
     def test_dotenv_is_parsed_and_comments_and_blank_lines_skipped(self):
         (self.tmp / ".env").write_text(
-            "# a comment\n\nR20_NOTIFY_WEBHOOK_ENABLED=1\nSPACED = value \nNOEQUALS\n",
+            "# a comment\n\nASTRA_NOTIFY_WEBHOOK_ENABLED=1\nSPACED = value \nNOEQUALS\n",
             encoding="utf-8")
         with mock.patch.object(N, "ROOT", self.tmp), \
                 mock.patch.object(N, "SECRET_LOADER", lambda: {}):
             env = N._env()
-        self.assertEqual(env["R20_NOTIFY_WEBHOOK_ENABLED"], "1")
+        self.assertEqual(env["ASTRA_NOTIFY_WEBHOOK_ENABLED"], "1")
         self.assertIn("SPACED", env)
         self.assertNotIn("NOEQUALS", env)
 
     def test_encrypted_secrets_override_dotenv_and_environment(self):
-        (self.tmp / ".env").write_text("R20_QQ_APP_ID=from-dotenv\n", encoding="utf-8")
+        (self.tmp / ".env").write_text("ASTRA_QQ_APP_ID=from-dotenv\n", encoding="utf-8")
         with mock.patch.object(N, "ROOT", self.tmp), \
-                mock.patch.dict("os.environ", {"R20_QQ_APP_ID": "from-environ"}), \
+                mock.patch.dict("os.environ", {"ASTRA_QQ_APP_ID": "from-environ"}), \
                 mock.patch.object(N, "SECRET_LOADER",
-                                  lambda: {"R20_QQ_APP_ID": "from-secrets"}):
+                                  lambda: {"ASTRA_QQ_APP_ID": "from-secrets"}):
             env = N._env()
-        self.assertEqual(env["R20_QQ_APP_ID"], "from-secrets",
+        self.assertEqual(env["ASTRA_QQ_APP_ID"], "from-secrets",
                          "动态密文必须压过 .env 与继承的环境变量")
 
     def test_secret_loader_failure_is_swallowed(self):
@@ -167,27 +167,27 @@ class PostJsonTests(unittest.TestCase):
 
 class EnabledAndDiagnoseTests(unittest.TestCase):
     def test_only_explicitly_enabled_channels_are_listed_in_order(self):
-        env = {"R20_NOTIFY_WEBHOOK_ENABLED": "1", "R20_NOTIFY_TELEGRAM_ENABLED": "1",
-               "R20_NOTIFY_WECHAT_ENABLED": "0"}
+        env = {"ASTRA_NOTIFY_WEBHOOK_ENABLED": "1", "ASTRA_NOTIFY_TELEGRAM_ENABLED": "1",
+               "ASTRA_NOTIFY_WECHAT_ENABLED": "0"}
         self.assertEqual(N.enabled_channels(env), ["webhook", "telegram"])
 
     def test_unknown_channel_is_failed_not_incomplete(self):
         self.assertEqual(N.diagnose_channel("nope", {})["status"], "failed")
 
     def test_missing_keys_are_named(self):
-        out = N.diagnose_channel("telegram", {"R20_TELEGRAM_BOT_TOKEN": "t"})
+        out = N.diagnose_channel("telegram", {"ASTRA_TELEGRAM_BOT_TOKEN": "t"})
         self.assertEqual(out["status"], "incomplete")
-        self.assertEqual(out["missing"], ["R20_TELEGRAM_CHAT_ID"])
+        self.assertEqual(out["missing"], ["ASTRA_TELEGRAM_CHAT_ID"])
 
     def test_qq_with_only_openid_missing_gets_the_binding_hint(self):
-        out = N.diagnose_channel("qq", {"R20_QQ_APP_ID": "a",
-                                        "R20_QQ_CLIENT_SECRET": "s"})
+        out = N.diagnose_channel("qq", {"ASTRA_QQ_APP_ID": "a",
+                                        "ASTRA_QQ_CLIENT_SECRET": "s"})
         self.assertEqual(out["status"], "incomplete")
         self.assertIn("自动获取 OpenID", out["detail"])
 
     def test_complete_config_is_ready_and_never_sends(self):
         with mock.patch.object(N, "_post_json") as poster:
-            out = N.diagnose_channel("webhook", {"R20_NOTIFICATION_WEBHOOK": "https://h"})
+            out = N.diagnose_channel("webhook", {"ASTRA_NOTIFICATION_WEBHOOK": "https://h"})
         self.assertEqual(out["status"], "ready")
         poster.assert_not_called()
 
@@ -197,7 +197,7 @@ class SendChannelWebhookTests(unittest.TestCase):
         with mock.patch.object(N, "validate_outbound_url", side_effect=lambda u, **k: u), \
                 mock.patch.object(N, "_post_json",
                                   return_value=(ok, "HTTP 200", response if response is not None else {})) as poster:
-            result = N.send_channel("webhook", "hello", dict(env, R20_NOTIFICATION_WEBHOOK=url))
+            result = N.send_channel("webhook", "hello", dict(env, ASTRA_NOTIFICATION_WEBHOOK=url))
         return result, poster
 
     def test_unconfigured_and_invalid_urls_fail_before_any_request(self):
@@ -205,18 +205,18 @@ class SendChannelWebhookTests(unittest.TestCase):
             self.assertFalse(N.send_channel("webhook", "m", {})[0])
             poster.assert_not_called()
         self.assertFalse(N.send_channel("webhook", "m",
-                                        {"R20_NOTIFICATION_WEBHOOK": "x"})[0])
+                                        {"ASTRA_NOTIFICATION_WEBHOOK": "x"})[0])
 
     def test_invalid_url_reports_the_validation_error(self):
         with mock.patch.object(N, "validate_outbound_url",
                                side_effect=ValueError("内网地址被拒绝")):
             ok, detail = N.send_channel("webhook", "m",
-                                        {"R20_NOTIFICATION_WEBHOOK": "http://127.0.0.1"})
+                                        {"ASTRA_NOTIFICATION_WEBHOOK": "http://127.0.0.1"})
         self.assertFalse(ok)
         self.assertIn("内网地址被拒绝", detail)
 
     def test_dingtalk_payload_and_signature(self):
-        result, poster = self._send({"R20_DINGTALK_SECRET": "s3cret"},
+        result, poster = self._send({"ASTRA_DINGTALK_SECRET": "s3cret"},
                                     url="https://oapi.dingtalk.com/robot/send")
         self.assertTrue(result[0])
         url, payload = poster.call_args[0][0], poster.call_args[0][1]
@@ -231,9 +231,9 @@ class SendChannelWebhookTests(unittest.TestCase):
                 mock.patch.object(N, "_post_json",
                                   return_value=(True, "HTTP 200", {})) as poster:
             clock.time.return_value = 1_700_000_000.0
-            N.send_channel("webhook", "m", {"R20_NOTIFICATION_WEBHOOK":
+            N.send_channel("webhook", "m", {"ASTRA_NOTIFICATION_WEBHOOK":
                                             "https://oapi.dingtalk.com/r", 
-                                            "R20_DINGTALK_SECRET": "k"})
+                                            "ASTRA_DINGTALK_SECRET": "k"})
         ts = 1_700_000_000_000
         expected = urllib.parse.quote_plus(base64.b64encode(hmac.new(
             b"k", f"{ts}\nk".encode(), hashlib.sha256).digest()).decode())
@@ -241,7 +241,7 @@ class SendChannelWebhookTests(unittest.TestCase):
         self.assertIn(f"sign={expected}", poster.call_args[0][0])
 
     def test_feishu_signature_goes_into_the_payload(self):
-        result, poster = self._send({"R20_FEISHU_SECRET": "fk"},
+        result, poster = self._send({"ASTRA_FEISHU_SECRET": "fk"},
                                     url="https://open.feishu.cn/open-apis/bot/v2/hook/x")
         self.assertTrue(result[0])
         payload = poster.call_args[0][1]
@@ -291,14 +291,14 @@ class SendChannelWechatTests(unittest.TestCase):
                 mock.patch.object(N, "_post_json",
                                   return_value=(True, "HTTP 200", response)):
             return N.send_channel("wechat", "m",
-                                  dict(env, R20_WECHAT_WEBHOOK="https://qyapi.weixin.qq.com/x"))
+                                  dict(env, ASTRA_WECHAT_WEBHOOK="https://qyapi.weixin.qq.com/x"))
 
     def test_missing_and_invalid_config(self):
         self.assertFalse(N.send_channel("wechat", "m", {})[0])
         with mock.patch.object(N, "validate_outbound_url",
                                side_effect=ValueError("非公网")):
             ok, detail = N.send_channel("wechat", "m",
-                                        {"R20_WECHAT_WEBHOOK": "http://10.0.0.1"})
+                                        {"ASTRA_WECHAT_WEBHOOK": "http://10.0.0.1"})
         self.assertFalse(ok)
         self.assertIn("非公网", detail)
 
@@ -312,7 +312,7 @@ class SendChannelWechatTests(unittest.TestCase):
                 mock.patch.object(N, "_post_json",
                                   return_value=(False, "HTTP 500", {"errcode": 1})):
             ok, detail = N.send_channel("wechat", "m", {
-                "R20_WECHAT_WEBHOOK": "https://qyapi.weixin.qq.com/x"})
+                "ASTRA_WECHAT_WEBHOOK": "https://qyapi.weixin.qq.com/x"})
         self.assertFalse(ok)
         self.assertIn("HTTP 500", detail)
 
@@ -326,8 +326,8 @@ class SendChannelTelegramTests(unittest.TestCase):
                                   return_value=(ok, detail,
                                                 self._OK_BODY if response is None else response)) as poster:
             result = N.send_channel("telegram", "m", dict(
-                env, R20_TELEGRAM_BOT_TOKEN="123456789:TOK",
-                R20_TELEGRAM_CHAT_ID="42"))
+                env, ASTRA_TELEGRAM_BOT_TOKEN="123456789:TOK",
+                ASTRA_TELEGRAM_CHAT_ID="42"))
         return result, poster
 
     def test_missing_config_and_invalid_base_url(self):
@@ -335,12 +335,12 @@ class SendChannelTelegramTests(unittest.TestCase):
         with mock.patch.object(N, "validate_outbound_url",
                                side_effect=ValueError("api.telegram.org 不可达")):
             ok, detail = N.send_channel("telegram", "m", {
-                "R20_TELEGRAM_BOT_TOKEN": "t", "R20_TELEGRAM_CHAT_ID": "1"})
+                "ASTRA_TELEGRAM_BOT_TOKEN": "t", "ASTRA_TELEGRAM_CHAT_ID": "1"})
         self.assertFalse(ok)
         self.assertIn("Telegram API Base URL 无效", detail)
 
     def test_custom_base_url_is_normalised(self):
-        result, poster = self._send({"R20_TELEGRAM_API_BASE": "https://proxy.example/"})
+        result, poster = self._send({"ASTRA_TELEGRAM_API_BASE": "https://proxy.example/"})
         self.assertTrue(result[0])
         self.assertTrue(poster.call_args[0][0].startswith("https://proxy.example/bot"))
 
@@ -368,8 +368,8 @@ class SendChannelQQTests(unittest.TestCase):
     def test_token_failure_is_reported(self):
         with mock.patch.object(N, "_post_json", return_value=(
                 False, "HTTP 401", {"code": "100007", "message": "bad secret"})):
-            ok, detail = N._send_qq({"R20_QQ_APP_ID": "a", "R20_QQ_CLIENT_SECRET": "s",
-                                     "R20_QQ_OPENID": "u"}, "m")
+            ok, detail = N._send_qq({"ASTRA_QQ_APP_ID": "a", "ASTRA_QQ_CLIENT_SECRET": "s",
+                                     "ASTRA_QQ_OPENID": "u"}, "m")
         self.assertFalse(ok)
         self.assertIn("access token 获取失败", detail)
         self.assertIn("100007", detail)
@@ -382,9 +382,9 @@ class SendChannelQQTests(unittest.TestCase):
                 with mock.patch.object(N, "_post_json", side_effect=[
                         (True, "HTTP 200", {"access_token": "tok"}),
                         (True, "HTTP 200", {"id": "msg-1"})]) as poster:
-                    ok, detail = N._send_qq({"R20_QQ_APP_ID": "a",
-                                             "R20_QQ_CLIENT_SECRET": "s",
-                                             "R20_QQ_OPENID": openid}, "m")
+                    ok, detail = N._send_qq({"ASTRA_QQ_APP_ID": "a",
+                                             "ASTRA_QQ_CLIENT_SECRET": "s",
+                                             "ASTRA_QQ_OPENID": openid}, "m")
                 self.assertTrue(ok)
                 self.assertIn(expected, poster.call_args_list[1][0][0])
                 self.assertIn("msg-1", detail)
@@ -393,8 +393,8 @@ class SendChannelQQTests(unittest.TestCase):
         with mock.patch.object(N, "_post_json", side_effect=[
                 (True, "HTTP 200", {"access_token": "tok"}),
                 (True, "HTTP 200", {"code": 11255})]):
-            ok, detail = N._send_qq({"R20_QQ_APP_ID": "a", "R20_QQ_CLIENT_SECRET": "s",
-                                     "R20_QQ_OPENID": "u"}, "m")
+            ok, detail = N._send_qq({"ASTRA_QQ_APP_ID": "a", "ASTRA_QQ_CLIENT_SECRET": "s",
+                                     "ASTRA_QQ_OPENID": "u"}, "m")
         self.assertFalse(ok)
         self.assertIn("11255", detail)
         self.assertIn("自动获取 OpenID", detail)
@@ -404,8 +404,8 @@ class SendChannelQQTests(unittest.TestCase):
         with mock.patch.object(N, "_post_json", side_effect=[
                 (True, "HTTP 200", {"access_token": "tok"}),
                 (False, "HTTP 400", {"code": 11255})]):
-            ok, detail = N._send_qq({"R20_QQ_APP_ID": "a", "R20_QQ_CLIENT_SECRET": "s",
-                                     "R20_QQ_OPENID": "u"}, "m")
+            ok, detail = N._send_qq({"ASTRA_QQ_APP_ID": "a", "ASTRA_QQ_CLIENT_SECRET": "s",
+                                     "ASTRA_QQ_OPENID": "u"}, "m")
         self.assertFalse(ok)
         self.assertIn("11255", detail)
         self.assertIn("自动获取 OpenID", detail)
@@ -414,15 +414,15 @@ class SendChannelQQTests(unittest.TestCase):
         with mock.patch.object(N, "_post_json", side_effect=[
                 (True, "HTTP 200", {"access_token": "tok"}),
                 (False, "HTTP 500", {})]):
-            self.assertFalse(N._send_qq({"R20_QQ_APP_ID": "a",
-                                         "R20_QQ_CLIENT_SECRET": "s",
-                                         "R20_QQ_OPENID": "u"}, "m")[0])
+            self.assertFalse(N._send_qq({"ASTRA_QQ_APP_ID": "a",
+                                         "ASTRA_QQ_CLIENT_SECRET": "s",
+                                         "ASTRA_QQ_OPENID": "u"}, "m")[0])
 
         with mock.patch.object(N, "_post_json", side_effect=[
                 (True, "HTTP 200", {"access_token": "tok"}),
                 (True, "HTTP 200", {"code": "40054", "message": "rejected"})]):
-            ok, detail = N._send_qq({"R20_QQ_APP_ID": "a", "R20_QQ_CLIENT_SECRET": "s",
-                                     "R20_QQ_OPENID": "u"}, "m")
+            ok, detail = N._send_qq({"ASTRA_QQ_APP_ID": "a", "ASTRA_QQ_CLIENT_SECRET": "s",
+                                     "ASTRA_QQ_OPENID": "u"}, "m")
         self.assertFalse(ok)
         self.assertIn("40054", detail)
 
@@ -430,8 +430,8 @@ class SendChannelQQTests(unittest.TestCase):
         with mock.patch.object(N, "_post_json", side_effect=[
                 (True, "HTTP 200", {"access_token": "tok"}),
                 (True, "HTTP 200", {"id": "m9"})]):
-            ok, detail = N._send_qq({"R20_QQ_APP_ID": "a", "R20_QQ_CLIENT_SECRET": "s",
-                                     "R20_QQ_OPENID": "u"}, "m")
+            ok, detail = N._send_qq({"ASTRA_QQ_APP_ID": "a", "ASTRA_QQ_CLIENT_SECRET": "s",
+                                     "ASTRA_QQ_OPENID": "u"}, "m")
         self.assertTrue(ok)
         self.assertIn("m9", detail)
 
@@ -439,9 +439,9 @@ class SendChannelQQTests(unittest.TestCase):
         with mock.patch.object(N, "_post_json", side_effect=[
                 (True, "HTTP 200", {"access_token": "tok"}),
                 (True, "HTTP 200", {"message": "accepted-ish"})]):
-            rejected, detail = N._send_qq({"R20_QQ_APP_ID": "a",
-                                           "R20_QQ_CLIENT_SECRET": "s",
-                                           "R20_QQ_OPENID": "u"}, "m")
+            rejected, detail = N._send_qq({"ASTRA_QQ_APP_ID": "a",
+                                           "ASTRA_QQ_CLIENT_SECRET": "s",
+                                           "ASTRA_QQ_OPENID": "u"}, "m")
         self.assertFalse(rejected)
         self.assertIn("业务拒绝", detail)
 
@@ -458,7 +458,7 @@ class RoutingTests(unittest.TestCase):
         self.assertIn("未知通知通道", detail)
 
     def test_notify_marks_each_enabled_channel(self):
-        env = {"R20_NOTIFY_WEBHOOK_ENABLED": "1", "R20_NOTIFY_QQ_ENABLED": "1"}
+        env = {"ASTRA_NOTIFY_WEBHOOK_ENABLED": "1", "ASTRA_NOTIFY_QQ_ENABLED": "1"}
         with mock.patch.object(N, "_env", return_value=env), \
                 mock.patch.object(N, "send_channel",
                                   side_effect=[(True, "HTTP 200"), (False, "boom")]), \
@@ -502,8 +502,8 @@ class NoSecretLeakTests(unittest.TestCase):
                 mock.patch.object(N, "safe_urlopen", side_effect=ValueError(
                     "unknown url type: https://api.telegram.org/bot123456789:AAF-xyz_secret/sendMessage")):
             ok, detail = N.send_channel("telegram", "m", {
-                "R20_TELEGRAM_BOT_TOKEN": "123456789:AAF-xyz_secret",
-                "R20_TELEGRAM_CHAT_ID": "1"})
+                "ASTRA_TELEGRAM_BOT_TOKEN": "123456789:AAF-xyz_secret",
+                "ASTRA_TELEGRAM_CHAT_ID": "1"})
         self.assertFalse(ok)
         self.assertNotIn("AAF-xyz_secret", detail)
         self.assertRegex(detail, re.compile(r"bot\*+REDACTED\*+"))

@@ -23,8 +23,8 @@ from unittest import mock
 
 from fastapi import HTTPException
 
-from r20_backend.routers import risk as A
-from r20_backend.schemas import (
+from astra_backend.routers import risk as A
+from astra_backend.schemas import (
     InitialCapitalUpdate,
     InstrumentAddRequest,
     InstrumentDeleteRequest,
@@ -64,13 +64,13 @@ class _Base(unittest.TestCase):
         self.risk_config.HIGH_RISK_PHRASE = "HIGH RISK"
         self.risk_config.SUITES = [{"id": "default"}]
         self.risk_config.schema.return_value = {"fields": []}
-        self.risk_config.current_values.return_value = {"R20_MAX_LEVERAGE": 5.0}
-        self.risk_config.process_values.return_value = {"R20_MAX_LEVERAGE": 5.0}
+        self.risk_config.current_values.return_value = {"ASTRA_MAX_LEVERAGE": 5.0}
+        self.risk_config.process_values.return_value = {"ASTRA_MAX_LEVERAGE": 5.0}
         self.risk_config.process_freshness.return_value = {"age": 1}
         self.risk_config.file_vs_process_diff.return_value = {}
-        self.risk_config.effective_engine_values.return_value = {"R20_MAX_LEVERAGE": 5.0}
+        self.risk_config.effective_engine_values.return_value = {"ASTRA_MAX_LEVERAGE": 5.0}
         self.risk_config.high_risk_changes.return_value = []
-        self.risk_config.reset_keys.return_value = ["R20_MAX_LEVERAGE"]
+        self.risk_config.reset_keys.return_value = ["ASTRA_MAX_LEVERAGE"]
         _patch("risk_config", self.risk_config)
         self.update_env = mock.Mock()
         _patch("update_env", self.update_env)
@@ -101,13 +101,13 @@ class TrackerKeyTests(unittest.TestCase):
 
 class LiveHoldingsTests(unittest.TestCase):
     def _set_cache(self, value):
-        import r20_backend.dashboard_cache as dash
+        import astra_backend.dashboard_cache as dash
         patcher = mock.patch.object(dash, "CACHE_DATA", value, create=True)
         patcher.start()
         self.addCleanup(patcher.stop)
 
     def test_module_unavailable_reports_unknown_not_no_holdings(self):
-        with mock.patch.dict(sys.modules, {"r20_backend.dashboard_cache": None}):
+        with mock.patch.dict(sys.modules, {"astra_backend.dashboard_cache": None}):
             held, venues, unknown = A._live_holdings("BTC-USDT-SWAP")
         self.assertFalse(held)
         self.assertEqual(venues, [])
@@ -156,11 +156,11 @@ class LiveHoldingsTests(unittest.TestCase):
 
 class RiskReadTests(_Base):
     def test_risk_get_requires_admin_and_exposes_file_and_process_views(self):
-        out = A.admin_risk_get(equity=1234.0, x_r20_session="t")
+        out = A.admin_risk_get(equity=1234.0, x_astra_session="t")
         self.risk_config.effective_engine_values.assert_called_once_with(1234.0)
         self.assertEqual(out["schema"], {"fields": []})
         self.assertEqual(out["suites"], [{"id": "default"}])
-        self.assertEqual(out["process_values"], {"R20_MAX_LEVERAGE": 5.0})
+        self.assertEqual(out["process_values"], {"ASTRA_MAX_LEVERAGE": 5.0})
         self.assertEqual(out["file_vs_process"], {})
         self.assertEqual(self.audits, [], "读操作不写审计")
 
@@ -168,26 +168,26 @@ class RiskReadTests(_Base):
 class RiskUpdateTests(_Base):
     def test_empty_payload_is_rejected_before_anything_else(self):
         with self.assertRaises(HTTPException) as ctx:
-            A.admin_risk_update(RiskConfigUpdate(), x_r20_session="t")
+            A.admin_risk_update(RiskConfigUpdate(), x_astra_session="t")
         self.assertEqual(ctx.exception.status_code, 400)
         self.update_env.assert_not_called()
 
     def test_unresolvable_suite_is_400_without_audit(self):
         self.risk_config.suite_values.side_effect = ValueError("未知套件")
         with self.assertRaises(HTTPException) as ctx:
-            A.admin_risk_update(RiskConfigUpdate(suite_id="nope"), x_r20_session="t")
+            A.admin_risk_update(RiskConfigUpdate(suite_id="nope"), x_astra_session="t")
         self.assertEqual(ctx.exception.status_code, 400)
         self.assertEqual(self.audits, [])
 
     def test_high_risk_without_the_exact_phrase_is_rejected_and_audited(self):
         self.risk_config.high_risk_changes.return_value = [
-            {"label": "单标的占比", "key": "R20_MAX_SINGLE_ASSET_RATIO", "value": 0.5,
+            {"label": "单标的占比", "key": "ASTRA_MAX_SINGLE_ASSET_RATIO", "value": 0.5,
              "threshold": 0.3},
-            {"label": "杠杆", "key": "R20_MAX_LEVERAGE", "value": 12.0, "threshold": 10.0},
+            {"label": "杠杆", "key": "ASTRA_MAX_LEVERAGE", "value": 12.0, "threshold": 10.0},
         ]
         with self.assertRaises(HTTPException) as ctx:
-            A.admin_risk_update(RiskConfigUpdate(values={"R20_MAX_LEVERAGE": 12}),
-                                x_r20_session="t")
+            A.admin_risk_update(RiskConfigUpdate(values={"ASTRA_MAX_LEVERAGE": 12}),
+                                x_astra_session="t")
         self.assertEqual(ctx.exception.status_code, 400)
         self.assertIn("HIGH RISK", ctx.exception.detail)
         self.assertIn("50", ctx.exception.detail)   # RATIO 项按百分比展示
@@ -197,68 +197,68 @@ class RiskUpdateTests(_Base):
 
     def test_high_risk_with_the_phrase_proceeds_and_records_confirmed_keys(self):
         self.risk_config.high_risk_changes.return_value = [
-            {"label": "杠杆", "key": "R20_MAX_LEVERAGE", "value": 12.0, "threshold": 10.0}]
-        self.risk_config.normalize.return_value = {"R20_MAX_LEVERAGE": 12.0}
-        A.admin_risk_update(RiskConfigUpdate(values={"R20_MAX_LEVERAGE": 12},
+            {"label": "杠杆", "key": "ASTRA_MAX_LEVERAGE", "value": 12.0, "threshold": 10.0}]
+        self.risk_config.normalize.return_value = {"ASTRA_MAX_LEVERAGE": 12.0}
+        A.admin_risk_update(RiskConfigUpdate(values={"ASTRA_MAX_LEVERAGE": 12},
                                              confirmation="high risk"),
-                            x_r20_session="t")
-        self.update_env.assert_called_once_with({"R20_MAX_LEVERAGE": 12.0})
+                            x_astra_session="t")
+        self.update_env.assert_called_once_with({"ASTRA_MAX_LEVERAGE": 12.0})
         self.assertEqual(self._rec()[1], "success")
-        self.assertEqual(self._rec()[2]["high_risk_confirmed"], ["R20_MAX_LEVERAGE"])
+        self.assertEqual(self._rec()[2]["high_risk_confirmed"], ["ASTRA_MAX_LEVERAGE"])
 
     def test_normalise_failure_is_400_and_audited_as_failed(self):
         self.risk_config.normalize.side_effect = ValueError("杠杆区间非法")
         with self.assertRaises(HTTPException) as ctx:
-            A.admin_risk_update(RiskConfigUpdate(values={"R20_MAX_LEVERAGE": 99}),
-                                x_r20_session="t")
+            A.admin_risk_update(RiskConfigUpdate(values={"ASTRA_MAX_LEVERAGE": 99}),
+                                x_astra_session="t")
         self.assertEqual(ctx.exception.status_code, 400)
         self.assertEqual(self._rec()[1], "failed")
         self.assertEqual(self._rec()[2]["reason"], "杠杆区间非法")
         self.update_env.assert_not_called()
 
     def test_success_writes_env_syncs_leverage_and_audits_before_after(self):
-        self.risk_config.normalize.return_value = {"R20_MAX_LEVERAGE": 8.0}
-        out = A.admin_risk_update(RiskConfigUpdate(values={"R20_MAX_LEVERAGE": 8}),
-                                  x_r20_session="t")
-        self.update_env.assert_called_once_with({"R20_MAX_LEVERAGE": 8.0})
+        self.risk_config.normalize.return_value = {"ASTRA_MAX_LEVERAGE": 8.0}
+        out = A.admin_risk_update(RiskConfigUpdate(values={"ASTRA_MAX_LEVERAGE": 8}),
+                                  x_astra_session="t")
+        self.update_env.assert_called_once_with({"ASTRA_MAX_LEVERAGE": 8.0})
         self.risk_config.reload_risk_constants.assert_called_once_with()
         # env_updates 缺 MIN ⇒ 从 current_values 退化，MAX 取写入值
         self.sync.assert_called_once_with(min_leverage=2.0, max_leverage=8.0)
-        self.assertEqual(out["updated"], ["R20_MAX_LEVERAGE"])
+        self.assertEqual(out["updated"], ["ASTRA_MAX_LEVERAGE"])
         self.assertIsNone(out["applied_suite"])
         changed = self._rec()[2]["changed"]
-        self.assertEqual(changed["R20_MAX_LEVERAGE"], {"before": 5.0, "after": 8.0})
+        self.assertEqual(changed["ASTRA_MAX_LEVERAGE"], {"before": 5.0, "after": 8.0})
 
     def test_suite_values_are_merged_before_an_empty_check(self):
-        self.risk_config.suite_values.return_value = {"R20_MAX_LEVERAGE": 3.0}
-        self.risk_config.normalize.return_value = {"R20_MAX_LEVERAGE": 3.0}
+        self.risk_config.suite_values.return_value = {"ASTRA_MAX_LEVERAGE": 3.0}
+        self.risk_config.normalize.return_value = {"ASTRA_MAX_LEVERAGE": 3.0}
         out = A.admin_risk_update(RiskConfigUpdate(suite_id="conservative"),
-                                  x_r20_session="t")
+                                  x_astra_session="t")
         self.risk_config.suite_values.assert_called_once_with("conservative")
         self.assertEqual(out["applied_suite"], "conservative")
 
     def test_leverage_sync_failure_is_swallowed_after_the_env_write(self):
         """杠杆帽同步失败只吞掉：env 已写、审计照记 success（不能因为同步失败谎报保存失败）。"""
-        self.risk_config.normalize.return_value = {"R20_MAX_LEVERAGE": 8.0}
+        self.risk_config.normalize.return_value = {"ASTRA_MAX_LEVERAGE": 8.0}
         self.sync.side_effect = RuntimeError("池文件写不动")
-        out = A.admin_risk_update(RiskConfigUpdate(values={"R20_MAX_LEVERAGE": 8}),
-                                  x_r20_session="t")
-        self.update_env.assert_called_once_with({"R20_MAX_LEVERAGE": 8.0})
-        self.assertEqual(out["updated"], ["R20_MAX_LEVERAGE"])
+        out = A.admin_risk_update(RiskConfigUpdate(values={"ASTRA_MAX_LEVERAGE": 8}),
+                                  x_astra_session="t")
+        self.update_env.assert_called_once_with({"ASTRA_MAX_LEVERAGE": 8.0})
+        self.assertEqual(out["updated"], ["ASTRA_MAX_LEVERAGE"])
         self.assertEqual(self._rec()[1], "success")
 
 
 class RiskResetTests(_Base):
     def test_reset_requires_the_exact_phrase(self):
         with self.assertRaises(HTTPException) as ctx:
-            A.admin_risk_reset(RiskResetRequest(confirmation="reset"), x_r20_session="t")
+            A.admin_risk_reset(RiskResetRequest(confirmation="reset"), x_astra_session="t")
         self.assertEqual(ctx.exception.status_code, 400)
         self.remove_env.assert_not_called()
 
     def test_reset_clears_overrides_and_audits(self):
         out = A.admin_risk_reset(RiskResetRequest(confirmation="  reset risk  "),
-                                 x_r20_session="t")
-        self.remove_env.assert_called_once_with({"R20_MAX_LEVERAGE"})
+                                 x_astra_session="t")
+        self.remove_env.assert_called_once_with({"ASTRA_MAX_LEVERAGE"})
         self.risk_config.reload_risk_constants.assert_called_once_with()
         self.sync.assert_called_once_with(min_leverage=2.0, max_leverage=5.0)
         self.assertTrue(out["reset"])
@@ -267,8 +267,8 @@ class RiskResetTests(_Base):
     def test_reset_survives_a_leverage_sync_failure(self):
         self.sync.side_effect = RuntimeError("池文件写不动")
         out = A.admin_risk_reset(RiskResetRequest(confirmation="RESET RISK"),
-                                 x_r20_session="t")
-        self.remove_env.assert_called_once_with({"R20_MAX_LEVERAGE"})
+                                 x_astra_session="t")
+        self.remove_env.assert_called_once_with({"ASTRA_MAX_LEVERAGE"})
         self.assertTrue(out["reset"])
 
 
@@ -284,7 +284,7 @@ class AccountBaselineTests(_Base):
         with self.assertRaises(HTTPException) as ctx:
             A.admin_update_account_baseline(
                 InitialCapitalUpdate(initial_capital=10000.0, confirmation="UPDATE"),
-                x_r20_session="t")
+                x_astra_session="t")
         self.assertEqual(ctx.exception.status_code, 400)
         self.fn_update.assert_not_called()
 
@@ -293,14 +293,14 @@ class AccountBaselineTests(_Base):
         with self.assertRaises(HTTPException) as ctx:
             A.admin_update_account_baseline(
                 InitialCapitalUpdate(initial_capital=10000.0, confirmation="UPDATE CAPITAL"),
-                x_r20_session="t")
+                x_astra_session="t")
         self.assertEqual(ctx.exception.status_code, 400)
         self.assertEqual(self.audits, [])
 
     def test_success_audits_previous_and_new_capital(self):
         out = A.admin_update_account_baseline(
             InitialCapitalUpdate(initial_capital=10000.0, confirmation="UPDATE CAPITAL"),
-            x_r20_session="t")
+            x_astra_session="t")
         self.fn_update.assert_called_once_with(10000.0)
         payload = self._rec()[2]
         self.assertEqual(payload["previous_initial_capital"], 5000.0)
@@ -331,7 +331,7 @@ class InstrumentsListTests(_Base):
         self._start(mock.patch.object(A, "_holdings_report", side_effect=_report))
 
     def test_rows_flag_protected_tracker_live_and_unknown_states(self):
-        out = A.admin_instruments(x_r20_admin_token="tok")
+        out = A.admin_instruments(x_astra_admin_token="tok")
         rows = {r["instId"]: r for r in out["instruments"]}
         self.assertTrue(rows["BTC-USDT-SWAP"]["protected"])
         self.assertFalse(rows["BTC-USDT-SWAP"]["removable"], "BTC 恒不可删")
@@ -345,7 +345,7 @@ class InstrumentsListTests(_Base):
 
     def test_non_dict_tracker_file_is_coerced_to_empty(self):
         with mock.patch.object(A, "read_json", return_value=[1, 2]):
-            out = A.admin_instruments(x_r20_admin_token="tok")
+            out = A.admin_instruments(x_astra_admin_token="tok")
         self.assertEqual(len(out["instruments"]), 3)
 
 
@@ -366,7 +366,7 @@ class AddInstrumentTests(_Base):
         self.okx.instruments.side_effect = RuntimeError("网络炸了")
         with self.assertRaises(HTTPException) as ctx:
             A.add_admin_instrument(InstrumentAddRequest(inst_id="ETH-USDT-SWAP"),
-                                   x_r20_admin_token="tok")
+                                   x_astra_admin_token="tok")
         self.assertEqual(ctx.exception.status_code, 502)
         self.mutate.assert_not_called()
 
@@ -376,7 +376,7 @@ class AddInstrumentTests(_Base):
             self.okx.instruments.return_value = raw
             with self.assertRaises(HTTPException) as ctx:
                 A.add_admin_instrument(InstrumentAddRequest(inst_id="ETH-USDT-SWAP"),
-                                       x_r20_admin_token="tok")
+                                       x_astra_admin_token="tok")
             self.assertEqual(ctx.exception.status_code, 400)
         self.mutate.assert_not_called()
 
@@ -384,7 +384,7 @@ class AddInstrumentTests(_Base):
         self.mutate.side_effect = lambda fn: fn([{"instId": "ETH-USDT-SWAP"}])
         with self.assertRaises(HTTPException) as ctx:
             A.add_admin_instrument(InstrumentAddRequest(inst_id="ETH-USDT-SWAP"),
-                                   x_r20_admin_token="tok")
+                                   x_astra_admin_token="tok")
         self.assertEqual(ctx.exception.status_code, 409)
         self.assertIn("已在交易池", ctx.exception.detail)
         self.assertEqual(self.audits, [])
@@ -394,14 +394,14 @@ class AddInstrumentTests(_Base):
                                                  for i in range(20)])
         with self.assertRaises(HTTPException) as ctx:
             A.add_admin_instrument(InstrumentAddRequest(inst_id="ETH-USDT-SWAP"),
-                                   x_r20_admin_token="tok")
+                                   x_astra_admin_token="tok")
         self.assertEqual(ctx.exception.status_code, 409)
         self.assertEqual(self.audits, [])
 
     def test_success_appends_under_the_lock_and_audits(self):
         self.mutate.side_effect = lambda fn: fn([{"instId": "BTC-USDT-SWAP"}])
         out = A.add_admin_instrument(InstrumentAddRequest(inst_id="ETH-USDT-SWAP"),
-                                     x_r20_admin_token="tok")
+                                     x_astra_admin_token="tok")
         self.assertEqual(out["added"]["instId"], "ETH-USDT-SWAP")
         self.assertEqual(out["count"], 2)
         self.assertEqual(self._rec()[0], "instrument.add")
@@ -426,7 +426,7 @@ class DeleteInstrumentTests(_Base):
         with self.assertRaises(HTTPException) as ctx:
             A.delete_admin_instrument("ETH-USDT-SWAP",
                                       InstrumentDeleteRequest(confirmation=""),
-                                      x_r20_admin_token="tok")
+                                      x_astra_admin_token="tok")
         self.assertEqual(ctx.exception.status_code, 400)
         self.assertEqual(self._rec()[1], "rejected_phrase")
         self.assertFalse(self._rec()[2]["provided"])
@@ -435,7 +435,7 @@ class DeleteInstrumentTests(_Base):
     def test_confirm_phrase_is_accepted_from_the_query_parameter_too(self):
         out = A.delete_admin_instrument("ETH-USDT-SWAP", None,
                                         confirmation="remove eth-usdt-swap",
-                                        x_r20_admin_token="tok")
+                                        x_astra_admin_token="tok")
         self.assertEqual(out["removed"], "ETH-USDT-SWAP")
         self.assertEqual(self.admin.call_args[0][0], "tok")
 
@@ -444,7 +444,7 @@ class DeleteInstrumentTests(_Base):
         with self.assertRaises(HTTPException) as ctx:
             A.delete_admin_instrument("BTC-USDT-SWAP",
                                       InstrumentDeleteRequest(confirmation="REMOVE BTC-USDT-SWAP"),
-                                      x_r20_admin_token="tok")
+                                      x_astra_admin_token="tok")
         self.assertEqual(ctx.exception.status_code, 403)
 
     def test_pool_floor_and_missing_symbol_are_409_and_404(self):
@@ -452,14 +452,14 @@ class DeleteInstrumentTests(_Base):
         with self.assertRaises(HTTPException) as ctx:
             A.delete_admin_instrument("ETH-USDT-SWAP",
                                       InstrumentDeleteRequest(confirmation="REMOVE ETH-USDT-SWAP"),
-                                      x_r20_admin_token="tok")
+                                      x_astra_admin_token="tok")
         self.assertEqual(ctx.exception.status_code, 409)
 
         self.load.return_value = list(self.pool)
         with self.assertRaises(HTTPException) as ctx:
             A.delete_admin_instrument("DOGE-USDT-SWAP",
                                       InstrumentDeleteRequest(confirmation="REMOVE DOGE-USDT-SWAP"),
-                                      x_r20_admin_token="tok")
+                                      x_astra_admin_token="tok")
         self.assertEqual(ctx.exception.status_code, 404)
 
     def test_tracker_record_blocks_deletion(self):
@@ -469,7 +469,7 @@ class DeleteInstrumentTests(_Base):
         with self.assertRaises(HTTPException) as ctx:
             A.delete_admin_instrument("ETH-USDT-SWAP",
                                       InstrumentDeleteRequest(confirmation="REMOVE ETH-USDT-SWAP"),
-                                      x_r20_admin_token="tok")
+                                      x_astra_admin_token="tok")
         self.assertEqual(ctx.exception.status_code, 409)
         self.assertEqual(self._rec()[1], "rejected_tracker")
 
@@ -480,7 +480,7 @@ class DeleteInstrumentTests(_Base):
         with self.assertRaises(HTTPException) as ctx:
             A.delete_admin_instrument("ETH-USDT-SWAP",
                                       InstrumentDeleteRequest(confirmation="REMOVE ETH-USDT-SWAP"),
-                                      x_r20_admin_token="tok")
+                                      x_astra_admin_token="tok")
         self.assertEqual(ctx.exception.status_code, 409)
         self.assertEqual(self._rec()[1], "rejected_live_holdings")
 
@@ -491,7 +491,7 @@ class DeleteInstrumentTests(_Base):
         with self.assertRaises(HTTPException) as ctx:
             A.delete_admin_instrument("ETH-USDT-SWAP",
                                       InstrumentDeleteRequest(confirmation="REMOVE ETH-USDT-SWAP"),
-                                      x_r20_admin_token="tok")
+                                      x_astra_admin_token="tok")
         self.assertEqual(ctx.exception.status_code, 503)
         self.assertEqual(self._rec()[1], "rejected_unknown_holdings")
         self.mutate.assert_not_called()
@@ -499,7 +499,7 @@ class DeleteInstrumentTests(_Base):
     def test_success_rewrites_the_pool_under_the_lock_and_audits(self):
         out = A.delete_admin_instrument("ETH-USDT-SWAP",
                                         InstrumentDeleteRequest(confirmation="REMOVE ETH-USDT-SWAP"),
-                                        x_r20_admin_token="tok")
+                                        x_astra_admin_token="tok")
         self.assertEqual(out["removed"], "ETH-USDT-SWAP")
         self.assertEqual(out["count"], 2)
         self.assertEqual(self._rec()[0], "instrument.remove")
@@ -510,7 +510,7 @@ class DeleteInstrumentTests(_Base):
             out = A.delete_admin_instrument(
                 "ETH-USDT-SWAP",
                 InstrumentDeleteRequest(confirmation="REMOVE ETH-USDT-SWAP"),
-                x_r20_admin_token="tok")
+                x_astra_admin_token="tok")
         self.assertEqual(out["removed"], "ETH-USDT-SWAP")
         self.report.assert_called_once_with("ETH-USDT-SWAP", {})
 
@@ -518,7 +518,7 @@ class DeleteInstrumentTests(_Base):
 class ManualCloseTests(_Base):
     def setUp(self):
         super().setUp()
-        self.tmp = Path(tempfile.mkdtemp(prefix="r20-risk-datalock-"))
+        self.tmp = Path(tempfile.mkdtemp(prefix="astra-risk-datalock-"))
         self.addCleanup(shutil.rmtree, self.tmp, True)
         self._start(mock.patch.object(A, "DATA_DIR", self.tmp))
         self.settings = mock.Mock(manual_close_enabled=True)
@@ -528,7 +528,7 @@ class ManualCloseTests(_Base):
                                return_value=self.env))
         self.store = mock.Mock()
         self.store.verify_password.return_value = True
-        self._start(mock.patch("r20_backend.dependencies.get_auth_store",
+        self._start(mock.patch("astra_backend.dependencies.get_auth_store",
                                return_value=self.store))
         self.fast_close = mock.Mock(return_value={"instId": "BTC-USDT-SWAP",
                                                   "posSide": "long", "closed_size": 1.0,
@@ -596,7 +596,7 @@ class ManualCloseTests(_Base):
     def test_non_okx_venue_delegates_to_the_venue_router(self):
         delegated = mock.Mock(return_value={"instId": "ETH-USDT-SWAP", "venue": "gate",
                                             "environment": "live"})
-        with mock.patch("r20_backend.close_intent.venue_fast_close", delegated):
+        with mock.patch("astra_backend.close_intent.venue_fast_close", delegated):
             A.manual_close_position(self._payload(venue="gate"))
         delegated.assert_called_once_with("gate", self.env.mode, "tok-" + "x" * 20,
                                           "CLOSE BTC-USDT-SWAP")

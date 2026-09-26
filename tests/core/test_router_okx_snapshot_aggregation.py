@@ -19,7 +19,7 @@ from unittest import mock
 
 from fastapi import HTTPException
 
-from r20_backend.routers import exchanges as R
+from astra_backend.routers import exchanges as R
 
 
 def _env(configured=True, mode="demo", fingerprint="fp"):
@@ -36,14 +36,14 @@ class SnapshotAggregationTest(unittest.TestCase):
         p = mock.patch("scripts.okx_runtime.current_environment", return_value=_env())
         p.start()
         self.addCleanup(p.stop)
-        p = mock.patch("r20_backend.close_intent.adapter_environment", return_value="demo")
+        p = mock.patch("astra_backend.close_intent.adapter_environment", return_value="demo")
         p.start()
         self.addCleanup(p.stop)
-        p = mock.patch("r20_backend.close_intent._current_credential_fp",
+        p = mock.patch("astra_backend.close_intent._current_credential_fp",
                        return_value="cred-fp")
         p.start()
         self.addCleanup(p.stop)
-        p = mock.patch("r20_backend.close_intent.create",
+        p = mock.patch("astra_backend.close_intent.create",
                        side_effect=self._intent)
         p.start()
         self.addCleanup(p.stop)
@@ -62,14 +62,14 @@ class SnapshotAggregationTest(unittest.TestCase):
         self.addCleanup(p.stop)
 
     def _adapters(self, adapters):
-        p = mock.patch("r20_backend.exchanges.get_adapter",
+        p = mock.patch("astra_backend.exchanges.get_adapter",
                        side_effect=lambda v, environment=None: adapters[v])
         p.start()
         self.addCleanup(p.stop)
 
     def _call(self):
         try:
-            return R.admin_okx_account_snapshot(x_r20_admin_token="t"), None
+            return R.admin_okx_account_snapshot(x_astra_admin_token="t"), None
         except HTTPException as exc:
             return None, exc
 
@@ -85,7 +85,7 @@ class SnapshotAggregationTest(unittest.TestCase):
 
     def test_okx_not_configured_is_fail_closed_503(self):
         # ⚠️ 正解：类来自 `scripts.okx_rest`（模块顶部 `from scripts.okx_rest import OKXNotConfigured`）。
-        # 我第一次改成 `import r20_backend.okx_rest` —— **那个模块根本不存在**（第三次栽在
+        # 我第一次改成 `import astra_backend.okx_rest` —— **那个模块根本不存在**（第三次栽在
         # "没确认导入路径就写进用例"上）。这次先打印模块导入块，再照抄它的来源。
         from scripts.okx_rest import OKXNotConfigured as not_configured
         self._okx(exc=not_configured("没配"))

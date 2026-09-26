@@ -2,9 +2,9 @@ r"""作业历史保留策略门（第一百四十刀）。
 
 ## 背景
 
-`data/r20_gateway.db` 的 `job_runs` **没有任何自动清理机制**：`factor_library` 每分钟
+`data/astra_gateway.db` 的 `job_runs` **没有任何自动清理机制**：`factor_library` 每分钟
 跑一次，15 天就累计 19,215 / 22,521 行、DB 涨到 **23.5M**（实测）。用户确认加保留策略，
-默认窗口 **7 天**，`R20_JOB_RUNS_KEEP_DAYS` 可覆盖。
+默认窗口 **7 天**，`ASTRA_JOB_RUNS_KEEP_DAYS` 可覆盖。
 
 ## 本门钉住的四条边界（每条都有理由，勿放宽）
 
@@ -31,7 +31,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from r20_gateway.store import BJ_TZ, GatewayStore  # noqa: E402
+from astra_gateway.store import BJ_TZ, GatewayStore  # noqa: E402
 
 
 class PruneJobRunsTest(unittest.TestCase):
@@ -101,17 +101,17 @@ class PruneJobRunsTest(unittest.TestCase):
 
     def test_env_override(self):
         self._insert_run("factor_library", "success", 5)
-        old = os.environ.get("R20_JOB_RUNS_KEEP_DAYS")
-        os.environ["R20_JOB_RUNS_KEEP_DAYS"] = "3"
+        old = os.environ.get("ASTRA_JOB_RUNS_KEEP_DAYS")
+        os.environ["ASTRA_JOB_RUNS_KEEP_DAYS"] = "3"
         try:
             result = self.store.prune_job_runs()
             self.assertEqual(result["keep_days"], 3)
             self.assertEqual(result["deleted"], 1, "3 天窗口应删掉 5 天前的行")
         finally:
             if old is None:
-                os.environ.pop("R20_JOB_RUNS_KEEP_DAYS", None)
+                os.environ.pop("ASTRA_JOB_RUNS_KEEP_DAYS", None)
             else:
-                os.environ["R20_JOB_RUNS_KEEP_DAYS"] = old
+                os.environ["ASTRA_JOB_RUNS_KEEP_DAYS"] = old
 
     def test_vacuum_can_be_skipped(self):
         self._insert_run("factor_library", "success", 30)
@@ -131,7 +131,7 @@ class WorkerWiringTest(unittest.TestCase):
     """清理必须真的挂在 worker 上，否则策略等于没生效。"""
 
     def _src(self) -> str:
-        return (ROOT / "r20_gateway" / "worker.py").read_text(encoding="utf-8")
+        return (ROOT / "astra_gateway" / "worker.py").read_text(encoding="utf-8")
 
     def test_worker_prunes_on_start_and_periodically(self):
         src = self._src()

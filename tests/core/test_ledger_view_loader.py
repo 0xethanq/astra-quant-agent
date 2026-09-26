@@ -6,8 +6,8 @@
 |---|---|
 | ★ **持仓中永远保留** | 过滤条件是「`close_time`/`open_time`/`time` 任一 ≥ reset」**或** `status == "holding"` ⇒ 持仓中的行**不受 reset 影响** |
 | 截断 | `trades_table = valid[:LEDGER_TRADES_MAX]`（取**前** 60，按文件原始顺序）|
-| ★ **同步闸门（批E 测试封闭闸）** | `autosync_enabled=False` ⇒ **不触发**同步；`R20_LEDGER_SYNC_DISABLED ∈ {1,true,yes}` ⇒ 也不触发；台账文件 **60 秒内**改过 ⇒ 不需要同步 |
-| ★ **审计批7 的修复** | 触发时走 `r20_backend.spawn.run_script(..., timeout=45, label="sync_full_ledger")` —— 旧实现是 `python3` **shell 串**（这台主机**根本没有该可执行文件**，rc=127 被 `capture_output` **吞**）⇒ **服务器侧台账刷新从未生效**；旧 `timeout=10s` 还**短于**真实三所全史拉取（约 20-30s）⇒ **必然静默超时** |
+| ★ **同步闸门（批E 测试封闭闸）** | `autosync_enabled=False` ⇒ **不触发**同步；`ASTRA_LEDGER_SYNC_DISABLED ∈ {1,true,yes}` ⇒ 也不触发；台账文件 **60 秒内**改过 ⇒ 不需要同步 |
+| ★ **审计批7 的修复** | 触发时走 `astra_backend.spawn.run_script(..., timeout=45, label="sync_full_ledger")` —— 旧实现是 `python3` **shell 串**（这台主机**根本没有该可执行文件**，rc=127 被 `capture_output` **吞**）⇒ **服务器侧台账刷新从未生效**；旧 `timeout=10s` 还**短于**真实三所全史拉取（约 20-30s）⇒ **必然静默超时** |
 | ★ 快照优先序 | 行内 `_SNAPSHOT_KEYS`（**非空** dict）＞ `holding` 行的 tracker `signal_snapshot` ＞ `calculus_snapshot.json` ＞ `match_trade_snapshot`（journal）＞ calculus 兜底 |
 | ★ **缺席即缺席** | 一行都拿不到证据 ⇒ **不写 `entry_snapshot`**，但**一定**写 `snapshot_observability="NONE"` |
 """
@@ -19,7 +19,7 @@ import time
 import unittest
 from unittest import mock
 
-from r20_backend.dashboard_payload import ledger_view as LV
+from astra_backend.dashboard_payload import ledger_view as LV
 
 OLD_RESET = "2020-01-01 00:00:00"
 FUTURE_RESET = "2030-01-01 00:00:00"
@@ -50,7 +50,7 @@ class LedgerLoaderTest(unittest.TestCase):
         ctx = mock.patch.dict("os.environ", env or {}, clear=False)
         ctx.start()
         self.addCleanup(ctx.stop)
-        with mock.patch("r20_backend.spawn.run_script") as runner:
+        with mock.patch("astra_backend.spawn.run_script") as runner:
             out = LV.load_ledger_lifecycle_trades(self.ledger, self.dir.name,
                                                   autosync, reset)
         return out[0], out[1], runner   # (valid, table, runner)
@@ -100,9 +100,9 @@ class LedgerLoaderTest(unittest.TestCase):
         with open(script, "w", encoding="utf-8") as f:
             f.write("# stub\n")
         self._write([_row()], age_seconds=600)
-        # ⚠️ 测试环境自身就置了 R20_LEDGER_SYNC_DISABLED（批E 封闭闸，见 tests/__init__.py）
+        # ⚠️ 测试环境自身就置了 ASTRA_LEDGER_SYNC_DISABLED（批E 封闭闸，见 tests/__init__.py）
         # ⇒ 想验证"同步真的会触发"，必须先把它置空串。
-        _v, _t, runner = self._run(autosync=True, env={"R20_LEDGER_SYNC_DISABLED": ""})
+        _v, _t, runner = self._run(autosync=True, env={"ASTRA_LEDGER_SYNC_DISABLED": ""})
         runner.assert_called_once()
         args, kwargs = runner.call_args
         self.assertEqual(args[0], script)
@@ -115,7 +115,7 @@ class LedgerLoaderTest(unittest.TestCase):
                   "w", encoding="utf-8") as f:
             f.write("# stub\n")
         self._write([_row()], age_seconds=600)
-        _v, _t, runner = self._run(autosync=True, env={"R20_LEDGER_SYNC_DISABLED": "YES"})
+        _v, _t, runner = self._run(autosync=True, env={"ASTRA_LEDGER_SYNC_DISABLED": "YES"})
         runner.assert_not_called()
 
     def test_inline_snapshot_is_used_and_labelled(self):

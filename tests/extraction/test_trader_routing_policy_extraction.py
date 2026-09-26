@@ -22,6 +22,7 @@ import types
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+from tests.extraction.rename_baseline import legacy_rev_path, normalize
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
@@ -49,10 +50,11 @@ INJ = {
 
 
 def _base_text() -> str:
-    r = subprocess.run(["git", "show", f"{PRE}:scripts/ai_factor_trader.py"],
+    """基线源码，**已归一命名空间**（r20_* → astra_*）；见 `rename_baseline`。"""
+    r = subprocess.run(["git", "show", legacy_rev_path(f"{PRE}:scripts/ai_factor_trader.py")],
                        capture_output=True, text=True, cwd=str(ROOT))
     assert r.returncode == 0, f"基线取不到：{r.stderr[:200]}"
-    return r.stdout
+    return normalize(r.stdout)
 
 
 def _get_func(tree: ast.Module, name: str) -> ast.FunctionDef:
@@ -110,8 +112,8 @@ class RoutingPolicyVerbatimTest(unittest.TestCase):
     def test_constant_injection_and_pure_semantics(self):
         """patch 门面常量名 + 环境变量必须改变预算读取；两个纯函数语义不变。"""
         import scripts.ai_factor_trader as aft
-        with patch.object(aft, "PORTFOLIO_RISK_BUDGET_ENV", "R20_TEST_BUDGET_ONLY"), \
-             patch.dict(os.environ, {"R20_TEST_BUDGET_ONLY": "777.5"}, clear=False):
+        with patch.object(aft, "PORTFOLIO_RISK_BUDGET_ENV", "ASTRA_TEST_BUDGET_ONLY"), \
+             patch.dict(os.environ, {"ASTRA_TEST_BUDGET_ONLY": "777.5"}, clear=False):
             self.assertEqual(aft.portfolio_risk_budget_usdt(), 777.5)
         # 0 = 不限（既有语义）
         self.assertIsNone(aft.portfolio_budget_guard(0.0, 9999.0, 500.0))

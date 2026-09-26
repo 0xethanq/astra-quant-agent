@@ -6,9 +6,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
-import r20_backend.app as app_module
-from r20_backend.admin_auth import AdminAuthStore
-from r20_backend.version import __version__
+import astra_backend.app as app_module
+from astra_backend.admin_auth import AdminAuthStore
+from astra_backend.version import __version__
 
 
 class AdminApiTests(unittest.TestCase):
@@ -30,7 +30,7 @@ class AdminApiTests(unittest.TestCase):
     def login(self, username: str, password: str) -> dict[str, str]:
         response = self.client.post("/api/v1/admin/auth/login", json={"username": username, "password": password})
         self.assertEqual(response.status_code, 200, response.text)
-        return {"X-R20-Session": response.json()["session_token"]}
+        return {"X-Astra-Session": response.json()["session_token"]}
 
     def test_login_session_and_logout(self):
         headers = self.login("admin", "InitialAdmin123456")
@@ -58,7 +58,7 @@ class AdminApiTests(unittest.TestCase):
         self.assertEqual(versions["FastAPI Control Plane"], __version__)
 
     def test_legacy_header_disabled_after_initialization(self):
-        response = self.client.get("/api/v1/admin/overview", headers={"X-R20-Admin-Token": "InitialAdmin123456"})
+        response = self.client.get("/api/v1/admin/overview", headers={"X-Astra-Admin-Token": "InitialAdmin123456"})
         self.assertEqual(response.status_code, 401)
 
     def test_vue_console_endpoints_require_session_and_return_data(self):
@@ -79,7 +79,7 @@ class AdminApiTests(unittest.TestCase):
         self.assertIn("decisions", runtime.json())
         logs = self.client.get("/api/v1/admin/logs?source=backend&lines=30", headers=headers)
         self.assertEqual(logs.status_code, 200)
-        self.assertEqual(logs.json()["file"], "uvicorn.log")  # 审计①#6：r20_backend.log 从无写入方（死文件），已指向真实日志
+        self.assertEqual(logs.json()["file"], "uvicorn.log")  # 审计①#6：astra_backend.log 从无写入方（死文件），已指向真实日志
         self.assertEqual(self.client.get("/api/v1/admin/logs?source=../../etc/passwd", headers=headers).status_code, 400)
         library = self.client.get("/api/v1/admin/prompt-library", headers=headers)
         self.assertEqual(library.status_code, 200)
@@ -136,7 +136,7 @@ class AdminApiTests(unittest.TestCase):
         import os
         from unittest.mock import patch
         import scripts.okx_runtime as runtime
-        import r20_gateway.secrets as secrets
+        import astra_gateway.secrets as secrets
         trio = ({"OKX_DEMO_API_KEY": "fake-demo-key",
                  "OKX_DEMO_SECRET_KEY": "fake-demo-secret",
                  "OKX_DEMO_PASSPHRASE": "fake-demo-pass"}
@@ -144,11 +144,11 @@ class AdminApiTests(unittest.TestCase):
 
         @contextlib.contextmanager
         def scope():
-            with tempfile.TemporaryDirectory(prefix="r20-us012-env-") as tmp, \
+            with tempfile.TemporaryDirectory(prefix="astra-us012-env-") as tmp, \
                     patch.object(runtime, "ROOT", Path(tmp)), \
                     patch.object(runtime, "_FROZEN_ENVIRONMENT", None), \
                     patch.object(secrets, "load_secrets", lambda: {}), \
-                    patch.dict(os.environ, {"R20_OKX_ENV": "demo", **trio}, clear=True):
+                    patch.dict(os.environ, {"ASTRA_OKX_ENV": "demo", **trio}, clear=True):
                 yield
         return scope()
 
@@ -336,7 +336,7 @@ class AdminApiTests(unittest.TestCase):
 
             # 4. POST /api/v1/admin/update with correct confirmation
             with patch.object(app_module, "git", return_value="Already up to date."):
-                res_ok = self.client.post("/api/v1/admin/update", headers=root, json={"confirmation": "UPDATE R20"})
+                res_ok = self.client.post("/api/v1/admin/update", headers=root, json={"confirmation": "UPDATE ASTRA"})
                 self.assertEqual(res_ok.status_code, 200)
                 self.assertIn("git_output", res_ok.json())
 
@@ -345,7 +345,7 @@ class AdminApiTests(unittest.TestCase):
         self.assertEqual(self.client.get("/api/v1/admin/backups/download/nonexistent.tar.gz").status_code, 401)
 
         root = self.login("admin", "InitialAdmin123456")
-        token = root["X-R20-Session"]
+        token = root["X-Astra-Session"]
 
         # Create a dummy backup file in backups/local/
         backups_dir = app_module.ROOT / "backups" / "local"

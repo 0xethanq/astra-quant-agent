@@ -15,7 +15,7 @@ import sys
 import unittest
 from unittest import mock
 
-from r20_backend.council import debate as D
+from astra_backend.council import debate as D
 
 
 class RenderSeatPromptFallbackTest(unittest.TestCase):
@@ -57,7 +57,7 @@ class LeverageFallbackTest(unittest.TestCase):
         ⚠️ 夹之后的值是**函数内的局部变量**，外部不可观测 —— 本用例只证明**该分支能走通**，
         **不声称**验证了夹取结果（那是读代码得到的结论）。
         """
-        exc = self._run(env={"R20_MAX_LEVERAGE": "1", "R20_MIN_LEVERAGE": "9"})
+        exc = self._run(env={"ASTRA_MAX_LEVERAGE": "1", "ASTRA_MIN_LEVERAGE": "9"})
         self.assertIsInstance(exc, TimeoutError, "倒挂区间不导致异常")
 
 
@@ -69,7 +69,7 @@ class CritiqueErrorShapeTest(unittest.TestCase):
         """
         def _boom(**kwargs):
             raise RuntimeError("网关 504")
-        with mock.patch("r20_backend.llm_manager.execute_llm_request", side_effect=_boom):
+        with mock.patch("astra_backend.llm_manager.execute_llm_request", side_effect=_boom):
             out = D._call_single_trader_critique(lambda s: {"model": "M", "base_url": "U",
                                                             "api_key": "K", "api_format": "F",
                                                             "effort": "high"},
@@ -88,11 +88,11 @@ class FenceStrippingTest(unittest.TestCase):
         def _load_config():
             return {"roles": {"cio": {"name": "首席", "is_arbitrator": True, "prompt": "p"},
                               "a": {"name": "甲", "prompt": "p"}}, "consensus_mode": "standard"}
-        p = mock.patch("r20_backend.llm_manager.execute_llm_request",
+        p = mock.patch("astra_backend.llm_manager.execute_llm_request",
                        return_value=(payload, "", {}, 1.0))
         p.start()
         self.addCleanup(p.stop)
-        p2 = mock.patch("r20_backend.llm_manager.get_active_llm_runtime",
+        p2 = mock.patch("astra_backend.llm_manager.get_active_llm_runtime",
                         return_value={"model": "M"})
         p2.start()
         self.addCleanup(p2.stop)
@@ -129,10 +129,10 @@ class CritiqueErrorInOrchestrationTest(unittest.TestCase):
 
         def _boom(*a, **k):
             raise RuntimeError("质询崩了")
-        for name, value in (("r20_backend.llm_manager.execute_llm_request", None),
-                            ("r20_backend.llm_manager.get_active_llm_runtime",
+        for name, value in (("astra_backend.llm_manager.execute_llm_request", None),
+                            ("astra_backend.llm_manager.get_active_llm_runtime",
                              {"model": "M"}),
-                            ("r20_backend.council.debate._normalize_cio_adopted_roles", None)):
+                            ("astra_backend.council.debate._normalize_cio_adopted_roles", None)):
             target, ret = name, value
             if ret is None and target.endswith("execute_llm_request"):
                 patcher = mock.patch(target, return_value=('{"decisions": []}', "", {}, 1.0))
@@ -142,7 +142,7 @@ class CritiqueErrorInOrchestrationTest(unittest.TestCase):
                 patcher = mock.patch(target, return_value=ret)
             patcher.start()
             self.addCleanup(patcher.stop)
-        p_sleep = mock.patch("r20_backend.council.debate.time.sleep")
+        p_sleep = mock.patch("astra_backend.council.debate.time.sleep")
         p_sleep.start()
         self.addCleanup(p_sleep.stop)
         _brain, transcript = D.execute_council_debate(

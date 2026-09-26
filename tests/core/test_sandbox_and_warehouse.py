@@ -5,10 +5,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from r20_backend.exchanges import get_adapter
-from r20_backend.sandbox.adapter import SandboxExchangeAdapter
-from r20_backend.sandbox.data_warehouse import CandleWarehouse
-from r20_backend.sandbox.replay import PointInTimeReplayEngine, ReplayMetrics
+from astra_backend.exchanges import get_adapter
+from astra_backend.sandbox.adapter import SandboxExchangeAdapter
+from astra_backend.sandbox.data_warehouse import CandleWarehouse
+from astra_backend.sandbox.replay import PointInTimeReplayEngine, ReplayMetrics
 
 
 class SandboxAdapterTests(unittest.TestCase):

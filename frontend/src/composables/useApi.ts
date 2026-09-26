@@ -4,7 +4,7 @@
  * ## 本刀改了什么
  *
  * 原先本文件**内联复刻**了 `src/api/http.ts` 里的整个 fetch 流程
- * （拼 `X-R20-Session` 会话头 → 解析响应 → 401 登出 → FastAPI `detail` 归一）。
+ * （拼 `X-Astra-Session` 会话头 → 解析响应 → 401 登出 → FastAPI `detail` 归一）。
  * 两者是同一段逻辑的两份拷贝，且**已经漂移**：
  *
  * | 行为 | `api/http.ts` | 旧 `useApi` |

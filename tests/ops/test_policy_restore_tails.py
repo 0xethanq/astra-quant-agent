@@ -1,4 +1,4 @@
-"""策略冷恢复（`r20_backend/policy/restore.py`）残余分支收口测试 —— 第 342 刀。
+"""策略冷恢复（`astra_backend/policy/restore.py`）残余分支收口测试 —— 第 342 刀。
 
 本模块 255 行，是系统策略版本归档回滚的核心原子执行引擎：
 - 心法复核门禁（`_review_restored_lessons`）：复核器异常捕获、非字典与空文本过滤、宪法违规改标 `RESTORED_UNREVIEWED`；
@@ -18,12 +18,12 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT / "scripts") not in sys.path:
     sys.path.insert(0, str(ROOT / "scripts"))
 
-from r20_backend.policy.restore import _review_restored_lessons, restore_archived_policy
+from astra_backend.policy.restore import _review_restored_lessons, restore_archived_policy
 
 
 class PolicyRestoreTailsTests(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(prefix="r20_restore_tails_")
+        self.tmp = tempfile.TemporaryDirectory(prefix="astra_restore_tails_")
         self.addCleanup(self.tmp.cleanup)
         self.tmp_path = Path(self.tmp.name)
         self.archive_file = self.tmp_path / "target_policy_hash.json"
@@ -83,9 +83,9 @@ class PolicyRestoreTailsTests(unittest.TestCase):
     def _prepare_archive_and_restore(self, evo_data: any) -> dict:
         pkg = {"package": {"evolution_memory": evo_data}, "policy_hash": "target_hash"}
         self.archive_file.write_text(json.dumps(pkg), encoding="utf-8")
-        with patch("r20_backend.policy.restore.capture_full_strategy_package", return_value={"package": {}}):
-            with patch("r20_backend.policy.restore.generate_policy_snapshot", return_value={"policy_hash": "target_hash"}):
-                with patch("r20_backend.policy.restore.package_restore_diff", return_value=[]):
+        with patch("astra_backend.policy.restore.capture_full_strategy_package", return_value={"package": {}}):
+            with patch("astra_backend.policy.restore.generate_policy_snapshot", return_value={"policy_hash": "target_hash"}):
+                with patch("astra_backend.policy.restore.package_restore_diff", return_value=[]):
                     with patch("evolution_shield.STRUCTURED_MEMORY_FILE", self.tmp_path / "memory.json"):
                         with patch("evolution_shield._validate"):
                             return restore_archived_policy(
@@ -131,9 +131,9 @@ class PolicyRestoreTailsTests(unittest.TestCase):
             def remove(self, item):
                 raise ValueError("path already removed")
 
-        with patch("r20_backend.policy.restore.capture_full_strategy_package", return_value={"package": {}}):
-            with patch("r20_backend.policy.restore.generate_policy_snapshot", return_value={"policy_hash": "target_hash"}):
-                with patch("r20_backend.policy.restore.package_restore_diff", return_value=[]):
+        with patch("astra_backend.policy.restore.capture_full_strategy_package", return_value={"package": {}}):
+            with patch("astra_backend.policy.restore.generate_policy_snapshot", return_value={"policy_hash": "target_hash"}):
+                with patch("astra_backend.policy.restore.package_restore_diff", return_value=[]):
                     with patch.object(sys, "path", MockPathList(sys.path)):
                         res = restore_archived_policy(
                             lambda a, h: self.archive_file,
@@ -148,8 +148,8 @@ class PolicyRestoreTailsTests(unittest.TestCase):
         # 恢复后快照哈希与目标不一致 -> 触发回滚并报错
         pkg = {"package": {}, "policy_hash": "target_hash"}
         self.archive_file.write_text(json.dumps(pkg), encoding="utf-8")
-        with patch("r20_backend.policy.restore.capture_full_strategy_package", return_value={"package": {}}):
-            with patch("r20_backend.policy.restore.generate_policy_snapshot", return_value={"policy_hash": "mismatched_hash"}):
+        with patch("astra_backend.policy.restore.capture_full_strategy_package", return_value={"package": {}}):
+            with patch("astra_backend.policy.restore.generate_policy_snapshot", return_value={"policy_hash": "mismatched_hash"}):
                 with self.assertRaises(RuntimeError) as ctx:
                     restore_archived_policy(
                         lambda a, h: self.archive_file,
@@ -163,9 +163,9 @@ class PolicyRestoreTailsTests(unittest.TestCase):
         # 四单元哈希相同，但规范化投影核对发现单元缺失 -> 触发回滚并报错
         pkg = {"package": {}, "policy_hash": "target_hash"}
         self.archive_file.write_text(json.dumps(pkg), encoding="utf-8")
-        with patch("r20_backend.policy.restore.capture_full_strategy_package", return_value={"package": {}}):
-            with patch("r20_backend.policy.restore.generate_policy_snapshot", return_value={"policy_hash": "target_hash"}):
-                with patch("r20_backend.policy.restore.package_restore_diff", return_value=["interceptor_config", "risk_config"]):
+        with patch("astra_backend.policy.restore.capture_full_strategy_package", return_value={"package": {}}):
+            with patch("astra_backend.policy.restore.generate_policy_snapshot", return_value={"policy_hash": "target_hash"}):
+                with patch("astra_backend.policy.restore.package_restore_diff", return_value=["interceptor_config", "risk_config"]):
                     with self.assertRaises(RuntimeError) as ctx:
                         restore_archived_policy(
                             lambda a, h: self.archive_file,

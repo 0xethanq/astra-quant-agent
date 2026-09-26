@@ -12,7 +12,7 @@
 |---|---|
 | `scripts/trader/` | `position_universe.py`（第三十一刀新增） |
 | `scripts/factors/` | `scoring.py`、`candles_15m.py`（第二十九/三十二刀新增） |
-| `r20_backend/council/` | 完全没有模块清单 |
+| `astra_backend/council/` | 完全没有模块清单 |
 | `scripts/ledger/` | 完全没有模块清单 |
 
 而且**没有任何测试会红** —— 文档腐烂是静默的。等到有人照着清单找模块时才发现。
@@ -45,31 +45,31 @@ ROOT = Path(__file__).resolve().parents[2]
 #: 受管子包 → 该子包的文件名出现形式。
 #: `allowed_extra` 是在文档里**有意**提到但不在本目录的文件（如门面、测试）。
 #: `docs` 是"登记名册"的额外来源 —— 有些子包把清单写在 README 而不是 __init__.py
-#: （`dashboard_payload/` 就是：它的总约定在 r20_backend/README.md）。
+#: （`dashboard_payload/` 就是：它的总约定在 astra_backend/README.md）。
 MANAGED = {
     "scripts/trader": {"allowed_extra": set()},
     "scripts/brain": {"allowed_extra": {"ai_brain_trader.py"}},
     "scripts/factors": {"allowed_extra": {"factor_library.py"}},
     "scripts/ledger": {"allowed_extra": {"sync_full_ledger.py"}},
-    "r20_backend/council": {"allowed_extra": {"council_manager.py"}},
+    "astra_backend/council": {"allowed_extra": {"council_manager.py"}},
     # 第五十九刀补登记：本子包此前**不在受管名单**里（.py 文件靠 __init__ 的
     # 项目符号清单导航）。既然已有该约定，顺手纳入监管，防止新模块漏登记。
-    "r20_backend/exchanges": {"allowed_extra": set()},
-    "r20_backend/dashboard_payload": {
+    "astra_backend/exchanges": {"allowed_extra": set()},
+    "astra_backend/dashboard_payload": {
         "allowed_extra": {"dashboard.py", "app.py"},
-        "docs": ["r20_backend/README.md"],
+        "docs": ["astra_backend/README.md"],
     },
     # 第三十八刀补登记：`execution_router.py::open_protected_position` 的风控闸门
     # 抽成 `risk_gates.py` 后才发现本子包**此前根本不在受管名单里** ——
     # 也就是说 `indicators.py` / `sizing.py` / `circuit_breaker.py` 烂了文档也没人管。
     # 顺手纳入。
-    "r20_backend/execution": {"allowed_extra": {"execution_router.py"}},
+    "astra_backend/execution": {"allowed_extra": {"execution_router.py"}},
     # 第三十九刀新增：回测引擎的成块领域逻辑外提（门面仍是单文件 backtest_engine.py）。
     "scripts/backtest": {"allowed_extra": {"backtest_engine.py"}},
     # 第四十二刀新增：自进化引擎的可观测性聚簇外提。
     "scripts/evolution": {"allowed_extra": {"self_improvement_engine.py"}},
     # 第四十三刀新增：选所质量域外提（门面仍是单文件 venue_router.py）。
-    "r20_backend/venue_routing": {"allowed_extra": {"venue_router.py"}},
+    "astra_backend/venue_routing": {"allowed_extra": {"venue_router.py"}},
     # 第四十四刀新增：快讯纯判断逻辑外提（门面仍是 news_sentiment_harvester.py）。
     "scripts/news": {"allowed_extra": {"news_sentiment_harvester.py"}},
     # 第四十五刀新增：微积分引擎实现外提（门面仍只做再导出）。
@@ -89,7 +89,7 @@ def _doc_names(init_py: Path, extra_docs: list[str] | None = None) -> set[str]:
     """该子包**登记名册**里提到的所有 `xxx.py`。
 
     名册来源 = `__init__.py` 文档串 + 任意 `docs` 里的 Markdown。
-    （`dashboard_payload/` 的清单写在 `r20_backend/README.md` —— 那里才是
+    （`dashboard_payload/` 的清单写在 `astra_backend/README.md` —— 那里才是
     新人会去翻的地方，所以在 README 里登记是合理的，不该被本测试判为漏登记。）
     """
     tree = ast.parse(init_py.read_text(encoding="utf-8"))
@@ -156,7 +156,7 @@ class DirectoryDocsTest(unittest.TestCase):
     def test_manifest_tables_are_present(self):
         """受管子包的文档串里应有一张「模块清单」表（便于"新文件放哪"）。"""
         for rel in ("scripts/trader", "scripts/brain", "scripts/factors",
-                    "scripts/ledger", "r20_backend/council"):
+                    "scripts/ledger", "astra_backend/council"):
             init = ROOT / rel / "__init__.py"
             doc = ast.get_docstring(ast.parse(init.read_text(encoding="utf-8"))) or ""
             with self.subTest(pkg=rel):
@@ -172,11 +172,11 @@ class DirectoryDocsTest(unittest.TestCase):
 class RootLevelModulesRegisteredTest(unittest.TestCase):
     """⚠️ 第六十五刀补：**根层模块**此前不在任何门禁里。
 
-    `MANAGED` 只覆盖**子包**，而 `r20_backend/*.py`（根层，38 个）靠
-    `r20_backend/README.md` 的 §L3/§L4 表格导航 —— 那张表**没有任何测试看着**。
+    `MANAGED` 只覆盖**子包**，而 `astra_backend/*.py`（根层，38 个）靠
+    `astra_backend/README.md` 的 §L3/§L4 表格导航 —— 那张表**没有任何测试看着**。
 
-    后果实测：第四十九刀抽出的 `r20_backend/redact.py` 与
-    第五十一刀抽出的 `r20_backend/math_utils.py` **从未登记进 README**，
+    后果实测：第四十九刀抽出的 `astra_backend/redact.py` 与
+    第五十一刀抽出的 `astra_backend/math_utils.py` **从未登记进 README**，
     直到本刀才发现。而这两刀恰恰就是"新增模块"的操作 ——
     **说明这个洞一直在漏**。
 
@@ -184,9 +184,9 @@ class RootLevelModulesRegisteredTest(unittest.TestCase):
     反向也查（README 提到的 `.py` 必须真实存在，避免把人引到死路）。
     """
 
-    README = ROOT / "r20_backend" / "README.md"
+    README = ROOT / "astra_backend" / "README.md"
 
-    #: 文档里**有意**提到但不在 `r20_backend/` 根层的文件
+    #: 文档里**有意**提到但不在 `astra_backend/` 根层的文件
     #: （子包内的、以及作为门面被引用的上层脚本）。
     ALLOWED_EXTRA = {
         "dashboard.py", "app.py",                       # dashboard_payload 的门面
@@ -196,7 +196,7 @@ class RootLevelModulesRegisteredTest(unittest.TestCase):
     }
 
     def _disk_modules(self) -> set:
-        pkg = ROOT / "r20_backend"
+        pkg = ROOT / "astra_backend"
         return {p.name for p in pkg.glob("*.py")
                 if p.name != "__init__.py" and not p.name.startswith("_")}
 
@@ -225,7 +225,7 @@ class RootLevelModulesRegisteredTest(unittest.TestCase):
         missing = sorted(m for m in self._disk_modules() if m not in entries)
         self.assertEqual(
             missing, [],
-            f"这些 r20_backend/ 根层模块未登记在 {self.README.name} —— "
+            f"这些 astra_backend/ 根层模块未登记在 {self.README.name} —— "
             f"新增模块后请补进 §L3/§L4 的表格或 §L1/§L2 的列举: {missing}")
 
     def test_documented_root_names_exist(self):
@@ -236,7 +236,7 @@ class RootLevelModulesRegisteredTest(unittest.TestCase):
         dangling = sorted(
             n for n in referenced
             if n not in on_disk and n not in self.ALLOWED_EXTRA
-            and not any((ROOT / "r20_backend" / sub / n).exists()
+            and not any((ROOT / "astra_backend" / sub / n).exists()
                         for sub in ("dashboard_payload", "council", "execution",
                                     "exchanges", "routers", "llm", "policy",
                                     "sandbox", "venue_routing")))
@@ -269,7 +269,7 @@ class ScriptsRootModulesRegisteredTest(unittest.TestCase):
     README = ROOT / "scripts" / "README.md"
 
     #: 文档里**有意**提到但不在 `scripts/` 根层的文件
-    #: （子包内的部件、以及 `r20_backend/` 的兄弟模块）。
+    #: （子包内的部件、以及 `astra_backend/` 的兄弟模块）。
     ALLOWED_EXTRA = {
         "app.py", "dashboard.py", "ai_factor_trader.py",   # 提及的调用方/门面
     }
@@ -331,7 +331,16 @@ class ScriptsRootModulesRegisteredTest(unittest.TestCase):
         #    第一版没排除 → 误报 "['scripts']"。
         listed.discard("scripts")
         listed.discard(ROOT.name)
-        missing = sorted(s for s in listed if not (ROOT / "scripts" / s).is_dir())
+        # ⚠️ 还要排除**仓库根下的兄弟目录**：文档会正常引用它们
+        #    （`astra_backend/README.md`、前端/文档/部署目录说明）。
+        #    历史注记（2026-09-27）：旧名 `r20_backend` 含**数字**，`[a-z_]+` 根本
+        #    匹配不到，所以这个洞在改名成纯小写之前从未暴露；改成 `astra_backend`
+        #    的当天就假红了一次。判据改为"既不是 scripts/ 的子目录、也不是仓库根的
+        #    兄弟目录 ⇒ 才算文档列了不存在的子包"，对今后新增兄弟包也不再误伤。
+        sibling_dirs = {q.name for q in ROOT.iterdir() if q.is_dir()}
+        missing = sorted(s for s in listed
+                         if s not in sibling_dirs
+                         and not (ROOT / "scripts" / s).is_dir())
         self.assertEqual(missing, [], f"文档列了不存在的子包: {missing}")
 
     def test_daemons_and_main_entry_are_registered(self):
@@ -358,7 +367,7 @@ class ExtractedModulesHaveTestsTest(unittest.TestCase):
     | `dashboard_payload/reset_state.py` | 27 | **0** |
     | `dashboard_payload/ledger_view.py` | 79 | 1（仅间接） |
 
-    它们只经 `r20_backend/dashboard_cache.py` 门面被调用，而门面级用例只验证
+    它们只经 `astra_backend/dashboard_cache.py` 门面被调用，而门面级用例只验证
     "载荷非空 / 某几个键在"，**从不验证这些模块内部的取值优先级链**。
     这三个模块的 docstring 都写着"路径由门面注入（测试会指向沙箱）" ——
     **为可测性做了准备，却始终没人测。**
@@ -446,12 +455,12 @@ class ProjectReadmeStructureEntryTest(unittest.TestCase):
     #: (文件名, 章节标题, [(被指向的文档, 该行必须说明的用途串)], OPENCODE 否定性事实的正则)
     CASES = (
         ("README.md", "Code map", (
-            ("r20_backend/README.md", "Backend layering"),
+            ("astra_backend/README.md", "Backend layering"),
             ("scripts/README.md", "Runtime scripts & daemons"),
             ("frontend/src/components/admin/README.md", "Frontend components & state"),
         ), r"never contained|non-existent|does not exist"),
         ("README.zh-CN.md", "代码结构入口", (
-            ("r20_backend/README.md", "后端分层"),
+            ("astra_backend/README.md", "后端分层"),
             ("scripts/README.md", "哪个是入口/守护"),
             ("frontend/src/components/admin/README.md", "前端组件"),
         ), r"从未存在|不存在"),

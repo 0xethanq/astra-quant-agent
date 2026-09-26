@@ -36,7 +36,7 @@
 ## 与门面的分工
 
 `build_position_lines` 需要 `safe_float`（浮点兜底）与 `tz_bj`（挂单时间格式化），
-两者**由调用方传入** —— 不 import 期绑定，见 `r20_backend/README.md` §5。
+两者**由调用方传入** —— 不 import 期绑定，见 `astra_backend/README.md` §5。
 """
 
 from __future__ import annotations

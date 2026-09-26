@@ -1,4 +1,4 @@
-"""量化指标纯数学引擎（`r20_backend/execution/indicators.py`）残余分支收口测试 —— 第 350 刀。
+"""量化指标纯数学引擎（`astra_backend/execution/indicators.py`）残余分支收口测试 —— 第 350 刀。
 
 本模块 140 行，是策略特征提取纯数学技术指标计算核心：
 - RSI（相对强弱指标）：样本不足（<= period）安全返回 50.0；
@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import unittest
 
-from r20_backend.execution.indicators import (
+from astra_backend.execution.indicators import (
     calc_atr,
     calc_bollinger_squeeze,
     calc_macd_histogram_acceleration,

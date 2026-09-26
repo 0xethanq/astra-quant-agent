@@ -4,7 +4,7 @@
 - 凭证：patch registry.venue_credentials（_account_key 走模块全局，可钉）；
 - 沙盒实例化：patch env_profiles.PROFILE_FILE 到临时目录并预写钉死域
   （否则 Gate sandbox 双候选会触发探测——测试绝不允许出网）；
-- 密钥库：patch r20_gateway.secrets.load_secrets。
+- 密钥库：patch astra_gateway.secrets.load_secrets。
 事实锚点 = plan_local/THREE_VENUE_API_FRESHNESS_AUDIT_20260910.md
 （「Gate demo + enabled 是真实发送模拟盘订单，绝不能标成 LIVE 实盘」）。
 """
@@ -18,10 +18,10 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from r20_backend.exchanges import env_profiles as ep
-from r20_backend.exchanges import registry as reg
-from r20_backend.exchanges import routing_policy as rp
-from r20_backend.exchanges.identity import (ANON_CREDENTIAL, AccountKey,
+from astra_backend.exchanges import env_profiles as ep
+from astra_backend.exchanges import registry as reg
+from astra_backend.exchanges import routing_policy as rp
+from astra_backend.exchanges.identity import (ANON_CREDENTIAL, AccountKey,
                                             credential_fingerprint,
                                             is_sandbox_environment)
 
@@ -30,12 +30,12 @@ GATE_SANDBOX_PIN = "https://api-testnet.gateapi.io"   # 候选域之一（钉死
 
 def setUpModule():
     """封闭三律（同 fa417ee）：排除宿主 .env 注入的 ambient
-    R20_* 旗标——R20_GATE_TESTNET=1 会把「单参 = live 档」契约用例的环境解析
+    ASTRA_* 旗标——ASTRA_GATE_TESTNET=1 会把「单参 = live 档」契约用例的环境解析
     到 sandbox 档（URL/开闸文案全部错档）。环境只由用例自设旗标决定。"""
     _backup = {k: v for k, v in os.environ.items()
-               if k.startswith(("R20_BINANCE_TESTNET", "R20_BINANCE_EXECUTION", "R20_BINANCE_DEMO_EXECUTION",
-                                "R20_GATE_TESTNET", "R20_GATE_EXECUTION", "R20_GATE_DEMO_EXECUTION",
-                                "R20_OKX_ENV", "R20_OKX_TESTNET"))}
+               if k.startswith(("ASTRA_BINANCE_TESTNET", "ASTRA_BINANCE_EXECUTION", "ASTRA_BINANCE_DEMO_EXECUTION",
+                                "ASTRA_GATE_TESTNET", "ASTRA_GATE_EXECUTION", "ASTRA_GATE_DEMO_EXECUTION",
+                                "ASTRA_OKX_ENV", "ASTRA_OKX_TESTNET"))}
     for k in _backup:
         os.environ.pop(k, None)
     _AMBIENT_BACKUP.append(_backup)
@@ -175,10 +175,10 @@ class AccountKeyCacheTest(_IsolatedRegistryMixin):
         # 现有调用点全部 venue 单参（execution_router/lab/market_data/app…）
         live = reg.get_adapter("gate")                 # 位置参数
         self.assertEqual(live.base_url, "https://api.gateio.ws")
-        with patch.dict("os.environ", {"R20_BINANCE_TESTNET": "1"}):
+        with patch.dict("os.environ", {"ASTRA_BINANCE_TESTNET": "1"}):
             bn = reg.get_adapter("binance")            # 旧布尔 → demo 档
             self.assertEqual(bn.base_url, "https://demo-fapi.binance.com")
-        with patch.dict("os.environ", {"R20_GATE_TESTNET": "1"}):
+        with patch.dict("os.environ", {"ASTRA_GATE_TESTNET": "1"}):
             gt = reg.get_adapter("gate")               # 旧布尔 → sandbox 钉死域
             self.assertEqual(gt.base_url, GATE_SANDBOX_PIN)
             self.assertEqual(reg.adapter_environment("gate"), "sandbox")
@@ -188,10 +188,10 @@ class AccountKeyCacheTest(_IsolatedRegistryMixin):
         # app.py PUT /admin/multi-exchange 保存后 clear_instances 热切换。
         # 三元键下「环境轴或凭证代际变化」天然生成新键新实例；clear 仍承担
         # 全量作废（含同键但外部 URL 钉死变化等场景）——旧语义保留不放松。
-        with patch.dict("os.environ", {"R20_BINANCE_TESTNET": "0"}):
+        with patch.dict("os.environ", {"ASTRA_BINANCE_TESTNET": "0"}):
             before = reg.get_adapter("binance")
             self.assertIs(reg.get_adapter("binance"), before)   # 同键必命中缓存
-        with patch.dict("os.environ", {"R20_BINANCE_TESTNET": "1"}):
+        with patch.dict("os.environ", {"ASTRA_BINANCE_TESTNET": "1"}):
             hot = reg.get_adapter("binance")                    # 轴变→键变→新实例
             self.assertIsNot(hot, before)
             self.assertEqual(hot.base_url, "https://demo-fapi.binance.com")
@@ -205,14 +205,14 @@ class AccountKeyCacheTest(_IsolatedRegistryMixin):
 # execution_open / require_execution 双轴门禁矩阵
 # ----------------------------------------------------------------------
 class ExecutionGateMatrixTest(_IsolatedRegistryMixin):
-    ENV_KEYS = ("R20_GATE_EXECUTION", "R20_GATE_DEMO_EXECUTION", "R20_GATE_TESTNET")
+    ENV_KEYS = ("ASTRA_GATE_EXECUTION", "ASTRA_GATE_DEMO_EXECUTION", "ASTRA_GATE_TESTNET")
 
     def _flag(self, live=None, demo=None):
         env = {}
         if live is not None:
-            env["R20_GATE_EXECUTION"] = live
+            env["ASTRA_GATE_EXECUTION"] = live
         if demo is not None:
-            env["R20_GATE_DEMO_EXECUTION"] = demo
+            env["ASTRA_GATE_DEMO_EXECUTION"] = demo
         return patch.dict("os.environ", env, clear=False)
 
     def test_default_both_axes_closed(self):
@@ -235,10 +235,10 @@ class ExecutionGateMatrixTest(_IsolatedRegistryMixin):
             self.assertFalse(reg.execution_open("gate"))             # live 仍关
 
     def test_demo_flag_default_zero_when_unset(self):
-        # AC：R20_GATE_DEMO_EXECUTION 默认 0——变量完全未设置亦视为关
+        # AC：ASTRA_GATE_DEMO_EXECUTION 默认 0——变量完全未设置亦视为关
         import os
         saved = {k: os.environ.pop(k, None) for k in
-                 ("R20_GATE_EXECUTION", "R20_GATE_DEMO_EXECUTION")}
+                 ("ASTRA_GATE_EXECUTION", "ASTRA_GATE_DEMO_EXECUTION")}
         try:
             self.assertFalse(reg.execution_open("gate"))            # live 默认关
             self.assertFalse(reg.execution_open("gate", "demo"))    # 沙盒默认关
@@ -257,17 +257,17 @@ class ExecutionGateMatrixTest(_IsolatedRegistryMixin):
     def test_require_execution_reject_message_points_right_switch(self):
         with self._flag("0", "0"), self.assertRaises(reg.ExchangeCapabilityError) as cm:
             reg.require_execution("gate")                 # live 档
-        self.assertIn("R20_GATE_EXECUTION=1", str(cm.exception))
-        self.assertNotIn("R20_GATE_DEMO_EXECUTION", str(cm.exception))
+        self.assertIn("ASTRA_GATE_EXECUTION=1", str(cm.exception))
+        self.assertNotIn("ASTRA_GATE_DEMO_EXECUTION", str(cm.exception))
         with self._flag("0", "0"), self.assertRaises(reg.ExchangeCapabilityError) as cm:
             reg.require_execution("gate", "demo")         # 沙盒档
         msg = str(cm.exception)
-        self.assertIn("R20_GATE_DEMO_EXECUTION", msg)     # 指路当前缺的闸
+        self.assertIn("ASTRA_GATE_DEMO_EXECUTION", msg)     # 指路当前缺的闸
         self.assertIn("demo", msg)
         # live 开着、demo 缺 → 沙盒拒绝文案不得诱导去开 live 那把
         with self._flag("1", "0"), self.assertRaises(reg.ExchangeCapabilityError) as cm:
             reg.require_execution("gate", "sandbox")
-        self.assertIn("R20_GATE_DEMO_EXECUTION", str(cm.exception))
+        self.assertIn("ASTRA_GATE_DEMO_EXECUTION", str(cm.exception))
 
 
 # ----------------------------------------------------------------------
@@ -279,13 +279,13 @@ class RoutingPolicyAxisTest(unittest.TestCase):
         self.addCleanup(self._tmp.cleanup)
         self.file = Path(self._tmp.name) / "venue_routing.json"
         self.enterContext(patch.object(rp, "ROUTING_FILE", self.file))
-        self.enterContext(patch("r20_gateway.secrets.load_secrets",
+        self.enterContext(patch("astra_gateway.secrets.load_secrets",
                                 return_value={"GATE_API_KEY": "K",
                                               "GATE_SECRET_KEY": "S"}))
         self.enterContext(patch.dict("os.environ",
-                                     {"R20_GATE_EXECUTION": "0",
-                                      "R20_GATE_DEMO_EXECUTION": "0",
-                                      "R20_GATE_TESTNET": "0"}, clear=False))
+                                     {"ASTRA_GATE_EXECUTION": "0",
+                                      "ASTRA_GATE_DEMO_EXECUTION": "0",
+                                      "ASTRA_GATE_TESTNET": "0"}, clear=False))
 
     def _pool(self, dry_run=None, assets=("BTC",)):
         doc = {"gate": {"assets": list(assets)}}
@@ -301,49 +301,49 @@ class RoutingPolicyAxisTest(unittest.TestCase):
 
     def test_axes_empty_pool_off(self):
         self._pool(dry_run=False)
-        with patch.dict("os.environ", {"R20_GATE_EXECUTION": "1"}):
+        with patch.dict("os.environ", {"ASTRA_GATE_EXECUTION": "1"}):
             self.assertEqual(rp.effective_mode(), "live")   # 有池有闸→live 轴
         self._pool(dry_run=False, assets=())
         self.assertEqual(rp.effective_mode(), "off")        # 无池一票否决
 
     def test_dry_run_axis_independent_of_environment(self):
         self._pool(dry_run=True)
-        with patch.dict("os.environ", {"R20_GATE_EXECUTION": "1",
-                                       "R20_GATE_TESTNET": "1",
-                                       "R20_GATE_DEMO_EXECUTION": "1"}):
+        with patch.dict("os.environ", {"ASTRA_GATE_EXECUTION": "1",
+                                       "ASTRA_GATE_TESTNET": "1",
+                                       "ASTRA_GATE_DEMO_EXECUTION": "1"}):
             self.assertEqual(rp.effective_mode(), "dry_run")  # 本地演算不涉所环境
 
     def test_gate_sandbox_enabled_reports_demo_not_live(self):
         # 审计字面：gate demo+enabled=真实发送模拟单，不得标 LIVE
         self._pool(dry_run=False)
-        with patch.dict("os.environ", {"R20_GATE_TESTNET": "1",
-                                       "R20_GATE_DEMO_EXECUTION": "1"}):
+        with patch.dict("os.environ", {"ASTRA_GATE_TESTNET": "1",
+                                       "ASTRA_GATE_DEMO_EXECUTION": "1"}):
             self.assertEqual(rp.effective_mode(), "demo")
             self.assertEqual(rp.gate_execution_axis(), "demo")
 
     def test_sandbox_missing_demo_flag_failsafe_dry_run(self):
         self._pool(dry_run=False)
-        with patch.dict("os.environ", {"R20_GATE_TESTNET": "1",
-                                       "R20_GATE_DEMO_EXECUTION": "0",
-                                       "R20_GATE_EXECUTION": "1"}):
+        with patch.dict("os.environ", {"ASTRA_GATE_TESTNET": "1",
+                                       "ASTRA_GATE_DEMO_EXECUTION": "0",
+                                       "ASTRA_GATE_EXECUTION": "1"}):
             # live 闸不能越权放行沙盒轴；缺 demo 闸 → 强制 dry_run
             self.assertEqual(rp.effective_mode(), "dry_run")
             self.assertIs(rp.load_gate_pool()["dry_run"], True)
 
     def test_live_axis_default_unchanged(self):
         self._pool(dry_run=False)
-        with patch.dict("os.environ", {"R20_GATE_EXECUTION": "1",
-                                       "R20_GATE_DEMO_EXECUTION": "1"}):
+        with patch.dict("os.environ", {"ASTRA_GATE_EXECUTION": "1",
+                                       "ASTRA_GATE_DEMO_EXECUTION": "1"}):
             self.assertEqual(rp.effective_mode(), "live")     # 无 TESTNET=现状轴
-        with patch.dict("os.environ", {"R20_GATE_EXECUTION": "0"}):
+        with patch.dict("os.environ", {"ASTRA_GATE_EXECUTION": "0"}):
             self.assertEqual(rp.effective_mode(), "dry_run")  # 闸关 fail-safe
 
     def test_credentials_missing_forces_dry_run(self):
         self._pool(dry_run=False)
-        with patch("r20_gateway.secrets.load_secrets", return_value={}), \
-                patch.dict("os.environ", {"R20_GATE_EXECUTION": "1",
-                                          "R20_GATE_TESTNET": "1",
-                                          "R20_GATE_DEMO_EXECUTION": "1"}):
+        with patch("astra_gateway.secrets.load_secrets", return_value={}), \
+                patch.dict("os.environ", {"ASTRA_GATE_EXECUTION": "1",
+                                          "ASTRA_GATE_TESTNET": "1",
+                                          "ASTRA_GATE_DEMO_EXECUTION": "1"}):
             self.assertEqual(rp.effective_mode(), "dry_run")  # 凭证缺失收敛
 
     def test_execution_open_consumed_with_axis(self):

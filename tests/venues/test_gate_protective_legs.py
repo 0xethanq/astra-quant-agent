@@ -14,10 +14,10 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from r20_backend.exchanges.gate import (
+from astra_backend.exchanges.gate import (
     GateAdapter, GateAPIError, AUTO_SIZE_CLOSE_LONG, AUTO_SIZE_CLOSE_SHORT,
 )
-from r20_backend.exchanges.base import ExchangeCapabilityError
+from astra_backend.exchanges.base import ExchangeCapabilityError
 
 
 class _Base(unittest.TestCase):

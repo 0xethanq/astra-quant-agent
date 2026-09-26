@@ -57,6 +57,7 @@ SUBPKG_INIT = ROOT / "scripts" / "trader" / "__init__.py"
 import scripts.ai_factor_trader as trader  # noqa: E402
 import scripts.trader.reservation_reconcile as rr  # noqa: E402
 from unittest.mock import patch  # noqa: E402
+from tests.extraction.rename_baseline import legacy_rev_path, normalize
 
 
 def _code(p: Path) -> str:
@@ -334,7 +335,7 @@ class BehaviourPreservedTest(unittest.TestCase):
 
     def test_moved_bodies_are_verbatim(self):
         import subprocess
-        old = subprocess.run(["git", "show", f"{self.PRE}:scripts/ai_factor_trader.py"],
+        old = subprocess.run(["git", "show", legacy_rev_path(f"{self.PRE}:scripts/ai_factor_trader.py")],
                              capture_output=True, text=True, cwd=str(ROOT))
         self.assertEqual(old.returncode, 0, old.stderr)
         new = MODULE.read_text(encoding="utf-8")

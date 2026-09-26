@@ -17,7 +17,7 @@ import types
 import unittest
 from unittest import mock
 
-from r20_backend.routers import exchanges as R
+from astra_backend.routers import exchanges as R
 
 
 class ScanTest(unittest.TestCase):
@@ -33,7 +33,7 @@ class ScanTest(unittest.TestCase):
                                                           fingerprint="fp"))
         p.start()
         self.addCleanup(p.stop)
-        p = mock.patch("r20_backend.close_intent.adapter_environment",
+        p = mock.patch("astra_backend.close_intent.adapter_environment",
                        side_effect=lambda v, mode: f"{v}-{mode}")
         p.start()
         self.addCleanup(p.stop)
@@ -57,7 +57,7 @@ class ScanTest(unittest.TestCase):
         def _get(v, environment=None):
             self.adapter_calls.append((v, environment))
             return mapping[v]
-        p = mock.patch("r20_backend.exchanges.get_adapter", side_effect=_get)
+        p = mock.patch("astra_backend.exchanges.get_adapter", side_effect=_get)
         p.start()
         self.addCleanup(p.stop)
 
@@ -65,7 +65,7 @@ class ScanTest(unittest.TestCase):
         """★ 只读预演：`dry_run=True` 是硬前提；台账行与所注册表都要交下去。"""
         self._adapters({"gate": types.SimpleNamespace(positions=lambda: []),
                         "binance": types.SimpleNamespace(positions=lambda: [])})
-        out = R.venue_protection_scan(x_r20_admin_token="t")
+        out = R.venue_protection_scan(x_astra_admin_token="t")
         self.assertIs(self.audit_kwargs.get("dry_run"), True, "**绝不下单、绝不撤单**")
         self.assertEqual(self.audit_kwargs.get("environment"), "demo")
         self.assertEqual(self.audit_kwargs.get("ledger_rows"), [{"row": 1}])
@@ -81,7 +81,7 @@ class ScanTest(unittest.TestCase):
         self.ledger_reader.return_value = None
         self._adapters({"gate": types.SimpleNamespace(positions=lambda: []),
                         "binance": types.SimpleNamespace(positions=lambda: [])})
-        R.venue_protection_scan(x_r20_admin_token="t")
+        R.venue_protection_scan(x_astra_admin_token="t")
         self.assertIsNone(self.audit_kwargs.get("ledger_rows"))
 
     def test_a_raising_ledger_reader_is_currently_unguarded(self):
@@ -93,13 +93,13 @@ class ScanTest(unittest.TestCase):
         self._adapters({"gate": types.SimpleNamespace(positions=lambda: []),
                         "binance": types.SimpleNamespace(positions=lambda: [])})
         with self.assertRaises(RuntimeError):
-            R.venue_protection_scan(x_r20_admin_token="t")
+            R.venue_protection_scan(x_astra_admin_token="t")
 
     def test_registry_falls_back_to_the_adapter_environment(self):
         """★ 第 590 行：未显式给 environment 时，注册表自己按档位解析。"""
         self._adapters({"gate": types.SimpleNamespace(positions=lambda: []),
                         "binance": types.SimpleNamespace(positions=lambda: [])})
-        R.venue_protection_scan(x_r20_admin_token="t")
+        R.venue_protection_scan(x_astra_admin_token="t")
         registry = self.audit_kwargs["venue_registry"]
         # ⚠️ 不能再 patch 一层：函数内的 `get_adapter` 是**函数作用域绑定**，外层 patch 盖不住。
         # 改为记录**实际调用**（谁被以什么环境叫过）。
@@ -116,7 +116,7 @@ class ScanTest(unittest.TestCase):
         self._adapters({"gate": types.SimpleNamespace(positions=_boom),
                         "binance": types.SimpleNamespace(
                             positions=lambda: [{"size_signed": 2}])})
-        out = R.venue_protection_scan(x_r20_admin_token="t")
+        out = R.venue_protection_scan(x_astra_admin_token="t")
         self.assertIn("gate", out["snapshot_errors"])
         self.assertIn("gate 网络断了", out["snapshot_errors"]["gate"])
         self.assertEqual(out["snapshot_errors"]["gate"] != "", True)
@@ -128,14 +128,14 @@ class ScanTest(unittest.TestCase):
         self._adapters({"gate": types.SimpleNamespace(
             positions=lambda: [{"size_signed": 0}, {"size_signed": -1.5}]),
             "binance": types.SimpleNamespace(positions=lambda: [])})
-        R.venue_protection_scan(x_r20_admin_token="t")
+        R.venue_protection_scan(x_astra_admin_token="t")
         self.assertEqual(self.audit_snapshot["gate"], [{"size_signed": -1.5}])
 
     def test_watchdog_flag_is_three_state(self):
         """★ 第 604 行：读不到开关 ⇒ `None`（**不可判定 ≠ 否**）。"""
         self._adapters({"gate": types.SimpleNamespace(positions=lambda: []),
                         "binance": types.SimpleNamespace(positions=lambda: [])})
-        out = R.venue_protection_scan(x_r20_admin_token="t")
+        out = R.venue_protection_scan(x_astra_admin_token="t")
         self.assertIn(out["watchdog_enabled"], (True, False), "读得到就是布尔")
 
         real_import = builtins.__import__
@@ -149,7 +149,7 @@ class ScanTest(unittest.TestCase):
             return real_import(name, *a, **kw)
 
         with mock.patch.object(builtins, "__import__", side_effect=_blocked):
-            out2 = R.venue_protection_scan(x_r20_admin_token="t")
+            out2 = R.venue_protection_scan(x_astra_admin_token="t")
         self.assertIsNone(out2["watchdog_enabled"],
                           "读不到 ⇒ None（区分「巡检没开」与「开了没发现问题」）")
 

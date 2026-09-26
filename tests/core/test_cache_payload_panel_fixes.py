@@ -14,8 +14,8 @@ import ast
 import inspect
 import unittest
 
-from r20_backend.dashboard_payload import cache_payload
-from r20_backend.dashboard_payload.cache_payload import build_live_cache_payload, is_stale_status
+from astra_backend.dashboard_payload import cache_payload
+from astra_backend.dashboard_payload.cache_payload import build_live_cache_payload, is_stale_status
 
 
 def _builder_tree():

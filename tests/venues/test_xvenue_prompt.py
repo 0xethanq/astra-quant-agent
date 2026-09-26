@@ -80,7 +80,7 @@ class TestXVenueMatrix(unittest.TestCase):
     def test_kill_switch(self):
         pkgs = self._pkgs()
         with patch.object(abt, "_get_xvenue_adapter", lambda v: _BoomAd()), \
-                patch.dict(os.environ, {"R20_XVENUE_PROMPT": "0"}):
+                patch.dict(os.environ, {"ASTRA_XVENUE_PROMPT": "0"}):
             abt.fetch_cross_venue_matrix(pkgs)  # 不触发 _BoomAd
 
     def test_prompt_line_full(self):
@@ -221,17 +221,17 @@ class TestHealthFlushFallbacks(_XvModuleBase):
 
     def test_okx_testnet_env_fallback_when_runtime_module_is_unavailable(self):
         # ★ 第 95 行：`from scripts.okx_runtime import current_environment` 抛 ⇒
-        #   回落到直接读环境变量（`R20_OKX_ENV == "demo"`）
+        #   回落到直接读环境变量（`ASTRA_OKX_ENV == "demo"`）
         pkgs = [{"name": "BTC", "price": 100.0}]
         with patch.dict(sys.modules, {"scripts.okx_runtime": None}):
-            with patch.dict(os.environ, {"R20_OKX_ENV": "DEMO"}):
+            with patch.dict(os.environ, {"ASTRA_OKX_ENV": "DEMO"}):
                 out = self._flush(pkgs)
         self.assertTrue(out["venues"]["okx"]["testnet"], "回落分支必须按环境变量判 demo")
 
     def test_okx_testnet_env_fallback_says_false_for_live(self):
         pkgs = [{"name": "BTC", "price": 100.0}]
         with patch.dict(sys.modules, {"scripts.okx_runtime": None}), \
-             patch.dict(os.environ, {"R20_OKX_ENV": "live"}):
+             patch.dict(os.environ, {"ASTRA_OKX_ENV": "live"}):
             out = self._flush(pkgs)
         self.assertFalse(out["venues"]["okx"]["testnet"])
 
@@ -307,7 +307,7 @@ class TestHealthFlushFallbacks(_XvModuleBase):
     def test_venue_testnet_flag_comes_from_the_upper_case_env_key(self):
         pkgs = [{"name": "BTC", "price": 100.0}]
         self.health["gate"] = {"latency": {"BTC": 5}, "failed": {}}
-        with patch.dict(os.environ, {"R20_GATE_TESTNET": "1"}):
+        with patch.dict(os.environ, {"ASTRA_GATE_TESTNET": "1"}):
             out = self._flush(pkgs)
         self.assertTrue(out["venues"]["gate"]["testnet"])
 
@@ -349,7 +349,7 @@ class TestSnapshotFallbacks(_XvModuleBase):
 
     def test_get_xvenue_adapter_forwards_to_the_backend_registry(self):
         # ★ 第 158 行：该函数是**既定 mock 缝**，必须真的转调 backend registry
-        import r20_backend.exchanges as exchanges
+        import astra_backend.exchanges as exchanges
         with patch.object(exchanges, "get_adapter", lambda v: f"adapter:{v}"):
             self.assertEqual(self.xv._get_xvenue_adapter("binance"), "adapter:binance")
 

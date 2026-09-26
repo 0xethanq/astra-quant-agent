@@ -28,7 +28,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from r20_backend import admin_auth as AA
+from astra_backend import admin_auth as AA
 
 GOOD = "abcd1234efgh"          # 12 位、含字母与数字
 
@@ -84,9 +84,9 @@ class _StoreBase(unittest.TestCase):
         return started
 
     def setUp(self):
-        self.tmp = Path(tempfile.mkdtemp(prefix="r20-auth-"))
+        self.tmp = Path(tempfile.mkdtemp(prefix="astra-auth-"))
         self.addCleanup(shutil.rmtree, self.tmp, True)
-        self.db = self.tmp / "data" / "r20_admin.db"
+        self.db = self.tmp / "data" / "astra_admin.db"
         self._start(mock.patch.object(AA, "DB_PATH", self.db))
         self._start(mock.patch.object(AA, "_hash_password", _fast_hash))
         self.now = 1_700_000_000

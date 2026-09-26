@@ -27,7 +27,7 @@ _ROOT = Path(__file__).resolve().parents[2]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from r20_backend.dashboard_payload.algo_protection import collect_algo_protection
+from astra_backend.dashboard_payload.algo_protection import collect_algo_protection
 
 
 def _leg(**over):

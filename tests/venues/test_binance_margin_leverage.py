@@ -16,7 +16,7 @@
 import unittest
 from unittest.mock import patch
 
-from r20_backend.exchanges.binance import BinanceAdapter, BinanceAPIError
+from astra_backend.exchanges.binance import BinanceAdapter, BinanceAPIError
 
 
 class _Base(unittest.TestCase):

@@ -4,7 +4,7 @@
 |---|---|
 | 非整数张数 | ★ **拒绝截断抹零**（`int()` 抹零会**留下残仓却谎报全平**）⇒ `closed:False` + 明确原因 |
 | 双向同存 | 未指定方向 ⇒ **拒绝盲平**（不猜平哪条腿）|
-| 全平单 | `size = -int(signed)`、`price=0`、`tif=ioc`、`reduce_only=True`、`text=t-r20c*` |
+| 全平单 | `size = -int(signed)`、`price=0`、`tif=ioc`、`reduce_only=True`、`text=t-astrac*` |
 | 触发方向 | 多 TP 上式、多 SL 下式、空 TP 下式、空 SL 上式（`RULE_ABOVE/BELOW`）|
 | 模式探测 | **只读**：读不到 ⇒ `unknown`（调用方据此禁新开仓）；**绝不自动切换账户模式**（审计 §2）|
 """
@@ -14,8 +14,8 @@ import inspect
 import unittest
 from unittest.mock import patch
 
-import r20_backend.exchanges.gate as gate_mod
-from r20_backend.exchanges.gate import GateAdapter, RULE_ABOVE, RULE_BELOW
+import astra_backend.exchanges.gate as gate_mod
+from astra_backend.exchanges.gate import GateAdapter, RULE_ABOVE, RULE_BELOW
 
 
 class _Base(unittest.TestCase):
@@ -81,7 +81,7 @@ class FastClosePositionTest(_Base):
         self.assertEqual(body["price"], "0")
         self.assertEqual(body["tif"], "ioc")
         self.assertTrue(body["reduce_only"], "只减不增")
-        self.assertTrue(body["text"].startswith("t-r20c"))
+        self.assertTrue(body["text"].startswith("t-astrac"))
         self.assertEqual(out, {"id": 1})
 
     def test_non_dict_receipt_is_wrapped_not_dropped(self):

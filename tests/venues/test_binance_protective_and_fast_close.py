@@ -10,7 +10,7 @@
 import unittest
 from unittest.mock import MagicMock
 
-from r20_backend.exchanges.binance import BinanceAdapter
+from astra_backend.exchanges.binance import BinanceAdapter
 
 
 class _Base(unittest.TestCase):

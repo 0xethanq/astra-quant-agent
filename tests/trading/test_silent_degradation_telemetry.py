@@ -319,7 +319,7 @@ class CycleDisclosureSummaryTest(unittest.TestCase):
         self.assertIn("path=CYCLE_DISCLOSURE_FILE", src)
         for kw in ("broken_venues=_BROKEN_VENUES", "entries_blocked=entries_blocked",
                    "shape_violations=_shape_violations", "watchdog_report=_wd_report",
-                   "watchdog_enabled=R20_VENUE_PROTECTION_WATCHDOG"):
+                   "watchdog_enabled=ASTRA_VENUE_PROTECTION_WATCHDOG"):
             with self.subTest(arg=kw):
                 self.assertIn(kw, src, f"汇总缺参数 {kw} ⇒ 该路披露不会被汇总")
 

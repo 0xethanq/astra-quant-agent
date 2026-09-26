@@ -4,7 +4,7 @@
  * ## 实测缺陷与背景：
  *
  * 在管理后台的网关重试（GatewayPage）、自进化心法复盘（EvolutionPage）与系统更新（AboutPage）中：
- * 用户需要输入指定的短语（如 `REPLAY {id}`、`RUN EVOLUTION`、`UPDATE R20`）以确认高危操作。
+ * 用户需要输入指定的短语（如 `REPLAY {id}`、`RUN EVOLUTION`、`UPDATE ASTRA`）以确认高危操作。
  *
  * 缺陷：
  * 1. `GatewayPage.vue`：提交按钮此前仅检查 `:disabled="!replayPhrase.trim() || replaying"`，

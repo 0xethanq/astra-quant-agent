@@ -17,14 +17,14 @@ import copy
 import json
 import unittest
 
-from r20_backend.dashboard_cache import (
+from astra_backend.dashboard_cache import (
     SLIM_HISTORY_DROP_KEYS,
     SLIM_HISTORY_FULL_ENTRIES,
     SLIM_LOGS,
     SLIM_TRADES,
     slim_payload,
 )
-from r20_backend.dashboard_payload.ledger_view import LEDGER_TRADES_MAX
+from astra_backend.dashboard_payload.ledger_view import LEDGER_TRADES_MAX
 
 #: 台账夹具必须**多于**瘦身上限，否则「截断并留痕」这条契约根本不会触发。
 _TRADES_TOTAL = SLIM_TRADES + 11

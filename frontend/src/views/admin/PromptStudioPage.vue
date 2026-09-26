@@ -399,7 +399,7 @@ async function exportProfile() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `r20-strategy-${selectedProfile.value?.name || 'profile'}-${fmtDate(new Date())}.json`
+    a.download = `astra-strategy-${selectedProfile.value?.name || 'profile'}-${fmtDate(new Date())}.json`
     a.click()
     URL.revokeObjectURL(url)
     toast.ok(t('admin.promptStudio.exported', undefined, { name: selectedProfile.value?.name || '' }))
@@ -882,7 +882,7 @@ onMounted(loadLib)
             :class="{ 'is-bad': !!importFileError }"
             :aria-invalid="!!importFileError ? 'true' : undefined"
             :aria-label="t('admin.promptStudio.import.methodTwo')"
-            placeholder='{"format": "r20-prompt-profile", "version": 3, "profile": { ... }}'
+            placeholder='{"format": "astra-prompt-profile", "version": 3, "profile": { ... }}'
           />
         </div>
 

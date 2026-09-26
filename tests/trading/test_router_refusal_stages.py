@@ -19,15 +19,15 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from r20_backend import execution_router as router
-from r20_backend.exchanges import ExchangeCapabilityError
+from astra_backend import execution_router as router
+from astra_backend.exchanges import ExchangeCapabilityError
 from tests.test_gate_execution_router import _StubAdapter, _decision
 
 
 class RefusalStageTest(unittest.TestCase):
     def _run(self, ad=None, *, decision=None, price_ref=79000.0):
         ad = ad or _StubAdapter()
-        with patch.dict(os.environ, {"R20_GATE_EXECUTION": "1"}):
+        with patch.dict(os.environ, {"ASTRA_GATE_EXECUTION": "1"}):
             r = router.open_protected_position(
                 decision if decision is not None else _decision(),
                 adapter=ad, price_ref=price_ref)
@@ -35,7 +35,7 @@ class RefusalStageTest(unittest.TestCase):
 
     def test_listing_gate_refuses_delisted_contract(self):
         ad = _StubAdapter()
-        with patch("r20_backend.exchanges.listing.ensure_contract_listed",
+        with patch("astra_backend.exchanges.listing.ensure_contract_listed",
                    return_value=SimpleNamespace(ok=False, reason="合约已下架")):
             r, ad = self._run(ad)
         self.assertFalse(r["ok"])
@@ -46,7 +46,7 @@ class RefusalStageTest(unittest.TestCase):
     def test_listing_gate_unavailable_is_fail_open(self):
         """目录拉不到 ⇒ 放行（对账是增强不是风控闸门，绝不阻塞交易）。"""
         ad = _StubAdapter()
-        with patch("r20_backend.exchanges.listing.ensure_contract_listed",
+        with patch("astra_backend.exchanges.listing.ensure_contract_listed",
                    side_effect=RuntimeError("目录服务挂了")):
             r, ad = self._run(ad)
         self.assertTrue(r["ok"], f"目录不可用不该阻塞交易：{r.get('detail')}")
@@ -85,7 +85,7 @@ class RefusalStageTest(unittest.TestCase):
         """能力异常（场所不支持）必须**原样上抛** —— 降级成 fail 会把它伪装成"临时故障"。"""
         ad = _StubAdapter()
         ad.positions = lambda: (_ for _ in ()).throw(ExchangeCapabilityError("不支持"))
-        with patch.dict(os.environ, {"R20_GATE_EXECUTION": "1"}):
+        with patch.dict(os.environ, {"ASTRA_GATE_EXECUTION": "1"}):
             with self.assertRaises(ExchangeCapabilityError):
                 router.open_protected_position(_decision(), adapter=ad, price_ref=79000.0)
 
@@ -100,7 +100,7 @@ class RefusalStageTest(unittest.TestCase):
     def test_capability_error_from_leverage_is_reraised(self):
         ad = _StubAdapter()
         ad.set_leverage = lambda *a, **k: (_ for _ in ()).throw(ExchangeCapabilityError("不支持"))
-        with patch.dict(os.environ, {"R20_GATE_EXECUTION": "1"}):
+        with patch.dict(os.environ, {"ASTRA_GATE_EXECUTION": "1"}):
             with self.assertRaises(ExchangeCapabilityError):
                 router.open_protected_position(_decision(), adapter=ad, price_ref=79000.0)
 
@@ -134,7 +134,7 @@ class OwnLedgerVerdictTest(unittest.TestCase):
         for _p in patches:
             _p.start()
         try:
-            with patch.dict(os.environ, {"R20_GATE_EXECUTION": "1"}):
+            with patch.dict(os.environ, {"ASTRA_GATE_EXECUTION": "1"}):
                 r = router.open_protected_position(
                     _decision(), adapter=ad, price_ref=79000.0,
                     own_position=own_position)
@@ -194,7 +194,7 @@ class ClosePositionEnvironmentTest(unittest.TestCase):
         ad = _StubAdapter()
         ad.environment = "demo"
         ad.fast_close_position = lambda symbol, **k: {"id": 7, "closed": True}
-        with patch.dict(os.environ, {"R20_GATE_EXECUTION": "1"}):
+        with patch.dict(os.environ, {"ASTRA_GATE_EXECUTION": "1"}):
             r = router.close_position("BTC", venue="gate", adapter=ad, environment="demo")
         self.assertTrue(r["ok"], r.get("detail"))
         self.assertEqual(getattr(ad, "environment", None), "demo",
@@ -206,11 +206,11 @@ class ProtectiveRollbackTest(unittest.TestCase):
     铁律是「任一步失败 → 已挂触发单回滚 + 撤入场单」。旧实现只撤入场单 ⇒
     tp 挂成、sl 失败时 tp 变孤儿留到 expiration（**无仓挂保护单不可对账**）。
     现有两段：①已知 legs 逐腿 best-effort 撤；②枚举该资产残留触发单，
-    **只撤带 r20 前缀的本系统单**（用户手动保护单绝不触碰），枚举失败则**如实标注**。
+    **只撤带 astra 前缀的本系统单**（用户手动保护单绝不触碰），枚举失败则**如实标注**。
     """
 
     def _run(self, ad):
-        with patch.dict(os.environ, {"R20_GATE_EXECUTION": "1"}):
+        with patch.dict(os.environ, {"ASTRA_GATE_EXECUTION": "1"}):
             return router.open_protected_position(_decision(), adapter=ad, price_ref=79000.0)
 
     def test_attach_failure_rolls_back_without_known_legs(self):
@@ -220,12 +220,12 @@ class ProtectiveRollbackTest(unittest.TestCase):
         self.assertEqual(r["stage"], "protective")
         self.assertIn(("cancel_entry", "BTC", "9001"), ad.calls, "绝不留裸仓")
 
-    def test_residue_enumeration_touches_only_r20_labelled_orders(self):
+    def test_residue_enumeration_touches_only_astra_labelled_orders(self):
         """孤儿清理**只认本系统标签**；用户手单、非 dict、无 id 的行一律不碰。"""
         ad = _StubAdapter(fail_verify=True)
         ad.list_protective_orders = lambda symbol: [
-            {"id": "r1", "text": "t-r20tp"},           # 本系统 ⇒ 撤
-            {"text": "t-r20sl"},                       # 无 id ⇒ 跳过
+            {"id": "r1", "text": "t-astratp"},           # 本系统 ⇒ 撤
+            {"text": "t-astrasl"},                       # 无 id ⇒ 跳过
             "垃圾行",                                   # 非 dict ⇒ 跳过
             {"id": "u1", "text": "user-manual"},       # 用户手单 ⇒ 绝不触碰
         ]
@@ -254,7 +254,7 @@ class CancelProvenOwnLegsTest(unittest.TestCase):
     （`leg_base`/`_leg_kind`/`_row_text` 实测都正常）。真因见下面"死分支"注释。
     """
 
-    ROW = {"id": "g1", "initial": {"contract": "BTC_USDT", "text": "t-r20sl"}}
+    ROW = {"id": "g1", "initial": {"contract": "BTC_USDT", "text": "t-astrasl"}}
 
     def _adapter(self):
         ad = _StubAdapter()
@@ -279,10 +279,10 @@ class CancelProvenOwnLegsTest(unittest.TestCase):
         """**仅台账证据 ⇒ 不自动撤**（保守）。
 
         台账是本地记录、可能与交易所不一致（本仓已有"账实不符"实例）⇒ 只有交易所侧
-        的 `tag`（`t-r20sl/t-r20tp`）才算"可证明"，台账证据只交归属审计。
+        的 `tag`（`t-astrasl/t-astratp`）才算"可证明"，台账证据只交归属审计。
         """
-        from r20_backend.execution_router import _cancel_proven_own_legs
-        import r20_backend.execution.own_records as own
+        from astra_backend.execution_router import _cancel_proven_own_legs
+        import astra_backend.execution.own_records as own
         ad = self._adapter()
         with patch.object(own, "load_ledger",
                           return_value=[{"id": "l1", "inst": "BTC_USDT", "side": "long",
@@ -292,13 +292,13 @@ class CancelProvenOwnLegsTest(unittest.TestCase):
         self.assertIn("未撤", note, f"但要如实报数：{note}")
 
     def test_untagged_leg_for_another_contract_is_left(self):
-        from r20_backend.execution_router import _cancel_proven_own_legs
-        import r20_backend.execution.own_records as own
+        from astra_backend.execution_router import _cancel_proven_own_legs
+        import astra_backend.execution.own_records as own
         ad = _StubAdapter()
         ad.cancelled = []
         ad.cancel_price_order = lambda oid: ad.cancelled.append(oid)
         ad.list_protective_orders = lambda symbol: [
-            {"id": "eth1", "initial": {"contract": "ETH_USDT", "text": "t-r20sl"}}]
+            {"id": "eth1", "initial": {"contract": "ETH_USDT", "text": "t-astrasl"}}]
         with patch.object(own, "load_ledger", return_value=[]):
             note = _cancel_proven_own_legs(ad, "BTC", {})
         self.assertEqual(ad.cancelled, [], "别的合约的腿不碰")

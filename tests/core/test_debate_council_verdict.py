@@ -25,7 +25,7 @@ brain_output["council_transcript"] = council_transcript      # 同一个对象
 import unittest
 from unittest import mock
 
-from r20_backend.council.debate import execute_council_debate
+from astra_backend.council.debate import execute_council_debate
 
 ROLES = {
     "cio": {"name": "首席", "is_arbitrator": True, "prompt": "p"},
@@ -39,14 +39,14 @@ RESOLVED = {"model": "M", "base_url": "U", "api_key": "K", "api_format": "F",
 
 class VerdictTest(unittest.TestCase):
     def setUp(self):
-        p = mock.patch("r20_backend.council.debate.time.sleep")
+        p = mock.patch("astra_backend.council.debate.time.sleep")
         p.start()
         self.addCleanup(p.stop)
-        p2 = mock.patch("r20_backend.llm_manager.get_active_llm_runtime",
+        p2 = mock.patch("astra_backend.llm_manager.get_active_llm_runtime",
                         return_value={"model": "M-active"})
         p2.start()
         self.addCleanup(p2.stop)
-        p3 = mock.patch("r20_backend.council.debate._normalize_cio_adopted_roles")
+        p3 = mock.patch("astra_backend.council.debate._normalize_cio_adopted_roles")
         self.normalize = p3.start()
         self.addCleanup(p3.stop)
 
@@ -63,7 +63,7 @@ class VerdictTest(unittest.TestCase):
 
         def _call_critique(*args, **kwargs):
             return {"role_id": args[0], "role_name": "?", "status": "ok", "content": "质询"}
-        p = mock.patch("r20_backend.llm_manager.execute_llm_request",
+        p = mock.patch("astra_backend.llm_manager.execute_llm_request",
                        return_value=(cio_payload, "思考", {}, 12.5))
         p.start()
         self.addCleanup(p.stop)

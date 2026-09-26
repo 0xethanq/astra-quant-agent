@@ -16,7 +16,7 @@
 import unittest
 from unittest.mock import patch
 
-import r20_backend.dashboard_cache as dc
+import astra_backend.dashboard_cache as dc
 
 _STATE_KEYS = ("_private_not_ready", "avail_eq", "balance_ok", "cash_bal", "long_count",
                "orders_data", "pending_orders_list", "positions", "positions_ok", "short_count",

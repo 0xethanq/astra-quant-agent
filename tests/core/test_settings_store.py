@@ -5,8 +5,8 @@
 
 | 语义 | 口径 |
 |---|---|
-| ★ **换行=注入新键，必须拒** | 审计 P2-7：`.env` 是"每行一个 KEY=VALUE"，值里带换行就等于**追加新键**（任一输入框都能伪造 `R20_BINANCE_EXECUTION=1` 这类执行开闸键）⇒ 拒绝换行/回车/NUL，并顺带拒绝控制字符 |
-| ★ **写盘用"临时文件 + fsync + replace"** | 先 `mkstemp` 同目录、`fsync` 落盘、`chmod 600`、`os.replace` 原子换、再 `chmod 600`；**失败必留 `finally` 清理**临时文件（不留 `.r20-env-*` 垃圾）|
+| ★ **换行=注入新键，必须拒** | 审计 P2-7：`.env` 是"每行一个 KEY=VALUE"，值里带换行就等于**追加新键**（任一输入框都能伪造 `ASTRA_BINANCE_EXECUTION=1` 这类执行开闸键）⇒ 拒绝换行/回车/NUL，并顺带拒绝控制字符 |
+| ★ **写盘用"临时文件 + fsync + replace"** | 先 `mkstemp` 同目录、`fsync` 落盘、`chmod 600`、`os.replace` 原子换、再 `chmod 600`；**失败必留 `finally` 清理**临时文件（不留 `.astra-env-*` 垃圾）|
 | ★ **读-改-写整体持锁** | 审计 P0-2：旧实现无锁 ⇒ 两个并发保存各自基于同一份旧文本回写，**后写者静默覆盖先写者**，而两个接口都返回"已保存"。锁只覆盖 RMW（不覆盖无 I/O 的 `os.environ` 同步）|
 | ★ **键名白名单 + 键名格式** | `update_env` 只认 `MANAGED_KEYS`；`remove_env` 只认 `^[A-Za-z_][A-Za-z0-9_]*$`。未知键**整行保留**（不误删运维手写的配置）|
 | ★ **脱敏读写回环防线** | `is_masked` 识别 `mask()`/`mask_url()` 的产物：掩码串出现在写请求里一律视为「用户未改动」，绝不落盘覆盖真密钥 |
@@ -23,7 +23,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from r20_backend import settings_store as SS
+from astra_backend import settings_store as SS
 
 
 class _Base(unittest.TestCase):
@@ -50,7 +50,7 @@ class _Base(unittest.TestCase):
         return self.env_file.read_text(encoding="utf-8")
 
     def _temps(self):
-        return sorted(p.name for p in self.env_file.parent.glob(".r20-env-*"))
+        return sorted(p.name for p in self.env_file.parent.glob(".astra-env-*"))
 
 
 class MaskForwardingTests(unittest.TestCase):
@@ -67,9 +67,9 @@ class MaskForwardingTests(unittest.TestCase):
         spy.assert_called_once_with("supersecret", 7)
 
     def test_the_name_stays_in_this_module(self):
-        """docstring 契约：路由与审计用例直接 `from r20_backend.settings_store import mask`。"""
+        """docstring 契约：路由与审计用例直接 `from astra_backend.settings_store import mask`。"""
         self.assertTrue(callable(SS.mask))
-        self.assertEqual(SS.mask.__module__, "r20_backend.settings_store")
+        self.assertEqual(SS.mask.__module__, "astra_backend.settings_store")
 
 
 class IsMaskedTests(unittest.TestCase):
@@ -163,7 +163,7 @@ class SanitizeEnvValueTests(unittest.TestCase):
 
     def test_the_newline_error_names_the_injection_risk(self):
         with self.assertRaises(SS.EnvValueError) as ctx:
-            SS.sanitize_env_value("K", "v\nR20_BINANCE_EXECUTION=1")
+            SS.sanitize_env_value("K", "v\nASTRA_BINANCE_EXECUTION=1")
         self.assertIn("防止注入新配置键", str(ctx.exception))
 
     def test_control_characters_are_rejected(self):
@@ -278,7 +278,7 @@ class RemoveEnvTests(_Base):
         with mock.patch.object(SS.os, "replace", side_effect=OSError("跨设备")):
             with self.assertRaises(OSError):
                 SS.remove_env(["A"])
-        self.assertEqual(self._temps(), [], "失败也必须清掉 .r20-env-* 临时文件")
+        self.assertEqual(self._temps(), [], "失败也必须清掉 .astra-env-* 临时文件")
 
     def test_the_rewrite_is_locked(self):
         spy = mock.Mock(wraps=SS.file_lock)
@@ -295,8 +295,8 @@ class RemoveEnvTests(_Base):
 class UpdateEnvTests(_Base):
     def test_it_appends_a_new_managed_key(self):
         self._write("LLM_MODEL=gpt\n")
-        SS.update_env({"R20_ADMIN_TOKEN": "tok"})
-        self.assertEqual(self._read(), "LLM_MODEL=gpt\n\nR20_ADMIN_TOKEN=tok\n")
+        SS.update_env({"ASTRA_ADMIN_TOKEN": "tok"})
+        self.assertEqual(self._read(), "LLM_MODEL=gpt\n\nASTRA_ADMIN_TOKEN=tok\n")
 
     def test_it_replaces_an_existing_key_in_place(self):
         self._write("A=1\nLLM_MODEL=old\nB=2\n")
@@ -305,14 +305,14 @@ class UpdateEnvTests(_Base):
 
     def test_no_blank_separator_when_the_file_already_ends_blank(self):
         self._write("LLM_MODEL=gpt\n\n")
-        SS.update_env({"R20_ADMIN_TOKEN": "tok"})
+        SS.update_env({"ASTRA_ADMIN_TOKEN": "tok"})
         # splitlines 得到 ["LLM_MODEL=gpt", ""] ⇒ result[-1] 为空 ⇒ **不再**补分隔空行
-        self.assertEqual(self._read(), "LLM_MODEL=gpt\n\nR20_ADMIN_TOKEN=tok\n")
+        self.assertEqual(self._read(), "LLM_MODEL=gpt\n\nASTRA_ADMIN_TOKEN=tok\n")
 
     def test_no_blank_separator_when_the_file_was_empty(self):
         self.env_file.parent.mkdir(parents=True, exist_ok=True)
-        SS.update_env({"R20_ADMIN_TOKEN": "tok"})
-        self.assertEqual(self._read(), "R20_ADMIN_TOKEN=tok\n")
+        SS.update_env({"ASTRA_ADMIN_TOKEN": "tok"})
+        self.assertEqual(self._read(), "ASTRA_ADMIN_TOKEN=tok\n")
 
     def test_unmanaged_keys_are_ignored(self):
         self._write("A=1\n")
@@ -320,14 +320,14 @@ class UpdateEnvTests(_Base):
         self.assertEqual(self._read(), "A=1\n")
 
     def test_none_values_are_ignored(self):
-        self._write("R20_ADMIN_TOKEN=keep\n")
-        SS.update_env({"R20_ADMIN_TOKEN": None})
-        self.assertEqual(self._read(), "R20_ADMIN_TOKEN=keep\n")
+        self._write("ASTRA_ADMIN_TOKEN=keep\n")
+        SS.update_env({"ASTRA_ADMIN_TOKEN": None})
+        self.assertEqual(self._read(), "ASTRA_ADMIN_TOKEN=keep\n")
 
     def test_comments_and_blank_lines_survive(self):
-        self._write("# 头注释\n\nR20_ADMIN_TOKEN=old\n")
-        SS.update_env({"R20_ADMIN_TOKEN": "new"})
-        self.assertEqual(self._read(), "# 头注释\n\nR20_ADMIN_TOKEN=new\n")
+        self._write("# 头注释\n\nASTRA_ADMIN_TOKEN=old\n")
+        SS.update_env({"ASTRA_ADMIN_TOKEN": "new"})
+        self.assertEqual(self._read(), "# 头注释\n\nASTRA_ADMIN_TOKEN=new\n")
 
     def test_values_are_sanitized(self):
         self._write("")
@@ -336,13 +336,13 @@ class UpdateEnvTests(_Base):
 
     def test_booleans_become_python_text(self):
         self._write("")
-        SS.update_env({"R20_GATE_EXECUTION": True})
-        self.assertIn("R20_GATE_EXECUTION=True", self._read())
+        SS.update_env({"ASTRA_GATE_EXECUTION": True})
+        self.assertIn("ASTRA_GATE_EXECUTION=True", self._read())
 
     def test_an_injection_attempt_is_rejected_before_any_write(self):
         self._write("LLM_MODEL=gpt\n")
         with self.assertRaises(SS.EnvValueError):
-            SS.update_env({"LLM_MODEL": "gpt\nR20_BINANCE_EXECUTION=1"})
+            SS.update_env({"LLM_MODEL": "gpt\nASTRA_BINANCE_EXECUTION=1"})
         self.assertEqual(self._read(), "LLM_MODEL=gpt\n", "失败不得留下半写状态")
 
     def test_several_keys_are_written_together(self):
@@ -443,24 +443,24 @@ class RiskEnvKeysFallbackTests(unittest.TestCase):
         """
         import sys
         src = Path(SS.__file__).read_text(encoding="utf-8")
-        ns = {"__name__": "r20_settings_store_fallback_probe",
-              "__file__": SS.__file__, "__package__": "r20_backend"}
+        ns = {"__name__": "astra_settings_store_fallback_probe",
+              "__file__": SS.__file__, "__package__": "astra_backend"}
         with mock.patch.dict(sys.modules, {"scripts.risk_constants": None}):
             exec(compile(src, SS.__file__, "exec"), ns)
-        self.assertIn("R20_MAX_LEVERAGE", SS.MANAGED_KEYS, "线上模块不受影响")
-        self.assertNotIn("R20_MAX_LEVERAGE", ns["MANAGED_KEYS"],
+        self.assertIn("ASTRA_MAX_LEVERAGE", SS.MANAGED_KEYS, "线上模块不受影响")
+        self.assertNotIn("ASTRA_MAX_LEVERAGE", ns["MANAGED_KEYS"],
                          "风控键表拿不到 ⇒ 兜底静默跳过，只剩字面白名单")
         self.assertIn("OKX_API_KEY", ns["MANAGED_KEYS"], "字面白名单照常生效")
-        self.assertIn("R20_MAX_TOTAL_EXPOSURE_USDT", ns["MANAGED_KEYS"],
+        self.assertIn("ASTRA_MAX_TOTAL_EXPOSURE_USDT", ns["MANAGED_KEYS"],
                       "该键同时在字面白名单里（所以它不随兜底消失）")
 
 
 class ManagedKeysTests(unittest.TestCase):
     def test_the_execution_toggles_are_managed(self):
         """真实下单权限的开关必须在白名单里，否则后台改不动（也不该能改）。"""
-        for key in ("R20_GATE_EXECUTION", "R20_GATE_DEMO_EXECUTION",
-                    "R20_BINANCE_EXECUTION", "R20_BINANCE_DEMO_EXECUTION",
-                    "R20_MAX_TOTAL_EXPOSURE_USDT", "R20_MANUAL_CLOSE_ENABLED"):
+        for key in ("ASTRA_GATE_EXECUTION", "ASTRA_GATE_DEMO_EXECUTION",
+                    "ASTRA_BINANCE_EXECUTION", "ASTRA_BINANCE_DEMO_EXECUTION",
+                    "ASTRA_MAX_TOTAL_EXPOSURE_USDT", "ASTRA_MANUAL_CLOSE_ENABLED"):
             self.assertIn(key, SS.MANAGED_KEYS)
 
     def test_the_six_account_credential_families_are_managed(self):
@@ -481,7 +481,7 @@ class ManagedKeysTests(unittest.TestCase):
         self.assertTrue(set(RC.RISK_ENV_KEYS) <= SS.MANAGED_KEYS)
 
     def test_the_env_file_points_at_the_repo_root(self):
-        from r20_backend.config import ROOT
+        from astra_backend.config import ROOT
         self.assertEqual(SS.ENV_FILE, ROOT / ".env")
 
 

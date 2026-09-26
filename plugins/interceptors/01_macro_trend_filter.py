@@ -1,10 +1,10 @@
 """
-R20 物理拦截插件规范
+ASTRA 物理拦截插件规范
 ====================
 id: 01_macro_trend_filter
 name: 4H 宏观大周期顺势铁律
 version: 1.0.0
-author: R20 Official
+author: ASTRA Official
 description: 4H大级别多头通道下严禁逆势摸顶开空；4H大级别空头承压下严禁逆势抄底接飞刀 (Fail-Closed)。
 tags: 趋势过滤, 核心风控, 官方预设
 """

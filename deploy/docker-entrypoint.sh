@@ -51,28 +51,28 @@ case "$MODE" in
         # 理由：Docker 的 `restart:` 策略只对**退出**生效；"进程还在、HTTP 卡死"这种死法
         # Docker 根本不会重启（健康检查只影响 `docker ps` 的显示）。看门狗按
         # /api/v1/health 探测并拉起，把"卡死"一并覆盖。看门狗缺失时退回直接起 uvicorn。
-        if [ -f "$ROOT_DIR/scripts/r20_watchdog.sh" ]; then
-            echo "✨ [R20] Starting Web Engine & Control Plane on 0.0.0.0:8080 (supervised)..."
-            exec bash "$ROOT_DIR/scripts/r20_watchdog.sh"
+        if [ -f "$ROOT_DIR/scripts/astra_watchdog.sh" ]; then
+            echo "✨ [ASTRA] Starting Web Engine & Control Plane on 0.0.0.0:8080 (supervised)..."
+            exec bash "$ROOT_DIR/scripts/astra_watchdog.sh"
         fi
-        echo "✨ [R20] Starting Web Engine & Control Plane on 0.0.0.0:8080..."
-        exec python3 -m uvicorn r20_backend.app:app --host 0.0.0.0 --port 8080
+        echo "✨ [ASTRA] Starting Web Engine & Control Plane on 0.0.0.0:8080..."
+        exec python3 -m uvicorn astra_backend.app:app --host 0.0.0.0 --port 8080
         ;;
     gateway|worker)
         # 同理：网关的死法更隐蔽 —— 后端照常绿着、看板能开，调度却已停。
         # 判据是 worker 每轮循环写的存活心跳（见 scripts/gateway_liveness.py）。
-        if [ -f "$ROOT_DIR/scripts/r20_watchdog.sh" ]; then
-            echo "🚀 [R20] Starting Quantitative Gateway & Dispatch Worker (supervised)..."
-            exec bash "$ROOT_DIR/scripts/r20_watchdog.sh" gateway
+        if [ -f "$ROOT_DIR/scripts/astra_watchdog.sh" ]; then
+            echo "🚀 [ASTRA] Starting Quantitative Gateway & Dispatch Worker (supervised)..."
+            exec bash "$ROOT_DIR/scripts/astra_watchdog.sh" gateway
         fi
-        echo "🚀 [R20] Starting Quantitative Gateway & Dispatch Worker..."
-        exec python3 -m r20_gateway.worker
+        echo "🚀 [ASTRA] Starting Quantitative Gateway & Dispatch Worker..."
+        exec python3 -m astra_gateway.worker
         ;;
     all)
-        echo "✨ [R20] Starting All-in-One Mode (Web + Gateway Worker)..."
-        python3 -m uvicorn r20_backend.app:app --host 0.0.0.0 --port 8080 &
+        echo "✨ [ASTRA] Starting All-in-One Mode (Web + Gateway Worker)..."
+        python3 -m uvicorn astra_backend.app:app --host 0.0.0.0 --port 8080 &
         BACKEND_PID=$!
-        python3 -m r20_gateway.worker &
+        python3 -m astra_gateway.worker &
         GATEWAY_PID=$!
 
         trap 'echo "🛑 Stopping services..."; kill -TERM $BACKEND_PID $GATEWAY_PID 2>/dev/null' TERM INT

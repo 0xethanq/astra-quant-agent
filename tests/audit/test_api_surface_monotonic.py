@@ -17,7 +17,7 @@ BASE=cc1666082d34
 | 面 | 基线 | 现在 | 结果 |
 |---|---|---|---|
 | 全仓 HTTP 路由（method + path） | 163 | 163 | 消失 0 / 新增 0 |
-| Python 公开顶层名（`r20_backend/` + `scripts/`） | 928 | 1032 | **消失 0** |
+| Python 公开顶层名（`astra_backend/` + `scripts/`） | 928 | 1032 | **消失 0** |
 | 前端 TS 导出（`frontend/src`） | 161 | 249 | 消失 1（见下） |
 
 - 路由 **163 → 163，一条不差** —— 这是"接口不变"最硬的证据；
@@ -84,7 +84,7 @@ BASELINE_PUBLIC_NAMES: set[str] = {
 
 
 def _iter_source_files():
-    for sub in ("r20_backend", "scripts", "r20_gateway"):
+    for sub in ("astra_backend", "scripts", "astra_gateway"):
         base = ROOT / sub
         if base.is_dir():
             yield from base.rglob("*.py")

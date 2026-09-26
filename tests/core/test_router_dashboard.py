@@ -28,7 +28,7 @@ from unittest import mock
 from fastapi import HTTPException, Response
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse
 
-from r20_backend.routers import dashboard as A
+from astra_backend.routers import dashboard as A
 
 
 def _run(coro):
@@ -91,7 +91,7 @@ class CacheRouteTests(_Base):
 
     def test_ledger_requires_admin_and_defaults_to_a_list(self):
         self.read_json.return_value = []
-        out = A.cache("ledger", x_r20_admin_token="tok", x_r20_session="s")
+        out = A.cache("ledger", x_astra_admin_token="tok", x_astra_session="s")
         self.admin.assert_called_once_with("tok", "s")
         self.read_json.assert_called_once_with("trading_ledger.json", [])
         self.assertEqual(_body(out), [])
@@ -205,7 +205,7 @@ class CandlesRouteTests(_Base):
 class EquityHistoryTests(_Base):
     def setUp(self):
         super().setUp()
-        self.tmp = Path(tempfile.mkdtemp(prefix="r20-dash-equity-"))
+        self.tmp = Path(tempfile.mkdtemp(prefix="astra-dash-equity-"))
         self.addCleanup(shutil.rmtree, self.tmp, True)
         (self.tmp / "data").mkdir(parents=True, exist_ok=True)
         self._patch("ROOT", self.tmp)
@@ -311,7 +311,7 @@ class EquityHistoryTests(_Base):
 class StaticAssetTests(_Base):
     def setUp(self):
         super().setUp()
-        self.tmp = Path(tempfile.mkdtemp(prefix="r20-dash-static-"))
+        self.tmp = Path(tempfile.mkdtemp(prefix="astra-dash-static-"))
         self.addCleanup(shutil.rmtree, self.tmp, True)
         self.vue = self.tmp / "dist"
         self.root = self.tmp / "root"

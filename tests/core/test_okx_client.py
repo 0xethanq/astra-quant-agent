@@ -15,15 +15,15 @@
 
 ## 封闭性
 
-`urlopen` 是从 `urllib.request` 直接导入到本模块的 ⇒ patch `r20_backend.okx_client.urlopen`
-即可，**零真实网络**。分流用例 patch `r20_backend.okx_client.okx_rest.request`。
+`urlopen` 是从 `urllib.request` 直接导入到本模块的 ⇒ patch `astra_backend.okx_client.urlopen`
+即可，**零真实网络**。分流用例 patch `astra_backend.okx_client.okx_rest.request`。
 """
 
 import json
 import unittest
 from unittest import mock
 
-from r20_backend import okx_client as OK
+from astra_backend import okx_client as OK
 
 _WRITE_PATH = "/api/v5/trade/order"
 
@@ -181,7 +181,7 @@ class PublicRequestTests(unittest.TestCase):
         with self._urlopen({"data": []}) as urlopen:
             self.client.ticker("BTC")
         self.assertEqual(urlopen.call_args[0][0].get_header("User-agent"),
-                         "R20-Standalone/6.6.2")
+                         "ASTRA-Standalone/6.6.2")
 
     def test_a_missing_params_argument_does_not_break_the_url(self):
         with self._urlopen({"data": []}) as urlopen:

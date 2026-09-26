@@ -21,7 +21,7 @@
 ### ✅ 完整保留的核心资产
 1. **全量代码与版本控制**：
    - 完整 `.git/` 仓库（保留所有本地分支、Commit 历史与远程 origin 跟踪）；
-   - 后端全部模块 `r20_backend/`（L0-L4 架构、风控引擎与接口路由）；
+   - 后端全部模块 `astra_backend/`（L0-L4 架构、风控引擎与接口路由）；
    - 前端全部源码 `frontend/`（Vue 3 + TypeScript 纯净工程）；
    - 量化与算子脚本 `scripts/`（全量 33 个策略、复盘、执行与分析脚本）；
    - 自动化测试用例 `tests/`（涵盖审计、量化、UI 与风控门禁）；
@@ -35,7 +35,7 @@
 
 ### ❌ 彻底剔除的运行数据与敏感项
 - 数据库与业务状态：已排除全部 SQLite 数据库（`*.db` / `*.sqlite3`）、交易账本、决策历史、监控快照等；
-- 个人私密凭证：已排除 `.env` 及 Fernet 加密密钥文件（`r20_secrets.enc` / `.r20_secret_key`）；
+- 个人私密凭证：已排除 `.env` 及 Fernet 加密密钥文件（`astra_secrets.enc` / `.astra_secret_key`）；
 - 本地历史日志与备份：已排除 `logs/*.log` 与 `backups/*`；
 - 平台相关二进制环境：已排除 Python `.venv/` 与 `frontend/node_modules/`（避免跨机器架构导致的动态链接库不兼容问题）；
 - 运行缓存与文件锁：已排除全部 `*.lock`、`*.pid`、`__pycache__`、`.pytest_cache`。
@@ -50,10 +50,10 @@
 包含完整的 `.git`、源码及已预构建的前端产物：
 ```bash
 # 1. 解压归档包至目标目录（如 /data/dsh/home 或本地工作区）
-tar -xzvf r20_clean_project.tar.gz
+tar -xzvf astra_clean_project.tar.gz
 
 # 2. 进入项目根目录
-cd r20
+cd astra
 
 # 3. 赋予核心脚本执行权限
 chmod +x start.sh deploy/install.sh
@@ -64,7 +64,7 @@ chmod +x start.sh deploy/install.sh
 ```bash
 # 1. 克隆完整仓库
 git clone https://github.com/555cute/astra-quant-agent.git astra-quant-agent
-cd r20
+cd astra
 chmod +x start.sh deploy/install.sh
 
 # 2. 编译前端静态资源（需 Node.js 18+）
@@ -91,7 +91,7 @@ cp env.example .env
 chmod 600 .env
 ```
 用编辑器打开 `.env`：
-- 若仅用于本地离线开发或回测：保持 `R20_OKX_ENV=demo`，暂不填入真实 Key 即可；
+- 若仅用于本地离线开发或回测：保持 `ASTRA_OKX_ENV=demo`，暂不填入真实 Key 即可；
 - 若需要调用大语言模型（LLM）：配置 `LLM_API_KEY` 与对应的 `LLM_BASE_URL`；
 - 若接入实盘/模拟盘：通过管理后台 `/admin` 进行 Fernet 加密录入，或直接在 `.env` 中按需配置。
 
@@ -112,8 +112,8 @@ source .venv/bin/activate
 在新电脑上启动 DeepSeek Harness 后，让 AI Agent 无缝接手开发的流程如下：
 
 ### 1. 工作区挂载 (Workspace)
-- 将 DeepSeek Harness 的工作区路径直接指向新电脑上的 `r20` 目录（例如容器化部署下默认为 `/data/dsh/home/r20`，或本地路径）；
-- 在 Web 控制台确认当前工作目录为 `r20` 根目录。
+- 将 DeepSeek Harness 的工作区路径直接指向新电脑上的 `astra` 目录（例如容器化部署下默认为 `/data/dsh/home/astra`，或本地路径）；
+- 在 Web 控制台确认当前工作目录为 `astra` 根目录。
 
 ### 2. 模型服务配置 (LLM Providers)
 如果新电脑上的 DeepSeek Harness 为全新安装，请确保在 Harness 中配置好模型 Provider：
@@ -162,7 +162,7 @@ cd ..
 
 ## 六、常见疑难排查与避坑指南 (FAQ)
 
-### Q1: 运行脚本报 `ModuleNotFoundError: No module named 'r20_backend'`？
+### Q1: 运行脚本报 `ModuleNotFoundError: No module named 'astra_backend'`？
 - **原因**：未将项目根目录加入 Python 搜索路径，或未激活 `.venv`。
 - **解决办法**：
   ```bash

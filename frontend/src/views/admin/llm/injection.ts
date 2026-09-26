@@ -18,7 +18,7 @@ export type LlmCtx = ReturnType<typeof useLlmConfig>
  * 故必须由父页 provide，子组件 inject —— `useLlmCtx()` 在缺提供者时**直接抛错**，
  * 而不是静默返回 undefined。
  */
-export const LLM_KEY: InjectionKey<LlmCtx> = Symbol('r20.llmCtx')
+export const LLM_KEY: InjectionKey<LlmCtx> = Symbol('astra.llmCtx')
 
 export function useLlmCtx(): LlmCtx {
   const ctx = inject(LLM_KEY)

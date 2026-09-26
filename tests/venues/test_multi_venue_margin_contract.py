@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
-from r20_backend.dashboard_payload.multi_venue import collect_cross_venue_positions
+from astra_backend.dashboard_payload.multi_venue import collect_cross_venue_positions
 
 
 class MultiVenueMarginContractTests(unittest.TestCase):
@@ -53,7 +53,7 @@ class MultiVenueMarginContractTests(unittest.TestCase):
 
         positions = []
         pending_orders = []
-        with patch("r20_backend.exchanges.get_adapter", side_effect=get_ad):
+        with patch("astra_backend.exchanges.get_adapter", side_effect=get_ad):
             long_c, short_c, upl = collect_cross_venue_positions(
                 positions, pending_orders, 0, 0, 0.0
             )
@@ -102,7 +102,7 @@ class MultiVenueMarginContractTests(unittest.TestCase):
 
         positions = []
         pending_orders = []
-        with patch("r20_backend.exchanges.get_adapter", side_effect=get_ad):
+        with patch("astra_backend.exchanges.get_adapter", side_effect=get_ad):
             collect_cross_venue_positions(positions, pending_orders, 0, 0, 0.0)
 
         self.assertEqual(len(positions), 1)
@@ -140,7 +140,7 @@ class CrossVenuePendingOrderMarginTests(unittest.TestCase):
             return ad if v == venue else other
 
         positions, pending = [], []
-        with patch("r20_backend.exchanges.get_adapter", side_effect=get_ad):
+        with patch("astra_backend.exchanges.get_adapter", side_effect=get_ad):
             collect_cross_venue_positions(positions, pending, 0, 0, 0.0)
         return pending
 
@@ -181,7 +181,7 @@ class CrossVenuePendingOrderMarginTests(unittest.TestCase):
             return ad if v == "gate" else other
 
         positions, pending = [], []
-        with patch("r20_backend.exchanges.get_adapter", side_effect=get_ad):
+        with patch("astra_backend.exchanges.get_adapter", side_effect=get_ad):
             collect_cross_venue_positions(positions, pending, 0, 0, 0.0)
         self.assertTrue(pending, "挂单行没被装配出来（用例前提不成立）")
         self.assertIsNone(pending[0]["margin_usdt"])
@@ -197,7 +197,7 @@ class CrossVenuePendingOrderMarginTests(unittest.TestCase):
     def test_no_coin_name_guess_chain_in_source(self):
         """源码钉：禁止再出现「按币名猜面值」的兜底链（那是捏造数字的入口）。"""
         src = (Path(__file__).resolve().parents[2]
-               / "r20_backend" / "dashboard_payload" / "multi_venue.py").read_text(encoding="utf-8")
+               / "astra_backend" / "dashboard_payload" / "multi_venue.py").read_text(encoding="utf-8")
         for guess in ("0.0001 if base_sym", "0.01 if base_sym", 'ct_val or 0.0001'):
             self.assertNotIn(guess, src, f"按币名猜面值的兜底链回流：{guess}")
 

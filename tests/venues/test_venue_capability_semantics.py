@@ -17,12 +17,12 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
 
-from r20_backend.exchanges.base import ExchangeCapabilityError, InstrumentSpec
-from r20_backend.exchanges.binance import BinanceAdapter
-from r20_backend.exchanges.gate import (AUTO_SIZE_CLOSE_LONG, AUTO_SIZE_CLOSE_SHORT,
+from astra_backend.exchanges.base import ExchangeCapabilityError, InstrumentSpec
+from astra_backend.exchanges.binance import BinanceAdapter
+from astra_backend.exchanges.gate import (AUTO_SIZE_CLOSE_LONG, AUTO_SIZE_CLOSE_SHORT,
                                         GateAPIError, GateAdapter)
-from r20_backend.exchanges.okx import OKXPublicAdapter
-from r20_backend import okx_trade_service as ots
+from astra_backend.exchanges.okx import OKXPublicAdapter
+from astra_backend import okx_trade_service as ots
 
 _AMBIENT: dict = {}
 
@@ -32,7 +32,7 @@ def setUpModule():
     import os
     global _AMBIENT
     _AMBIENT = {k: os.environ.pop(k, None) for k in list(os.environ)
-                if k.startswith("R20_") and ("EXECUTION" in k or "TESTNET" in k)}
+                if k.startswith("ASTRA_") and ("EXECUTION" in k or "TESTNET" in k)}
 
 
 def tearDownModule():
@@ -67,16 +67,16 @@ _PROFILE_GUARD = None
 
 
 def setUpModule():
-    """封闭三律：清掉宿主 .env 注入的 R20_* 旗标，探测持久化文件钉 tmp。"""
+    """封闭三律：清掉宿主 .env 注入的 ASTRA_* 旗标，探测持久化文件钉 tmp。"""
     global _ENV_GUARD, _PROFILE_GUARD
     import os as _os
     import tempfile as _tempfile
     ambient = {k: "0" for k in _os.environ
-               if k.startswith(("R20_BINANCE_TESTNET", "R20_GATE_TESTNET",
-                                "R20_OKX_ENV", "R20_OKX_TESTNET"))}
+               if k.startswith(("ASTRA_BINANCE_TESTNET", "ASTRA_GATE_TESTNET",
+                                "ASTRA_OKX_ENV", "ASTRA_OKX_TESTNET"))}
     _ENV_GUARD = patch.dict(_os.environ, ambient, clear=False)
     _ENV_GUARD.start()
-    from r20_backend.exchanges import env_profiles as _ep
+    from astra_backend.exchanges import env_profiles as _ep
     tmp = _tempfile.NamedTemporaryFile(suffix=".json", delete=False)
     tmp.close()
     _PROFILE_GUARD = patch.object(_ep, "PROFILE_FILE", Path(tmp.name))
@@ -109,7 +109,7 @@ class TestCapabilityDeclarations(unittest.TestCase):
         self.assertIn("openOrders", cap.protection_semantics)  # 普通挂单≠保护全集
         # US-005 契约演进：下单面已实装，门禁职责移交 env 开闸旗标（registry 单源）
         self.assertTrue(cap.supports_orders)
-        self.assertEqual(cap.adapter_execution_flag, "R20_BINANCE_EXECUTION")
+        self.assertEqual(cap.adapter_execution_flag, "ASTRA_BINANCE_EXECUTION")
 
     def test_okx_attach_failcode_declared(self):
         cap = OKXPublicAdapter.capabilities
@@ -141,12 +141,12 @@ class TestBinanceAlgoContract(unittest.TestCase):
         req = self.ad.build_algo_order_request(
             symbol="BTCUSDT", side="SELL", type_="STOP_MARKET",
             trigger_price="78500.0", working_type="MARK_PRICE",
-            quantity="0.05", client_algo_id="r20a1")
+            quantity="0.05", client_algo_id="astraa1")
         self.assertEqual(req["method"], "POST")
         self.assertEqual(req["path"], "/fapi/v1/algoOrder")
         b = req["body"]
         self.assertEqual(b["triggerPrice"], "78500.0")     # 当前字段名
-        self.assertEqual(b["clientAlgoId"], "r20a1")       # 当前字段名
+        self.assertEqual(b["clientAlgoId"], "astraa1")       # 当前字段名
         self.assertEqual(b["workingType"], "MARK_PRICE")   # 显式传入
         self.assertNotIn("stopPrice", b)                   # 普通订单旧字段禁传
         self.assertNotIn("newClientOrderId", b)
@@ -188,7 +188,7 @@ class TestBinanceAlgoContract(unittest.TestCase):
     def test_private_algo_sends_require_credentials_fail_closed(self):
         # US-005 实装后契约升级：不再「恒不支持」，而是「凭证缺失显式拒」——
         # 实装 ≠ 放行，load_secrets 为空的封闭环境里绝不静默出网
-        import r20_gateway.secrets as gw_secrets
+        import astra_gateway.secrets as gw_secrets
         for call in (lambda: self.ad.query_algo_order(algo_id="1"),
                      lambda: self.ad.current_all_algo_open_orders(symbol="BTCUSDT"),
                      lambda: self.ad.cancel_algo_order(algo_id="1"),
@@ -215,9 +215,9 @@ class TestGateIdString(unittest.TestCase):
     def setUp(self):
         # 封死环境态：data/env_profiles.json 里持久化的沙盒探测结果不得影响本组断言，
         # 统一钉 live 默认域（resolve/has_env 均在构造期生效，必须在 GateAdapter() 之前 patch）。
-        with patch("r20_backend.exchanges.env_profiles.resolve_base_url",
+        with patch("astra_backend.exchanges.env_profiles.resolve_base_url",
                    lambda venue, env, **kw: "https://api.gateio.ws"), \
-             patch("r20_backend.exchanges.env_profiles.has_env", lambda *a, **k: True):
+             patch("astra_backend.exchanges.env_profiles.has_env", lambda *a, **k: True):
             self.ad = GateAdapter()
 
     def _request_capture(self, payload):
@@ -232,7 +232,7 @@ class TestGateIdString(unittest.TestCase):
         fake, seen = self._request_capture(
             [{"id": 123, "id_string": "9007199254740993", "contract": "BTC_USDT"}])
         with patch.object(GateAdapter, "_keys", lambda s: ("k", "s")), \
-             patch("r20_backend.exchanges.gate.urlopen", fake):
+             patch("astra_backend.exchanges.gate.urlopen", fake):
             rows = self.ad.signed_request("GET", "/api/v4/futures/usdt/orders")
         self.assertEqual(rows[0]["id"], "9007199254740993")   # id_string 优先
         self.assertIsInstance(rows[0]["id"], str)
@@ -241,7 +241,7 @@ class TestGateIdString(unittest.TestCase):
     def test_pure_int_id_also_stringified_no_float_roundtrip(self):
         fake, _ = self._request_capture({"id": 9007199254740993, "text": "t1"})
         with patch.object(GateAdapter, "_keys", lambda s: ("k", "s")), \
-             patch("r20_backend.exchanges.gate.urlopen", fake):
+             patch("astra_backend.exchanges.gate.urlopen", fake):
             data = self.ad.signed_request("GET", "/api/v4/futures/usdt/orders")
         self.assertEqual(data["id"], "9007199254740993")      # 不经 float：Python int 精确保留
 

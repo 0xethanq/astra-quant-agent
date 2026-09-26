@@ -1,4 +1,4 @@
-"""网关凭据加密存储（`r20_gateway/secrets.py`）残余分支收口测试 —— 第 376 刀。
+"""网关凭据加密存储（`astra_gateway/secrets.py`）残余分支收口测试 —— 第 376 刀。
 
 本模块 150 行，负责网关敏感 API Key 与密钥的 Fernet 对称加密、原子写入、备份与状态监控：
 - 秘钥文件不存在且不自动生成时返回 None（`_fernet(create=False)` 安全返回 None）；
@@ -13,12 +13,12 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import r20_gateway.secrets as sec_mod
+import astra_gateway.secrets as sec_mod
 
 
 class GatewaySecretsTailsTests(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(prefix="r20_gw_secrets_tails_")
+        self.tmp = tempfile.TemporaryDirectory(prefix="astra_gw_secrets_tails_")
         self.addCleanup(self.tmp.cleanup)
         self.tmp_path = Path(self.tmp.name)
         self.key_file = self.tmp_path / "secrets.key"

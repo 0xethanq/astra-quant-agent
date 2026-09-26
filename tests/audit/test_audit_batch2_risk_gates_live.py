@@ -27,8 +27,8 @@ for _p in (str(ROOT), str(ROOT / "scripts")):
         sys.path.insert(0, _p)
 
 import scripts.ai_factor_trader as aft  # noqa: E402
-import r20_backend.execution.circuit_breaker as cb  # noqa: E402
-from r20_backend.risk_reservation import RiskReservationManager, STATE_CONFIRMED  # noqa: E402
+import astra_backend.execution.circuit_breaker as cb  # noqa: E402
+from astra_backend.risk_reservation import RiskReservationManager, STATE_CONFIRMED  # noqa: E402
 
 
 def _today_bj():
@@ -63,7 +63,7 @@ class TestTraderBreakerLiveWiring(unittest.TestCase):
     """回马枪核心：这些测试必须打在 trader 的本地函数上（活路径）。"""
 
     def setUp(self):
-        self.tmp = tempfile.mkdtemp(prefix="r20-b2-cb-")
+        self.tmp = tempfile.mkdtemp(prefix="astra-b2-cb-")
         self.ledger = os.path.join(self.tmp, "trading_ledger.json")
 
     def _run(self, rows, sidecar=None, mode="demo"):
@@ -130,7 +130,7 @@ class TestRoutingPolicySingleSource(unittest.TestCase):
 
     def test_defaults_follow_risk_constants(self):
         import scripts.risk_constants as rc
-        from r20_backend.exchanges.routing_policy import global_risk_defaults
+        from astra_backend.exchanges.routing_policy import global_risk_defaults
         d = global_risk_defaults()
         self.assertAlmostEqual(d["margin_per_trade_usdt"], float(rc.MAX_SINGLE_ASSET_MARGIN or 50.0))
         self.assertAlmostEqual(d["min_confidence"], float(rc.MIN_ENTRY_CONFIDENCE or 72.0))
@@ -138,7 +138,7 @@ class TestRoutingPolicySingleSource(unittest.TestCase):
 
     def test_no_import_error_swallowing(self):
         import warnings
-        from r20_backend.exchanges import routing_policy
+        from astra_backend.exchanges import routing_policy
         with warnings.catch_warnings(record=True) as w, \
              patch.dict(sys.modules, {"scripts.risk_constants": None}):  # 强制 import 失败
             d = routing_policy.global_risk_defaults()
@@ -154,7 +154,7 @@ class TestConfirmStateMachine(unittest.TestCase):
     """④6：RiskReservationManager.confirm 真实存在且 pending→confirmed 仍占预算。"""
 
     def setUp(self):
-        self.tmp = tempfile.mkdtemp(prefix="r20-b2-res-")
+        self.tmp = tempfile.mkdtemp(prefix="astra-b2-res-")
         self.mgr = RiskReservationManager(os.path.join(self.tmp, "risk.db"), total_limit_usdt=1000.0)
 
     def test_confirm_advances_state_and_keeps_budget_occupied(self):
@@ -258,21 +258,21 @@ class TestPriceSanityAnchor(unittest.TestCase):
         src = _ast.get_source_segment(path.read_text(encoding="utf-8"), node)
         self.assertIsNotNone(src, "取不到实现体原文片段")
         self.assertIn("入场价穿价幻觉", src)
-        self.assertIn("R20_MAX_PRICE_CROSS_PCT", src)
+        self.assertIn("ASTRA_MAX_PRICE_CROSS_PCT", src)
         i_geo = src.find("validate_quote_geometry_and_rr")
-        i_anchor = src.find("R20_MAX_PRICE_CROSS_PCT")
+        i_anchor = src.find("ASTRA_MAX_PRICE_CROSS_PCT")
         i_multi = src.find("多所平权执行")
         self.assertLess(i_geo, i_anchor)
         self.assertLess(i_anchor, i_multi)
         # 反证：门面壳里不得出现这三段（否则上面的定位可能虚 Hits）
         shell = inspect.getsource(aft.submit_protected_limit_order)
-        for frag in ("入场价穿价幻觉", "R20_MAX_PRICE_CROSS_PCT", "多所平权执行"):
+        for frag in ("入场价穿价幻觉", "ASTRA_MAX_PRICE_CROSS_PCT", "多所平权执行"):
             self.assertNotIn(frag, shell, f"门面壳残留 {frag} 会虚 Hits 本断言")
 
     def test_semantic_matrix_via_env_thresholds(self):
         # 用真实 fetch 路径跑单元语义：直接构造锚定判断不可拆——这里以阈值配置钉行为面
-        with patch.dict(os.environ, {"R20_MAX_PRICE_CROSS_PCT": "0.005",
-                                     "R20_MAX_PRICE_FAR_PCT": "0.50"}):
+        with patch.dict(os.environ, {"ASTRA_MAX_PRICE_CROSS_PCT": "0.005",
+                                     "ASTRA_MAX_PRICE_FAR_PCT": "0.50"}):
             last = 100.0
             self.assertGreater(100.6, last * 1.005)   # BUY 挂 100.6：穿价 → 拒
             self.assertLessEqual(99.4, last * 1.005)  # SELL 挂 99.4：不穿 → 过

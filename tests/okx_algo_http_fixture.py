@@ -61,7 +61,7 @@ def install_http(test, trader):
     frozen = patch.object(okx_runtime, '_FROZEN_ENVIRONMENT', None)
     frozen.start()
     test.addCleanup(frozen.stop)
-    okx_runtime.freeze_environment(dict(R20_OKX_ENV='demo', OKX_DEMO_API_KEY='fixture-key',
+    okx_runtime.freeze_environment(dict(ASTRA_OKX_ENV='demo', OKX_DEMO_API_KEY='fixture-key',
                                       OKX_DEMO_SECRET_KEY='fixture-secret', OKX_DEMO_PASSPHRASE='fixture-pass'))
     wire = AlgoHTTP()
     p = patch.object(trader.okx_rest, 'urlopen', side_effect=wire)

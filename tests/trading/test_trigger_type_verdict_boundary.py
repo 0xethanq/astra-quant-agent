@@ -33,8 +33,8 @@ ROOT = Path(__file__).resolve().parents[2]
 VERDICT_FUNCS = {
     "scripts/trader/venue_protection.py": ("scan_protective_orders", "attribute_protective_orders",
                                            "ensure_venue_protection"),
-    "r20_backend/dashboard_payload/multi_venue.py": ("_protection_verdict",),
-    "r20_backend/dashboard_payload/algo_protection.py": ("collect_algo_protection",),
+    "astra_backend/dashboard_payload/multi_venue.py": ("_protection_verdict",),
+    "astra_backend/dashboard_payload/algo_protection.py": ("collect_algo_protection",),
 }
 TYPE_TOKENS = ("trigger_px_type", "TriggerPxType", "protectionSlTriggerPxType",
                "protectionTpTriggerPxType", "protection_trigger_type_fields")
@@ -99,7 +99,7 @@ class TriggerTypeStaysOutOfVerdictsTest(unittest.TestCase):
 
     def test_payload_status_ignores_type_but_discloses_unknown(self):
         """行为：状态判定不受类型影响；类型字段如实 `unknown`（不猜）。"""
-        from r20_backend.dashboard_payload.algo_protection import collect_algo_protection
+        from astra_backend.dashboard_payload.algo_protection import collect_algo_protection
         def _run(leg):
             pos = {"instId": "ETH-USDT-SWAP", "posSide": "long", "pos_sz": 100.0}
             collect_algo_protection([pos], [], lambda fn, *a, **k: (True, [leg], ""),

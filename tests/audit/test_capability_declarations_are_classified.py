@@ -31,7 +31,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-SCAN_DIRS = ("scripts", "r20_backend", "r20_gateway", "plugins")
+SCAN_DIRS = ("scripts", "astra_backend", "astra_gateway", "plugins")
 #: 零生产读者、但**行为另有出处**（或本就是人读说明）的字段 —— 每条都写明真正的落点。
 UNREAD_ALLOWLIST = {
     "bar_case": "K 线周期大小写由唯一归一函数承担：`scripts/market_data_service.py::normalize_bar`"
@@ -60,7 +60,7 @@ UNREAD_ALLOWLIST = {
 
 
 def declaration_fields() -> list:
-    src = (ROOT / "r20_backend/exchanges/base.py").read_text(encoding="utf-8")
+    src = (ROOT / "astra_backend/exchanges/base.py").read_text(encoding="utf-8")
     tree = ast.parse(src)
     for node in ast.walk(tree):
         if isinstance(node, ast.ClassDef) and node.name == "ExchangeCapabilities":
@@ -76,7 +76,7 @@ def _iter_py():
             if "__pycache__" in path.parts:
                 continue
             rel = str(path.relative_to(ROOT))
-            if rel == "r20_backend/exchanges/base.py":
+            if rel == "astra_backend/exchanges/base.py":
                 continue
             yield rel, path
 

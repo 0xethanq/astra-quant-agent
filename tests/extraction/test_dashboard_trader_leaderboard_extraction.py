@@ -1,4 +1,4 @@
-"""`r20_backend/dashboard_payload/trader_leaderboard.py`（B3 第二十六刀）回归。
+"""`astra_backend/dashboard_payload/trader_leaderboard.py`（B3 第二十六刀）回归。
 
 ## 这个测试在守什么
 
@@ -27,12 +27,12 @@ import random
 import unittest
 from pathlib import Path
 
-from r20_backend.dashboard_payload.trader_leaderboard import build_inst_leaderboard
+from astra_backend.dashboard_payload.trader_leaderboard import build_inst_leaderboard
 
 ROOT = Path(__file__).resolve().parents[2]
-APP = ROOT / "r20_backend" / "dashboard_cache.py"
-MODULE = ROOT / "r20_backend" / "dashboard_payload" / "trader_leaderboard.py"
-STATS = ROOT / "r20_backend" / "dashboard_payload" / "trade_stats.py"   # 第九十五刀：调用点现住此
+APP = ROOT / "astra_backend" / "dashboard_cache.py"
+MODULE = ROOT / "astra_backend" / "dashboard_payload" / "trader_leaderboard.py"
+STATS = ROOT / "astra_backend" / "dashboard_payload" / "trade_stats.py"   # 第九十五刀：调用点现住此
 
 
 def _legacy(by_inst):
@@ -282,9 +282,9 @@ class WiringTest(unittest.TestCase):
     def test_payload_key_still_present(self):
         """接口不变：载荷里仍要有 `leaderboard` 键。
 
-        ⚠️ 这段字面量**已经没有**在 `r20_backend/dashboard_cache.py` 里了 ——
+        ⚠️ 这段字面量**已经没有**在 `astra_backend/dashboard_cache.py` 里了 ——
         阶段 4·B3 第三十六刀把整个 `CACHE_DATA` 字面量（92 行）搬进了
-        `r20_backend/dashboard_payload/cache_payload.py`。
+        `astra_backend/dashboard_payload/cache_payload.py`。
         故断言必须**同时**接受"在载荷装配模块里"这个位置，
         否则测试会把一次**等价搬迁**误报成接口变更。
 
@@ -293,7 +293,7 @@ class WiringTest(unittest.TestCase):
         """
         sources = {
             "门面": APP.read_text(encoding="utf-8"),
-            "载荷装配模块": (ROOT / "r20_backend" / "dashboard_payload"
+            "载荷装配模块": (ROOT / "astra_backend" / "dashboard_payload"
                              / "cache_payload.py").read_text(encoding="utf-8"),
         }
         hits = [name for name, src in sources.items()
@@ -361,9 +361,9 @@ class WiringTest(unittest.TestCase):
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 for a in node.names:
-                    self.assertFalse(a.name.startswith("r20_backend.dashboard_cache"))
+                    self.assertFalse(a.name.startswith("astra_backend.dashboard_cache"))
             elif isinstance(node, ast.ImportFrom):
-                self.assertFalse((node.module or "").startswith("r20_backend.dashboard_cache"))
+                self.assertFalse((node.module or "").startswith("astra_backend.dashboard_cache"))
 
 
 if __name__ == "__main__":

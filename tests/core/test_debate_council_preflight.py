@@ -17,7 +17,7 @@ import os
 import unittest
 from unittest.mock import patch
 
-from r20_backend.council.debate import execute_council_debate
+from astra_backend.council.debate import execute_council_debate
 
 
 class PreflightTest(unittest.TestCase):
@@ -31,7 +31,7 @@ class PreflightTest(unittest.TestCase):
         ctx.start()
         self.addCleanup(ctx.stop)
         try:
-            with patch("r20_backend.llm_manager.get_active_llm_runtime",
+            with patch("astra_backend.llm_manager.get_active_llm_runtime",
                        return_value={"model": "M"}):
                 execute_council_debate(_load_config, lambda s: {}, lambda **k: {}, lambda **k: {},
                                        "市场", "系统", timeout=timeout, runtime_context=None)
@@ -63,15 +63,15 @@ class PreflightTest(unittest.TestCase):
         self.assertEqual(calls["config"], 1)
 
     def test_valid_env_overrides_do_not_break_the_preflight(self):
-        out, _ = self._run(1.0, env={"R20_MAX_LEVERAGE": "7", "R20_MIN_LEVERAGE": "3"})
+        out, _ = self._run(1.0, env={"ASTRA_MAX_LEVERAGE": "7", "ASTRA_MIN_LEVERAGE": "3"})
         self.assertIsInstance(out, TimeoutError, "合法覆盖不改变早退行为")
 
     def test_a_non_numeric_leverage_env_raises_value_error(self):
-        """⚠️ **实测边界（列待议）**：`R20_MAX_LEVERAGE` 写成非数值 ⇒ `float()` 抛 **`ValueError`**，
+        """⚠️ **实测边界（列待议）**：`ASTRA_MAX_LEVERAGE` 写成非数值 ⇒ `float()` 抛 **`ValueError`**，
         **整个委员会路径直接不可用**（没有兜底、也不是那句默认常量）。
         环境变量写错属运维常见失误 ⇒ 记为待议：应当回落到常量并留痕，而不是炸掉决策路径。
         """
-        out, _ = self._run(1.0, env={"R20_MAX_LEVERAGE": "五倍"})
+        out, _ = self._run(1.0, env={"ASTRA_MAX_LEVERAGE": "五倍"})
         self.assertIsInstance(out, ValueError)
         self.assertNotIsInstance(out, TimeoutError, "炸在读取杠杆之前，连前置检查都没走到")
 

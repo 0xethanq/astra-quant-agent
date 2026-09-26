@@ -12,8 +12,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from r20_backend import client_ip as cip  # noqa: E402
-from r20_backend import login_guard as lg  # noqa: E402
+from astra_backend import client_ip as cip  # noqa: E402
+from astra_backend import login_guard as lg  # noqa: E402
 
 
 class _FakeClient:
@@ -105,14 +105,14 @@ class LoginGuardTests(unittest.TestCase):
 
     def test_disabled_switch(self):
         import os
-        os.environ["R20_LOGIN_RATE_LIMIT"] = "0"
+        os.environ["ASTRA_LOGIN_RATE_LIMIT"] = "0"
         try:
             ip = "203.0.113.55"
             for _ in range(lg._MAX_FAILURES * 3):
                 lg.note_failure(ip)
             self.assertTrue(lg.check(ip)[0], "关闭开关后不得再限速")
         finally:
-            del os.environ["R20_LOGIN_RATE_LIMIT"]
+            del os.environ["ASTRA_LOGIN_RATE_LIMIT"]
 
     def test_stats_shape(self):
         s = lg.stats()

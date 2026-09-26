@@ -6,14 +6,14 @@ r"""观测产物（Prometheus 规则 / Grafana 面板）**反漂移门**。
 
 1. **没有任何编译期检查** —— 面板写错一个字母，导入 Grafana 后只是"图是空的"，
    没有任何报错；告警写错则**永不触发**（最危险：以为有人在看，其实没人）；
-2. **改名是常态** —— `r20_backend/metrics.py` 里改一个族名，仓库测试全绿，
+2. **改名是常态** —— `astra_backend/metrics.py` 里改一个族名，仓库测试全绿，
    生产面板静默失效；
 3. **这里是"会响的入口"** —— 第 137 刀那次 30 小时无信号，根因就是"失败没有出口"。
    面板/告警就是出口，出口自己烂掉等于事故复现。
 
 ## 本门怎么做（两个方向都钉）
 
-- **正向**：面板/告警里出现的每个 `r20_*` 族名，必须能在**真实渲染结果**
+- **正向**：面板/告警里出现的每个 `astra_*` 族名，必须能在**真实渲染结果**
   （`render_prometheus` 对一份"全源齐备"快照的输出）里找到；
 - **反向**：真实渲染出的每个族名，必须**至少被面板或告警用上**，或显式登记进
   `INTENTIONALLY_UNUSED`（"产出了但没人看"本身就是缺陷，必须当着人登记）。
@@ -39,7 +39,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from r20_backend import metrics as M  # noqa: E402
+from astra_backend import metrics as M  # noqa: E402
 
 OBS = ROOT / "deploy" / "observability"
 DASHBOARD = OBS / "grafana-dashboard.json"
@@ -49,11 +49,11 @@ PROMETHEUS = OBS / "prometheus.yml"
 #: 产出了但**刻意不告警/不上板**的族（登记即承诺：这里每加一个名字都要说清理由）
 INTENTIONALLY_UNUSED = {
     # 快照生成时刻：用于人工对时间，不适合做告警（它自己就是时间的度量）
-    "r20_metrics_generated_at_timestamp_seconds",
+    "astra_metrics_generated_at_timestamp_seconds",
 }
 #: 面板里允许出现的非本系统指标（Prometheus 自身/时序函数）
 
-FAMILY_TOKEN = re.compile(r"\br20_[a-zA-Z0-9_]+\b")
+FAMILY_TOKEN = re.compile(r"\bastra_[a-zA-Z0-9_]+\b")
 
 
 def _full_snapshot() -> dict:
@@ -105,7 +105,7 @@ def _full_snapshot() -> dict:
 
 
 def emitted_families() -> set:
-    """真实渲染出来的族名集合（**唯一事实来源**：`r20_backend/metrics.py`）。"""
+    """真实渲染出来的族名集合（**唯一事实来源**：`astra_backend/metrics.py`）。"""
     text = M.render_prometheus(_full_snapshot())
     names = set()
     for line in text.splitlines():
@@ -248,15 +248,15 @@ class MetricNameAntiRotTest(unittest.TestCase):
     def test_snapshot_fixture_covers_every_family(self):
         """夹具漏族 ⇒ 上一门会误报。用"已知血缘"反查：每个族都必须来自夹具的某个源。"""
         known = emitted_families()
-        for family in ("r20_market_data_calls_total", "r20_venue_instruments_ok",
-                       "r20_model_tokens_total", "r20_risk_limit"):
+        for family in ("astra_market_data_calls_total", "astra_venue_instruments_ok",
+                       "astra_model_tokens_total", "astra_risk_limit"):
             self.assertIn(family, known, f"夹具没覆盖 {family} ⇒ 反漂移门形同虚设")
         self.assertGreaterEqual(len(known), 14, f"族数异常偏少：{sorted(known)}")
 
     def test_up_is_always_scoped_to_a_job(self):
         """`up` 是 Prometheus 自带的**全局**序列：不限定 job 就会把别的抓取目标算进来。
 
-        （本门第一版写成"检查有没有 r20_up"是纯粹的逻辑错误 —— `r20_up` 是本仓
+        （本门第一版写成"检查有没有 astra_up"是纯粹的逻辑错误 —— `astra_up` 是本仓
         自己的进程存活指标，与 Prometheus 的 `up` 是两回事；门禁自己也会写错，
         所以每加一条断言都要说清它到底在防什么。）
         """
@@ -304,9 +304,9 @@ class AlertRulesShapeTest(unittest.TestCase):
     def test_coverage_of_the_two_incident_classes(self):
         """两次真实事故必须各有对应告警（否则出口又漏了）。"""
         exprs = " ".join(e["expr"] for e in self.entries)
-        self.assertIn("r20_market_data_last_success_age_seconds", exprs,
+        self.assertIn("astra_market_data_last_success_age_seconds", exprs,
                       "第 137 刀：取数失败必须有告警")
-        self.assertIn("r20_market_data_snapshot_age_seconds", exprs,
+        self.assertIn("astra_market_data_snapshot_age_seconds", exprs,
                       "worker 断档（周期不再运行）必须有告警")
 
 
@@ -318,14 +318,14 @@ class PrometheusConfigShapeTest(unittest.TestCase):
 
     def test_scrape_targets_the_admin_metrics_endpoint(self):
         self.assertIn("metrics_path: /api/v1/admin/metrics", self.text)
-        self.assertIn("job_name: r20-backend", self.text)
+        self.assertIn("job_name: astra-backend", self.text)
 
     def test_uses_admin_header_not_query_token(self):
         """令牌必须走请求头文件注入：查询串里的 token 会进日志/浏览器历史。"""
-        self.assertIn("X-R20-Admin-Token", self.text)
+        self.assertIn("X-Astra-Admin-Token", self.text)
         self.assertNotIn("?token=", self.text)
-        self.assertNotIn("X-R20-Admin-Token: ", self.text.replace("X-R20-Admin-Token:", "", 1)
-                         .replace('      X-R20-Admin-Token:', "", 1),
+        self.assertNotIn("X-Astra-Admin-Token: ", self.text.replace("X-Astra-Admin-Token:", "", 1)
+                         .replace('      X-Astra-Admin-Token:', "", 1),
                          "令牌值不得直接写在配置里（只允许 secrets 文件引用）")
 
     def test_token_is_never_a_literal(self):
@@ -353,7 +353,7 @@ class PrometheusConfigShapeTest(unittest.TestCase):
 
     def test_compose_mounts_token_file_readonly(self):
         compose = (OBS / "docker-compose.yml").read_text(encoding="utf-8")
-        self.assertIn("/etc/r20/metrics_token:ro", compose, "令牌文件必须只读挂载")
+        self.assertIn("/etc/astra/metrics_token:ro", compose, "令牌文件必须只读挂载")
 
 
 if __name__ == "__main__":

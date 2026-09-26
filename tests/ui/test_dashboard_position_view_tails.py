@@ -1,4 +1,4 @@
-"""看板持仓视图装配（`r20_backend/dashboard_payload/position_view.py`）残余分支收口测试 —— 第 364 刀。
+"""看板持仓视图装配（`astra_backend/dashboard_payload/position_view.py`）残余分支收口测试 —— 第 364 刀。
 
 本模块 165 行，负责操盘看板活跃持仓规范化、名义价值与保证金折算、持仓方向判定：
 - 全局环境轴解析异常回退（`okx_runtime.current_environment` 异常时保守回退 `DEMO` 模拟盘与 `demo` 档，防持仓环境抬升至实盘）。
@@ -8,7 +8,7 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from r20_backend.dashboard_payload.position_view import collect_position_rows
+from astra_backend.dashboard_payload.position_view import collect_position_rows
 
 
 class DashboardPositionViewTailsTests(unittest.TestCase):

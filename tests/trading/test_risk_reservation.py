@@ -12,8 +12,8 @@ import threading
 import unittest
 from unittest import mock
 
-from r20_backend import risk_reservation as RR
-from r20_backend.risk_reservation import (
+from astra_backend import risk_reservation as RR
+from astra_backend.risk_reservation import (
     ReservationError,
     ReservationExceeded,
     RiskReservationManager,

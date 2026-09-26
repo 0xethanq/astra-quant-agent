@@ -1,4 +1,4 @@
-"""LLM 配置与持久化存储（`r20_backend/llm/store.py`）残余分支收口测试 —— 第 339 刀。
+"""LLM 配置与持久化存储（`astra_backend/llm/store.py`）残余分支收口测试 —— 第 339 刀。
 
 本模块 893 行，是多供应商与模型管理的核心存储与运行时装配层：
 - 配置初始化与平滑迁移（`init_llm_config`）：坏 JSON 容错、老默认项清洗、凭据权威源合并；
@@ -14,7 +14,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from r20_backend.llm.store import (
+from astra_backend.llm.store import (
     activate_provider_model,
     clear_provider_models,
     delete_model,
@@ -32,20 +32,20 @@ from r20_backend.llm.store import (
 
 class LlmStoreTailsTests(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(prefix="r20_llm_store_test_")
+        self.tmp = tempfile.TemporaryDirectory(prefix="astra_llm_store_test_")
         self.addCleanup(self.tmp.cleanup)
         self.config_file = Path(self.tmp.name) / "llm_models.json"
 
-        # 严防测试向生产 data/r20_secrets.enc 与 .env 写入
-        p_sec = patch("r20_gateway.secrets.save_secrets")
+        # 严防测试向生产 data/astra_secrets.enc 与 .env 写入
+        p_sec = patch("astra_gateway.secrets.save_secrets")
         self.mock_save_secrets = p_sec.start()
         self.addCleanup(p_sec.stop)
 
-        p_env = patch("r20_backend.settings_store.update_env")
+        p_env = patch("astra_backend.settings_store.update_env")
         self.mock_update_env = p_env.start()
         self.addCleanup(p_env.stop)
 
-        p_cfg = patch("r20_backend.config.refresh_settings")
+        p_cfg = patch("astra_backend.config.refresh_settings")
         self.mock_refresh_settings = p_cfg.start()
         self.addCleanup(p_cfg.stop)
 
@@ -82,7 +82,7 @@ class LlmStoreTailsTests(unittest.TestCase):
             "providers": [{"id": "openai", "name": "OpenAI", "base_url": "", "api_key": "k"}],
             "defaults_seeded": False,
         })
-        with patch("r20_backend.config.settings.llm_base_url", "https://custom.openai.com/v1"):
+        with patch("astra_backend.config.settings.llm_base_url", "https://custom.openai.com/v1"):
             cfg = init_llm_config(self.config_file)
         prov = next(p for p in cfg["providers"] if p["id"] == "openai")
         self.assertEqual(prov["base_url"], "https://custom.openai.com/v1")
@@ -120,8 +120,8 @@ class LlmStoreTailsTests(unittest.TestCase):
             "models": [{"id": "m1", "provider_id": "prov1", "provider_name": "自定义"}],
             "providers": [{"id": "prov1", "name": "CustomProv", "base_url": "https://api.prov1.com/v1", "api_key": "sec_key"}],
         }
-        with patch("r20_backend.config.settings.llm_base_url", ""):
-            with patch("r20_backend.config.settings.llm_api_key", ""):
+        with patch("astra_backend.config.settings.llm_base_url", ""):
+            with patch("astra_backend.config.settings.llm_api_key", ""):
                 rt = get_active_llm_runtime(cfg)
         self.assertEqual(rt["model"], "m1")
         self.assertEqual(rt["base_url"], "https://api.prov1.com/v1")
@@ -131,7 +131,7 @@ class LlmStoreTailsTests(unittest.TestCase):
     def test_get_active_llm_runtime_unconfigured_base_url_raises(self):
         # 既无配置也无环境变量中的 LLM_BASE_URL -> 明确抛出 RuntimeError
         with patch.dict("os.environ", {"LLM_BASE_URL": ""}, clear=False):
-            with patch("r20_backend.config.settings.llm_base_url", ""):
+            with patch("astra_backend.config.settings.llm_base_url", ""):
                 with self.assertRaises(RuntimeError) as ctx:
                     get_active_llm_runtime({"models": [], "providers": []})
                 self.assertIn("LLM 出口未配置", str(ctx.exception))
@@ -180,8 +180,8 @@ class LlmStoreTailsTests(unittest.TestCase):
             }],
             "models": [],
         })
-        with patch("r20_backend.settings_store.update_env"):
-            with patch("r20_backend.config.refresh_settings"):
+        with patch("astra_backend.settings_store.update_env"):
+            with patch("astra_backend.config.refresh_settings"):
                 res = activate_provider_model(self.config_file, self._reload, "custom", "nested-m")
         self.assertEqual(res["active_model_id"], "nested-m")
         self.assertEqual(res["active_provider_id"], "p1")
@@ -193,8 +193,8 @@ class LlmStoreTailsTests(unittest.TestCase):
             "providers": [{"id": "p1", "base_url": "https://api.p1.com"}],
             "models": [{"id": "m1", "provider_id": "p1"}],
         })
-        with patch("r20_backend.settings_store.update_env"):
-            with patch("r20_backend.config.refresh_settings"):
+        with patch("astra_backend.settings_store.update_env"):
+            with patch("astra_backend.config.refresh_settings"):
                 res = activate_provider_model(self.config_file, self._reload, "p1", "m1", reasoning_effort="ultra_extreme")
         self.assertEqual(res["active_reasoning_effort"], "auto")
 
@@ -250,7 +250,7 @@ class LlmStoreTailsTests(unittest.TestCase):
             "models": [{"id": "m1", "base_url": "https://api.com"}],
             "providers": [{"id": "p1", "base_url": "https://api.com"}],
         })
-        with patch("r20_backend.settings_store.update_env") as mock_env:
+        with patch("astra_backend.settings_store.update_env") as mock_env:
             upsert_model(self.config_file, self._reload, "p1", {"id": "m1", "base_url": "https://api.com", "default_effort": "high"})
             mock_env.assert_called_with({"LLM_REASONING_EFFORT": "high"})
         cfg = self._reload()
@@ -367,9 +367,9 @@ class LlmStoreTailsTests(unittest.TestCase):
             "providers": [{"id": "p1", "base_url": "https://api.p1.com"}],
             "models": [{"id": "m1", "provider_id": "p1"}],
         })
-        with patch.dict(sys.modules, {"r20_gateway.secrets": None}):
-            with patch("r20_backend.settings_store.update_env"):
-                with patch("r20_backend.config.refresh_settings"):
+        with patch.dict(sys.modules, {"astra_gateway.secrets": None}):
+            with patch("astra_backend.settings_store.update_env"):
+                with patch("astra_backend.config.refresh_settings"):
                     res = activate_provider_model(self.config_file, self._reload, "p1", "m1")
         self.assertEqual(res["active_model_id"], "m1")
 
@@ -380,7 +380,7 @@ class LlmStoreTailsTests(unittest.TestCase):
             "models": [{"id": "m1", "base_url": "https://api.com"}],
             "providers": [{"id": "p1", "base_url": "https://api.com"}],
         })
-        with patch("r20_backend.settings_store.update_env", side_effect=RuntimeError("env update error")):
+        with patch("astra_backend.settings_store.update_env", side_effect=RuntimeError("env update error")):
             upsert_model(self.config_file, self._reload, "p1", {"id": "m1", "base_url": "https://api.com", "default_effort": "high"})
         cfg = self._reload()
         self.assertEqual(cfg["active_reasoning_effort"], "high")
@@ -392,9 +392,9 @@ class LlmStoreTailsTests(unittest.TestCase):
             "providers": [{"id": "p1", "base_url": "https://api.p1.com"}],
             "models": [{"id": "m1", "provider_id": "p1"}],
         })
-        with patch.dict(sys.modules, {"r20_gateway.secrets": None}):
-            with patch("r20_backend.settings_store.update_env"):
-                with patch("r20_backend.config.refresh_settings"):
+        with patch.dict(sys.modules, {"astra_gateway.secrets": None}):
+            with patch("astra_backend.settings_store.update_env"):
+                with patch("astra_backend.config.refresh_settings"):
                     res = upsert_provider(self.config_file, self._reload, {"id": "p1", "base_url": "https://api.p1.com", "api_key": "new_k"})
         self.assertEqual(res["id"], "p1")
 
@@ -404,7 +404,7 @@ class LlmStoreTailsTests(unittest.TestCase):
             "providers": [{"id": "p1", "base_url": "https://api.p1.com"}],
             "models": [{"id": "m1", "provider_id": "p1"}],
         })
-        with patch("r20_backend.settings_store.update_env", side_effect=RuntimeError("env fail")):
+        with patch("astra_backend.settings_store.update_env", side_effect=RuntimeError("env fail")):
             res = upsert_provider(self.config_file, self._reload, {"id": "p1", "base_url": "https://api.p1.com", "api_key": "k"})
         self.assertEqual(res["id"], "p1")
 

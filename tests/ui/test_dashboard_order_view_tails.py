@@ -1,4 +1,4 @@
-"""看板委托挂单视图装配（`r20_backend/dashboard_payload/order_view.py`）残余分支收口测试 —— 第 363 刀。
+"""看板委托挂单视图装配（`astra_backend/dashboard_payload/order_view.py`）残余分支收口测试 —— 第 363 刀。
 
 本模块 162 行，负责操盘看板活跃挂单规范化、止盈止损提取、杠杆与保证金折算：
 - 全局环境轴解析异常回退（`okx_runtime.current_environment` 异常时保守回退 `DEMO` 模拟盘与 `demo` 档，防挂单环境抬升至实盘）。
@@ -9,7 +9,7 @@ import datetime
 import unittest
 from unittest.mock import patch
 
-from r20_backend.dashboard_payload.order_view import collect_pending_order_rows
+from astra_backend.dashboard_payload.order_view import collect_pending_order_rows
 
 
 class DashboardOrderViewTailsTests(unittest.TestCase):

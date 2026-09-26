@@ -22,8 +22,8 @@ import warnings
 from unittest.mock import patch
 from urllib.error import HTTPError
 
-from r20_backend.exchanges.binance import BinanceAdapter, BinanceAPIError
-from r20_backend.exchanges.binance_signing import build_signed_query
+from astra_backend.exchanges.binance import BinanceAdapter, BinanceAPIError
+from astra_backend.exchanges.binance_signing import build_signed_query
 
 
 class _Resp:
@@ -57,7 +57,7 @@ class _Base(unittest.TestCase):
         self.addCleanup(self._keys.stop)
 
     def _urlopen(self, side_effect):
-        p = patch("r20_backend.exchanges.binance.urlopen", side_effect=side_effect)
+        p = patch("astra_backend.exchanges.binance.urlopen", side_effect=side_effect)
         return p.start(), p.stop
 
 
@@ -76,7 +76,7 @@ class ServerTimeOffsetTest(_Base):
 
     def test_offset_is_measured_and_cached_within_ttl(self):
         counter = {}
-        with patch("r20_backend.exchanges.binance.urlopen", self._server(2100.0, counter=counter)):
+        with patch("astra_backend.exchanges.binance.urlopen", self._server(2100.0, counter=counter)):
             first = self.ad.server_time_offset_ms()
             second = self.ad.server_time_offset_ms()
         self.assertAlmostEqual(first, 2100.0, delta=300.0, msg="偏差应约等于服务器与本机的差")
@@ -85,7 +85,7 @@ class ServerTimeOffsetTest(_Base):
 
     def test_force_bypasses_cache(self):
         counter = {}
-        with patch("r20_backend.exchanges.binance.urlopen", self._server(100.0, counter=counter)):
+        with patch("astra_backend.exchanges.binance.urlopen", self._server(100.0, counter=counter)):
             self.ad.server_time_offset_ms()
             self.ad.server_time_offset_ms(force=True)
         self.assertEqual(counter["n"], 2, "force 必须真的重测（-1021 重试靠它）")
@@ -96,7 +96,7 @@ class ServerTimeOffsetTest(_Base):
         def _boom(req, timeout=None):
             raise RuntimeError("校时端点挂了")
 
-        with patch("r20_backend.exchanges.binance.urlopen", _boom), \
+        with patch("astra_backend.exchanges.binance.urlopen", _boom), \
                 warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
             offset = self.ad.server_time_offset_ms()
@@ -105,7 +105,7 @@ class ServerTimeOffsetTest(_Base):
                         "失败要留痕（-1021 风险仍在）")
 
     def test_large_offset_warns_about_recvwindow_headroom(self):
-        with patch("r20_backend.exchanges.binance.urlopen", self._server(4000.0)), \
+        with patch("astra_backend.exchanges.binance.urlopen", self._server(4000.0)), \
                 warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
             self.ad.server_time_offset_ms()
@@ -130,7 +130,7 @@ class SignedRequestTest(_Base):
             return _Resp({"ok": True})
 
         with patch.object(BinanceAdapter, "server_time_offset_ms", return_value=250.0), \
-                patch("r20_backend.exchanges.binance.urlopen", _fake):
+                patch("astra_backend.exchanges.binance.urlopen", _fake):
             out = self._call()
         self.assertEqual(out, {"ok": True})
         query = seen["url"].split("?", 1)[1]
@@ -157,14 +157,14 @@ class SignedRequestTest(_Base):
             return _Resp({"orderId": 1})
 
         with patch.object(BinanceAdapter, "server_time_offset_ms", return_value=0.0), \
-                patch("r20_backend.exchanges.binance.urlopen", _fake):
+                patch("astra_backend.exchanges.binance.urlopen", _fake):
             self._call(method="POST", path="/fapi/v1/order", body={"symbol": "BTCUSDT"})
         self.assertEqual(json.loads(seen["data"].decode()), {"symbol": "BTCUSDT"})
         self.assertIn("application/json", seen["headers"].get("content-type", ""))
 
     def test_empty_success_body_returns_none(self):
         with patch.object(BinanceAdapter, "server_time_offset_ms", return_value=0.0), \
-                patch("r20_backend.exchanges.binance.urlopen",
+                patch("astra_backend.exchanges.binance.urlopen",
                       lambda req, timeout=None: _Resp(b"")):
             self.assertIsNone(self._call())
 
@@ -173,7 +173,7 @@ class SignedRequestTest(_Base):
             raise _http_error(400, {"code": -2015, "msg": "Invalid API-key"})
 
         with patch.object(BinanceAdapter, "server_time_offset_ms", return_value=0.0), \
-                patch("r20_backend.exchanges.binance.urlopen", _fake):
+                patch("astra_backend.exchanges.binance.urlopen", _fake):
             with self.assertRaises(BinanceAPIError) as ctx:
                 self._call()
         self.assertEqual(ctx.exception.code, -2015)
@@ -185,7 +185,7 @@ class SignedRequestTest(_Base):
             raise _http_error(503, b"<html>gateway</html>")
 
         with patch.object(BinanceAdapter, "server_time_offset_ms", return_value=0.0), \
-                patch("r20_backend.exchanges.binance.urlopen", _fake):
+                patch("astra_backend.exchanges.binance.urlopen", _fake):
             with self.assertRaises(BinanceAPIError) as ctx:
                 self._call()
         self.assertEqual(ctx.exception.status, 503)
@@ -202,7 +202,7 @@ class SignedRequestTest(_Base):
             raise OSError("connection reset")
 
         with patch.object(BinanceAdapter, "server_time_offset_ms", return_value=0.0), \
-                patch("r20_backend.exchanges.binance.urlopen", _fake):
+                patch("astra_backend.exchanges.binance.urlopen", _fake):
             with self.assertRaises(BinanceAPIError) as ctx:
                 self._call()
         self.assertEqual(ctx.exception.code, "network")
@@ -226,7 +226,7 @@ class SignedRequestTest(_Base):
             return _Resp({"ok": True})
 
         with patch.object(BinanceAdapter, "server_time_offset_ms", side_effect=_offset), \
-                patch("r20_backend.exchanges.binance.urlopen", _fake), \
+                patch("astra_backend.exchanges.binance.urlopen", _fake), \
                 warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
             out = self._call()
@@ -245,7 +245,7 @@ class SignedRequestTest(_Base):
             raise _http_error(400, {"code": -1021, "msg": "Timestamp outside recvWindow"})
 
         with patch.object(BinanceAdapter, "server_time_offset_ms", return_value=0.0), \
-                patch("r20_backend.exchanges.binance.urlopen", _fake), \
+                patch("astra_backend.exchanges.binance.urlopen", _fake), \
                 warnings.catch_warnings(record=True):
             warnings.simplefilter("always")
             with self.assertRaises(BinanceAPIError) as ctx:
@@ -257,24 +257,24 @@ class CredentialsTest(_Base):
     def test_real_keys_reads_credentials_and_returns_the_pair(self):
         """走**真** `_keys`（setUp 把它整个打桩了 ⇒ 不打掉这里就永远测不到happy path）。"""
         self._keys.stop()
-        with patch("r20_backend.exchanges.registry.venue_credentials",
+        with patch("astra_backend.exchanges.registry.venue_credentials",
                    return_value=("K2", "S2")):
             self.assertEqual(BinanceAdapter._keys(self.ad), ("K2", "S2"))
 
     def test_secret_alone_missing_also_raises(self):
         """只有 key、secret 为空 ⇒ 同样**拒签**（半份凭证等于没有）。"""
-        from r20_backend.exchanges import ExchangeCapabilityError
+        from astra_backend.exchanges import ExchangeCapabilityError
         self._keys.stop()
-        with patch("r20_backend.exchanges.registry.venue_credentials",
+        with patch("astra_backend.exchanges.registry.venue_credentials",
                    return_value=("K2", "")):
             with self.assertRaises(ExchangeCapabilityError):
                 BinanceAdapter._keys(self.ad)
 
     def test_missing_credentials_raise_capability_error(self):
         """凭证未配置 ⇒ `ExchangeCapabilityError`（**不静默**、也不拿空串去签名）。"""
-        from r20_backend.exchanges import ExchangeCapabilityError
+        from astra_backend.exchanges import ExchangeCapabilityError
         self._keys.stop()      # ⚠️ setUp 把 `_keys` 打桩了 ⇒ 不打掉的话真 `_keys` 永不执行
-        with patch("r20_backend.exchanges.registry.venue_credentials", return_value=("", "")):
+        with patch("astra_backend.exchanges.registry.venue_credentials", return_value=("", "")):
             with self.assertRaises(ExchangeCapabilityError) as ctx:
                 BinanceAdapter._keys(self.ad)
         self.assertIn("凭证未配置", str(ctx.exception))

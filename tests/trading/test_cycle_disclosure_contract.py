@@ -77,7 +77,7 @@ class DisclosurePayloadTest(unittest.TestCase):
 
 class WatchdogStateContractTest(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(prefix="r20-wd-")
+        self.tmp = tempfile.TemporaryDirectory(prefix="astra-wd-")
         self.addCleanup(self.tmp.cleanup)
         self.path = Path(self.tmp.name) / "watchdog.json"
 

@@ -94,8 +94,8 @@ const groupIcons: Record<string, any> = {
 }
 
 // 杠杆区间合并行的参数引用（schema 缺失时自动退回通用行渲染，不炸页面）
-const levMinP = computed<any>(() => schema.value?.params.find((x: any) => x.key === 'R20_MIN_LEVERAGE') || null)
-const levMaxP = computed<any>(() => schema.value?.params.find((x: any) => x.key === 'R20_MAX_LEVERAGE') || null)
+const levMinP = computed<any>(() => schema.value?.params.find((x: any) => x.key === 'ASTRA_MIN_LEVERAGE') || null)
+const levMaxP = computed<any>(() => schema.value?.params.find((x: any) => x.key === 'ASTRA_MAX_LEVERAGE') || null)
 const levInverted = computed(() => !!levMinP.value && !!levMaxP.value
   && (draft[levMinP.value.key] ?? 0) > (draft[levMaxP.value.key] ?? 0));
 
@@ -170,7 +170,7 @@ function outOfRange(p: any): boolean {
 /** 分组内除杠杆两键外的参数（杠杆区间在上方合并为一行） */
 function paramsOf(groupId: string): any[] {
   return (schema.value?.params || []).filter(
-    (x: any) => x.group === groupId && x.key !== 'R20_MIN_LEVERAGE' && x.key !== 'R20_MAX_LEVERAGE',
+    (x: any) => x.group === groupId && x.key !== 'ASTRA_MIN_LEVERAGE' && x.key !== 'ASTRA_MAX_LEVERAGE',
   )
 }
 
@@ -238,25 +238,25 @@ function toggleAllGroups() {
 
 function groupSummary(groupId: string): string {
   if (groupId === 'exit_strategy') {
-    const scaleOut = draft.R20_SCALE_OUT_ENABLED ? `分批 ${Math.round((draft.R20_SCALE_OUT_RATIO || 0.5) * 100)}%` : '分批禁用';
-    const maxTp = `止盈宽 ≤ ${draft.R20_MAX_TAKE_PROFIT_ATR || 3.5}x ATR`;
+    const scaleOut = draft.ASTRA_SCALE_OUT_ENABLED ? `分批 ${Math.round((draft.ASTRA_SCALE_OUT_RATIO || 0.5) * 100)}%` : '分批禁用';
+    const maxTp = `止盈宽 ≤ ${draft.ASTRA_MAX_TAKE_PROFIT_ATR || 3.5}x ATR`;
     return `${scaleOut} · ${maxTp}`;
   }
   if (groupId === 'exposure') {
-    const levMin = draft.R20_MIN_LEVERAGE || 2;
-    const levMax = draft.R20_MAX_LEVERAGE || 5;
-    return `杠杆 ${levMin}~${levMax}x · 单笔 ${Math.round((draft.R20_MAX_MARGIN_EQUITY_RATIO || 0.2) * 100)}%`;
+    const levMin = draft.ASTRA_MIN_LEVERAGE || 2;
+    const levMax = draft.ASTRA_MAX_LEVERAGE || 5;
+    return `杠杆 ${levMin}~${levMax}x · 单笔 ${Math.round((draft.ASTRA_MAX_MARGIN_EQUITY_RATIO || 0.2) * 100)}%`;
   }
   if (groupId === 'per_trade') {
-    const rrMin = (draft.R20_MIN_RISK_REWARD || 2.0).toFixed(1);
-    const rrMax = (draft.R20_MAX_RISK_REWARD || 3.5).toFixed(1);
-    return `R:R ${rrMin}~${rrMax} · 置信度 ≥ ${draft.R20_MIN_ENTRY_CONFIDENCE || 80}%`;
+    const rrMin = (draft.ASTRA_MIN_RISK_REWARD || 2.0).toFixed(1);
+    const rrMax = (draft.ASTRA_MAX_RISK_REWARD || 3.5).toFixed(1);
+    return `R:R ${rrMin}~${rrMax} · 置信度 ≥ ${draft.ASTRA_MIN_ENTRY_CONFIDENCE || 80}%`;
   }
   if (groupId === 'stop_loss') {
-    return `止损宽 ${draft.R20_STOP_LOSS_ATR_MULT || 2.0}x ATR · 日亏 ${Math.round((draft.R20_DAILY_LOSS_EQUITY_RATIO || 0.05) * 100)}% · 冷静 ${draft.R20_STOP_COOLDOWN_MINUTES || 30}m`;
+    return `止损宽 ${draft.ASTRA_STOP_LOSS_ATR_MULT || 2.0}x ATR · 日亏 ${Math.round((draft.ASTRA_DAILY_LOSS_EQUITY_RATIO || 0.05) * 100)}% · 冷静 ${draft.ASTRA_STOP_COOLDOWN_MINUTES || 30}m`;
   }
   if (groupId === 'pyramiding') {
-    return (draft.R20_MAX_SCALE_IN_COUNT || 0) > 0 ? `允许加仓 ${draft.R20_MAX_SCALE_IN_COUNT} 次` : '已禁用加仓';
+    return (draft.ASTRA_MAX_SCALE_IN_COUNT || 0) > 0 ? `允许加仓 ${draft.ASTRA_MAX_SCALE_IN_COUNT} 次` : '已禁用加仓';
   }
   return '';
 }
@@ -287,7 +287,7 @@ async function saveChanges() {
     toast.err(t('admin.risk.levInvertedSave'))
     return
   }
-  if ((draft.R20_MIN_RISK_REWARD ?? 0) > (draft.R20_MAX_RISK_REWARD ?? 0)) {
+  if ((draft.ASTRA_MIN_RISK_REWARD ?? 0) > (draft.ASTRA_MAX_RISK_REWARD ?? 0)) {
     toast.err(t('admin.risk.rrInvertedSave'))
     return
   }
@@ -567,7 +567,7 @@ onMounted(loadData)
             </div>
 
             <div class="rk-row-ctl">
-              <div v-if="p.key === 'R20_SCALE_OUT_ENABLED'" class="flex items-center gap-3">
+              <div v-if="p.key === 'ASTRA_SCALE_OUT_ENABLED'" class="flex items-center gap-3">
                 <span class="text-xs font-mono font-medium" :style="{ color: draft[p.key] ? 'var(--up)' : 'var(--ink-3)' }">
                   {{ draft[p.key] ? '已开启' : '已关闭' }}
                 </span>

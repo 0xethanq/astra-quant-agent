@@ -12,9 +12,9 @@ import ast
 import inspect
 import unittest
 
-from r20_backend.dashboard_cache import update_cache_cycle
-from r20_backend.dashboard_payload import cache_payload
-from r20_backend.dashboard_payload.cache_payload import (STALE_STATUSES, build_live_cache_payload,
+from astra_backend.dashboard_cache import update_cache_cycle
+from astra_backend.dashboard_payload import cache_payload
+from astra_backend.dashboard_payload.cache_payload import (STALE_STATUSES, build_live_cache_payload,
                                                          is_stale_status)
 
 

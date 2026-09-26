@@ -20,7 +20,7 @@
 import unittest
 from unittest.mock import patch
 
-from r20_backend.council.debate import _call_single_trader
+from astra_backend.council.debate import _call_single_trader
 
 ROLE_SPEC = {"name": "老张", "prompt": "席位提示词:{{macro_4h}}", "temperature": 0.35}
 
@@ -40,11 +40,11 @@ class SingleTraderCallTest(unittest.TestCase):
             self.seen["exec"] = kwargs
             self.rv.append(kwargs)
             return "正文\nBTC-USDT-SWAP | WAIT | - | - | - | - | 55 | 箱体", "思考", {}, 1.5
-        self.p_exec = patch("r20_backend.llm_manager.execute_llm_request", side_effect=_exec)
+        self.p_exec = patch("astra_backend.llm_manager.execute_llm_request", side_effect=_exec)
         self.exec_mock = self.p_exec.start()
         self.addCleanup(self.p_exec.stop)
 
-        self.p_render = patch("r20_backend.council.debate._render_seat_prompt",
+        self.p_render = patch("astra_backend.council.debate._render_seat_prompt",
                               return_value="渲染后的身份")
         self.render_mock = self.p_render.start()
         self.addCleanup(self.p_render.stop)

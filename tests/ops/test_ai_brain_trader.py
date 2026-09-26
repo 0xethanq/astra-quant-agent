@@ -56,20 +56,20 @@ class ImportFallbackTests(unittest.TestCase):
 
     def test_standalone_settings_is_none_when_config_import_fails(self):
         node = _find_node(lambda n: isinstance(n, ast.Try) and n.lineno == 57)
-        with patch.dict(sys.modules, {"r20_backend.config": None}):
+        with patch.dict(sys.modules, {"astra_backend.config": None}):
             ns = _exec_node(node)
         self.assertIn("standalone_settings", ns)
         self.assertIsNone(ns["standalone_settings"])
 
     def test_version_falls_back_when_version_import_raises(self):
         node = _find_node(lambda n: isinstance(n, ast.Try) and n.lineno == 62)
-        with patch.dict(sys.modules, {"r20_backend.version": None}):
+        with patch.dict(sys.modules, {"astra_backend.version": None}):
             ns = _exec_node(node)
         self.assertEqual(ns["__version__"], "7.6.0")
 
     def test_canonical_base_fallback_chain_strips_usdt_markers(self):
         node = _find_node(lambda n: isinstance(n, ast.Try) and n.lineno == 186)
-        with patch.dict(sys.modules, {"r20_backend.exchanges.base": None}):
+        with patch.dict(sys.modules, {"astra_backend.exchanges.base": None}):
             ns = _exec_node(node)
         fn = ns["_canonical_base_name"]
         # 每个 marker 都要能被剥掉（含 break 早退），且分隔符被清掉
@@ -171,7 +171,7 @@ class PromptOverrideTests(unittest.TestCase):
                 self.assertEqual(abt.read_prompt_override(), "只做多")
 
     def test_missing_file_returns_empty(self):
-        with patch.object(abt, "PROMPT_OVERRIDE_FILE", "/nonexistent/r20-override.txt"):
+        with patch.object(abt, "PROMPT_OVERRIDE_FILE", "/nonexistent/astra-override.txt"):
             self.assertEqual(abt.read_prompt_override(), "")
 
     def test_oserror_path_returns_empty(self):

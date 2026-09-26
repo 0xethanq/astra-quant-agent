@@ -1,0 +1,24 @@
+[Unit]
+Description=AstraQuant Standalone Backend
+After=network-online.target
+Wants=network-online.target
+
+# ⚠️ `/opt/astra-quant-trader` 与 `User=astra` 是**历史部署约定**（内部代号 ASTRA），
+#    与对外品牌 AstraQuant 无关；沿用是为了不打断已按此路径部署的实例。
+#    新部署请把下面的路径/用户改成你自己的实际克隆目录。
+
+[Service]
+Type=simple
+User=astra
+Group=astra
+Environment=HOME=/home/astra
+Environment=PATH=/opt/astra-quant-trader/.venv/bin:/usr/local/bin:/usr/bin:/bin
+WorkingDirectory=/opt/astra-quant-trader
+EnvironmentFile=/opt/astra-quant-trader/.env
+ExecStart=/usr/bin/env python3 -m uvicorn astra_backend.app:app --host 0.0.0.0 --port 8080
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

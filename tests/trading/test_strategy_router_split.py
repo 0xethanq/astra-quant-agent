@@ -1,7 +1,7 @@
 r"""strategy 路由拆分对拍门（结构整理 B8·第九十六刀）。
 
-`r20_backend/routers/strategy.py`（775 行 / 35 端点）按资源拆成包
-`r20_backend/routers/strategy/`（council / interceptors / policy / prompts）。
+`astra_backend/routers/strategy.py`（775 行 / 35 端点）按资源拆成包
+`astra_backend/routers/strategy/`（council / interceptors / policy / prompts）。
 
 ## 这类重构的唯一安全属性：**路由表一字不变**
 
@@ -28,13 +28,14 @@ import subprocess
 import sys
 import unittest
 from pathlib import Path
+from tests.extraction.rename_baseline import legacy_rev_path, normalize
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 PRE = "386f24b"                      # 本刀动工前最后提交（第九十五刀收口）
-BASELINE = "r20_backend/routers/strategy.py"
-PKG = ROOT / "r20_backend" / "routers" / "strategy"
+BASELINE = "astra_backend/routers/strategy.py"
+PKG = ROOT / "astra_backend" / "routers" / "strategy"
 INCLUDE_ORDER = ("council", "interceptors", "policy", "prompts")
 
 # 拆分**之后**新增的路由（正常演进，不是本刀产物）：自进化配置页的读写两条，
@@ -62,7 +63,7 @@ def _routes_in(node_src: str) -> list:
 
 class StrategyRouterSplitTest(unittest.TestCase):
     def test_static_route_table_is_identical_and_ordered(self):
-        r = subprocess.run(["git", "show", f"{PRE}:{BASELINE}"],
+        r = subprocess.run(["git", "show", legacy_rev_path(f"{PRE}:{BASELINE}")],
                            capture_output=True, text=True, cwd=str(ROOT))
         self.assertEqual(r.returncode, 0, f"基线取不到：{r.stderr[:200]}")
         want = _routes_in(r.stdout)
@@ -77,7 +78,7 @@ class StrategyRouterSplitTest(unittest.TestCase):
                          "拆分后新增路由未登记（或顺序/处理器名变了）")
 
     def test_live_openapi_route_surface_unchanged(self):
-        from r20_backend.app import app
+        from astra_backend.app import app
         spec = app.openapi()
         pref = ("/api/v1/admin/council", "/api/v1/admin/interceptor",
                 "/api/v1/admin/policy", "/api/v1/prompt-library", "/api/v1/admin/prompt")
@@ -89,7 +90,7 @@ class StrategyRouterSplitTest(unittest.TestCase):
                 live.add((path, method.upper()))
                 t = tuple(op.get("tags") or [])
                 tags[t] = tags.get(t, 0) + 1
-        r = subprocess.run(["git", "show", f"{PRE}:{BASELINE}"],
+        r = subprocess.run(["git", "show", legacy_rev_path(f"{PRE}:{BASELINE}")],
                            capture_output=True, text=True, cwd=str(ROOT))
         want = {(p, m) for p, m, _ in _routes_in(r.stdout)}
         self.assertEqual(live, want, "线上接口面（路径×方法）与拆分前不一致")
@@ -109,14 +110,14 @@ class StrategyRouterSplitTest(unittest.TestCase):
         self.assertIn("router = APIRouter()", src, "聚合器不得再加 tags")
 
     def test_old_module_path_still_importable(self):
-        """外部 `from r20_backend.routers.strategy import router` 必须照旧可用。
+        """外部 `from astra_backend.routers.strategy import router` 必须照旧可用。
 
         ⚠️ 本仓 FastAPI 版本的 `include_router` 是**惰性**的：聚合器的 `routes`
         里放的是 `_IncludedRouter` **句柄**（4 个子路由），真正的 35 条在应用
         规格解析时才展开 —— 故此处只断言"4 个句柄 + 可挂载"，35 条由
         `test_live_openapi_route_surface_unchanged` 从 OpenAPI 规格校验。
         """
-        from r20_backend.routers.strategy import router
+        from astra_backend.routers.strategy import router
         self.assertTrue(hasattr(router, "routes"))
         self.assertEqual(len(router.routes), len(INCLUDE_ORDER),
                          "聚合器应有 4 个子路由句柄（惰性 include）")

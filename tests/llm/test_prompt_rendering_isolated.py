@@ -48,7 +48,7 @@ _EXTRA_NODES = {
     for name in ("_sl_atr_mult_for", "_xvenue_prompt_line")
 }
 
-APP_TREE = ast.parse((PROJECT / "r20_backend/app.py").read_text())
+APP_TREE = ast.parse((PROJECT / "astra_backend/app.py").read_text())
 OLD_TREE = ast.parse((PROJECT / "tests/ops/test_control_plane_v2.py").read_text())
 
 
@@ -220,7 +220,7 @@ class RenderingTests(Sandbox):
     def test_committee_original_expression_preserves_base_modules(self):
         assignment = next(n for n in ast.walk(APP_TREE) if isinstance(n, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "test_sys" for t in n.targets) and isinstance(n.value, ast.IfExp))
         mods = [{"source": "base", "title": "规则", "content": "规则 {{market_matrix}} {{account_balance}}"}]
-        result = eval(compile(ast.Expression(body=assignment.value), "r20_backend/app.py", "eval"), {
+        result = eval(compile(ast.Expression(body=assignment.value), "astra_backend/app.py", "eval"), {
             "sys_mods": mods, "prof": {"name": "测试"}, "test_market": "隔离行情",
             "compile_modules": prompts.compile_modules, "apply_module_layout": prompts.apply_module_layout,
         })

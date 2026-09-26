@@ -94,7 +94,7 @@ def persist_state_and_sync_ledger(*,
     # 批E(2026-09-13)·测试封闭闸：这两条 spawn 会打三所接口并**重写生产台账/数据库**。
     # 测试若在进程内跑一轮交易员巡检（多处如此），就会连带改写 data/trading_ledger.json
     # 与 SQLite——违反「测试不触生产文件」。tests/__init__.py 在任何测试模块导入前置位
-    # R20_LEDGER_SYNC_DISABLED=1，下面的模块级快照即 False；生产不设 → 行为不变。
+    # ASTRA_LEDGER_SYNC_DISABLED=1，下面的模块级快照即 False；生产不设 → 行为不变。
     if LEDGER_AUTOSYNC_ENABLED:
         try:
             sync_script = os.path.join(WORKSPACE_DIR, "scripts", "sync_full_ledger.py")
@@ -517,7 +517,7 @@ def venue_protection_watchdog_stage(*,
         executed_actions,
         venue_registry,
         current_environment,
-        R20_VENUE_PROTECTION_WATCHDOG,
+        ASTRA_VENUE_PROTECTION_WATCHDOG,
         audit_cross_venue_protection,
         dry_run=False,
         state_path=None,
@@ -534,7 +534,7 @@ def venue_protection_watchdog_stage(*,
     （跨所持仓 instId 是合成 id `GATE:BTC_USDT`，与因子快照的 OKX 形态匹配不上）。
     本格把 `scripts/trader/venue_protection.py` 的判定/动作接到每周期快照上。
 
-    **接线不等于开闸**：`R20_VENUE_PROTECTION_WATCHDOG` 未置 1 时本函数直接返回，
+    **接线不等于开闸**：`ASTRA_VENUE_PROTECTION_WATCHDOG` 未置 1 时本函数直接返回，
     **零网络、零写单**（线上行为与本刀之前逐字一致）。开闸是运营决定，需人拍板。
 
     ## 防抖：缺口必须**持续**够久才写单（第一百三十刀）
@@ -552,7 +552,7 @@ def venue_protection_watchdog_stage(*,
 
     ## 开闸前的第一步：`dry_run=True` 预演（第一百二十九刀）
 
-    总闸开启 + `R20_VENUE_PROTECTION_WATCHDOG_DRY_RUN=1` ⇒ 本格照常每周期判定，
+    总闸开启 + `ASTRA_VENUE_PROTECTION_WATCHDOG_DRY_RUN=1` ⇒ 本格照常每周期判定，
     但把 `dry_run=True` 透给审计层：**只判定、不写单**，并把审计层 `would`
     里"本来会做"的动作逐条打印出来。这是把"一次误判"与"一串真实订单"隔开的那道闸，
     也是本格从"默认关闭"走向"开闸"之间**唯一安全**的过渡档。
@@ -565,7 +565,7 @@ def venue_protection_watchdog_stage(*,
     - 完全没有止损腿的仓位只报 CRITICAL（**不替它定价补挂** —— 价位是策略决定，
       巡检层臆造价位等于偷偷改策略）。
     """
-    if not R20_VENUE_PROTECTION_WATCHDOG:
+    if not ASTRA_VENUE_PROTECTION_WATCHDOG:
         return None
     try:
         env_mode = str(current_environment().mode)

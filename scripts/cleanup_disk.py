@@ -85,12 +85,12 @@ def clean_system_caches():
     # 2. Clean temporary files in /tmp older than 2 days
     #    审计D(2026-09-13)·越权清扫收口：旧命令 `find /tmp -type f -mtime +2 -delete`
     #    扫的是**整个 /tmp**——凡本用户可读写的其他程序临时件（SSH agent socket 目录、
-    #    测试沙箱、harness 文件）一律当垃圾删，属严重越权。现只清带本仓前缀 r20-* 的
+    #    测试沙箱、harness 文件）一律当垃圾删，属严重越权。现只清带本仓前缀 astra-* 的
     #    顶层临时条目（测试/工具泄漏产物），其余一概不碰。
     try:
-        subprocess.run("find /tmp -maxdepth 1 -name 'r20-*' -mtime +2 -exec rm -rf {} + 2>/dev/null",
+        subprocess.run("find /tmp -maxdepth 1 -name 'astra-*' -mtime +2 -exec rm -rf {} + 2>/dev/null",
                        shell=True, capture_output=True, timeout=10)
-        actions.append("stale /tmp/r20-* entries cleared")
+        actions.append("stale /tmp/astra-* entries cleared")
     except Exception:
         pass
 

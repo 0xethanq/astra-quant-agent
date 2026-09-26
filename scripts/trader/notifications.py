@@ -23,7 +23,7 @@
 ## 单型字为什么在 2026-09 之后不再是常量
 
 上表里的「限价」此前是**硬编码字面量**。后台可切市价单
-（`R20_ORDER_MODE=market`，写进 `.env`）之后，这句话就变成了谎话：
+（`ASTRA_ORDER_MODE=market`，写进 `.env`）之后，这句话就变成了谎话：
 
     2026-09-26 12:45  [ARB] AI限价多单已提交待成交 309.4张@0.2228
 
@@ -63,11 +63,11 @@ def _order_word() -> str:
     """当前委托单型的展示字：`市价` / `限价`（见模块 docstring 的 2026-09 说明）。
 
     语义与下单路径（`order_submit.py` / `execution_router.py`）**同源**：
-    `R20_ORDER_MODE` 只在取值恰为 `market` 时算市价，读不到/拼错一律退回 `限价`
+    `ASTRA_ORDER_MODE` 只在取值恰为 `market` 时算市价，读不到/拼错一律退回 `限价`
     —— 与真实发单的兜底完全一致，故不会出现"文案说市价、实际发限价"。
     """
     return ("市价"
-            if str(os.getenv("R20_ORDER_MODE", "limit")).strip().lower() == "market"
+            if str(os.getenv("ASTRA_ORDER_MODE", "limit")).strip().lower() == "market"
             else "限价")
 
 

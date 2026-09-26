@@ -36,7 +36,7 @@
 ## ⚠️ 依赖方向
 
 本模块只依赖标准库 + **函数内延迟导入**的
-`r20_backend.backup_secrets` / `r20_backend.net_security` / `oss2` / `bypy`
+`astra_backend.backup_secrets` / `astra_backend.net_security` / `oss2` / `bypy`
 （与搬移前完全一致 —— 这些延迟导入是原样搬过来的，未改成模块级导入）。
 """
 
@@ -65,13 +65,13 @@ def calculate_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 def _credentials(target: dict[str, Any]) -> dict[str, str]:
-    from r20_backend.backup_secrets import load_credentials
+    from astra_backend.backup_secrets import load_credentials
     return load_credentials(str(target.get("credential_ref") or f"backup:{target['id']}"))
 
 def _urlencoded_json(url: str, data: dict[str, Any] | None = None, timeout: int = 60) -> dict[str, Any]:
-    from r20_backend.net_security import safe_urlopen
+    from astra_backend.net_security import safe_urlopen
     body = urllib.parse.urlencode(data).encode() if data is not None else None
-    request = urllib.request.Request(url, data=body, headers={"User-Agent": "R20-Backup/6.2.0"}, method="POST" if body is not None else "GET")
+    request = urllib.request.Request(url, data=body, headers={"User-Agent": "ASTRA-Backup/6.2.0"}, method="POST" if body is not None else "GET")
     with safe_urlopen(request, timeout=timeout) as response:
         raw = response.read().decode("utf-8")
     payload = json.loads(raw or "{}")
@@ -80,10 +80,10 @@ def _urlencoded_json(url: str, data: dict[str, Any] | None = None, timeout: int 
     return payload
 
 def _multipart_upload(url: str, field_name: str, filename: str, content: bytes, timeout: int = 180) -> dict[str, Any]:
-    from r20_backend.net_security import safe_urlopen
-    boundary = f"----R20{hashlib.sha256(os.urandom(16)).hexdigest()[:24]}"
+    from astra_backend.net_security import safe_urlopen
+    boundary = f"----ASTRA{hashlib.sha256(os.urandom(16)).hexdigest()[:24]}"
     body = (f"--{boundary}\r\nContent-Disposition: form-data; name=\"{field_name}\"; filename=\"{filename}\"\r\nContent-Type: application/octet-stream\r\n\r\n").encode() + content + f"\r\n--{boundary}--\r\n".encode()
-    request = urllib.request.Request(url, data=body, headers={"Content-Type": f"multipart/form-data; boundary={boundary}", "User-Agent": "R20-Backup/6.2.0"}, method="POST")
+    request = urllib.request.Request(url, data=body, headers={"Content-Type": f"multipart/form-data; boundary={boundary}", "User-Agent": "ASTRA-Backup/6.2.0"}, method="POST")
     with safe_urlopen(request, timeout=timeout) as response:
         payload = json.loads(response.read().decode("utf-8") or "{}")
     if payload.get("errno") not in (None, 0):
@@ -94,7 +94,7 @@ def upload_baidu_oauth(source: Path, target: dict[str, Any], *,
                        _credentials: Callable[[dict[str, Any]], dict[str, str]],
                        _urlencoded_json: Callable[..., dict[str, Any]],
                        _multipart_upload: Callable[..., Any]) -> dict[str, Any]:
-    from r20_backend.backup_secrets import save_credentials
+    from astra_backend.backup_secrets import save_credentials
     creds = _credentials(target)
     app_key = creds.get("app_key", "")
     app_secret = creds.get("app_secret", "")
@@ -125,8 +125,8 @@ def upload_baidu_oauth(source: Path, target: dict[str, Any], *,
             if not chunk:
                 break
             block_list.append(hashlib.md5(chunk).hexdigest())
-    remote_dir = str(target.get("remote_path") or "R20_Backups").strip("/")
-    remote_path = f"/apps/R20QuantumTrader/{remote_dir}/{source.name}" if remote_dir else f"/apps/R20QuantumTrader/{source.name}"
+    remote_dir = str(target.get("remote_path") or "ASTRA_Backups").strip("/")
+    remote_path = f"/apps/AstraQuantumTrader/{remote_dir}/{source.name}" if remote_dir else f"/apps/AstraQuantumTrader/{source.name}"
     precreate_url = "https://pan.baidu.com/rest/2.0/xpan/file?method=precreate&access_token=" + urllib.parse.quote(access_token, safe="")
     common = {"path": remote_path, "size": source.stat().st_size, "isdir": 0, "autoinit": 1, "rtype": 3, "block_list": json.dumps(block_list)}
     precreated = _urlencoded_json(precreate_url, common)
@@ -221,7 +221,7 @@ def upload_oss(source: Path, target: dict[str, Any], *,
 
 def upload_webdav(source: Path, target: dict[str, Any], *,
                   _credentials: Callable[[dict[str, Any]], dict[str, str]]) -> dict[str, Any]:
-    from r20_backend.net_security import safe_urlopen
+    from astra_backend.net_security import safe_urlopen
     creds = _credentials(target)
     endpoint = str(target["endpoint"]).rstrip("/")
     remote = str(target.get("remote_path") or "").strip("/")

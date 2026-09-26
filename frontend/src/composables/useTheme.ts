@@ -13,7 +13,7 @@ function applyCvd(on: boolean) {
     if (on) el.setAttribute('data-cvd', 'true')
     else el.removeAttribute('data-cvd')
     try {
-      localStorage.setItem('r20_cvd', on ? '1' : '0')
+      localStorage.setItem('astra_cvd', on ? '1' : '0')
     } catch {
       // ignore
     }
@@ -34,8 +34,8 @@ export function useTheme() {
         el.classList.remove('light')
       }
       try {
-        localStorage.setItem('r20_theme', theme)
-        localStorage.setItem('r20_theme_v2', theme)
+        localStorage.setItem('astra_theme', theme)
+        localStorage.setItem('astra_theme_v2', theme)
       } catch {
         // ignore
       }
@@ -52,14 +52,14 @@ export function useTheme() {
     let savedTheme: ThemeMode = 'dark'
     if (typeof document !== 'undefined') {
       try {
-        if (localStorage.getItem('r20_cvd') === '1') applyCvd(true)
-        const storedV2 = localStorage.getItem('r20_theme_v2')
+        if (localStorage.getItem('astra_cvd') === '1') applyCvd(true)
+        const storedV2 = localStorage.getItem('astra_theme_v2')
         if (storedV2 === 'dark' || storedV2 === 'light') {
           savedTheme = storedV2
         } else {
           // 清理历史残留的主题设置，确保全站升级为默认深色黑曜石主题
-          localStorage.removeItem('r20_theme')
-          localStorage.setItem('r20_theme_v2', 'dark')
+          localStorage.removeItem('astra_theme')
+          localStorage.setItem('astra_theme_v2', 'dark')
           savedTheme = 'dark'
         }
       } catch {

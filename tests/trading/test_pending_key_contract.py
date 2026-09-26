@@ -41,7 +41,7 @@ sys.path.insert(0, str(ROOT))
 
 from scripts.trader.cycle_snapshot import collect_pending_inst_ids  # noqa: E402
 from scripts.trader.reservation_reconcile import reconcile_reservation_ledger  # noqa: E402
-from r20_backend import risk_reservation  # noqa: E402
+from astra_backend import risk_reservation  # noqa: E402
 
 
 _READ_SCOPE = None
@@ -52,7 +52,7 @@ def setUpModule():
     本文件核对**线上准入清单**里每个标的都是 USDT 永续 —— 有意的线上守卫。
 
     只读、不改；声明在此是为了把「依赖线上配置内容」从**静默**变成**可审计**
-    （守卫见 `tests/__init__.py`；`R20_TESTS_STRICT_READS=1` 下未声明的读会报错）。
+    （守卫见 `tests/__init__.py`；`ASTRA_TESTS_STRICT_READS=1` 下未声明的读会报错）。
     """
     global _READ_SCOPE
     from tests import allow_real_data_reads

@@ -1,4 +1,4 @@
-"""策略全量包捕获（`r20_backend/policy/capture.py`）残余分支收口测试 —— 第 351 刀。
+"""策略全量包捕获（`astra_backend/policy/capture.py`）残余分支收口测试 —— 第 351 刀。
 
 本模块 190 行，是策略快照生成与整包归档捕获核心：
 - 提示词库捕获容错：`load_library` 缺失属性时回退 `load_prompt_config`、两阶段异常安全自愈返回 `{}`；
@@ -18,12 +18,12 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT / "scripts") not in sys.path:
     sys.path.insert(0, str(ROOT / "scripts"))
 
-from r20_backend.policy.capture import capture_full_strategy_package
+from astra_backend.policy.capture import capture_full_strategy_package
 
 
 class PolicyCaptureTailsTests(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(prefix="r20_policy_capture_tails_")
+        self.tmp = tempfile.TemporaryDirectory(prefix="astra_policy_capture_tails_")
         self.addCleanup(self.tmp.cleanup)
         self.tmp_path = Path(self.tmp.name)
 
@@ -45,10 +45,10 @@ class PolicyCaptureTailsTests(unittest.TestCase):
         with patch("prompt_library.load_library", side_effect=RuntimeError("prompt error")):
             with patch("evolution_shield.STRUCTURED_MEMORY_FILE", self.tmp_path / "missing_mem.json"):
                 with patch("evolution_shield.read_memory_snapshot", side_effect=RuntimeError("memory error")):
-                    with patch("r20_backend.interceptor_manager.load_config", side_effect=RuntimeError("int error")):
-                        with patch("r20_backend.council_manager.load_council_config", side_effect=RuntimeError("ccl error")):
-                            with patch("r20_backend.risk_config.current_values", side_effect=RuntimeError("risk error")):
-                                with patch("r20_backend.exchanges.routing_policy._read_raw_routing", side_effect=RuntimeError("rout error")):
+                    with patch("astra_backend.interceptor_manager.load_config", side_effect=RuntimeError("int error")):
+                        with patch("astra_backend.council_manager.load_council_config", side_effect=RuntimeError("ccl error")):
+                            with patch("astra_backend.risk_config.current_values", side_effect=RuntimeError("risk error")):
+                                with patch("astra_backend.exchanges.routing_policy._read_raw_routing", side_effect=RuntimeError("rout error")):
                                     pkg = capture_full_strategy_package(self.tmp_path, root_dir=self.tmp_path)
                                     p = pkg["package"]
                                     self.assertEqual(p["prompt_config"], {})
@@ -69,7 +69,7 @@ class PolicyCaptureTailsTests(unittest.TestCase):
 
         with patch.object(sys, "path", MockPathList(sys.path)):
             pkg = capture_full_strategy_package(self.tmp_path, root_dir=self.tmp_path)
-            self.assertEqual(pkg["format"], "r20_policy_package_v1")
+            self.assertEqual(pkg["format"], "astra_policy_package_v1")
 
 
 if __name__ == "__main__":

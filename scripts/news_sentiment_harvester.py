@@ -15,7 +15,7 @@ import sys as _sys
 from pathlib import Path as _P
 
 # ⚠️ 第七十九刀（实盘 bug 修复）：本脚本**作为子进程被调度器每 10 分钟拉起**
-# （r20_backend/scheduler.py "news" 任务 / ai_factor_trader 周期 / sync 扇出）。
+# （astra_backend/scheduler.py "news" 任务 / ai_factor_trader 周期 / sync 扇出）。
 # 第四十四刀把纯逻辑外提到 `scripts/news/importance.py` 并在门面顶层
 # `from scripts.news.importance import …`，但**没抄 factor_library 同款的
 # sys.path bootstrap** —— 以 `python scripts/news_sentiment_harvester.py`
@@ -58,11 +58,11 @@ import xml.etree.ElementTree as ET
 from email.utils import parsedate_to_datetime
 
 WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-#: ⚠️ `R20_DATA_DIR` 是**测试沙箱专用环境变量**（由 tests/config_sandbox.isolate_config
+#: ⚠️ `ASTRA_DATA_DIR` 是**测试沙箱专用环境变量**（由 tests/config_sandbox.isolate_config
 #: 设置、由 `run_script` 拉起的子进程继承）：跑测试时把 data/ 写入重定向到沙箱，
 #: **生产从不设置该变量 → 取值与原先逐位相同**。修复"测试经子进程写生产文件"
 #: 的泄漏（§88/§91.6），不改任何业务行为。
-DATA_DIR = os.environ.get("R20_DATA_DIR") or os.path.join(WORKSPACE_DIR, "data")
+DATA_DIR = os.environ.get("ASTRA_DATA_DIR") or os.path.join(WORKSPACE_DIR, "data")
 NEWS_CACHE_FILE = os.path.join(DATA_DIR, "news_sentiment.json")
 CIRCUIT_BREAKER_FILE = os.path.join(DATA_DIR, "circuit_breaker.json")
 
@@ -130,7 +130,7 @@ def trigger_circuit_breaker(headline: str, keyword: str):
 def is_circuit_breaker_active():
     """读熔断状态文件 → `(active, info)`（服务于**提示词/展示**）。
 
-    ⚠️ 本函数是 `r20_backend.execution.circuit_breaker` 判定器的**同语义第二份实现**
+    ⚠️ 本函数是 `astra_backend.execution.circuit_breaker` 判定器的**同语义第二份实现**
     （此处只用于"宏观环境"这一提示词字段，故长期未收敛）。第一百四十六刀修正其中
     一处**方向相反**的失败语义：
 
@@ -540,7 +540,7 @@ def fetch_and_analyze_news_sentiment():
                     _atomic_write_json(CIRCUIT_BREAKER_FILE, {
                         "active": False,
                         "self_healed_at": int(time.time()),
-                        "note": "损坏自愈重写：见 r20 审计批3（news_sentiment_harvester）",
+                        "note": "损坏自愈重写：见 astra 审计批3（news_sentiment_harvester）",
                     })
                 except Exception as _we:
                     print(f"[熔断自愈] warn 重写失败: {_we}")

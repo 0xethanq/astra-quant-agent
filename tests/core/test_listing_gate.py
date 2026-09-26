@@ -1,6 +1,6 @@
 """US-007 环境维合约存在性对账（listing gate）纯单测。
 
-零凭证、零出网：patch ``r20_backend.exchanges.listing.urlopen`` 模块绑定名，
+零凭证、零出网：patch ``astra_backend.exchanges.listing.urlopen`` 模块绑定名，
 所有网络面由 fake urlopen 响应；域名正确性通过捕获 Request.url 断言。
 """
 from __future__ import annotations
@@ -15,8 +15,8 @@ from urllib.request import Request
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from r20_backend.exchanges import listing as listing_mod
-from r20_backend.exchanges.listing import ensure_contract_listed
+from astra_backend.exchanges import listing as listing_mod
+from astra_backend.exchanges.listing import ensure_contract_listed
 
 
 def _resp(payload) -> object:

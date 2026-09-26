@@ -19,7 +19,7 @@ from unittest.mock import MagicMock, Mock, patch
 from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlparse
 
-from r20_backend.exchanges import (
+from astra_backend.exchanges import (
     BinanceAPIError,
     BinanceAdapter,
     ExchangeCapabilityError,
@@ -30,12 +30,12 @@ _AMBIENT: dict = {}
 
 
 def setUpModule():
-    """隔离宿主 .env 的执行/档位旗标（r20_backend.config 导入期会把它们载入
+    """隔离宿主 .env 的执行/档位旗标（astra_backend.config 导入期会把它们载入
     os.environ）——执行路由用例的开闸语义只由本模块夹具决定。"""
     import os
     global _AMBIENT
     _AMBIENT = {k: os.environ.pop(k, None) for k in list(os.environ)
-                if k.startswith("R20_") and ("EXECUTION" in k or "TESTNET" in k)}
+                if k.startswith("ASTRA_") and ("EXECUTION" in k or "TESTNET" in k)}
 
 
     import os
@@ -70,7 +70,7 @@ class BinancePrivateAdapterTests(unittest.TestCase):
         self.assertTrue(cap.supports_orders, "US-005: supports_orders 声明为 True")
 
     def test_unconfigured_credentials_raises_capability_error(self):
-        with patch("r20_backend.exchanges.registry.venue_credentials", return_value=("", "")):
+        with patch("astra_backend.exchanges.registry.venue_credentials", return_value=("", "")):
             with self.assertRaises(ExchangeCapabilityError) as ctx:
                 self.adapter.account_snapshot()
             self.assertIn("未配置", str(ctx.exception))
@@ -85,9 +85,9 @@ class BinancePrivateAdapterTests(unittest.TestCase):
             captured_req.append(req)
             return _FakeResp(json.dumps({"test": "ok"}).encode("utf-8"))
 
-        with patch("r20_backend.exchanges.registry.venue_credentials", return_value=(api_key, secret_key)), \
+        with patch("astra_backend.exchanges.registry.venue_credentials", return_value=(api_key, secret_key)), \
              patch.object(self.adapter, "server_time_offset_ms", lambda **k: 0.0), \
-             patch("r20_backend.exchanges.binance.urlopen", mock_urlopen):
+             patch("astra_backend.exchanges.binance.urlopen", mock_urlopen):
             res = self.adapter.signed_request("GET", "/fapi/v1/test", params={"symbol": "BTCUSDT"})
             self.assertEqual(res, {"test": "ok"})
 
@@ -140,8 +140,8 @@ class BinancePrivateAdapterTests(unittest.TestCase):
         def mock_urlopen(req, timeout=15.0):
             return _FakeResp(json.dumps(mock_account_data).encode("utf-8"))
 
-        with patch("r20_backend.exchanges.registry.venue_credentials", return_value=(api_key, secret_key)), \
-             patch("r20_backend.exchanges.binance.urlopen", mock_urlopen):
+        with patch("astra_backend.exchanges.registry.venue_credentials", return_value=(api_key, secret_key)), \
+             patch("astra_backend.exchanges.binance.urlopen", mock_urlopen):
             snap = self.adapter.account_snapshot()
 
         self.assertEqual(snap["venue"], "binance")
@@ -197,8 +197,8 @@ class BinancePrivateAdapterTests(unittest.TestCase):
         def mock_urlopen(req, timeout=15.0):
             return _FakeResp(json.dumps(mock_positions_data).encode("utf-8"))
 
-        with patch("r20_backend.exchanges.registry.venue_credentials", return_value=(api_key, secret_key)), \
-             patch("r20_backend.exchanges.binance.urlopen", mock_urlopen):
+        with patch("astra_backend.exchanges.registry.venue_credentials", return_value=(api_key, secret_key)), \
+             patch("astra_backend.exchanges.binance.urlopen", mock_urlopen):
             pos_list = self.adapter.positions()
 
         # 0 仓位被剔除，仅保留真实仓位
@@ -226,7 +226,7 @@ class BinancePrivateAdapterTests(unittest.TestCase):
             {
                 "orderId": 883921049281,
                 "symbol": "BTCUSDT",
-                "clientOrderId": "r20_limit_01",
+                "clientOrderId": "astra_limit_01",
                 "price": "60000.00",
                 "origQty": "0.100",
                 "executedQty": "0.000",
@@ -239,8 +239,8 @@ class BinancePrivateAdapterTests(unittest.TestCase):
         def mock_urlopen(req, timeout=15.0):
             return _FakeResp(json.dumps(mock_orders_data).encode("utf-8"))
 
-        with patch("r20_backend.exchanges.registry.venue_credentials", return_value=(api_key, secret_key)), \
-             patch("r20_backend.exchanges.binance.urlopen", mock_urlopen):
+        with patch("astra_backend.exchanges.registry.venue_credentials", return_value=(api_key, secret_key)), \
+             patch("astra_backend.exchanges.binance.urlopen", mock_urlopen):
             orders = self.adapter.open_orders()
 
         self.assertEqual(len(orders), 1)
@@ -261,8 +261,8 @@ class BinancePrivateAdapterTests(unittest.TestCase):
             fp = io.BytesIO(error_body)
             raise HTTPError(req.full_url, 400, "Bad Request", {"Content-Type": "application/json"}, fp)
 
-        with patch("r20_backend.exchanges.registry.venue_credentials", return_value=(api_key, secret_key)), \
-             patch("r20_backend.exchanges.binance.urlopen", mock_urlopen):
+        with patch("astra_backend.exchanges.registry.venue_credentials", return_value=(api_key, secret_key)), \
+             patch("astra_backend.exchanges.binance.urlopen", mock_urlopen):
             with self.assertRaises(BinanceAPIError) as ctx:
                 self.adapter.account_snapshot()
 
@@ -289,7 +289,7 @@ class BinanceExecutionAndProtectionTests(unittest.TestCase):
             t = qs.get("type", [""])[0]
             resp_data = {
                 "orderId": 99881122,
-                "clientOrderId": qs.get("newClientOrderId", ["r20_order"])[0],
+                "clientOrderId": qs.get("newClientOrderId", ["astra_order"])[0],
                 "symbol": qs.get("symbol", ["BTCUSDT"])[0],
                 "status": "NEW",
                 "price": qs.get("price", ["0.0"])[0],
@@ -298,8 +298,8 @@ class BinanceExecutionAndProtectionTests(unittest.TestCase):
             }
             return _FakeResp(json.dumps(resp_data).encode("utf-8"))
 
-        with patch("r20_backend.exchanges.registry.venue_credentials", return_value=(api_key, secret_key)), \
-             patch("r20_backend.exchanges.binance.urlopen", mock_urlopen), \
+        with patch("astra_backend.exchanges.registry.venue_credentials", return_value=(api_key, secret_key)), \
+             patch("astra_backend.exchanges.binance.urlopen", mock_urlopen), \
              patch.object(self.adapter, "server_time_offset_ms", lambda **k: 0.0), \
              patch.object(type(self.adapter), "_public_get", lambda *a, **k: None):
              # 第七十九刀：spec 路径走 requests.Session 不是 urlopen，
@@ -307,7 +307,7 @@ class BinanceExecutionAndProtectionTests(unittest.TestCase):
              # fail-soft 返 None 也绿 ⇒ patch 成 None = 与离线行为等价。
             # 1. 限价单
             res_limit = self.adapter.place_order(
-                symbol="BTC", side="buy", contracts=0.25, price=60123.45, text="r20_cid_01"
+                symbol="BTC", side="buy", contracts=0.25, price=60123.45, text="astra_cid_01"
             )
             self.assertEqual(res_limit["venue"], "binance")
             self.assertEqual(res_limit["order_id"], "99881122")
@@ -318,7 +318,7 @@ class BinanceExecutionAndProtectionTests(unittest.TestCase):
             self.assertEqual(qs_l["type"], ["LIMIT"])
             self.assertEqual(qs_l["timeInForce"], ["GTC"])
             self.assertEqual(qs_l["symbol"], ["BTCUSDT"])
-            self.assertEqual(qs_l["newClientOrderId"], ["r20_cid_01"])
+            self.assertEqual(qs_l["newClientOrderId"], ["astra_cid_01"])
 
             # 2. 市价单
             res_market = self.adapter.place_order(symbol="BTC", side="sell", contracts=0.1)
@@ -336,8 +336,8 @@ class BinanceExecutionAndProtectionTests(unittest.TestCase):
             captured.append(req)
             return _FakeResp(json.dumps({"orderId": 12345, "status": "CANCELED"}).encode("utf-8"))
 
-        with patch("r20_backend.exchanges.registry.venue_credentials", return_value=(api_key, secret_key)), \
-             patch("r20_backend.exchanges.binance.urlopen", mock_urlopen):
+        with patch("astra_backend.exchanges.registry.venue_credentials", return_value=(api_key, secret_key)), \
+             patch("astra_backend.exchanges.binance.urlopen", mock_urlopen):
             # 1. 单撤
             c1 = self.adapter.cancel_order("BTC", order_id="12345")
             self.assertEqual(c1["order_id"], "12345")
@@ -364,8 +364,8 @@ class BinanceExecutionAndProtectionTests(unittest.TestCase):
             algo_id = 701 if "TAKE_PROFIT" in t else 702
             return _FakeResp(json.dumps({"algoId": algo_id, "code": "200"}).encode("utf-8"))
 
-        with patch("r20_backend.exchanges.registry.venue_credentials", return_value=(api_key, secret_key)), \
-             patch("r20_backend.exchanges.binance.urlopen", mock_urlopen), \
+        with patch("astra_backend.exchanges.registry.venue_credentials", return_value=(api_key, secret_key)), \
+             patch("astra_backend.exchanges.binance.urlopen", mock_urlopen), \
              patch.object(self.adapter, "server_time_offset_ms", lambda **k: 0.0), \
              patch.object(type(self.adapter), "_public_get", lambda *a, **k: None):
              # 第七十九刀：spec 路径走 requests.Session 不是 urlopen，
@@ -396,31 +396,31 @@ class BinanceExecutionAndProtectionTests(unittest.TestCase):
             self.assertEqual(sl_qs["workingType"], ["CONTRACT_PRICE"])
 
     def test_execution_switch_gatekeeping(self):
-        from r20_backend.exchanges import require_execution, execution_open
+        from astra_backend.exchanges import require_execution, execution_open
         import os
 
         # 默认关：require_execution 必须拒绝
-        with patch.dict(os.environ, {"R20_BINANCE_EXECUTION": "0", "R20_BINANCE_DEMO_EXECUTION": "0"}):
+        with patch.dict(os.environ, {"ASTRA_BINANCE_EXECUTION": "0", "ASTRA_BINANCE_DEMO_EXECUTION": "0"}):
             self.assertFalse(execution_open("binance", "live"))
             self.assertFalse(execution_open("binance", "demo"))
             with self.assertRaises(ExchangeCapabilityError) as ctx_live:
                 require_execution("binance", "live")
-            self.assertIn("R20_BINANCE_EXECUTION=1", str(ctx_live.exception))
+            self.assertIn("ASTRA_BINANCE_EXECUTION=1", str(ctx_live.exception))
 
             with self.assertRaises(ExchangeCapabilityError) as ctx_demo:
                 require_execution("binance", "demo")
-            self.assertIn("R20_BINANCE_DEMO_EXECUTION=1", str(ctx_demo.exception))
+            self.assertIn("ASTRA_BINANCE_DEMO_EXECUTION=1", str(ctx_demo.exception))
 
         # 开闸放行
-        with patch.dict(os.environ, {"R20_BINANCE_EXECUTION": "1"}):
+        with patch.dict(os.environ, {"ASTRA_BINANCE_EXECUTION": "1"}):
             self.assertTrue(execution_open("binance", "live"))
             # require_execution 不报错
             require_execution("binance", "live")
 
     def test_execution_router_integration_with_binance(self):
         import os
-        from r20_backend import execution_router as er
-        from r20_backend.exchanges import InstrumentSpec
+        from astra_backend import execution_router as er
+        from astra_backend.exchanges import InstrumentSpec
 
         ad = self.adapter
         # Mock 适配器关键动作（封闭三律：fetch_instrument_spec 必须钉死——
@@ -453,10 +453,10 @@ class BinanceExecutionAndProtectionTests(unittest.TestCase):
             "stop_loss_price": 58500.0,
         }
 
-        from r20_backend.exchanges import listing as listing_mod
+        from astra_backend.exchanges import listing as listing_mod
         _okl = listing_mod.ListingCheck(ok=True, reason=None,
                                         checked_at="2026-09-11T00:00:00Z", source="cache")
-        with patch.dict(os.environ, {"R20_BINANCE_EXECUTION": "1", "R20_BINANCE_DEMO_EXECUTION": "1"}), \
+        with patch.dict(os.environ, {"ASTRA_BINANCE_EXECUTION": "1", "ASTRA_BINANCE_DEMO_EXECUTION": "1"}), \
                 patch.object(listing_mod, "ensure_contract_listed", lambda v, e, c: _okl):
             res = er.open_protected_position(decision, adapter=ad)
 
@@ -471,7 +471,7 @@ class BinanceExecutionAndProtectionTests(unittest.TestCase):
 
     def test_execution_router_rollback_on_protective_gap(self):
         import os
-        from r20_backend import execution_router as er
+        from astra_backend import execution_router as er
 
         ad = self.adapter
         ad._keys = lambda: ("ak", "sk")
@@ -481,7 +481,7 @@ class BinanceExecutionAndProtectionTests(unittest.TestCase):
         # 取值 "net" 与真实 DEMO 账户一致（实测 dualSidePosition=False）。
         ad.detect_position_mode = lambda: "net"
         # 同族封闭钉：规格 + listing 对账两处分发前动作必须 mock（离线套件纪律）
-        from r20_backend.exchanges import InstrumentSpec as _Spec
+        from astra_backend.exchanges import InstrumentSpec as _Spec
         ad.fetch_instrument_spec = Mock(return_value=_Spec(
             venue="binance", inst_id="BTCUSDT", base="BTC", tick_size=0.1,
             step_size=0.001, ct_val=1.0, min_size=0.001, max_leverage=20))
@@ -506,10 +506,10 @@ class BinanceExecutionAndProtectionTests(unittest.TestCase):
             "stop_loss_price": 59000.0,
         }
 
-        from r20_backend.exchanges import listing as listing_mod
+        from astra_backend.exchanges import listing as listing_mod
         _okl = listing_mod.ListingCheck(ok=True, reason=None,
                                         checked_at="2026-09-11T00:00:00Z", source="cache")
-        with patch.dict(os.environ, {"R20_BINANCE_EXECUTION": "1", "R20_BINANCE_DEMO_EXECUTION": "1"}), \
+        with patch.dict(os.environ, {"ASTRA_BINANCE_EXECUTION": "1", "ASTRA_BINANCE_DEMO_EXECUTION": "1"}), \
                 patch.object(listing_mod, "ensure_contract_listed", lambda v, e, c: _okl):
             res = er.open_protected_position(decision, adapter=ad)
 
@@ -645,7 +645,7 @@ class ServerClockAlignmentTest(unittest.TestCase):
             calls["n"] += 1
             return _FakeResp(json.dumps({"serverTime": int(_time.time() * 1000) + 2000}).encode())
 
-        with patch("r20_backend.exchanges.binance.urlopen", fake):
+        with patch("astra_backend.exchanges.binance.urlopen", fake):
             first = self.adapter.server_time_offset_ms()
             second = self.adapter.server_time_offset_ms()
             forced = self.adapter.server_time_offset_ms(force=True)
@@ -671,8 +671,8 @@ class ServerClockAlignmentTest(unittest.TestCase):
             seen["url"] = url
             return _FakeResp(b'{"ok": true}')
 
-        with patch("r20_backend.exchanges.registry.venue_credentials", return_value=("ak", "sk")), \
-             patch("r20_backend.exchanges.binance.urlopen", fake):
+        with patch("astra_backend.exchanges.registry.venue_credentials", return_value=("ak", "sk")), \
+             patch("astra_backend.exchanges.binance.urlopen", fake):
             self.adapter.signed_request("GET", "/fapi/v2/account")
         ts = int(parse_qs(urlparse(seen["url"]).query)["timestamp"][0])
         self.assertAlmostEqual(ts - int(_time.time() * 1000), 2000, delta=120,
@@ -692,8 +692,8 @@ class ServerClockAlignmentTest(unittest.TestCase):
                     b'{"code":-1021,"msg":"Timestamp for this request is outside of the recvWindow."}'))
             return _FakeResp(b'{"ok": true}')
 
-        with patch("r20_backend.exchanges.registry.venue_credentials", return_value=("ak", "sk")), \
-             patch("r20_backend.exchanges.binance.urlopen", fake), \
+        with patch("astra_backend.exchanges.registry.venue_credentials", return_value=("ak", "sk")), \
+             patch("astra_backend.exchanges.binance.urlopen", fake), \
              patch.object(self.adapter, "server_time_offset_ms",
                           side_effect=lambda **k: 0.0) as resync:
             with warnings.catch_warnings(record=True) as caught:
@@ -717,8 +717,8 @@ class ServerClockAlignmentTest(unittest.TestCase):
             raise HTTPError(url, 400, "bad", {}, io.BytesIO(
                 b'{"code":-1021,"msg":"Timestamp for this request is outside of the recvWindow."}'))
 
-        with patch("r20_backend.exchanges.registry.venue_credentials", return_value=("ak", "sk")), \
-             patch("r20_backend.exchanges.binance.urlopen", fake), \
+        with patch("astra_backend.exchanges.registry.venue_credentials", return_value=("ak", "sk")), \
+             patch("astra_backend.exchanges.binance.urlopen", fake), \
              patch.object(self.adapter, "server_time_offset_ms", side_effect=lambda **k: 0.0):
             with warnings.catch_warnings(record=True):
                 warnings.simplefilter("always")
@@ -730,7 +730,7 @@ class ServerClockAlignmentTest(unittest.TestCase):
         def fake(req, timeout=None):
             raise OSError("no route")
 
-        with patch("r20_backend.exchanges.binance.urlopen", fake):
+        with patch("astra_backend.exchanges.binance.urlopen", fake):
             with warnings.catch_warnings(record=True) as caught:
                 warnings.simplefilter("always")
                 off = self.adapter.server_time_offset_ms()
@@ -743,7 +743,7 @@ class ServerClockAlignmentTest(unittest.TestCase):
         def fake(req, timeout=None):
             return _FakeResp(json.dumps({"serverTime": int(_time.time() * 1000) + 3600}).encode())
 
-        with patch("r20_backend.exchanges.binance.urlopen", fake):
+        with patch("astra_backend.exchanges.binance.urlopen", fake):
             with warnings.catch_warnings(record=True) as caught:
                 warnings.simplefilter("always")
                 self.adapter.server_time_offset_ms()

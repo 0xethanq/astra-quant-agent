@@ -1,4 +1,4 @@
-"""熔断引擎（`r20_backend/execution/circuit_breaker.py`）的残余分支收口 —— 第 335 刀。
+"""熔断引擎（`astra_backend/execution/circuit_breaker.py`）的残余分支收口 —— 第 335 刀。
 
 本模块 316 行，是**钱路的风控闸门**：黑天鹅哨兵 + 状态文件 + 台账跨所同步旁车 +
 单日回撤限额。修正后的全量基线里它是**钱路最大单块**（46 行真运行时缺口 / 71.4%）。
@@ -38,7 +38,7 @@ for _p in (str(ROOT), str(ROOT / "scripts")):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-import r20_backend.execution.circuit_breaker as cb  # noqa: E402
+import astra_backend.execution.circuit_breaker as cb  # noqa: E402
 
 
 def _bj_today():
@@ -55,7 +55,7 @@ def _closed(pnl, *, day=None, env="demo", **extra):
 
 class _Sandbox(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(prefix="r20-cb-tails-")
+        self.tmp = tempfile.TemporaryDirectory(prefix="astra-cb-tails-")
         self.addCleanup(self.tmp.cleanup)
         self.data = Path(self.tmp.name)
         for name, value in (
@@ -355,7 +355,7 @@ class SidecarTests(_Sandbox, unittest.TestCase):
         # ⚠️ 必须把 `venue_credentials` 打桩 —— 否则它会读到**真实凭证**
         #    （实测：连 `venue_credentials("gate", "")` 都返回 32/64 字符的 live key），
         #    豁免分支永远不触发，用例变成"测生产环境"。
-        with patch("r20_backend.exchanges.venue_credentials",
+        with patch("astra_backend.exchanges.venue_credentials",
                    lambda v, e: ("", "")):
             for reason in ("-2015 invalid api-key", "未配置凭证", "missing credential",
                            "invalid api-key", "not configured", "未提供", "需显式设"):
@@ -365,21 +365,21 @@ class SidecarTests(_Sandbox, unittest.TestCase):
                     self.assertEqual(failed, [], f"{reason!r} 不应熔断其他已配置场所")
 
     def test_the_exemption_tokens_are_matched_case_insensitively(self):
-        with patch("r20_backend.exchanges.venue_credentials",
+        with patch("astra_backend.exchanges.venue_credentials",
                    lambda v, e: ("", "")):
             failed, _ = self._sidecar({"venues": {
                 "gate": {"status": "failed", "reason": "INVALID API-KEY expired"}}})
         self.assertEqual(failed, [])
 
     def test_an_unconfigured_venue_with_real_credentials_still_counts(self):
-        with patch("r20_backend.exchanges.venue_credentials",
+        with patch("astra_backend.exchanges.venue_credentials",
                    lambda v, e: ("AK", "SK")):
             failed, _ = self._sidecar({"venues": {
                 "gate": {"status": "failed", "reason": "invalid api-key"}}})
         self.assertEqual(failed, ["gate"], "凭证其实在 ⇒ 仍视为真实失败")
 
     def test_a_non_credential_failure_reason_is_never_exempted(self):
-        with patch("r20_backend.exchanges.venue_credentials",
+        with patch("astra_backend.exchanges.venue_credentials",
                    lambda v, e: ("", "")):
             failed, _ = self._sidecar({"venues": {
                 "gate": {"status": "failed", "reason": "timeout"}}})
@@ -387,7 +387,7 @@ class SidecarTests(_Sandbox, unittest.TestCase):
 
     def test_a_credential_lookup_failure_still_counts_the_venue(self):
         # 第 82/83 行 —— 查凭证本身抛 ⇒ 不豁免（宁可停）
-        with patch("r20_backend.exchanges.venue_credentials",
+        with patch("astra_backend.exchanges.venue_credentials",
                    side_effect=RuntimeError("boom")):
             failed, _ = self._sidecar({"venues": {
                 "gate": {"status": "failed", "reason": "invalid api-key"}}})

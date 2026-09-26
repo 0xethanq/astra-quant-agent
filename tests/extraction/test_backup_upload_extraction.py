@@ -60,6 +60,7 @@ MOVED = ["calculate_sha256", "_credentials", "_urlencoded_json", "_multipart_upl
 
 import backup_runtime as br  # noqa: E402
 import backup_upload as bu  # noqa: E402
+from tests.extraction.rename_baseline import legacy_rev_path, normalize
 
 
 class FacadeSurfaceTest(unittest.TestCase):
@@ -205,10 +206,10 @@ class VerbatimCopyTest(unittest.TestCase):
     def _old_body(self, name):
         import subprocess
         src = subprocess.run(
-            ["git", "show", f"{PRE_EXTRACTION_COMMIT}:scripts/backup_runtime.py"],
+            ["git", "show", legacy_rev_path(f"{PRE_EXTRACTION_COMMIT}:scripts/backup_runtime.py")],
             capture_output=True, text=True, cwd=str(ROOT))
         self.assertEqual(src.returncode, 0, src.stderr)
-        tree = ast.parse(src.stdout)
+        tree = ast.parse(normalize(src.stdout))
         n = next(x for x in tree.body
                  if isinstance(x, ast.FunctionDef) and x.name == name)
         return ast.unparse(ast.Module(
@@ -282,7 +283,7 @@ class SharedModuleHygieneTest(unittest.TestCase):
         tmp = Path(tempfile.mkdtemp())
         self.addCleanup(__import__("shutil").rmtree, tmp, ignore_errors=True)
         f = tmp / "x.bin"
-        payload = b"hello R20 backup"
+        payload = b"hello ASTRA backup"
         f.write_bytes(payload)
         self.assertEqual(br.calculate_sha256(f),
                          hashlib.sha256(payload).hexdigest())

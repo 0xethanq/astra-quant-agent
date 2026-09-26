@@ -502,7 +502,7 @@ function parseAuditContext(action: string, detail: any): { label: string; tag: s
   display: flex;
   flex-direction: column;
   gap: var(--ds-space-5);
-  animation: r20-enter var(--dur-slow) var(--ease-out) backwards;
+  animation: astra-enter var(--dur-slow) var(--ease-out) backwards;
 }
 
 
@@ -812,7 +812,7 @@ function parseAuditContext(action: string, detail: any): { label: string; tag: s
 .ov-ch-link:hover {
   text-decoration: underline;
   opacity: 0.85;
-  background-color: var(--r20-brand-bg);
+  background-color: var(--astra-brand-bg);
 }
 
 /* 决策流 */

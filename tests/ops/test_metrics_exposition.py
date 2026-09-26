@@ -1,9 +1,9 @@
 """指标中枢（Prometheus exposition）契约测试。
 
-守四件事（每件都对应一条设计约束，见 `r20_backend/metrics.py` docstring）：
+守四件事（每件都对应一条设计约束，见 `astra_backend/metrics.py` docstring）：
 
 1. **格式合法**：HELP/TYPE 成对、label 转义、NaN/Inf 不落盘（部分抓取器会整条丢弃）；
-2. **fail-soft 且失败可见**：源缺失时渲染仍成功，但 `r20_metrics_source_ok{source}` 必须为 0
+2. **fail-soft 且失败可见**：源缺失时渲染仍成功，但 `astra_metrics_source_ok{source}` 必须为 0
    —— "全绿"与"取数挂了"必须可区分（本仓第 137 刀就是静默 except 吞掉失败）；
 3. **绝不泄露内容**：模型调用只出计数/耗时/token；prompt、响应、prompt_fingerprint
    一律不得出现在文本里；
@@ -16,7 +16,7 @@ import re
 import unittest
 from pathlib import Path
 
-from r20_backend import metrics as M
+from astra_backend import metrics as M
 
 
 class FakeStore:
@@ -58,17 +58,17 @@ class RenderFormatTest(unittest.TestCase):
 
     def test_core_families_present(self):
         text = M.render_prometheus(self._snapshot())
-        self.assertIn("r20_up 1", text)
-        self.assertIn('r20_metrics_source_ok{source="venue_health",required="1"} 1', text)
-        self.assertIn('r20_venue_instruments_ok{venue="okx"} 2', text)
-        self.assertIn('r20_venue_instruments_failed{venue="okx"} 1', text)
-        self.assertIn('r20_venue_latency_avg_ms{venue="okx"} 105', text)
-        self.assertIn('r20_venue_testnet{venue="okx"} 1', text)
-        self.assertIn('r20_venue_testnet{venue="gate"} 0', text)
-        self.assertIn("r20_model_calls_total 12", text)
-        self.assertIn("r20_model_calls_successful_total 10", text)
-        self.assertIn("r20_model_tokens_total 98765", text)
-        self.assertIn('r20_risk_limit{name="max_leverage"} 5', text)
+        self.assertIn("astra_up 1", text)
+        self.assertIn('astra_metrics_source_ok{source="venue_health",required="1"} 1', text)
+        self.assertIn('astra_venue_instruments_ok{venue="okx"} 2', text)
+        self.assertIn('astra_venue_instruments_failed{venue="okx"} 1', text)
+        self.assertIn('astra_venue_latency_avg_ms{venue="okx"} 105', text)
+        self.assertIn('astra_venue_testnet{venue="okx"} 1', text)
+        self.assertIn('astra_venue_testnet{venue="gate"} 0', text)
+        self.assertIn("astra_model_calls_total 12", text)
+        self.assertIn("astra_model_calls_successful_total 10", text)
+        self.assertIn("astra_model_tokens_total 98765", text)
+        self.assertIn('astra_risk_limit{name="max_leverage"} 5', text)
         self.assertTrue(text.endswith("\n"), "exposition 必须以换行结尾")
 
     def test_help_and_type_are_paired(self):
@@ -104,17 +104,17 @@ class RenderFormatTest(unittest.TestCase):
 
     def test_counter_type_declared_for_monotonic_families(self):
         text = M.render_prometheus(self._snapshot())
-        self.assertIn("# TYPE r20_model_calls_total counter", text)
-        self.assertIn("# TYPE r20_model_tokens_total counter", text)
+        self.assertIn("# TYPE astra_model_calls_total counter", text)
+        self.assertIn("# TYPE astra_model_tokens_total counter", text)
 
     def test_label_values_are_escaped(self):
         snap = self._snapshot(venue_health={"updated_utc": "",
                                            "venues": {'we"ird\\name': {"ok": ["x"]}}})
         text = M.render_prometheus(snap)
-        self.assertIn(r'r20_venue_instruments_ok{venue="we\"ird\\name"} 1', text)
+        self.assertIn(r'astra_venue_instruments_ok{venue="we\"ird\\name"} 1', text)
         # 转义后不得出现**未转义**的裸引号（计数时排除 \" ）
         for line in text.splitlines():
-            if line.startswith("r20_"):
+            if line.startswith("astra_"):
                 unescaped = re.findall(r'(?<!\\)"', line)
                 self.assertEqual(len(unescaped) % 2, 0, f"引号未闭合：{line}")
 
@@ -126,14 +126,14 @@ class RenderFormatTest(unittest.TestCase):
         text = M.render_prometheus(snap)
         self.assertNotIn("nan", text.lower())
         self.assertNotIn("inf", text.lower().replace("info", ""))
-        self.assertIn("r20_model_tokens_total 7", text)
+        self.assertIn("astra_model_tokens_total 7", text)
 
     def test_missing_venue_fields_are_omitted(self):
         snap = self._snapshot(venue_health={"updated_utc": "", "venues": {"okx": {}}})
         text = M.render_prometheus(snap)
-        self.assertIn('r20_venue_instruments_ok{venue="okx"} 0', text)
-        self.assertNotIn("r20_venue_latency_avg_ms", text, "缺字段不得写 0 冒充测量值")
-        self.assertNotIn("r20_venue_health_updated_timestamp_seconds", text,
+        self.assertIn('astra_venue_instruments_ok{venue="okx"} 0', text)
+        self.assertNotIn("astra_venue_latency_avg_ms", text, "缺字段不得写 0 冒充测量值")
+        self.assertNotIn("astra_venue_health_updated_timestamp_seconds", text,
                          "时间戳解析失败不得写 0")
 
 
@@ -144,7 +144,7 @@ class FailSoftTest(unittest.TestCase):
         # 真取数在本机可能成/败；这里只钉"渲染必须成功且带 source 行"
         text = M.render_prometheus(snap)
         for source in ("venue_health", "model_calls", "risk_limits"):
-            self.assertRegex(text, rf'r20_metrics_source_ok\{{source="{source}",required="[01]"\}} [01]')
+            self.assertRegex(text, rf'astra_metrics_source_ok\{{source="{source}",required="[01]"\}} [01]')
 
     def test_explicit_failure_is_visible_as_zero(self):
         snap = {
@@ -154,8 +154,8 @@ class FailSoftTest(unittest.TestCase):
         }
         text = M.render_prometheus(snap)
         for source in ("venue_health", "model_calls", "risk_limits"):
-            self.assertIn(f'r20_metrics_source_ok{{source="{source}",required="1"}} 0', text)
-        self.assertIn("r20_up 1", text, "数据源全挂也不影响进程存活指标")
+            self.assertIn(f'astra_metrics_source_ok{{source="{source}",required="1"}} 0', text)
+        self.assertIn("astra_up 1", text, "数据源全挂也不影响进程存活指标")
 
     def test_store_failure_returns_none_not_raises(self):
         self.assertIsNone(M.collect_model_stats(FakeStore(RuntimeError("db locked"))))
@@ -224,8 +224,8 @@ class MetricsRouteTest(unittest.TestCase):
         from pathlib import Path
         from fastapi.testclient import TestClient
         from tests.config_sandbox import isolate_config
-        import r20_backend.app as app_module
-        from r20_backend.admin_auth import AdminAuthStore
+        import astra_backend.app as app_module
+        from astra_backend.admin_auth import AdminAuthStore
 
         isolate_config(self)
         self.temp = tempfile.TemporaryDirectory()
@@ -235,7 +235,7 @@ class MetricsRouteTest(unittest.TestCase):
         self.client = TestClient(app_module.app)
 
     def tearDown(self):
-        import r20_backend.app as app_module
+        import astra_backend.app as app_module
         app_module.admin_auth = self._orig
         self.temp.cleanup()
 
@@ -243,7 +243,7 @@ class MetricsRouteTest(unittest.TestCase):
         r = self.client.post("/api/v1/admin/auth/login",
                              json={"username": "admin", "password": "InitialAdmin123456"})
         self.assertEqual(r.status_code, 200, r.text)
-        return {"X-R20-Session": r.json()["session_token"]}
+        return {"X-Astra-Session": r.json()["session_token"]}
 
     def test_requires_admin(self):
         r = self.client.get("/api/v1/admin/metrics")
@@ -254,8 +254,8 @@ class MetricsRouteTest(unittest.TestCase):
         r = self.client.get("/api/v1/admin/metrics", headers=self._headers())
         self.assertEqual(r.status_code, 200, r.text)
         self.assertIn("text/plain", r.headers.get("content-type", ""))
-        self.assertIn("r20_up 1", r.text)
-        self.assertIn('r20_metrics_source_ok{source="risk_limits",required="1"}', r.text)
+        self.assertIn("astra_up 1", r.text)
+        self.assertIn('astra_metrics_source_ok{source="risk_limits",required="1"}', r.text)
 
     def test_json_format_returns_snapshot(self):
         r = self.client.get("/api/v1/admin/metrics?format=json", headers=self._headers())
@@ -316,19 +316,19 @@ class MarketDataSourceTest(unittest.TestCase):
                                 risk_limits={}, now=1789000000.0)
         self.assertTrue(snap["sources"]["market_data"])
         text = M.render_prometheus(snap)
-        self.assertIn('r20_market_data_calls_total{kind="okx_public_get_ticker"} 12', text)
-        self.assertIn('r20_market_data_call_failures_total{kind="okx_public_get_ticker"} 3', text)
-        self.assertIn('r20_market_data_latency_p50_seconds{kind="okx_public_get_ticker"} 0.12', text)
-        self.assertIn('r20_market_data_latency_p95_seconds{kind="okx_public_get_ticker"} 0.98', text)
-        self.assertIn("r20_market_data_snapshot_age_seconds 30", text)
-        self.assertIn('r20_market_data_last_success_age_seconds{kind="okx_public_get_ticker"} 5', text)
+        self.assertIn('astra_market_data_calls_total{kind="okx_public_get_ticker"} 12', text)
+        self.assertIn('astra_market_data_call_failures_total{kind="okx_public_get_ticker"} 3', text)
+        self.assertIn('astra_market_data_latency_p50_seconds{kind="okx_public_get_ticker"} 0.12', text)
+        self.assertIn('astra_market_data_latency_p95_seconds{kind="okx_public_get_ticker"} 0.98', text)
+        self.assertIn("astra_market_data_snapshot_age_seconds 30", text)
+        self.assertIn('astra_market_data_last_success_age_seconds{kind="okx_public_get_ticker"} 5', text)
 
     def test_source_ok_zero_when_file_absent(self):
         snap = M.build_snapshot(data_dir=self.data_dir, venue_health={}, model_stats={},
                                risk_limits={}, now=1789000000.0)
         self.assertFalse(snap["sources"]["market_data"])
         text = M.render_prometheus(snap)
-        self.assertIn('r20_metrics_source_ok{source="market_data",required="1"} 0', text,
+        self.assertIn('astra_metrics_source_ok{source="market_data",required="1"} 0', text,
                       "取数挂了必须可见（第 137 刀：静默失败 30 小时无信号）")
 
     def test_no_family_is_declared_twice_with_market_data_present(self):
@@ -345,8 +345,8 @@ class MarketDataSourceTest(unittest.TestCase):
         snap = M.build_snapshot(data_dir=self.data_dir, venue_health={}, model_stats={},
                                risk_limits={}, now=1789000000.0)
         text = M.render_prometheus(snap)
-        self.assertNotIn("r20_market_data_calls_total", text)
-        self.assertIn('r20_metrics_source_ok{source="market_data",required="1"} 0', text)
+        self.assertNotIn("astra_market_data_calls_total", text)
+        self.assertIn('astra_metrics_source_ok{source="market_data",required="1"} 0', text)
 
     def test_negative_age_is_clamped_not_emitted_as_negative(self):
         """快照时间戳来自另一个进程，时钟回拨时不许出现负年龄（会让告警逻辑发疯）。"""
@@ -375,7 +375,7 @@ class OptionalSourceTest(unittest.TestCase):
     """`required` 标签：可选源缺失**不算故障**（否则告警永远在响 = 没有告警）。
 
     真实场景：公共行情流探测是**按需/非常驻**的（`scripts/market_stream.py --probe`），
-    若把它也当作"必需源"，`R20MetricsSourceMissing` 会 7×24 一直响。
+    若把它也当作"必需源"，`ASTRAMetricsSourceMissing` 会 7×24 一直响。
     """
 
     def _snapshot(self, sources):
@@ -385,8 +385,8 @@ class OptionalSourceTest(unittest.TestCase):
 
     def test_required_sources_are_labelled(self):
         text = M.render_prometheus(self._snapshot({"venue_health": True, "market_stream": False}))
-        self.assertIn('r20_metrics_source_ok{source="venue_health",required="1"} 1', text)
-        self.assertIn('r20_metrics_source_ok{source="market_stream",required="0"} 0', text,
+        self.assertIn('astra_metrics_source_ok{source="venue_health",required="1"} 1', text)
+        self.assertIn('astra_metrics_source_ok{source="market_stream",required="0"} 0', text,
                       "可选源缺失必须可区分，否则告警会永远在响")
 
     def test_the_alert_expression_only_targets_required_sources(self):
@@ -394,7 +394,7 @@ class OptionalSourceTest(unittest.TestCase):
         from pathlib import Path
         alerts = (Path(__file__).resolve().parents[2]
                   / "deploy" / "observability" / "alerts.yml").read_text(encoding="utf-8")
-        self.assertIn('r20_metrics_source_ok{required="1"} == 0', alerts)
+        self.assertIn('astra_metrics_source_ok{required="1"} == 0', alerts)
 
     def test_market_stream_is_declared_optional(self):
         self.assertNotIn("market_stream", M.REQUIRED_SOURCES)
@@ -432,19 +432,19 @@ class MarketStreamSourceTest(unittest.TestCase):
                                 "gate": {"frames": 1, "ticks": 0, "parse_errors": 0,
                                          "errors": 1, "tick_age_s": None}}})
         text = M.render_prometheus(self._snap())
-        self.assertIn('r20_market_stream_ticks_total{venue="okx"} 29', text)
-        self.assertIn('r20_market_stream_errors_total{venue="gate"} 1', text)
-        self.assertIn('r20_market_stream_tick_age_seconds{venue="okx"} 12', text)
-        self.assertNotIn('r20_market_stream_tick_age_seconds{venue="gate"}', text,
+        self.assertIn('astra_market_stream_ticks_total{venue="okx"} 29', text)
+        self.assertIn('astra_market_stream_errors_total{venue="gate"} 1', text)
+        self.assertIn('astra_market_stream_tick_age_seconds{venue="okx"} 12', text)
+        self.assertNotIn('astra_market_stream_tick_age_seconds{venue="gate"}', text,
                          "从未收到 tick ⇒ 不发该序列（发 0 会被读成『刚刚有数据』）")
-        self.assertIn("r20_market_stream_snapshot_age_seconds 12", text)
+        self.assertIn("astra_market_stream_snapshot_age_seconds 12", text)
 
     def test_absent_stream_is_optional_not_a_failure(self):
         snap = self._snap()
         self.assertFalse(snap["sources"]["market_stream"])
         text = M.render_prometheus(snap)
-        self.assertIn('r20_metrics_source_ok{source="market_stream",required="0"} 0', text)
-        self.assertNotIn("r20_market_stream_ticks_total", text, "没在跑就不该凭空发指标")
+        self.assertIn('astra_metrics_source_ok{source="market_stream",required="0"} 0', text)
+        self.assertNotIn("astra_market_stream_ticks_total", text, "没在跑就不该凭空发指标")
 
 class CycleDisclosureMetricsTest(unittest.TestCase):
     """周期披露指标的**诚实性**（第 51 刀）。
@@ -467,19 +467,19 @@ class CycleDisclosureMetricsTest(unittest.TestCase):
             "entries_blocked": True, "watchdog_enabled": True,
             "watchdog_errors": 3, "watchdog_critical": 1,
         }))
-        for needle in ("r20_cycle_disclosure_broken_venues 2",
-                       "r20_cycle_disclosure_shape_violations 1",
-                       "r20_cycle_disclosure_entries_blocked 1",
-                       "r20_cycle_disclosure_watchdog_enabled 1",
-                       "r20_cycle_disclosure_watchdog_errors 3",
-                       "r20_cycle_disclosure_watchdog_critical 1"):
+        for needle in ("astra_cycle_disclosure_broken_venues 2",
+                       "astra_cycle_disclosure_shape_violations 1",
+                       "astra_cycle_disclosure_entries_blocked 1",
+                       "astra_cycle_disclosure_watchdog_enabled 1",
+                       "astra_cycle_disclosure_watchdog_errors 3",
+                       "astra_cycle_disclosure_watchdog_critical 1"):
             with self.subTest(needle=needle):
                 self.assertIn(needle, text)
 
     def test_missing_snapshot_emits_no_counts_only_source_flag(self):
         text = M.render_prometheus(self._snap(None))
-        self.assertIn('r20_metrics_source_ok{source="cycle_disclosure",required="0"} 0', text)
-        self.assertNotIn("r20_cycle_disclosure_broken_venues", text,
+        self.assertIn('astra_metrics_source_ok{source="cycle_disclosure",required="0"} 0', text)
+        self.assertNotIn("astra_cycle_disclosure_broken_venues", text,
                          "读不到不得渲染成 0（那是把'不知道'说成'很干净'）")
 
     def test_disabled_watchdog_emits_no_error_counts(self):
@@ -490,9 +490,9 @@ class CycleDisclosureMetricsTest(unittest.TestCase):
             "entries_blocked": False, "watchdog_enabled": False,
             "watchdog_errors": 0, "watchdog_critical": 0,
         }))
-        self.assertIn("r20_cycle_disclosure_watchdog_enabled 0", text)
-        self.assertNotIn("r20_cycle_disclosure_watchdog_errors", text)
-        self.assertNotIn("r20_cycle_disclosure_watchdog_critical", text)
+        self.assertIn("astra_cycle_disclosure_watchdog_enabled 0", text)
+        self.assertNotIn("astra_cycle_disclosure_watchdog_errors", text)
+        self.assertNotIn("astra_cycle_disclosure_watchdog_critical", text)
 
     def test_collector_returns_none_for_missing_or_broken_file(self):
         import tempfile
@@ -517,7 +517,7 @@ class CycleDisclosureFileAgreementTest(unittest.TestCase):
     def test_worker_and_backend_agree_on_the_filename(self):
         root = Path(__file__).resolve().parents[2]
         facade = (root / "scripts" / "ai_factor_trader.py").read_text(encoding="utf-8")
-        backend = (root / "r20_backend" / "metrics.py").read_text(encoding="utf-8")
+        backend = (root / "astra_backend" / "metrics.py").read_text(encoding="utf-8")
         self.assertIn('CYCLE_DISCLOSURE_FILE = os.path.join(DATA_DIR, "cycle_disclosure.json")',
                       facade, "worker 侧文件名变了？")
         self.assertIn('cd_base / "cycle_disclosure.json"', backend,
@@ -553,26 +553,26 @@ class ProtectionOrphanMetricsTest(unittest.TestCase):
         summary = {"gate": {"readable": False, "candidates": None, "unattributed": None,
                             "ledger_evidence": None}}
         text = self._text(protection_orphans=summary)
-        self.assertTrue(self._lines(text, 'r20_protection_orphans_readable{venue="gate"} 0'),
+        self.assertTrue(self._lines(text, 'astra_protection_orphans_readable{venue="gate"} 0'),
                         "读腿失败必须被看见（readable=0）")
-        self.assertEqual(self._lines(text, "r20_protection_orphan_candidates"), [],
+        self.assertEqual(self._lines(text, "astra_protection_orphan_candidates"), [],
                          "读不到时**绝不能**发 candidates=0（会被读成'该所很干净'）")
 
     def test_readable_venue_emits_counts(self):
         summary = {"binance": {"readable": True, "candidates": 3, "unattributed": 1,
                                "ledger_evidence": False}}
         text = self._text(protection_orphans=summary)
-        self.assertTrue(self._lines(text, 'r20_protection_orphan_candidates{venue="binance"} 3'))
-        self.assertTrue(self._lines(text, 'r20_protection_orphan_unattributed{venue="binance"} 1'))
+        self.assertTrue(self._lines(text, 'astra_protection_orphan_candidates{venue="binance"} 3'))
+        self.assertTrue(self._lines(text, 'astra_protection_orphan_unattributed{venue="binance"} 1'))
         self.assertTrue(self._lines(text,
-                        'r20_protection_orphans_ledger_evidence{venue="binance"} 0'),
+                        'astra_protection_orphans_ledger_evidence{venue="binance"} 0'),
                         "台账读不到必须如实披露（否则候选偏少会被当成'就是这么多'）")
 
     def test_help_text_says_never_auto_cancel(self):
         text = self._text(protection_orphans={"binance": {"readable": True, "candidates": 1,
                                                          "unattributed": 0,
                                                          "ledger_evidence": True}})
-        helps = [ln for ln in text.splitlines() if ln.startswith("# HELP r20_protection_orphan")]
+        helps = [ln for ln in text.splitlines() if ln.startswith("# HELP astra_protection_orphan")]
         self.assertTrue(any("绝不自动撤" in ln for ln in helps),
                         "指标说明里必须写明'系统绝不自动撤'（否则读者会以为运维会自动清）")
 
@@ -595,8 +595,8 @@ class ProtectionMismatchMetricsTest(unittest.TestCase):
         self.assertEqual(summary["binance"]["side_mismatch"], 2)
         self.assertEqual(summary["binance"]["size_mismatch"], 1)
         text = M.render_prometheus(M.build_snapshot(protection_orphans=summary))
-        self.assertIn('r20_protection_side_mismatch_legs{venue="binance"} 2', text)
-        self.assertIn('r20_protection_size_mismatch_legs{venue="binance"} 1', text)
+        self.assertIn('astra_protection_side_mismatch_legs{venue="binance"} 2', text)
+        self.assertIn('astra_protection_size_mismatch_legs{venue="binance"} 1', text)
 
     def test_help_distinguishes_both_semantics(self):
         text = M.render_prometheus(M.build_snapshot(protection_orphans={
@@ -605,9 +605,9 @@ class ProtectionMismatchMetricsTest(unittest.TestCase):
         # 一个指标名只能有一个 HELP ⇒ 两种语义**必须**是两个名字（否则"仍被计入覆盖"
         # 这句永远发不出去；本用例第一版就是这么红的）
         side_help = [ln for ln in text.splitlines()
-                     if ln.startswith("# HELP r20_protection_side_mismatch_legs")]
+                     if ln.startswith("# HELP astra_protection_side_mismatch_legs")]
         size_help = [ln for ln in text.splitlines()
-                     if ln.startswith("# HELP r20_protection_size_mismatch_legs")]
+                     if ln.startswith("# HELP astra_protection_size_mismatch_legs")]
         self.assertTrue(any("不计入覆盖" in ln for ln in side_help), "方向不符必须明说'不计入覆盖'")
         self.assertTrue(any("正被计入覆盖" in ln for ln in size_help), "量不符必须明说'仍被计入覆盖'")
 
@@ -616,7 +616,7 @@ class ProtectionMismatchMetricsTest(unittest.TestCase):
             "gate": {"readable": False, "candidates": None, "unattributed": None,
                      "side_mismatch": None, "size_mismatch": None, "ledger_evidence": None}}))
         self.assertEqual([ln for ln in text.splitlines()
-                          if ln.startswith("r20_protection_mismatch_legs")], [],
+                          if ln.startswith("astra_protection_mismatch_legs")], [],
                          "读不到 ⇒ 不发 mismatch 计数（不可判定≠0）")
 
 class UnclassifiedLegMetricsTest(unittest.TestCase):
@@ -630,14 +630,14 @@ class UnclassifiedLegMetricsTest(unittest.TestCase):
         self.assertEqual(summary["gate"]["foreign"], 2)
         self.assertEqual(summary["gate"]["unparsed"], 1)
         text = M.render_prometheus(M.build_snapshot(protection_orphans=summary))
-        self.assertIn('r20_protection_foreign_legs{venue="gate"} 2', text)
-        self.assertIn('r20_protection_unparsed_legs{venue="gate"} 1', text)
+        self.assertIn('astra_protection_foreign_legs{venue="gate"} 2', text)
+        self.assertIn('astra_protection_unparsed_legs{venue="gate"} 1', text)
 
     def test_help_says_they_are_not_counted_in_coverage(self):
         text = M.render_prometheus(M.build_snapshot(protection_orphans={
             "gate": {"readable": True, "candidates": 0, "unattributed": 0, "side_mismatch": 0,
                      "size_mismatch": 0, "foreign": 1, "unparsed": 1, "ledger_evidence": True}}))
-        for metric in ("r20_protection_foreign_legs", "r20_protection_unparsed_legs"):
+        for metric in ("astra_protection_foreign_legs", "astra_protection_unparsed_legs"):
             helps = [ln for ln in text.splitlines() if ln.startswith(f"# HELP {metric}")]
             self.assertTrue(helps, f"{metric} 缺 HELP")
             self.assertTrue(any("不计入覆盖" in ln for ln in helps),

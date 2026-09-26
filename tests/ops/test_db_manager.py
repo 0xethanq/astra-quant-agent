@@ -99,7 +99,7 @@ class _DbFixture(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        self.db = os.path.join(self.tmp.name, "r20_quant.test.db")
+        self.db = os.path.join(self.tmp.name, "astra_quant.test.db")
         self.ledger = os.path.join(self.tmp.name, "trading_ledger.json")
         for name, value in (("DB_PATH", self.db), ("LEDGER_JSON_FILE", self.ledger)):
             p = patch.object(db_manager, name, value)

@@ -13,14 +13,14 @@ from unittest.mock import patch
 
 from scripts import market_data_service as mds
 
-from r20_backend.exchanges import (
+from astra_backend.exchanges import (
     OKXPublicAdapter,
     canonical_base,
     get_adapter,
     registered_venues,
     require_execution,
 )
-from r20_backend.exchanges.base import ExchangeCapabilityError
+from astra_backend.exchanges.base import ExchangeCapabilityError
 
 
 class _FakeAdapter:
@@ -67,7 +67,7 @@ class TestMultiVenueFallback(unittest.TestCase):
         # 钉死健康文件路径到不存在位置 + 清缓存：旧用例断言依赖静态序（binance 在前），
         # 不得被生产 data/venue_health.json 的真实失败记录翻转。
         self._health = patch("scripts.market_data_service.VENUE_HEALTH_FILE",
-                             "/tmp/r20-mission-nonexistent-venue-health.json")
+                             "/tmp/astra-mission-nonexistent-venue-health.json")
         self._health.start()
         self._reset()
 
@@ -128,7 +128,7 @@ class TestMultiVenueFallback(unittest.TestCase):
             raise AssertionError("kill switch 打开时不得触碰备源")
         with patch("scripts.market_data_service._public_get", return_value=None), \
                 patch("scripts.market_data_service._get_venue_adapter", boom), \
-                patch.dict(os.environ, {"R20_ALT_VENUE_FALLBACK": "0"}):
+                patch.dict(os.environ, {"ASTRA_ALT_VENUE_FALLBACK": "0"}):
             self.assertEqual(mds.fetch_candles("BTC-USDT-SWAP"), [])
             self.assertIsNone(mds.fetch_ticker("BTC-USDT-SWAP"))
 
@@ -266,13 +266,13 @@ class TestRegistryThreeVenues(unittest.TestCase):
     def test_three_venues_registered_readonly_gate(self):
         self.assertEqual(registered_venues(), ["binance", "gate", "okx"])
         # 契约是「默认关闸 fail-closed」——必须隔离宿主 ambient 旗标
-        # （后台开闸 R20_GATE_EXECUTION/R20_BINANCE_EXECUTION=1 后，
+        # （后台开闸 ASTRA_GATE_EXECUTION/ASTRA_BINANCE_EXECUTION=1 后，
         #  不清环境直接跑 require_execution 会命中真开闸，测试假设漂移）
         import os
         from unittest.mock import patch
         with patch.dict("os.environ", {}, clear=False):
-            for k in ("R20_GATE_EXECUTION", "R20_GATE_DEMO_EXECUTION",
-                      "R20_BINANCE_EXECUTION", "R20_BINANCE_DEMO_EXECUTION"):
+            for k in ("ASTRA_GATE_EXECUTION", "ASTRA_GATE_DEMO_EXECUTION",
+                      "ASTRA_BINANCE_EXECUTION", "ASTRA_BINANCE_DEMO_EXECUTION"):
                 os.environ.pop(k, None)
             for v in ("okx", "binance", "gate"):
                 with self.assertRaises(ExchangeCapabilityError):

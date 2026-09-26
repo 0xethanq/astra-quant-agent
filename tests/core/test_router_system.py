@@ -7,17 +7,17 @@
 | ★ **读不到 ≠ 新鲜** | `file_health` 缺文件 ⇒ `exists:False, age:None, fresh:False`（**不填 0 年龄冒充新鲜**）；`runtime_overview` 任一文件不新鲜 ⇒ `overall:"STALE"` |
 | ★ **公开面只说外壳** | `/api/v1/status` 是**无鉴权**公开面，只返回 mode 与脚本存在性 —— 审计修复后**不再**吐出 tracker/decisions 底牌 |
 | ★ **敏感面不泄密** | `admin_runtime` 的 `llm_runtime` 只取**白名单四键**，`get_active_llm_runtime()` 回包里的明文 `api_key`/`base_url` **绝不整包入响应**；调用失败也有兜底 |
-| ★ **更新先自证干净** | `POST /admin/update`：确认短语 `UPDATE R20` 逐字校验 ⇒ 400；`update_status().error` ⇒ 502；工作区 dirty ⇒ **409**；读不到 remote ⇒ 502；`git pull` 失败 ⇒ 502；**只有 local 变了才算 updated** 并触发前端构建 |
+| ★ **更新先自证干净** | `POST /admin/update`：确认短语 `UPDATE ASTRA` 逐字校验 ⇒ 400；`update_status().error` ⇒ 502；工作区 dirty ⇒ **409**；读不到 remote ⇒ 502；`git pull` 失败 ⇒ 502；**只有 local 变了才算 updated** 并触发前端构建 |
 | 写配置分权 | 含 `okx_*` 或 `manual_close_enabled` 的载荷 ⇒ **超管**，其余 ⇒ 管理员；URL 协议校验 ⇒ 400；切换 OKX 环境要抢交易锁，抢不到 ⇒ **409** |
 | 日志来源 | 白名单外 ⇒ **400**（不是静默空内容）|
 
 ⚠️ 如实记录两处**不一致**（列待议，未擅自改）：
 
-1. `ADMIN_LOG_SOURCES` 把 `scheduler` 与 `gateway` 都映到 `r20_gateway.log`，而
-   `runtime_overview()` 的日志块却读 `r20_scheduler.log` —— 同一页面两条路径口径不同；
+1. `ADMIN_LOG_SOURCES` 把 `scheduler` 与 `gateway` 都映到 `astra_gateway.log`，而
+   `runtime_overview()` 的日志块却读 `astra_scheduler.log` —— 同一页面两条路径口径不同；
 2. `admin_config` 用**局部导入**再取 `app_attr`（309 行），因此「打模块级别
-   `routers.system.app_attr`」的测试缝对它无效，只有 `r20_backend.app` 上的覆盖才生效
-   —— 表现为**隔离跑绿、全量跑红**（全量里 `r20_backend.app` 已导入 ⇒ 真 `app_attr`
+   `routers.system.app_attr`」的测试缝对它无效，只有 `astra_backend.app` 上的覆盖才生效
+   —— 表现为**隔离跑绿、全量跑红**（全量里 `astra_backend.app` 已导入 ⇒ 真 `app_attr`
    命中 app 的属性，读到生产 `account_initial_state.json`）。本刀在两处 seam 都钉住。
 """
 
@@ -32,8 +32,8 @@ from unittest import mock
 from fastapi import HTTPException
 from fastapi.responses import PlainTextResponse
 
-from r20_backend.routers import system as A
-from r20_backend.schemas import AdminConfigUpdate, UpdateRequest
+from astra_backend.routers import system as A
+from astra_backend.schemas import AdminConfigUpdate, UpdateRequest
 
 
 class _Base(unittest.TestCase):
@@ -54,11 +54,11 @@ class _Base(unittest.TestCase):
 
         _patch("audit_record", lambda *a, **k: self.audits.append((a, k)))
         _patch("app_attr", side_effect=lambda name, default=None: default)
-        # ⚠️ admin_config 里 `from r20_backend.dependencies import app_attr` 是**局部导入**，
+        # ⚠️ admin_config 里 `from astra_backend.dependencies import app_attr` 是**局部导入**，
         # 打模块级别的 A.app_attr 管不到它 —— 必须同时钉住 dependencies 上的那一份，
-        # 否则全量套件里 r20_backend.app 已被导入 ⇒ 真 app_attr 命中 app.load_account_baseline
+        # 否则全量套件里 astra_backend.app 已被导入 ⇒ 真 app_attr 命中 app.load_account_baseline
         # 而读到生产 account_initial_state.json（实测：隔离跑绿、全量跑红，initial_capital 5000≠4061）。
-        self._start(mock.patch("r20_backend.dependencies.app_attr",
+        self._start(mock.patch("astra_backend.dependencies.app_attr",
                                side_effect=lambda name, default=None: default))
         _patch("refresh_settings")
         self.admin = mock.Mock()
@@ -97,7 +97,7 @@ class _Base(unittest.TestCase):
 
 class FileHealthTests(unittest.TestCase):
     def setUp(self):
-        self.tmp = Path(tempfile.mkdtemp(prefix="r20-sys-health-"))
+        self.tmp = Path(tempfile.mkdtemp(prefix="astra-sys-health-"))
         self.addCleanup(shutil.rmtree, self.tmp, True)
         patcher = mock.patch.object(A, "DATA_DIR", self.tmp)
         patcher.start()
@@ -126,7 +126,7 @@ class FileHealthTests(unittest.TestCase):
 
 class LogTailTests(unittest.TestCase):
     def setUp(self):
-        self.tmp = Path(tempfile.mkdtemp(prefix="r20-sys-logs-"))
+        self.tmp = Path(tempfile.mkdtemp(prefix="astra-sys-logs-"))
         self.addCleanup(shutil.rmtree, self.tmp, True)
         patcher = mock.patch.object(A, "ROOT", self.tmp)
         patcher.start()
@@ -191,10 +191,10 @@ class AdminConfigurationTests(_Base):
         self.assertEqual(out["LLM 思考强度"], "HIGH")
 
     def test_preferred_venue_is_loaded_and_defaults_to_auto(self):
-        with mock.patch("r20_backend.exchanges.routing_policy.load_preferred_venue",
+        with mock.patch("astra_backend.exchanges.routing_policy.load_preferred_venue",
                         return_value="binance"):
             self.assertIn("选所模式: BINANCE", A.get_admin_configuration()["交易场所与路由"])
-        with mock.patch("r20_backend.exchanges.routing_policy.load_preferred_venue",
+        with mock.patch("astra_backend.exchanges.routing_policy.load_preferred_venue",
                         side_effect=RuntimeError("policy bad")):
             self.assertIn("选所模式: AUTO", A.get_admin_configuration()["交易场所与路由"])
 
@@ -363,43 +363,43 @@ class StatusRouteTests(_Base):
 class AdminReadRoutesTests(_Base):
     def test_overview_requires_admin_and_returns_runtime_overview(self):
         self._start(mock.patch.object(A, "runtime_overview", return_value={"ok": 1}))
-        self.assertEqual(A.admin_overview(x_r20_admin_token="tok"), {"ok": 1})
+        self.assertEqual(A.admin_overview(x_astra_admin_token="tok"), {"ok": 1})
         self.admin.assert_called_once_with("tok")
 
     def test_audit_route_forwards_the_limit(self):
         rec = mock.Mock(return_value=[{"id": 9}])
         self._start(mock.patch.object(A, "recent_audit", rec))
-        self.assertEqual(A.admin_audit(x_r20_admin_token="tok", limit=7),
+        self.assertEqual(A.admin_audit(x_astra_admin_token="tok", limit=7),
                          {"records": [{"id": 9}]})
         rec.assert_called_once_with(7)
 
     def test_metrics_defaults_to_prometheus_text(self):
-        import r20_backend.metrics as metrics_mod
+        import astra_backend.metrics as metrics_mod
         self._start(mock.patch.object(metrics_mod, "build_snapshot", return_value={"a": 1}))
         self._start(mock.patch.object(metrics_mod, "render_prometheus",
-                                      return_value="r20_x 1\n"))
-        out = A.admin_metrics(x_r20_admin_token="tok")
+                                      return_value="astra_x 1\n"))
+        out = A.admin_metrics(x_astra_admin_token="tok")
         self.assertIsInstance(out, PlainTextResponse)
-        self.assertEqual(out.body, b"r20_x 1\n")
+        self.assertEqual(out.body, b"astra_x 1\n")
         self.assertIn("version=0.0.4", out.media_type)
 
     def test_metrics_json_format_returns_the_raw_snapshot(self):
-        import r20_backend.metrics as metrics_mod
+        import astra_backend.metrics as metrics_mod
         self._start(mock.patch.object(metrics_mod, "build_snapshot", return_value={"a": 1}))
         self._start(mock.patch.object(metrics_mod, "render_prometheus"))
-        self.assertEqual(A.admin_metrics(format="JSON", x_r20_admin_token="tok"),
+        self.assertEqual(A.admin_metrics(format="JSON", x_astra_admin_token="tok"),
                          {"a": 1})
         metrics_mod.render_prometheus.assert_not_called()
 
     def test_logs_reject_unknown_sources_instead_of_returning_empty(self):
         with self.assertRaises(HTTPException) as ctx:
-            A.admin_logs(source="nope", x_r20_admin_token="tok")
+            A.admin_logs(source="nope", x_astra_admin_token="tok")
         self.assertEqual(ctx.exception.status_code, 400)
         self.assertIn("trader", ctx.exception.detail)
 
     def test_logs_map_a_known_source_to_its_real_file(self):
         self._start(mock.patch.object(A, "log_tail", return_value="line"))
-        out = A.admin_logs(source="backend", lines=5, x_r20_admin_token="tok")
+        out = A.admin_logs(source="backend", lines=5, x_astra_admin_token="tok")
         self.assertEqual(out, {"source": "backend", "file": "uvicorn.log", "content": "line"})
 
 
@@ -414,7 +414,7 @@ class AdminRuntimeRouteTests(_Base):
             "api_format": "anthropic_messages", "api_key": "sk-SECRET",
             "base_url": "https://secret.example.com"}))
         self._start(mock.patch.object(A, "read_json", return_value={}))
-        out = A.admin_runtime(x_r20_admin_token="tok")
+        out = A.admin_runtime(x_astra_admin_token="tok")
         self.assertEqual(set(out["llm_runtime"]),
                          {"model", "provider_name", "reasoning_effort", "api_format"})
         self.assertNotIn("sk-SECRET", str(out))
@@ -424,7 +424,7 @@ class AdminRuntimeRouteTests(_Base):
         self._start(mock.patch.object(A, "get_active_llm_runtime",
                                       side_effect=RuntimeError("boom")))
         self._start(mock.patch.object(A, "read_json", return_value={}))
-        self.assertEqual(A.admin_runtime(x_r20_admin_token="tok")["llm_runtime"],
+        self.assertEqual(A.admin_runtime(x_astra_admin_token="tok")["llm_runtime"],
                          {"model": "", "provider_name": "默认",
                           "reasoning_effort": "high", "api_format": "openai_chat"})
 
@@ -438,7 +438,7 @@ class AdminRuntimeRouteTests(_Base):
             "ETH-USDT-SWAP": {"action": "SELL", "confidence": 0.5, "reason": "平",
                               "timestamp": 123},
         }))
-        rows = {r["instId"]: r for r in A.admin_runtime(x_r20_admin_token="tok")["full_decisions"]}
+        rows = {r["instId"]: r for r in A.admin_runtime(x_astra_admin_token="tok")["full_decisions"]}
         self.assertEqual(rows["BTC-USDT-SWAP"]["confidence"], 0.9,
                          ">1 的置信度按百分比折成 0-1")
         self.assertEqual(rows["BTC-USDT-SWAP"]["reason"], "结构上行")
@@ -448,10 +448,10 @@ class AdminRuntimeRouteTests(_Base):
     def test_full_decisions_accepts_list_payload_and_other_types(self):
         self._start(mock.patch.object(A, "get_active_llm_runtime", return_value={}))
         self._start(mock.patch.object(A, "read_json", return_value=[{"instId": "BTC"}]))
-        self.assertEqual(A.admin_runtime(x_r20_admin_token="tok")["full_decisions"],
+        self.assertEqual(A.admin_runtime(x_astra_admin_token="tok")["full_decisions"],
                          [{"instId": "BTC"}])
         self._start(mock.patch.object(A, "read_json", return_value="garbage"))
-        self.assertEqual(A.admin_runtime(x_r20_admin_token="tok")["full_decisions"], [])
+        self.assertEqual(A.admin_runtime(x_astra_admin_token="tok")["full_decisions"], [])
 
 
 class AdminConfigRouteTests(_Base):
@@ -464,7 +464,7 @@ class AdminConfigRouteTests(_Base):
                                       return_value={"model": "m"}))
 
     def test_get_config_exposes_editable_snapshot(self):
-        out = A.admin_config(x_r20_admin_token="tok")
+        out = A.admin_config(x_astra_admin_token="tok")
         self.assertEqual(out["authentication_mode"], "account-password")
         self.assertEqual(out["editable"]["okx_environment"], "live")
         self.assertEqual(out["editable"]["initial_capital"], 4061.04)
@@ -472,7 +472,7 @@ class AdminConfigRouteTests(_Base):
 
     def test_missing_baseline_falls_back_to_the_documented_default(self):
         self._start(mock.patch.object(A, "load_account_baseline", return_value={}))
-        self.assertEqual(A.admin_config(x_r20_admin_token="tok")["editable"]["initial_capital"],
+        self.assertEqual(A.admin_config(x_astra_admin_token="tok")["editable"]["initial_capital"],
                          4061.04)
 
 
@@ -494,13 +494,13 @@ class UpdateAdminConfigTests(_Base):
         self._start(mock.patch.object(A, "init_llm_providers", self.init_llm))
         self.save_llm = mock.Mock()
         self._start(mock.patch.object(A, "save_llm_config", self.save_llm))
-        self.tmp = Path(tempfile.mkdtemp(prefix="r20-sys-cfg-"))
+        self.tmp = Path(tempfile.mkdtemp(prefix="astra-sys-cfg-"))
         self.addCleanup(shutil.rmtree, self.tmp, True)
         self._start(mock.patch.object(A, "DATA_DIR", self.tmp))
 
     def test_non_sensitive_payload_uses_admin_not_superadmin(self):
         out = A.update_admin_config(AdminConfigUpdate(llm_model="m2"),
-                                    x_r20_admin_token="tok")
+                                    x_astra_admin_token="tok")
         # 授权只用管理员（末尾的 admin_config 也会再调一次，故不断言"仅一次"）
         self.assertIn(mock.call("tok"), self.admin.call_args_list)
         self.superadmin.assert_not_called()
@@ -509,17 +509,17 @@ class UpdateAdminConfigTests(_Base):
 
     def test_any_okx_or_close_flag_field_requires_superadmin(self):
         A.update_admin_config(AdminConfigUpdate(okx_simulated=False),
-                              x_r20_admin_token="tok", x_r20_session="s")
+                              x_astra_admin_token="tok", x_astra_session="s")
         self.superadmin.assert_called_once_with("s")
 
     def test_url_protocol_validation_blocks_bad_endpoints(self):
         with self.assertRaises(HTTPException) as ctx:
             A.update_admin_config(AdminConfigUpdate(llm_base_url="ftp://x"),
-                                  x_r20_admin_token="tok")
+                                  x_astra_admin_token="tok")
         self.assertEqual(ctx.exception.status_code, 400)
         with self.assertRaises(HTTPException) as ctx:
             A.update_admin_config(AdminConfigUpdate(notification_webhook="nope"),
-                                  x_r20_admin_token="tok")
+                                  x_astra_admin_token="tok")
         self.assertEqual(ctx.exception.status_code, 400)
         self.update_env.assert_not_called()
 
@@ -527,7 +527,7 @@ class UpdateAdminConfigTests(_Base):
         with mock.patch("fcntl.flock", side_effect=BlockingIOError()):
             with self.assertRaises(HTTPException) as ctx:
                 A.update_admin_config(AdminConfigUpdate(okx_environment="demo"),
-                                      x_r20_admin_token="tok", x_r20_session="s")
+                                      x_astra_admin_token="tok", x_astra_session="s")
         self.assertEqual(ctx.exception.status_code, 409)
         self.update_env.assert_not_called()
 
@@ -535,17 +535,17 @@ class UpdateAdminConfigTests(_Base):
         calls = []
         with mock.patch("fcntl.flock", side_effect=lambda *a, **k: calls.append(a)):
             A.update_admin_config(AdminConfigUpdate(okx_environment="live"),
-                                  x_r20_admin_token="tok", x_r20_session="s")
+                                  x_astra_admin_token="tok", x_astra_session="s")
         self.assertEqual(calls, [], "环境没变 ⇒ 不该抢锁")
 
     def test_secrets_are_saved_without_empty_values_and_env_is_written(self):
         A.update_admin_config(AdminConfigUpdate(okx_live_api_key="K",
                                                 okx_live_secret_key=""),
-                              x_r20_admin_token="tok", x_r20_session="s")
+                              x_astra_admin_token="tok", x_astra_session="s")
         self.save_secrets.assert_called_once_with({"OKX_LIVE_API_KEY": "K"})
         env_values = self.update_env.call_args[0][0]
         self.assertIsNone(env_values["LLM_BASE_URL"])
-        self.assertIsNone(env_values["R20_OKX_ENV"])
+        self.assertIsNone(env_values["ASTRA_OKX_ENV"])
 
     def test_llm_updates_rewrite_the_provider_and_model_entries(self):
         self.init_llm.return_value = {
@@ -555,7 +555,7 @@ class UpdateAdminConfigTests(_Base):
                                                 llm_api_key="sk-new",
                                                 llm_model="m9",
                                                 llm_reasoning_effort="low"),
-                              x_r20_admin_token="tok")
+                              x_astra_admin_token="tok")
         cfg = self.save_llm.call_args[0][0]
         self.assertEqual(cfg["providers"][0]["base_url"], "https://new")
         self.assertEqual(cfg["providers"][0]["api_key"], "sk-new")
@@ -566,7 +566,7 @@ class UpdateAdminConfigTests(_Base):
     def test_llm_config_sync_failure_is_swallowed(self):
         self.init_llm.side_effect = RuntimeError("坏配置")
         out = A.update_admin_config(AdminConfigUpdate(llm_model="m2"),
-                                    x_r20_admin_token="tok")
+                                    x_astra_admin_token="tok")
         self.assertEqual(out["authentication_mode"], "account-password")
 
 
@@ -579,7 +579,7 @@ class AdminOpsRoutesTests(_Base):
         self._start(mock.patch.object(A, "GatewayStore", return_value=store))
         self._start(mock.patch.object(A, "agent_statuses", return_value=["a"]))
         self._start(mock.patch.object(A, "secret_store_status", return_value={"ok": True}))
-        out = A.admin_agents(x_r20_admin_token="tok")
+        out = A.admin_agents(x_astra_admin_token="tok")
         self.assertEqual(out["agents"], ["a"])
         self.assertEqual(out["model_stats"], {"x": 1})
         store.job_runs.assert_called_once_with(100)
@@ -587,7 +587,7 @@ class AdminOpsRoutesTests(_Base):
 
     def test_plugins_are_builtin_only(self):
         self._start(mock.patch.object(A, "plugin_statuses", return_value=[{"name": "p"}]))
-        out = A.admin_plugins(x_r20_admin_token="tok")
+        out = A.admin_plugins(x_astra_admin_token="tok")
         self.assertEqual(out["installation_policy"], "builtin-only")
         self.assertEqual(out["plugins"], [{"name": "p"}])
 
@@ -605,7 +605,7 @@ class AdminOpsRoutesTests(_Base):
             ("rev-parse", "--short", "HEAD"): "abc",
         }[tuple(cmd)]))
         self._start(mock.patch.object(A, "update_status", return_value={"behind": 0}))
-        out = A.admin_about(x_r20_admin_token="tok")
+        out = A.admin_about(x_astra_admin_token="tok")
         self.assertEqual(out["product"]["version"], "9.9.9")
         self.assertTrue(out["runtime"]["gateway"]["running"])
         self.assertEqual(out["runtime"]["gateway"]["pid"], 4242)
@@ -623,7 +623,7 @@ class AdminOpsRoutesTests(_Base):
         self._start(mock.patch.object(A, "scheduler_snapshot", return_value={}))
         self._start(mock.patch.object(A, "git", side_effect=lambda cmd: ""))
         self._start(mock.patch.object(A, "update_status", return_value={}))
-        out = A.admin_about(x_r20_admin_token="tok")
+        out = A.admin_about(x_astra_admin_token="tok")
         self.assertFalse(out["runtime"]["gateway"]["running"])
         self.assertIsNone(out["runtime"]["gateway"]["pid"])
 
@@ -632,7 +632,7 @@ class UpdateApplicationTests(_Base):
     def test_confirmation_phrase_is_mandatory(self):
         with self.assertRaises(HTTPException) as ctx:
             A.update_application(UpdateRequest(confirmation="update"),
-                                 x_r20_admin_token="tok")
+                                 x_astra_admin_token="tok")
         self.assertEqual(ctx.exception.status_code, 400)
 
     def test_dirty_worktree_blocks_the_update(self):
@@ -640,22 +640,22 @@ class UpdateApplicationTests(_Base):
             "branch": "main", "local": "a", "remote": "b", "dirty": True}))
         self._start(mock.patch.object(A, "git"))
         with self.assertRaises(HTTPException) as ctx:
-            A.update_application(UpdateRequest(confirmation="UPDATE R20"),
-                                 x_r20_admin_token="tok")
+            A.update_application(UpdateRequest(confirmation="UPDATE ASTRA"),
+                                 x_astra_admin_token="tok")
         self.assertEqual(ctx.exception.status_code, 409)
 
     def test_status_error_and_missing_remote_are_502(self):
         self._start(mock.patch.object(A, "update_status", return_value={"error": "git 坏了"}))
         with self.assertRaises(HTTPException) as ctx:
-            A.update_application(UpdateRequest(confirmation="UPDATE R20"),
-                                 x_r20_admin_token="tok")
+            A.update_application(UpdateRequest(confirmation="UPDATE ASTRA"),
+                                 x_astra_admin_token="tok")
         self.assertEqual(ctx.exception.status_code, 502)
 
         self._start(mock.patch.object(A, "update_status", return_value={
             "branch": "main", "local": "a", "remote": "", "dirty": False}))
         with self.assertRaises(HTTPException) as ctx:
-            A.update_application(UpdateRequest(confirmation="UPDATE R20"),
-                                 x_r20_admin_token="tok")
+            A.update_application(UpdateRequest(confirmation="UPDATE ASTRA"),
+                                 x_astra_admin_token="tok")
         self.assertEqual(ctx.exception.status_code, 502)
 
     def test_git_pull_failure_is_502(self):
@@ -663,8 +663,8 @@ class UpdateApplicationTests(_Base):
             "branch": "main", "local": "a", "remote": "b", "dirty": False}))
         self._start(mock.patch.object(A, "git", side_effect=RuntimeError("non-fast-forward")))
         with self.assertRaises(HTTPException) as ctx:
-            A.update_application(UpdateRequest(confirmation="UPDATE R20"),
-                                 x_r20_admin_token="tok")
+            A.update_application(UpdateRequest(confirmation="UPDATE ASTRA"),
+                                 x_astra_admin_token="tok")
         self.assertEqual(ctx.exception.status_code, 502)
         self.assertIn("non-fast-forward", ctx.exception.detail)
 
@@ -675,8 +675,8 @@ class UpdateApplicationTests(_Base):
         self._start(mock.patch.object(A, "git", return_value="Already up to date."))
         npm = mock.Mock()
         self._start(mock.patch.object(A.subprocess, "run", npm))
-        out = A.update_application(UpdateRequest(confirmation="UPDATE R20"),
-                                   x_r20_admin_token="tok")
+        out = A.update_application(UpdateRequest(confirmation="UPDATE ASTRA"),
+                                   x_astra_admin_token="tok")
         self.assertTrue(out["updated"])
         self.assertTrue(out["restart_required"])
         self.assertIn("重启", out["restart_note"])
@@ -692,8 +692,8 @@ class UpdateApplicationTests(_Base):
         self._start(mock.patch.object(A, "git", return_value="Already up to date."))
         npm = mock.Mock()
         self._start(mock.patch.object(A.subprocess, "run", npm))
-        out = A.update_application(UpdateRequest(confirmation="UPDATE R20"),
-                                   x_r20_admin_token="tok")
+        out = A.update_application(UpdateRequest(confirmation="UPDATE ASTRA"),
+                                   x_astra_admin_token="tok")
         self.assertFalse(out["updated"])
         self.assertFalse(out["restart_required"])
         npm.assert_not_called()
@@ -705,13 +705,13 @@ class UpdateApplicationTests(_Base):
         self._start(mock.patch.object(A, "git", return_value="ok"))
         self._start(mock.patch.object(A.subprocess, "run",
                                       side_effect=OSError("npm 不在 PATH")))
-        out = A.update_application(UpdateRequest(confirmation="UPDATE R20"),
-                                   x_r20_admin_token="tok")
+        out = A.update_application(UpdateRequest(confirmation="UPDATE ASTRA"),
+                                   x_astra_admin_token="tok")
         self.assertTrue(out["updated"], "构建失败只吞掉，更新本身已成功")
 
     def test_auxiliary_update_status_routes_delegate(self):
         self._start(mock.patch.object(A, "update_status", return_value={"behind": 3}))
-        self.assertEqual(A.admin_update_status(x_r20_admin_token="tok"), {"behind": 3})
+        self.assertEqual(A.admin_update_status(x_astra_admin_token="tok"), {"behind": 3})
 
 
 if __name__ == "__main__":

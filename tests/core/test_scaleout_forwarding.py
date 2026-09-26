@@ -14,7 +14,7 @@
 import unittest
 from unittest.mock import patch
 
-from r20_backend.dashboard_payload import factors
+from astra_backend.dashboard_payload import factors
 
 
 def _pos(inst="BTC-USDT-SWAP", side="long", **over):

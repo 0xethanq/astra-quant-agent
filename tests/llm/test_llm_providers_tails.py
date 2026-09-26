@@ -1,4 +1,4 @@
-"""模型供应商路径拼接与活跃模型归属解析（`r20_backend/llm/providers.py`）全量分支收口测试 —— 第 361 刀。
+"""模型供应商路径拼接与活跃模型归属解析（`astra_backend/llm/providers.py`）全量分支收口测试 —— 第 361 刀。
 
 本模块 84 行，负责网关基址解析、API 端点后缀拼装与活跃模型所属供应商判定：
 - URL 路径解析容错（`_url_path_of`）：URL 解析异常时安全返回 `/unparseable`；
@@ -18,7 +18,7 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from r20_backend.llm.providers import (
+from astra_backend.llm.providers import (
     _join_api_path,
     _provider_holds_active_model,
     _resolve_active_provider_id,
@@ -32,7 +32,7 @@ class LLMProvidersTailsTests(unittest.TestCase):
     # -------------------------------------------------------------------------
     def test_url_path_of_exception_returns_unparseable(self):
         # urlparse 发生异常时按有路径处理，安全返回 /unparseable (line 20)
-        with patch("r20_backend.llm.providers.urlparse", side_effect=ValueError("bad url")):
+        with patch("astra_backend.llm.providers.urlparse", side_effect=ValueError("bad url")):
             self.assertEqual(_url_path_of("http://invalid-url"), "/unparseable")
 
     def test_join_api_path_already_ends_with_suffix(self):

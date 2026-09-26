@@ -20,15 +20,15 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from r20_backend.settings_store import mask, mask_url, is_masked  # noqa: E402
-import r20_backend.routers.system as sysmod  # noqa: E402
-import r20_backend.routers.gateway as gwmod  # noqa: E402
+from astra_backend.settings_store import mask, mask_url, is_masked  # noqa: E402
+import astra_backend.routers.system as sysmod  # noqa: E402
+import astra_backend.routers.gateway as gwmod  # noqa: E402
 # 第九十七刀：gateway 拆包 ⇒ patch/调用必须落到**归属子模块**
-from r20_backend.routers.gateway import channels as gw_channels  # noqa: E402
-from r20_backend.routers.gateway import notifications as gw_notifications  # noqa: E402
-import r20_gateway.secrets as gws  # noqa: E402
-from r20_backend.schemas import ChannelToggleRequest, NotificationConfigUpdate  # noqa: E402
-import r20_backend.notifications as notif  # noqa: E402
+from astra_backend.routers.gateway import channels as gw_channels  # noqa: E402
+from astra_backend.routers.gateway import notifications as gw_notifications  # noqa: E402
+import astra_gateway.secrets as gws  # noqa: E402
+from astra_backend.schemas import ChannelToggleRequest, NotificationConfigUpdate  # noqa: E402
+import astra_backend.notifications as notif  # noqa: E402
 
 
 def _raw(fn):
@@ -70,8 +70,8 @@ class TestA2MaskedWriteback(unittest.TestCase):
     def setUp(self) -> None:
         # 批1 P0-2 配套：toggle_channel 会调 channels.update_env（真实 settings_store），
         # 此前直接把测试 URL 写进生产 .env（tests/__init__ 的写闸现已拦下）→ 显式沙箱化。
-        import r20_backend.settings_store as settings_store
-        self._env_tmp = tempfile.TemporaryDirectory(prefix="r20-gwtest-")
+        import astra_backend.settings_store as settings_store
+        self._env_tmp = tempfile.TemporaryDirectory(prefix="astra-gwtest-")
         self.addCleanup(self._env_tmp.cleanup)
         self._env_patcher = patch.object(settings_store, "ENV_FILE",
                                         Path(self._env_tmp.name) / ".env")
@@ -100,13 +100,13 @@ class TestA2MaskedWriteback(unittest.TestCase):
     def test_toggle_does_not_overwrite_with_masked_url(self):
         saved, removed = self._toggle(ChannelToggleRequest(
             enabled=False, webhook_url=mask_url("https://hooks.example/send?key=realtoken999")))
-        self.assertNotIn("R20_NOTIFICATION_WEBHOOK", saved)
-        self.assertNotIn("R20_NOTIFICATION_WEBHOOK", removed)  # 也没被 remove_env 误拔
+        self.assertNotIn("ASTRA_NOTIFICATION_WEBHOOK", saved)
+        self.assertNotIn("ASTRA_NOTIFICATION_WEBHOOK", removed)  # 也没被 remove_env 误拔
 
     def test_toggle_still_accepts_real_url(self):
         saved, _ = self._toggle(ChannelToggleRequest(
             enabled=False, webhook_url="https://hooks.example/send?key=realtoken999"))
-        self.assertEqual(saved.get("R20_NOTIFICATION_WEBHOOK"), "https://hooks.example/send?key=realtoken999")
+        self.assertEqual(saved.get("ASTRA_NOTIFICATION_WEBHOOK"), "https://hooks.example/send?key=realtoken999")
 
     def test_put_sanitizes_masked_and_routes_secrets_to_encrypted_store(self):
         env_writes: dict = {}
@@ -114,8 +114,8 @@ class TestA2MaskedWriteback(unittest.TestCase):
         with patch.object(gw_notifications, "require_superadmin", return_value={"username": "root"}), \
              patch.object(gw_notifications, "refresh_settings"), \
              patch.object(gw_notifications, "notification_env", return_value={
-                 "R20_NOTIFICATION_WEBHOOK": "https://hooks.example/send?key=realtoken999",
-                 "R20_QQ_APP_ID": "app1", "R20_QQ_OPENID": "oid1"}), \
+                 "ASTRA_NOTIFICATION_WEBHOOK": "https://hooks.example/send?key=realtoken999",
+                 "ASTRA_QQ_APP_ID": "app1", "ASTRA_QQ_OPENID": "oid1"}), \
              patch.object(gw_notifications, "update_env", side_effect=lambda d: env_writes.update(d)), \
              patch.object(gw_notifications, "save_secrets", side_effect=lambda d: sec_writes.update(d)), \
              patch.object(gw_notifications, "remove_env"), \
@@ -126,11 +126,11 @@ class TestA2MaskedWriteback(unittest.TestCase):
                 wechat_webhook="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=NEW-REAL",  # 新值 → 密文库
             )
             _raw(gw_notifications.admin_update_notifications)(payload)
-        self.assertNotIn("R20_NOTIFICATION_WEBHOOK", env_writes)   # 掩码未回写 env
-        self.assertNotIn("R20_NOTIFICATION_WEBHOOK", sec_writes)   # 掩码未回写密文库
-        self.assertEqual(sec_writes.get("R20_WECHAT_WEBHOOK"),
+        self.assertNotIn("ASTRA_NOTIFICATION_WEBHOOK", env_writes)   # 掩码未回写 env
+        self.assertNotIn("ASTRA_NOTIFICATION_WEBHOOK", sec_writes)   # 掩码未回写密文库
+        self.assertEqual(sec_writes.get("ASTRA_WECHAT_WEBHOOK"),
                          "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=NEW-REAL")
-        self.assertNotIn("R20_WECHAT_WEBHOOK", env_writes)         # 真密钥不再明文落 .env
+        self.assertNotIn("ASTRA_WECHAT_WEBHOOK", env_writes)         # 真密钥不再明文落 .env
 
 
 class TestA3BackupExclusions(unittest.TestCase):
@@ -157,9 +157,9 @@ class TestA6TelegramSafety(unittest.TestCase):
 
     def test_telegram_invalid_base_rejected_before_socket(self):
         env = {
-            "R20_TELEGRAM_BOT_TOKEN": "123456789:AAFsecretTOK",
-            "R20_TELEGRAM_CHAT_ID": "42",
-            "R20_TELEGRAM_API_BASE": "api.telegram.org",  # 无 scheme
+            "ASTRA_TELEGRAM_BOT_TOKEN": "123456789:AAFsecretTOK",
+            "ASTRA_TELEGRAM_CHAT_ID": "42",
+            "ASTRA_TELEGRAM_API_BASE": "api.telegram.org",  # 无 scheme
         }
         ok, msg = notif.send_channel("telegram", "hello", env=env)
         self.assertFalse(ok)
@@ -178,10 +178,10 @@ class TestBStatusNoPositionLeaks(unittest.TestCase):
 
 class TestCSecretsStoreCorruption(unittest.TestCase):
     def setUp(self):
-        self.tmp = Path(tempfile.mkdtemp(prefix="r20-secrets-test-"))
+        self.tmp = Path(tempfile.mkdtemp(prefix="astra-secrets-test-"))
         self._orig = (gws.KEY_FILE, gws.STORE_FILE)
-        gws.KEY_FILE = self.tmp / ".r20_secret_key"
-        gws.STORE_FILE = self.tmp / "r20_secrets.enc"
+        gws.KEY_FILE = self.tmp / ".astra_secret_key"
+        gws.STORE_FILE = self.tmp / "astra_secrets.enc"
         gws._CORRUPT_REPORTED = False
 
     def tearDown(self):
@@ -190,8 +190,8 @@ class TestCSecretsStoreCorruption(unittest.TestCase):
     def test_healthy_roundtrip_and_bak(self):
         gws.save_secrets({"LLM_API_KEY": "k1"})
         self.assertEqual(gws.load_secrets().get("LLM_API_KEY"), "k1")
-        gws.save_secrets({"R20_QQ_CLIENT_SECRET": "s2"})
-        self.assertTrue((self.tmp / "r20_secrets.enc.bak").exists())  # 覆盖前留旧密文
+        gws.save_secrets({"ASTRA_QQ_CLIENT_SECRET": "s2"})
+        self.assertTrue((self.tmp / "astra_secrets.enc.bak").exists())  # 覆盖前留旧密文
         self.assertEqual(gws.load_secrets().get("LLM_API_KEY"), "k1")  # merge 不丢
 
     def test_missing_key_refuses_write_not_wipe(self):
@@ -209,7 +209,7 @@ class TestCSecretsStoreCorruption(unittest.TestCase):
         gws.save_secrets({"LLM_API_KEY": "k1"})
         gws.STORE_FILE.write_bytes(b"garbage-not-fernet")
         with self.assertRaises(gws.SecretsStoreError):
-            gws.save_secrets({"R20_ADMIN_TOKEN": "x"})
+            gws.save_secrets({"ASTRA_ADMIN_TOKEN": "x"})
         self.assertEqual(gws.load_secrets(), {})  # 读面告警回退，不炸服务
 
 

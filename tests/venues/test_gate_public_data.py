@@ -12,7 +12,7 @@ Gate 与 OKX/Binance 的**载荷形态不同**，取数层必须把它归一掉�
 
 import unittest
 
-from r20_backend.exchanges.gate import GateAdapter
+from astra_backend.exchanges.gate import GateAdapter
 
 
 class _Base(unittest.TestCase):

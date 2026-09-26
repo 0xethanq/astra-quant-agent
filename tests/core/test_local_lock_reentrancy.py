@@ -7,7 +7,7 @@
 
 ```python
 try:
-    from r20_backend.file_locks import file_lock
+    from astra_backend.file_locks import file_lock
     return file_lock(TARGET_FILE)
 except Exception:
     # …… 手写一个 contextmanager 做本地 flock ……（两处逐字相同）
@@ -31,7 +31,7 @@ def mutate_instruments(mutator):
 
 ## ⚠️ 如实记录：该兜底在本仓当前是「不可达」的
 
-`r20_backend.file_locks` 只依赖标准库，且两个脚本在本仓都由 `r20_backend`
+`astra_backend.file_locks` 只依赖标准库，且两个脚本在本仓都由 `astra_backend`
 侧导入，故 `except Exception` 分支**不会被走到**。
 所以这是**潜伏**缺陷，**不是正在发生的线上故障**。
 
@@ -42,7 +42,7 @@ def mutate_instruments(mutator):
 
 调用方在两者之间**无条件切换**（后者 import 失败就退到本地），
 任何语义差异都会让"退化路径"变成另一种行为。故本模块的层数计数机制
-与 `r20_backend/file_locks.py` 的 `_STATE` **逐条对应**：
+与 `astra_backend/file_locks.py` 的 `_STATE` **逐条对应**：
 
 | 机制 | 后端 `file_lock` | 本模块 `local_file_lock` |
 |---|---|---|
@@ -121,9 +121,9 @@ class ReentrancyTest(unittest.TestCase):
             self.assertEqual(mode, 0o600, "锁文件权限必须是 0o600（与后端一致）")
 
     def test_lock_file_mode_matches_backend(self):
-        """与 `r20_backend.file_locks` 的权限保持一致（调用方无条件切换）。"""
+        """与 `astra_backend.file_locks` 的权限保持一致（调用方无条件切换）。"""
         import stat as _stat
-        from r20_backend.file_locks import file_lock
+        from astra_backend.file_locks import file_lock
         with tempfile.TemporaryDirectory() as d:
             a, b = Path(d) / "a.json", Path(d) / "b.json"
             with file_lock(a):
@@ -277,7 +277,7 @@ class FacadeWiringTest(unittest.TestCase):
         """⚠️ 后端锁仍是首选 —— 本刀只替换兜底，不改变优选顺序。"""
         for path in FACADES:
             src = path.read_text(encoding="utf-8")
-            self.assertIn("from r20_backend.file_locks import file_lock", src)
+            self.assertIn("from astra_backend.file_locks import file_lock", src)
             self.assertIn("except Exception:", src)
 
     def test_both_facades_fall_back_reentrantly(self):
@@ -301,9 +301,9 @@ class FacadeWiringTest(unittest.TestCase):
 import sys, tempfile, pathlib
 sys.path.insert(0, %r)
 sys.path.insert(0, %r)
-sys.modules['r20_backend.file_locks'] = None      # 逼出 ImportError → 兜底分支
+sys.modules['astra_backend.file_locks'] = None      # 逼出 ImportError → 兜底分支
 
-d = pathlib.Path(tempfile.mkdtemp(prefix='r20-lock-probe-'))
+d = pathlib.Path(tempfile.mkdtemp(prefix='astra-lock-probe-'))
 import prompt_library, instrument_pool
 # 提示词库 2026-09 拆成"出厂基线 + 用户改动"两文件：锁只跟**写入目标**（LOCAL_FILE）
 # 走，但两个常量都要挪到沙箱，免得读侧仍指向生产。
@@ -336,8 +336,8 @@ assert (d / '.local_file.json.lock').exists() or (d / '.pool_file.json.lock').ex
 import sys, tempfile, pathlib
 sys.path.insert(0, %r)
 sys.path.insert(0, %r)
-sys.modules['r20_backend.file_locks'] = None
-d = pathlib.Path(tempfile.mkdtemp(prefix='r20-lock-probe2-'))
+sys.modules['astra_backend.file_locks'] = None
+d = pathlib.Path(tempfile.mkdtemp(prefix='astra-lock-probe2-'))
 import instrument_pool
 instrument_pool.POOL_FILE = d / 'pool.json'
 with instrument_pool._pool_lock():
@@ -402,7 +402,7 @@ assert created == ['.pool.json.lock'], created
                 imported |= {a.name.split(".")[0] for a in n.names}
             elif isinstance(n, ast.ImportFrom):
                 imported.add((n.module or "").split(".")[0])
-        for banned in ("r20_backend", "scripts"):
+        for banned in ("astra_backend", "scripts"):
             self.assertNotIn(banned, imported, f"兜底模块不得 import {banned}")
         self.assertTrue(imported <= {"fcntl", "os", "threading", "contextlib",
                                      "pathlib", "typing", "__future__", "ast",
@@ -420,7 +420,7 @@ class BackendParityTest(unittest.TestCase):
     """⚠️ 兜底语义必须与后端一致（调用方在两者间无条件切换）。"""
 
     def test_lock_path_formula_matches_backend(self):
-        from r20_backend.file_locks import _lock_path as backend_lock_path
+        from astra_backend.file_locks import _lock_path as backend_lock_path
         from local_lock import _lock_path as local_lock_path
         for name in ("a.json", "instrument_pool.json", "no-ext"):
             t = Path("/tmp/dir") / name
@@ -429,7 +429,7 @@ class BackendParityTest(unittest.TestCase):
 
     def test_reentrancy_semantics_match_backend(self):
         """两者都必须在嵌套时「内层退出不释放外层」。"""
-        from r20_backend.file_locks import file_lock, lock_is_held as backend_held
+        from astra_backend.file_locks import file_lock, lock_is_held as backend_held
         with tempfile.TemporaryDirectory() as d:
             t = Path(d) / "p.json"
             with file_lock(t):

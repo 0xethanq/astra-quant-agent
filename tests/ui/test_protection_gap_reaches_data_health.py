@@ -9,7 +9,7 @@
 > 外所持仓的止损腿被**外部撤销**、或从来没挂上时，系统多久能发现？
 
 答案必须是"**一个缓存周期内**"，而不是"等谁手动跑一次巡检"——因为
-`R20_VENUE_PROTECTION_WATCHDOG` **默认关闭**（它会真的补挂腿，属实盘写操作，须人工开闸），
+`ASTRA_VENUE_PROTECTION_WATCHDOG` **默认关闭**（它会真的补挂腿，属实盘写操作，须人工开闸），
 所以"发现"这件事只能靠**默认开启**的面板载荷路径：
 
     collect_cross_venue_positions（每周期都跑，腿本来就要取来展示）
@@ -36,7 +36,7 @@ _ROOT = Path(__file__).resolve().parents[2]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from r20_backend import dashboard_cache as app
+from astra_backend import dashboard_cache as app
 
 
 class _Ad:
@@ -86,9 +86,9 @@ def _run_cycle(adapter):
          patch.object(app, "_core_load_ledger_lifecycle_trades", lambda *a, **k: ([], [])), \
          patch.object(app, "_core_load_local_reads", lambda *a, **k: dict(local)), \
          patch.object(app, "_core_collect_algo_protection", lambda *a, **k: None), \
-         patch("r20_backend.exchanges.get_adapter",
+         patch("astra_backend.exchanges.get_adapter",
                lambda v, *a, **k: adapter if v == "binance" else _EMPTY), \
-         patch("r20_backend.dashboard_payload.multi_venue._global_env_axis", lambda: "demo"):
+         patch("astra_backend.dashboard_payload.multi_venue._global_env_axis", lambda: "demo"):
         app.CACHE_DATA = {}
         app.LAST_CACHE_TIME = 0.0
         app.update_cache_cycle()

@@ -1,4 +1,4 @@
-"""Professional notification publisher bridging durable R20 Gateway events across channels."""
+"""Professional notification publisher bridging durable ASTRA Gateway events across channels."""
 from __future__ import annotations
 from pathlib import Path
 import sys
@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from r20_gateway.publisher import publish
+from astra_gateway.publisher import publish
 
 
 def _publish(event_type: str, title: str, message: str, payload: dict | None = None, priority: int = 50) -> bool:

@@ -12,7 +12,7 @@
  *    实测实机：`labelledby: null, describedby: null`。
  *
  * 2. 破坏性操作短语输入缺乏动态 `aria-invalid` 反馈：
- *    当弹窗要求输入特定短语确认（如 `BACKUP R20`、`LIVE`）时，
+ *    当弹窗要求输入特定短语确认（如 `BACKUP ASTRA`、`LIVE`）时，
  *    输入中途未对齐阶段缺少 `aria-invalid="true"` 辅助播报。
  *
  * 3. 模态框底部按钮缺少 `type="button"` 声明。

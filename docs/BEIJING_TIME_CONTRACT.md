@@ -14,7 +14,7 @@
 
 ## 后端
 
-- `r20_backend/time_utils.py` 负责有时区/无时区业务输入的规范化。
+- `astra_backend/time_utils.py` 负责有时区/无时区业务输入的规范化。
 - 日亏损、日报、权益日序列按转换后的北京时间归日。
 - 自进化快照关联必须先完整解析时区再转北京，禁止截去输入 offset 再关联。
 - Gateway 历史 `last_scheduled_at` 读入后统一为 aware 北京时间，防止 naive/aware 相减失败及跨日重复调度。

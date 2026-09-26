@@ -45,4 +45,4 @@ if (-not (Test-Path $PoolFile)) {
 
 # 6. Launch Backend Engine
 Write-Host "✨ Launching AstraQuant on http://127.0.0.1:8080 ..." -ForegroundColor Green
-& $PythonExe -m uvicorn r20_backend.app:app --host 0.0.0.0 --port 8080
+& $PythonExe -m uvicorn astra_backend.app:app --host 0.0.0.0 --port 8080

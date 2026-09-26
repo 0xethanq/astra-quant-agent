@@ -22,7 +22,7 @@ import types
 import unittest
 from unittest import mock
 
-from r20_backend import dashboard_cache as DC
+from astra_backend import dashboard_cache as DC
 
 CORE_TUPLE = (False, 100.0, True, 100.0, 1, [], [], [{"instId": "BTC"}], True, 0,
               100.0, 0.0, {}, 0.0)
@@ -103,9 +103,9 @@ class KpiSingleSourceTest(unittest.TestCase):
         extras = [
             mock.patch("scripts.trader.venue_protection.read_ledger_rows",
                        side_effect=_ledger_rows),
-            mock.patch("r20_backend.execution.circuit_breaker.ledger_today_stats",
+            mock.patch("astra_backend.execution.circuit_breaker.ledger_today_stats",
                        side_effect=_ts),
-            mock.patch("r20_backend.llm_manager.get_active_llm_runtime",
+            mock.patch("astra_backend.llm_manager.get_active_llm_runtime",
                        return_value={"model": "M"}),
         ]
         for p in extras:

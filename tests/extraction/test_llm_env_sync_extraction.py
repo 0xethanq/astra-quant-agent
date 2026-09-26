@@ -1,7 +1,7 @@
 r"""LLM 生效模型 → `.env` 装配抽取对拍门（第一百零六刀）。
 
-`r20_backend/llm/store.py::activate_provider_model`（143 行）里两段 →
-`r20_backend/llm/env_sync.py`：`resolve_effective_endpoint`（优先级链）、
+`astra_backend/llm/store.py::activate_provider_model`（143 行）里两段 →
+`astra_backend/llm/env_sync.py`：`resolve_effective_endpoint`（优先级链）、
 `build_env_values`（env 值组装 + 超时夹取 + 条件写密钥）。
 
 ## 本门钉的是**判定规则**，不是搬家动作
@@ -20,13 +20,14 @@ import subprocess
 import sys
 import unittest
 from pathlib import Path
+from tests.extraction.rename_baseline import legacy_rev_path, normalize
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 PRE = "c7fc135"
-FACADE = ROOT / "r20_backend" / "llm" / "store.py"
-MOD = ROOT / "r20_backend" / "llm" / "env_sync.py"
+FACADE = ROOT / "astra_backend" / "llm" / "store.py"
+MOD = ROOT / "astra_backend" / "llm" / "env_sync.py"
 OWNER = "activate_provider_model"
 SPECS = {"resolve_effective_endpoint": (20, 24), "build_env_values": (25, 27)}
 
@@ -42,10 +43,10 @@ class FakeOS:
 
 
 def _baseline_fn() -> ast.FunctionDef:
-    r = subprocess.run(["git", "show", f"{PRE}:r20_backend/llm/store.py"],
+    r = subprocess.run(["git", "show", legacy_rev_path(f"{PRE}:astra_backend/llm/store.py")],
                        capture_output=True, text=True, cwd=str(ROOT))
     assert r.returncode == 0, f"基线取不到：{r.stderr[:200]}"
-    return next(n for n in ast.parse(r.stdout).body
+    return next(n for n in ast.parse(normalize(r.stdout)).body
                 if isinstance(n, ast.FunctionDef) and n.name == OWNER)
 
 
@@ -118,7 +119,7 @@ class LlmEnvSyncTest(unittest.TestCase):
     # ---------- 行为例：优先级链 ----------
 
     def _resolve(self, target_model, providers=(), **env):
-        from r20_backend.llm.env_sync import resolve_effective_endpoint
+        from astra_backend.llm.env_sync import resolve_effective_endpoint
         return resolve_effective_endpoint(
             config={"providers": list(providers)}, os=FakeOS(**env), target_model=target_model)
 
@@ -152,7 +153,7 @@ class LlmEnvSyncTest(unittest.TestCase):
     # ---------- 行为例：env 值组装 ----------
 
     def _build(self, **over):
-        from r20_backend.llm.env_sync import build_env_values
+        from astra_backend.llm.env_sync import build_env_values
         seen = []
         kw = dict(api_key="", base_url="https://api.example/v1", effort="high", model_id="m1",
                   save_secrets=lambda d: seen.append(d), thinking_timeout=None)

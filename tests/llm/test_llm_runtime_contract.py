@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import unittest
 
-from r20_backend.llm_manager import get_active_llm_runtime
+from astra_backend.llm_manager import get_active_llm_runtime
 
 # 前端 OverviewPage.vue / SelfEvolutionLab.vue / stores/dashboard.ts 实际读取的键
 FRONTEND_CONSUMED_KEYS = ("model", "provider_name", "reasoning_effort", "api_format")
@@ -39,7 +39,7 @@ class LlmRuntimeContractTests(unittest.TestCase):
         root = Path(__file__).resolve().parents[2]
         out = subprocess.run(
             ["grep", "-rn", "gemini-3.8-flash-high", "--include=*.py", "--include=*.ts", "--include=*.vue",
-             "r20_backend", "scripts", "frontend/src"],
+             "astra_backend", "scripts", "frontend/src"],
             cwd=root, capture_output=True, text=True,
         )
         hits = [line for line in out.stdout.splitlines() if line.strip()]

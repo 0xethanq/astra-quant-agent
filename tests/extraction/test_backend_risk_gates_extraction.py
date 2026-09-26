@@ -1,8 +1,8 @@
-"""`r20_backend/execution/risk_gates.py`（阶段 4·B3 第三十八刀）回归。
+"""`astra_backend/execution/risk_gates.py`（阶段 4·B3 第三十八刀）回归。
 
 ## 抽了什么
 
-`r20_backend/execution_router.py::open_protected_position` 的 L108–173（67 行）
+`astra_backend/execution_router.py::open_protected_position` 的 L108–173（67 行）
 —— 该函数 293 行里最大的一块内聚逻辑，三道**发送前风控闸门**：
 
 | | 之前 | 之后 |
@@ -30,7 +30,7 @@
 `tests/audit/test_audit_config_p4_cleanup.py::ExposureCapTests::test_router_refuses_when_projected_exposure_exceeds_cap`
 现已被改写为真正走闸门并断言理由文案。
 
-**实盘影响**：生产 `R20_MAX_TOTAL_EXPOSURE_USDT` 未配置 → `TOTAL_EXPOSURE_CAP = 0.0`
+**实盘影响**：生产 `ASTRA_MAX_TOTAL_EXPOSURE_USDT` 未配置 → `TOTAL_EXPOSURE_CAP = 0.0`
 → 闸门仍**停用**，故本次修复**不改变当前实盘行为**（由 `ProductionCapStillDisabledTest` 守住）。
 """
 
@@ -41,10 +41,10 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-MODULE = ROOT / "r20_backend" / "execution" / "risk_gates.py"
-FACADE = ROOT / "r20_backend" / "execution_router.py"
+MODULE = ROOT / "astra_backend" / "execution" / "risk_gates.py"
+FACADE = ROOT / "astra_backend" / "execution_router.py"
 
-from r20_backend.execution.risk_gates import (  # noqa: E402
+from astra_backend.execution.risk_gates import (  # noqa: E402
     check_total_exposure,
     clamp_leverage,
     clamp_margin,
@@ -56,11 +56,11 @@ _READ_SCOPE = None
 
 def setUpModule():
     """显式声明生产读（第二百三十七刀）：
-    本文件把**线上 `.env`** 的 `R20_MAX_TOTAL_EXPOSURE_USDT` 与契约值对照，验证线上配置与
+    本文件把**线上 `.env`** 的 `ASTRA_MAX_TOTAL_EXPOSURE_USDT` 与契约值对照，验证线上配置与
     抽取后实现一致 —— 不读生产就无法成立，属**有意的线上守卫**。
 
     只读、不改；声明在此把「依赖线上配置内容」从**静默**变成**可审计**
-    （未声明时 `R20_TESTS_STRICT_READS=1` 会报错）。
+    （未声明时 `ASTRA_TESTS_STRICT_READS=1` 会报错）。
     """
     global _READ_SCOPE
     from tests import allow_real_data_reads
@@ -405,7 +405,7 @@ class ProductionCapStillDisabledTest(unittest.TestCase):
     旧版断言 `scripts.risk_constants.MAX_TOTAL_EXPOSURE_USDT == 0.0`，并自称
     "若有人将来配置了它，这条会翻红"。但 pytest 做了**环境隔离**（`tests/__init__.py`），
     于是它读到的永远是 0.0 —— **看不见生产 `.env`**，而生产 `.env` 里
-    `R20_MAX_TOTAL_EXPOSURE_USDT=3000.0`（`scripts/risk_constants.py` 在 cron/手动路径
+    `ASTRA_MAX_TOTAL_EXPOSURE_USDT=3000.0`（`scripts/risk_constants.py` 在 cron/手动路径
     显式加载 `.env`，本机实测 `TOTAL_EXPOSURE_CAP == 3000.0`）。护栏"安全通过"，
     闸门却早已生效——而且是**只算一所的"跨所"闸门**（已由
     `tests/audit/test_cross_venue_exposure_gate.py` 修正语义并钉住）。
@@ -425,13 +425,13 @@ class ProductionCapStillDisabledTest(unittest.TestCase):
         cap = 0.0
         for line in env_file.read_text(encoding="utf-8").splitlines():
             line = line.strip()
-            if line.startswith("R20_MAX_TOTAL_EXPOSURE_USDT="):
+            if line.startswith("ASTRA_MAX_TOTAL_EXPOSURE_USDT="):
                 try:
                     cap = float(line.split("=", 1)[1].strip().strip('"').strip("'"))
                 except ValueError:
                     cap = 0.0
         if cap:
-            src = (Path(__file__).resolve().parents[2] / "r20_backend" /
+            src = (Path(__file__).resolve().parents[2] / "astra_backend" /
                    "execution_router.py").read_text(encoding="utf-8")
             self.assertIn("_exposure_venues(", src,
                           f"生产已配置上限 {cap}U ⇒ 闸门生效，必须跨所口径")

@@ -74,7 +74,7 @@ def submit_protected_limit_order(inst_id: str, side: str, pos_side: str, size: f
     # 查不到 → 误判「沙盒未上市」，导致非 OKX 所一单都开不了。对账前必须先经
     # native_symbol_pure 翻译成目标所原生合约码（纯元数据，绝不实例化适配器→零出网）。
     try:
-        from r20_backend.exchanges.listing import ensure_contract_listed
+        from astra_backend.exchanges.listing import ensure_contract_listed
         native_contract = venue_registry.native_symbol_pure(
             canonical_base(inst_id), target_venue)
         _check = ensure_contract_listed(target_venue, "demo" if env.simulated else "live", native_contract)
@@ -132,7 +132,7 @@ def submit_protected_limit_order(inst_id: str, side: str, pos_side: str, size: f
 
     # 委托订单模式（限价 / 市价）。**在此处读**而不是发单前才读：市价单必须先在
     # 这里按现价重锚保护价，才能进下面的几何复验与穿价闸。
-    order_mode = str(os.getenv("R20_ORDER_MODE", "limit")).strip().lower()
+    order_mode = str(os.getenv("ASTRA_ORDER_MODE", "limit")).strip().lower()
 
     # 市价单：真实成交价 = 下单一刻的现价，而 `effective_px/tp/sl` 是按**限价挂单
     # 计划**算的。若计划是回踩挂单位（做多、计划价明显低于现价），市价单会在现价
@@ -189,8 +189,8 @@ def submit_protected_limit_order(inst_id: str, side: str, pos_side: str, size: f
     # 是合法策略（不穿价即放行，OKX 侧 4 分钟超时撤兜底）。_anchor_last 来自上方
     # 单次读价；取价失败不阻断（行情断时黑天鹅哨兵/熔断已另行 fail-closed），但必吼。
     if _anchor_last > 0 and effective_px > 0:
-        _cross_pct = float(os.getenv("R20_MAX_PRICE_CROSS_PCT", "0.005") or 0.005)
-        _far_pct = float(os.getenv("R20_MAX_PRICE_FAR_PCT", "0.50") or 0.50)
+        _cross_pct = float(os.getenv("ASTRA_MAX_PRICE_CROSS_PCT", "0.005") or 0.005)
+        _far_pct = float(os.getenv("ASTRA_MAX_PRICE_FAR_PCT", "0.50") or 0.50)
         if action_type == "BUY_LONG" and effective_px > _anchor_last * (1.0 + _cross_pct):
             _rej = f"入场价穿价幻觉：BUY 限价 {effective_px:g} 高于现价 {_anchor_last:g} 超阈值({max(0.0,(effective_px/_anchor_last-1)*100):.2f}%>{_cross_pct*100:.1f}%)，将即时成交于意外价且 SL 锚点失真"
             print(f"[价格锚定] 拒单 {inst_id}: {_rej}")
@@ -210,7 +210,7 @@ def submit_protected_limit_order(inst_id: str, side: str, pos_side: str, size: f
     # 多所平权执行：若路由选定 Gate 或 Binance，走统一原生受保护执行路由
     if target_venue in ("gate", "binance"):
         try:
-            from r20_backend import execution_router
+            from astra_backend import execution_router
             asset_canonical = str(inst_id).split("-")[0].upper()
             default_lever = float(MIN_LEVERAGE or 3.0)
             margin_val = float(venue_ctx.get("margin_usdt") or (size * price / default_lever)) if isinstance(venue_ctx, dict) else (size * price / default_lever)

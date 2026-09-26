@@ -2,8 +2,8 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useI18n } from '../composables/useI18n'
 
-const SESSION_TOKEN_KEY = 'r20.admin.session.id'
-const SESSION_USER_KEY = 'r20.admin.session.user'
+const SESSION_TOKEN_KEY = 'astra.admin.session.id'
+const SESSION_USER_KEY = 'astra.admin.session.user'
 
 export interface AdminUser {
   username: string
@@ -48,7 +48,7 @@ export const useAuthStore = defineStore('auth', () => {
     if (!token.value) return false
     try {
       const resp = await fetch('/api/v1/admin/auth/me', {
-        headers: { 'X-R20-Session': token.value },
+        headers: { 'X-Astra-Session': token.value },
       })
       if (!resp.ok) {
         logout()
@@ -84,7 +84,7 @@ export const useAuthStore = defineStore('auth', () => {
     if (token.value) {
       fetch('/api/v1/admin/logout', {
         method: 'POST',
-        headers: { 'X-R20-Session': token.value },
+        headers: { 'X-Astra-Session': token.value },
       }).catch(() => {})
     }
     token.value = ''

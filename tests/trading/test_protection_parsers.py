@@ -89,7 +89,7 @@ class LedgerEvidenceTest(unittest.TestCase):
 
     def test_missing_file_is_none(self):
         self.assertIsNone(read_ledger_rows(os.path.join(tempfile.gettempdir(),
-                                                       "r20_no_such_ledger_xyz.json")))
+                                                       "astra_no_such_ledger_xyz.json")))
 
     def test_unusable_path_is_none_not_crash(self):
         self.assertIsNone(read_ledger_rows(None), "路径都构造不出来 ⇒ 不产生证据（不抛）")
@@ -130,7 +130,7 @@ class AttributionEdgeTest(unittest.TestCase):
     脏输入必须被跳过而不是把循环带偏（读得到 ≠ 每条都能用）。
     """
 
-    LEG = {"id": "s1", "initial": {"contract": "BTC_USDT", "text": "t-r20sl"},
+    LEG = {"id": "s1", "initial": {"contract": "BTC_USDT", "text": "t-astrasl"},
            "size": 10.0, "side": "long"}
     # 没有本系统标签、但有明确类型名的腿（Binance 真机形态）⇒ 走**台账证据**那条路
     # `positionSide` 是 Binance 侧的持仓方向字段；**没有它**时腿的方向读不出来，
@@ -147,7 +147,7 @@ class AttributionEdgeTest(unittest.TestCase):
     def test_non_dict_ledger_rows_are_skipped_and_zh_side_is_normalised(self):
         """台账里的非 dict 行跳过；**「多/空」中文方向词要归一为 long/short**。
 
-        ⚠️ 必须用**没有本系统标签**的腿（`STOP_MARKET`）：带 `t-r20sl` 的腿走的是
+        ⚠️ 必须用**没有本系统标签**的腿（`STOP_MARKET`）：带 `t-astrasl` 的腿走的是
         `tag` 证据（优先级高于台账），根本到不了台账这条路。
         """
         r = attribute_protective_orders(

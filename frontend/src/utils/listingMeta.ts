@@ -1,7 +1,7 @@
 /**
  * US-007 前端配套 · 合约目录对账徽章 —— 单一事实源（venue 账户卡专用）。
  *
- * 后端契约（GET /api/v1/listing_status，r20_backend/exchanges/listing.py）：
+ * 后端契约（GET /api/v1/listing_status，astra_backend/exchanges/listing.py）：
  *   {ok, reason, checked_at, source: 'cache'|'fresh'|'unavailable', listed_count}
  * 铁律（与账户卡同源）：
  *   - 未知≠0：listed_count=null 绝不渲染成 0 项；

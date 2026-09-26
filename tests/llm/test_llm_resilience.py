@@ -11,9 +11,9 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
-import r20_backend.app as app_module
-import r20_backend.llm_manager as llm_manager
-from r20_backend.admin_auth import AdminAuthStore
+import astra_backend.app as app_module
+import astra_backend.llm_manager as llm_manager
+from astra_backend.admin_auth import AdminAuthStore
 
 
 class FakeResp:
@@ -58,9 +58,9 @@ class LLMResilienceTests(unittest.TestCase):
         app_module.admin_auth = AdminAuthStore(self.temp_path / "admin.db")
         app_module.admin_auth.initialize_from_legacy("TestAdminPass123456")
 
-        self.patcher_env = patch("r20_backend.settings_store.update_env")
-        self.patcher_refresh = patch("r20_backend.config.refresh_settings")
-        self.patcher_sec = patch("r20_gateway.secrets.save_secrets")
+        self.patcher_env = patch("astra_backend.settings_store.update_env")
+        self.patcher_refresh = patch("astra_backend.config.refresh_settings")
+        self.patcher_sec = patch("astra_gateway.secrets.save_secrets")
         self.patcher_sleep = patch("time.sleep")
         self.patcher_env.start()
         self.patcher_refresh.start()
@@ -90,7 +90,7 @@ class LLMResilienceTests(unittest.TestCase):
     def login(self) -> dict[str, str]:
         resp = self.client.post("/api/v1/admin/auth/login", json={"username": "admin", "password": "TestAdminPass123456"})
         self.assertEqual(resp.status_code, 200, resp.text)
-        return {"X-R20-Session": resp.json()["session_token"]}
+        return {"X-Astra-Session": resp.json()["session_token"]}
 
     # ---------- 配置 ----------
 
@@ -139,7 +139,7 @@ class LLMResilienceTests(unittest.TestCase):
 
     def test_connection_error_is_retried_and_succeeds(self):
         """核心回归：URLError 连接层失败一次后必须继续重试，而非直接放弃。"""
-        with patch("r20_backend.llm_manager.urllib.request.urlopen", side_effect=[
+        with patch("astra_backend.llm_manager.urllib.request.urlopen", side_effect=[
             urllib.error.URLError("connection refused"),
             chat_response("RECOVERED"),
         ]) as mock_open:
@@ -153,13 +153,13 @@ class LLMResilienceTests(unittest.TestCase):
     def test_attempts_setting_limits_retries(self):
         llm_manager.update_llm_settings(request_attempts=2)
         failing = MagicMock(side_effect=urllib.error.URLError("reset by peer"))
-        with patch("r20_backend.llm_manager.urllib.request.urlopen", failing):
+        with patch("astra_backend.llm_manager.urllib.request.urlopen", failing):
             with self.assertRaises(Exception):
                 llm_manager.execute_llm_request(messages=[{"role": "user", "content": "hi"}], timeout=10)
         self.assertEqual(failing.call_count, 2)
 
     def test_empty_content_retried_as_transient(self):
-        with patch("r20_backend.llm_manager.urllib.request.urlopen", side_effect=[
+        with patch("astra_backend.llm_manager.urllib.request.urlopen", side_effect=[
             chat_response(""),
             chat_response("SECOND WINS"),
         ]) as mock_open:
@@ -179,7 +179,7 @@ class LLMResilienceTests(unittest.TestCase):
                 raise urllib.error.URLError("connection refused")
             return chat_response("FROM BACKUP")
 
-        with patch("r20_backend.llm_manager.urllib.request.urlopen", side_effect=fake_open):
+        with patch("astra_backend.llm_manager.urllib.request.urlopen", side_effect=fake_open):
             content, _, _, _ = llm_manager.execute_llm_request(messages=[{"role": "user", "content": "hi"}], timeout=10)
         self.assertEqual(content, "FROM BACKUP")
         self.assertEqual(calls, ["https://a.example/v1/chat/completions"] * 2 + ["https://b.example/v1/chat/completions"])
@@ -201,7 +201,7 @@ class LLMResilienceTests(unittest.TestCase):
                 raise http_error(401, "invalid api key")
             return chat_response("BACKUP SAVED THE ROUND")
 
-        with patch("r20_backend.llm_manager.urllib.request.urlopen", side_effect=fake_open):
+        with patch("astra_backend.llm_manager.urllib.request.urlopen", side_effect=fake_open):
             content, _, _, _ = llm_manager.execute_llm_request(messages=[{"role": "user", "content": "hi"}], timeout=10)
         self.assertEqual(content, "BACKUP SAVED THE ROUND")
         # 401 硬故障不原地重试：主模型仅 1 次
@@ -209,7 +209,7 @@ class LLMResilienceTests(unittest.TestCase):
 
     def test_allow_fallback_false_keeps_single_model(self):
         llm_manager.update_llm_settings(request_attempts=1, fallback_model_ids=["backup-m"])
-        with patch("r20_backend.llm_manager.urllib.request.urlopen", side_effect=http_error(401, "invalid api key")) as mock_open:
+        with patch("astra_backend.llm_manager.urllib.request.urlopen", side_effect=http_error(401, "invalid api key")) as mock_open:
             with self.assertRaises(RuntimeError) as ctx:
                 llm_manager.execute_llm_request(
                     messages=[{"role": "user", "content": "hi"}], timeout=10, allow_fallback=False,
@@ -219,7 +219,7 @@ class LLMResilienceTests(unittest.TestCase):
 
     def test_full_chain_failure_records_event_and_raises_summary(self):
         llm_manager.update_llm_settings(request_attempts=2, fallback_model_ids=["backup-m"])
-        with patch("r20_backend.llm_manager.urllib.request.urlopen", side_effect=urllib.error.URLError("network down")):
+        with patch("astra_backend.llm_manager.urllib.request.urlopen", side_effect=urllib.error.URLError("network down")):
             with self.assertRaises(RuntimeError) as ctx:
                 llm_manager.execute_llm_request(messages=[{"role": "user", "content": "hi"}], timeout=10)
         self.assertIn("模型链全部失败", str(ctx.exception))
@@ -231,7 +231,7 @@ class LLMResilienceTests(unittest.TestCase):
 
     def test_single_model_timeout_keeps_legacy_message(self):
         llm_manager.update_llm_settings(request_attempts=1, fallback_model_ids=[])
-        with patch("r20_backend.llm_manager.urllib.request.urlopen", side_effect=socket.timeout("timed out")):
+        with patch("astra_backend.llm_manager.urllib.request.urlopen", side_effect=socket.timeout("timed out")):
             with self.assertRaises(TimeoutError) as ctx:
                 llm_manager.execute_llm_request(messages=[{"role": "user", "content": "hi"}], timeout=10)
         self.assertIn("LLM 推演超时", str(ctx.exception))
@@ -239,7 +239,7 @@ class LLMResilienceTests(unittest.TestCase):
 
     def test_single_model_http_error_keeps_legacy_runtime_error(self):
         llm_manager.update_llm_settings(request_attempts=1, fallback_model_ids=[])
-        with patch("r20_backend.llm_manager.urllib.request.urlopen", side_effect=http_error(404, "no such model")):
+        with patch("astra_backend.llm_manager.urllib.request.urlopen", side_effect=http_error(404, "no such model")):
             with self.assertRaises(RuntimeError) as ctx:
                 llm_manager.execute_llm_request(messages=[{"role": "user", "content": "hi"}], timeout=10)
         self.assertIn("LLM 网关返回 HTTP 404（模型 primary-m）", str(ctx.exception))
@@ -257,7 +257,7 @@ class LLMResilienceTests(unittest.TestCase):
                 raise http_error(504, "error code: 504")
             return chat_response("FAST BACKUP")
 
-        with patch("r20_backend.llm_manager.urllib.request.urlopen", side_effect=fake_open):
+        with patch("astra_backend.llm_manager.urllib.request.urlopen", side_effect=fake_open):
             content, _, _, _ = llm_manager.execute_llm_request(messages=[{"role": "user", "content": "hi"}], timeout=10)
         self.assertEqual(content, "FAST BACKUP")
         self.assertEqual(calls.count("https://a.example/v1/chat/completions"), 1)  # 不烧第二个超时窗口
@@ -265,7 +265,7 @@ class LLMResilienceTests(unittest.TestCase):
     def test_504_still_retries_when_no_fallback(self):
         """未配置回退时保持旧语义：504 仍按请求次数重试同一模型。"""
         llm_manager.update_llm_settings(request_attempts=2, fallback_model_ids=[])
-        with patch("r20_backend.llm_manager.urllib.request.urlopen", side_effect=http_error(504, "error code: 504")) as mock_open:
+        with patch("astra_backend.llm_manager.urllib.request.urlopen", side_effect=http_error(504, "error code: 504")) as mock_open:
             with self.assertRaises(RuntimeError) as ctx:
                 llm_manager.execute_llm_request(messages=[{"role": "user", "content": "hi"}], timeout=10)
         self.assertEqual(mock_open.call_count, 2)
@@ -281,7 +281,7 @@ class LLMResilienceTests(unittest.TestCase):
                 raise socket.timeout("thinking too long")
             return chat_response("BACKUP AFTER TIMEOUT")
 
-        with patch("r20_backend.llm_manager.urllib.request.urlopen", side_effect=fake_open):
+        with patch("astra_backend.llm_manager.urllib.request.urlopen", side_effect=fake_open):
             content, _, _, _ = llm_manager.execute_llm_request(messages=[{"role": "user", "content": "hi"}], timeout=10)
         self.assertEqual(content, "BACKUP AFTER TIMEOUT")
         self.assertEqual(len(calls), 2)
@@ -297,7 +297,7 @@ class LLMResilienceTests(unittest.TestCase):
                 raise http_error(400, '{"error":{"message":"unknown provider for model primary-m","code":"model_not_found"}}')
             return chat_response("SAVED BY FALLBACK")
 
-        with patch("r20_backend.llm_manager.urllib.request.urlopen", side_effect=fake_open):
+        with patch("astra_backend.llm_manager.urllib.request.urlopen", side_effect=fake_open):
             content, _, _, _ = llm_manager.execute_llm_request(messages=[{"role": "user", "content": "hi"}], timeout=10)
         self.assertEqual(content, "SAVED BY FALLBACK")
         self.assertEqual(calls.count("https://a.example/v1/chat/completions"), 1)

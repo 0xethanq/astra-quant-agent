@@ -105,9 +105,9 @@ class SubprocessDataWritesRedirectedTest(unittest.TestCase):
     `sync_full_ledger.py`）—— 子进程是**新解释器**，在进程沙箱
     （patch 模块常量）对它完全无效，它自己从真实 ROOT 拼路径 → 写生产。
 
-    修法：`isolate_config` 设 `R20_DATA_DIR` 环境变量（子进程经
+    修法：`isolate_config` 设 `ASTRA_DATA_DIR` 环境变量（子进程经
     `run_script` 继承），三个脚本的 `DATA_DIR` 改为
-    `os.environ.get("R20_DATA_DIR") or os.path.join(WORKSPACE_DIR, "data")`。
+    `os.environ.get("ASTRA_DATA_DIR") or os.path.join(WORKSPACE_DIR, "data")`。
     **生产从不设置该变量 ⇒ 行为逐位不变。**
     """
 
@@ -124,8 +124,8 @@ class SubprocessDataWritesRedirectedTest(unittest.TestCase):
             src = (ROOT / rel).read_text(encoding="utf-8")
             with self.subTest(script=rel):
                 self.assertIn(
-                    'DATA_DIR = os.environ.get("R20_DATA_DIR") or', src,
-                    f"{rel} 不再尊重 R20_DATA_DIR —— 子进程写生产泄漏会复发")
+                    'DATA_DIR = os.environ.get("ASTRA_DATA_DIR") or', src,
+                    f"{rel} 不再尊重 ASTRA_DATA_DIR —— 子进程写生产泄漏会复发")
 
     def test_fresh_interpreter_resolves_data_dir_into_sandbox(self):
         """端到端：真的**新起解释器** import factor_library，
@@ -140,8 +140,8 @@ class SubprocessDataWritesRedirectedTest(unittest.TestCase):
         from tests import config_sandbox
 
         config_sandbox.isolate_config(self)   # addCleanup 自动还原
-        expected = os.environ.get("R20_DATA_DIR")
-        self.assertTrue(expected, "isolate_config 未设置 R20_DATA_DIR")
+        expected = os.environ.get("ASTRA_DATA_DIR")
+        self.assertTrue(expected, "isolate_config 未设置 ASTRA_DATA_DIR")
 
         probe = (
             "import sys; sys.path.insert(0, 'scripts');"
@@ -157,14 +157,14 @@ class SubprocessDataWritesRedirectedTest(unittest.TestCase):
                          "env 传递链断了（泄漏仍在）")
 
     def test_env_absent_outside_isolation(self):
-        """⚠️ 边界钉：不进沙箱时 `R20_DATA_DIR` **必须不存在**
+        """⚠️ 边界钉：不进沙箱时 `ASTRA_DATA_DIR` **必须不存在**
         —— 否则"生产从不设置该变量"的前提被破坏，脚本行为就不再等价。
         （也验证 isolate_config 的 cleanup 真的还原了。）
         """
         import os
 
-        self.assertNotIn("R20_DATA_DIR", os.environ,
-                         "沙箱之外不该有 R20_DATA_DIR（cleanup 漏了或环境脏了）")
+        self.assertNotIn("ASTRA_DATA_DIR", os.environ,
+                         "沙箱之外不该有 ASTRA_DATA_DIR（cleanup 漏了或环境脏了）")
 
         from tests import config_sandbox
 
@@ -178,32 +178,32 @@ class SubprocessDataWritesRedirectedTest(unittest.TestCase):
         host = _Host()
         try:
             config_sandbox.isolate_config(host)
-            self.assertIn("R20_DATA_DIR", os.environ, "沙箱内应设置该 env")
+            self.assertIn("ASTRA_DATA_DIR", os.environ, "沙箱内应设置该 env")
         finally:
             for fn in reversed(host.cleaners):
                 fn()
-        self.assertNotIn("R20_DATA_DIR", os.environ,
-                         "还原后 R20_DATA_DIR 必须消失（与进入前一致）")
+        self.assertNotIn("ASTRA_DATA_DIR", os.environ,
+                         "还原后 ASTRA_DATA_DIR 必须消失（与进入前一致）")
 
     def test_bg_thread_spawn_uses_pre_thread_env_snapshot(self):
         """⚠️ 竞态钉（第七十六刀根因的另一半）：
         后台线程 spawn 子进程时**必须用线程创建前的环境快照**。
 
         实测事故形状：线程还没跑到 `subprocess.run`，测试已结束、
-        `isolate_config` 的 cleanup 已还原 `R20_DATA_DIR` ——
+        `isolate_config` 的 cleanup 已还原 `ASTRA_DATA_DIR` ——
         若靠"继承"，子进程拿到的是**干净环境** ⇒ 写生产
         （03:22:41 / 03:23:11 的 mtime 就是这条竞态留下的）。
 
         本用例把 `run_script` 换成"记录 env 的假 spawn"，在**沙箱内**调
         `sync_instruments_state()`，然后**还原沙箱**、再等线程真正走到
-        spawn —— 断言它拿到的 env **仍含沙箱 `R20_DATA_DIR`**（快照生效）。
-        未修复前：还原后 env 里没有 R20_DATA_DIR → 翻红。
+        spawn —— 断言它拿到的 env **仍含沙箱 `ASTRA_DATA_DIR`**（快照生效）。
+        未修复前：还原后 env 里没有 ASTRA_DATA_DIR → 翻红。
         """
         import threading
 
         from tests import config_sandbox
         import scripts.instrument_pool as pool
-        from r20_backend import spawn as spawn_mod
+        from astra_backend import spawn as spawn_mod
 
         # ⚠️ 第一百三十二刀去 flaky（本用例第三次红）：**按线程归属收敛判定**。
         # patch 装在**模块属性**上 ⇒ 前序测试漏下的后台线程只要在此期间调
@@ -246,7 +246,7 @@ class SubprocessDataWritesRedirectedTest(unittest.TestCase):
             #
             # ⚠️ 第一百二十一刀去 flaky：原来等的是**写死 5 秒**。本用例空载、
             # 乃至 8 路 CPU 争用下都复现不了；只在**整包跑**里偶发（已两次：
-            # 第 20 刀、第 25 刀），而本机同时跑着活体 `r20_gateway.worker` ——
+            # 第 20 刀、第 25 刀），而本机同时跑着活体 `astra_gateway.worker` ——
             # 5 秒窗口被它抢走即可假红。现改成**事件驱动**（线程走完即返回），
             # 30 秒只是安全网：真超时才说明"结构变了或卡死"。
             _done.wait(30.0)
@@ -260,11 +260,11 @@ class SubprocessDataWritesRedirectedTest(unittest.TestCase):
             f"本用例 spawn 的线程没走完（只见 {len(new_thread_calls)}/{_expected} 次，等满 30s）"
             f"；同期全场共 {len(seen)} 次（含无关线程）")
         bad = [i for i, env in enumerate(new_thread_calls) if env is None
-               or env.get("R20_DATA_DIR") != str(Path(sandbox) / "data")]
+               or env.get("ASTRA_DATA_DIR") != str(Path(sandbox) / "data")]
         self.assertEqual(
             bad, [],
             f"后台线程 spawn 用的不是沙箱快照（竞态复发）："
-            f"{[seen[i] is None and '继承(竞态)' or 'env 缺 R20_DATA_DIR' for i in bad]}"
+            f"{[seen[i] is None and '继承(竞态)' or 'env 缺 ASTRA_DATA_DIR' for i in bad]}"
             " —— 修见 sync_instruments_state 的 _env_snapshot。")
 
 
@@ -278,7 +278,7 @@ class SyncInstrumentsStateNeverWritesProductionTest(unittest.TestCase):
     ⚠️ 判据范围在第七十六刀**修正过一次错误**：
     第一版把 sync 的 4 个写集文件全做"生产哈希不变"断言，
     但 `factor_library_snapshot` / `dashboard_last_good` **每 ~60s 被活体
-    `r20_gateway.worker` 重写**（实测 `-newermt '-3 minutes'` 命中）——
+    `astra_gateway.worker` 重写**（实测 `-newermt '-3 minutes'` 命中）——
     落在我的 before→after 窗口里就会**误报成泄漏**（潜伏的 flaky，
     本轮 8 连跑没撞上纯属窗口窄）。⇒ 生产哈希断言**只保留
     `trading_state.json`**（活体 worker 不碰它，只有 15 分钟周期与 sync 写）；
@@ -444,8 +444,8 @@ class ProductionDbConnectBlockedTest(unittest.TestCase):
 
     def test_all_four_production_dbs_are_redirected_for_the_session(self):
         """会话级默认重定向：四个库都指向临时目录，且不在生产 data/ 之下。"""
-        from r20_backend import admin_auth, risk_reservation
-        from r20_gateway import publisher
+        from astra_backend import admin_auth, risk_reservation
+        from astra_gateway import publisher
         import scripts.db_manager as db_manager
         prod = (ROOT / "data").resolve()
         for name, value in (("admin_auth.DB_PATH", admin_auth.DB_PATH),
@@ -459,7 +459,7 @@ class ProductionDbConnectBlockedTest(unittest.TestCase):
 
     def test_default_manager_resolves_outside_production(self):
         """`get_manager()` 的**缓存实例**也必须跟着走（常量改了、缓存没清=照样连生产）。"""
-        from r20_backend import risk_reservation
+        from astra_backend import risk_reservation
         mgr = risk_reservation.get_manager()
         self.assertFalse(str(Path(mgr.db_path).resolve()).startswith(
             str((ROOT / "data").resolve()) + os.sep), f"默认管理器仍钉生产库：{mgr.db_path}")
@@ -467,7 +467,7 @@ class ProductionDbConnectBlockedTest(unittest.TestCase):
     def test_dashboard_render_does_not_touch_production_reservation_db(self):
         """行为判据（本文件的一贯做法）：渲染仪表盘 stale 注入后，生产库哈希不变。"""
         before = _hash_or_absent("data/risk_reservation.db")
-        import r20_backend.dashboard_cache as dashboard
+        import astra_backend.dashboard_cache as dashboard
         dashboard._inject_local_data_into_stale({}, [], "2026-09-02 22:00:00 (北京时间)")
         self.assertEqual(_hash_or_absent("data/risk_reservation.db"), before,
                          "测试渲染仪表盘不得改动生产风控预留库")
@@ -475,11 +475,11 @@ class ProductionDbConnectBlockedTest(unittest.TestCase):
     def test_admin_auth_default_arg_reads_module_constant_at_call_time(self):
         """回归：`def __init__(self, path=DB_PATH)` 的**定义期绑定**会让沙箱重定向失效。
 
-        实测那次泄漏就是它：`r20_backend/dependencies.py:30` 在 import 期
+        实测那次泄漏就是它：`astra_backend/dependencies.py:30` 在 import 期
         `AdminAuthStore()` 走的是定义期绑定的生产路径，`isolate_config` 改常量无效。
         """
         import tempfile
-        from r20_backend import admin_auth
+        from astra_backend import admin_auth
         with tempfile.TemporaryDirectory() as d:
             tmp = Path(d) / "admin.db"
             with patch.object(admin_auth, "DB_PATH", tmp):

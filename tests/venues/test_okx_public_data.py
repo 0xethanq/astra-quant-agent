@@ -10,7 +10,7 @@ import json
 import unittest
 from unittest.mock import patch
 
-from r20_backend.exchanges.okx import OKX_HOSTS, OKXPublicAdapter
+from astra_backend.exchanges.okx import OKX_HOSTS, OKXPublicAdapter
 
 
 class _Resp:
@@ -43,7 +43,7 @@ class _Base(unittest.TestCase):
             if isinstance(out, Exception):
                 raise out
             return _Resp(out)
-        p = patch("r20_backend.exchanges.okx.urlopen", side_effect=_f)
+        p = patch("astra_backend.exchanges.okx.urlopen", side_effect=_f)
         p.start()
         self.addCleanup(p.stop)
         return self.ad
@@ -173,7 +173,7 @@ class OkxPositionsTest(unittest.TestCase):
     """`positions()` 属 **OKXAdapter**（需要凭证字段与 canonical）—— 上一轮用错了夹具。"""
 
     def setUp(self):
-        from r20_backend.exchanges.okx import OKXAdapter
+        from astra_backend.exchanges.okx import OKXAdapter
         self.ad = OKXAdapter.__new__(OKXAdapter)
         self.ad.environment = "demo"
         self.ad.api_key, self.ad.secret_key, self.ad.passphrase = "K", "S", "P"
@@ -203,7 +203,7 @@ class OkxPositionsTest(unittest.TestCase):
 
 class OkxOpenOrdersTest(unittest.TestCase):
     def setUp(self):
-        from r20_backend.exchanges.okx import OKXAdapter
+        from astra_backend.exchanges.okx import OKXAdapter
         self.ad = OKXAdapter.__new__(OKXAdapter)
         self.ad.environment = "demo"
         self.ad.api_key, self.ad.secret_key, self.ad.passphrase = "K", "S", "P"
@@ -255,7 +255,7 @@ class OkxOpenOrdersTest(unittest.TestCase):
 
 class OkxOrderDelegationTest(unittest.TestCase):
     def setUp(self):
-        from r20_backend.exchanges.okx import OKXAdapter
+        from astra_backend.exchanges.okx import OKXAdapter
         self.ad = OKXAdapter.__new__(OKXAdapter)
         self.ad.environment = "demo"
         self.ad.api_key, self.ad.secret_key, self.ad.passphrase = "K", "S", "P"

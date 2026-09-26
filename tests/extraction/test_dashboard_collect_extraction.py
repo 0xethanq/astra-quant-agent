@@ -1,8 +1,8 @@
 r"""dashboard 相位 1 抽取对拍门（结构优化阶段 2·B2 续刀·第九十四刀）。
 
-`r20_backend/dashboard_cache.py::update_cache_cycle` 的相位 1（并发抓取余额/持仓/挂单 +
+`astra_backend/dashboard_cache.py::update_cache_cycle` 的相位 1（并发抓取余额/持仓/挂单 +
 失败语义 + 连接缺失判定 + 基础解析，58 行）**纯搬家**到
-`r20_backend/dashboard_payload/collect.py::collect_core_account_state`。
+`astra_backend/dashboard_payload/collect.py::collect_core_account_state`。
 
 判据同 trader 域：段体 **AST 逐字**、调用点**逐个同名恰好一次**、自由名可解析；
 另加三条**行为例**（连接缺失判定 / 部分失败 / 成功解析）——这三条正是这段代码
@@ -17,8 +17,9 @@ import sys
 import types
 import unittest
 from pathlib import Path
+from tests.extraction.rename_baseline import legacy_rev_path, normalize
 
-# 第 143 刀：本模块从 `dashboard/app.py` 迁到 `r20_backend/dashboard_cache.py`。
+# 第 143 刀：本模块从 `dashboard/app.py` 迁到 `astra_backend/dashboard_cache.py`。
 # **对拍基线必须按历史路径取**（旧 revision 里只有 dashboard/app.py），
 # LIVE 文件走新路径 —— 两者不可混用，否则基线取不到、对拍门必然失真。
 PRE_MOVE_PATH = "dashboard/app.py"
@@ -27,17 +28,17 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 PRE = "a4f310a"                      # 本刀动工前最后提交（第九十三刀收口）
-APP = ROOT / "r20_backend" / "dashboard_cache.py"
-MOD = ROOT / "r20_backend" / "dashboard_payload" / "collect.py"
+APP = ROOT / "astra_backend" / "dashboard_cache.py"
+MOD = ROOT / "astra_backend" / "dashboard_payload" / "collect.py"
 FN = "collect_core_account_state"
 SEG = (6, 26)                        # 基线 update_cache_cycle 的语句下标区间
 
 
 def _baseline_cycle() -> ast.FunctionDef:
-    r = subprocess.run(["git", "show", f"{PRE}:{PRE_MOVE_PATH}"],
+    r = subprocess.run(["git", "show", legacy_rev_path(f"{PRE}:{PRE_MOVE_PATH}")],
                        capture_output=True, text=True, cwd=str(ROOT))
     assert r.returncode == 0, f"基线取不到：{r.stderr[:200]}"
-    t = ast.parse(r.stdout)
+    t = ast.parse(normalize(r.stdout))
     return next(n for n in t.body if isinstance(n, ast.FunctionDef)
                 and n.name == "update_cache_cycle")
 
@@ -131,7 +132,7 @@ class CollectVerbatimTest(unittest.TestCase):
     # ---------- 行为例：这段代码存在的三条理由 ----------
 
     def _run(self, *, bal, pos, orders, errors=None):
-        from r20_backend.dashboard_payload import collect as C
+        from astra_backend.dashboard_payload import collect as C
         src_errors = errors if errors is not None else []
         collected = {}
 

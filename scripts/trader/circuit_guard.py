@@ -119,12 +119,12 @@ def is_circuit_breaker_active(usdt_available: float = None, *, circuit_breaker_f
     # 3. Daily Max Loss Limit Check from lifecycle ledger using Beijing close_time.
     if os.path.exists(ledger_json_file):
         # 审计回马枪④2(2026-09-13)：上轮 A2 的「同步失败所→禁开仓」加固只进了
-        # r20_backend.execution.circuit_breaker 模块版，而活路径走本函数（孪生漂移），
+        # astra_backend.execution.circuit_breaker 模块版，而活路径走本函数（孪生漂移），
         # 等于闸装了死副本。现从模块导入同一实现，双进程单一事实源。
         try:
-            from r20_backend.execution.circuit_breaker import (
+            from astra_backend.execution.circuit_breaker import (
                 _ledger_sync_failed_venues, ledger_daily_closed_pnl)
-            from r20_backend.execution.circuit_breaker import (
+            from astra_backend.execution.circuit_breaker import (
                 _ledger_sync_sidecar_state as _sidecar_state)
             _failed_venues, _sidecar_unknown = _sidecar_state()
             if _sidecar_unknown:

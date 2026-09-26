@@ -84,7 +84,7 @@ def collect_pending_inst_ids(*, venues, venue_mode, broken_venues, venue_registr
     `print` 以保持输出完全一致。传 `None` 表示静默（测试用）。
 
     参数全部注入，不在 import 期绑定任何门面对象 —— 见
-    `r20_backend/README.md` §5：门面会被 `pin_baseline_risk_env()` 原地重载。
+    `astra_backend/README.md` §5：门面会被 `pin_baseline_risk_env()` 原地重载。
     """
     pending_inst_ids: set = set()
     pending_long_count = 0

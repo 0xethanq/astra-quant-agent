@@ -58,14 +58,14 @@ id_rsa
 id_rsa.pub
 token.json
 credentials.json
-.r20-admin-bootstrap
+.astra-admin-bootstrap
 
 # Live Real-Money Ledger & Private DBs (CRITICAL)
 #
 # ⚠️ 运行态数据一律不跟踪 —— 且**永远不要用 `git add -f` 破例**。
 # 2026-09 实测事故：`data/prompt_library.json`（提示词方案库）曾被 -f 强加进来，
 # 于是用户一在后台改提示词就把工作区弄脏；而后台「更新」有一道
-# 「工作区存在未提交修改 ⇒ 409 拒绝更新」的闸（r20_backend/routers/system.py），
+# 「工作区存在未提交修改 ⇒ 409 拒绝更新」的闸（astra_backend/routers/system.py），
 # 用户为了更新只能丢弃改动 —— 丢弃的正是他自己的提示词。
 # 现在提示词库拆成「出厂基线（跟踪）+ 用户改动（本规则忽略）」两个文件。
 data/*.json
@@ -83,8 +83,15 @@ data/*.txt
 data/*.md
 data/.*secret_key
 # 2026-09 新增：上面是按**扩展名**列举的，于是**没有扩展名**的运行时产物会漏网。
-# 实测：`data/.r20_gateway_heartbeat`（worker 每秒重写的存活心跳）就这么被 `git add -A`
+# 实测：`data/.astra_gateway_heartbeat`（worker 每秒重写的存活心跳）就这么被 `git add -A`
 # 收进了提交 —— 机器状态入库，正是本文件反复记过的那类事故。故补一条按前缀的兜底。
+data/.astra_*
+# ⚠️ 过渡期守卫（2026-09-27 r20 → astra 全量改名）：改名**之前**写入的运行态文件
+#    （`.r20_gateway_heartbeat` / `.r20_gateway.lock` / `.r20_watchdog.lock` …）
+#    在数据迁移跑完之前仍躺在磁盘上。它们**没有扩展名**，一旦旧规则被改名带走，
+#    `git add -A` 就会把它们加进仓库 —— 本仓已经因为同类形态（无扩展名文件绕过
+#    扩展名白名单）提交过一次心跳文件。故旧形态必须同时被忽略。
+#    何时可删：确认所有实例都已完成迁移、磁盘上不再有 `.r20_*` 之后。
 data/.r20_*
 data/credentials/
 data/policy_archives/
@@ -101,7 +108,7 @@ backups/
 *.zip
 *.pid
 *_TODO.md
-R20_V600_PREVIEW_TODO.md
+ASTRA_V600_PREVIEW_TODO.md
 .github_device_pending.json
 
 # OS & Editor
@@ -154,7 +161,7 @@ promo_local/
 plan_local/
 
 # 网关运行态数据库（本地运行产物，永不入库）
-data/r20_gateway.sqlite3*
+data/astra_gateway.sqlite3*
 data/*.sqlite3
 
 # 崩溃转储：本机 core_pattern=core + ulimit -c unlimited ⇒ 任何崩溃都会在仓库根丢一个
@@ -167,5 +174,5 @@ data/*.sqlite3
 /core
 /core.[0-9]*
 
-# 观测栈的令牌文件（内容 = R20_ADMIN_TOKEN）：绝不入库，只走文件挂载
+# 观测栈的令牌文件（内容 = ASTRA_ADMIN_TOKEN）：绝不入库，只走文件挂载
 deploy/observability/metrics_token

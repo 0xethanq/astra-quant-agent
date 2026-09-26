@@ -202,7 +202,7 @@ class AllowedInstIdsTests(_Sandbox, unittest.TestCase):
 
     def test_the_sqlite_history_is_unioned_in(self):
         import sqlite3
-        db = self.root / "r20_quant.db"
+        db = self.root / "astra_quant.db"
         con = sqlite3.connect(str(db))
         con.execute("CREATE TABLE trades (inst TEXT)")
         con.execute("INSERT INTO trades VALUES ('SOLDCOIN')")
@@ -215,7 +215,7 @@ class AllowedInstIdsTests(_Sandbox, unittest.TestCase):
 
     def test_a_corrupt_sqlite_database_is_swallowed(self):
         # ★ 第 170/171 行
-        (self.root / "r20_quant.db").write_text("not a database", encoding="utf-8")
+        (self.root / "astra_quant.db").write_text("not a database", encoding="utf-8")
         self.assertEqual(sfl._sqlite_traded_names(), set())
 
 
@@ -303,7 +303,7 @@ class ResolveTradeLeverageTests(unittest.TestCase):
     def test_the_risk_constant_is_the_last_resort(self):
         # ★ 第 262–264 行
         with patch.dict(sys.modules, {"scripts.instrument_pool": None}), \
-             patch.dict(os.environ, {"R20_MIN_LEVERAGE": "4"}):
+             patch.dict(os.environ, {"ASTRA_MIN_LEVERAGE": "4"}):
             self.assertEqual(sfl._resolve_trade_leverage("ZZZUSDT", {}), 4)
 
     def test_a_broken_risk_constant_falls_back_to_three(self):
@@ -311,7 +311,7 @@ class ResolveTradeLeverageTests(unittest.TestCase):
         with patch.dict(sys.modules, {"scripts.instrument_pool": None,
                                       "scripts.risk_constants": None}), \
              patch.dict(os.environ, {}, clear=False):
-            os.environ.pop("R20_MIN_LEVERAGE", None)
+            os.environ.pop("ASTRA_MIN_LEVERAGE", None)
             with patch.object(sfl.os, "getenv", return_value=""):
                 self.assertEqual(sfl._resolve_trade_leverage("ZZZUSDT", {}), 3)
 
@@ -375,9 +375,9 @@ class OtherVenueLivePositionsTests(unittest.TestCase):
             if isinstance(got, Exception):
                 raise got
             return got
-        mods = {} if import_ok else {"r20_backend.exchanges": None}
+        mods = {} if import_ok else {"astra_backend.exchanges": None}
         with patch.dict(sys.modules, mods), \
-             patch("r20_backend.exchanges.get_adapter", side_effect=_get_adapter):
+             patch("astra_backend.exchanges.get_adapter", side_effect=_get_adapter):
             return sfl._other_venue_live_positions("demo")
 
     def test_an_unimportable_exchanges_package_yields_nothing(self):
@@ -628,9 +628,9 @@ class _FakeSigned:
 
 class FetchBinanceClosedTradesTests(unittest.TestCase):
     def _run(self, adapter, credentials=("key", "secret"), data_dir=None):
-        with patch("r20_backend.exchanges.get_adapter", return_value=adapter), \
-             patch("r20_backend.exchanges.venue_credentials", return_value=credentials), \
-             patch.object(sfl, "DATA_DIR", data_dir or "/nonexistent-r20-tmp"):
+        with patch("astra_backend.exchanges.get_adapter", return_value=adapter), \
+             patch("astra_backend.exchanges.venue_credentials", return_value=credentials), \
+             patch.object(sfl, "DATA_DIR", data_dir or "/nonexistent-astra-tmp"):
             return sfl.fetch_binance_closed_trades("demo", tz_bj=TZ_BJ)
 
     def test_missing_private_credentials_skip_safely(self):
@@ -729,9 +729,9 @@ class FetchBinanceClosedTradesTests(unittest.TestCase):
 
 class FetchGateClosedTradesTests(unittest.TestCase):
     def _run(self, adapter, credentials=("key", "secret"), data_dir=None):
-        with patch("r20_backend.exchanges.get_adapter", return_value=adapter), \
-             patch("r20_backend.exchanges.venue_credentials", return_value=credentials), \
-             patch.object(sfl, "DATA_DIR", data_dir or "/nonexistent-r20-tmp"):
+        with patch("astra_backend.exchanges.get_adapter", return_value=adapter), \
+             patch("astra_backend.exchanges.venue_credentials", return_value=credentials), \
+             patch.object(sfl, "DATA_DIR", data_dir or "/nonexistent-astra-tmp"):
             return sfl.fetch_gate_closed_trades("sandbox", tz_bj=TZ_BJ)
 
     def test_missing_private_credentials_skip_safely(self):
@@ -769,9 +769,9 @@ class FetchGateClosedTradesTests(unittest.TestCase):
                                                      "pnl": "1", "time": 1}],
             "/api/v4/futures/usdt/positions": [],
         })
-        with patch("r20_backend.exchanges.get_adapter", return_value=ad), \
-             patch("r20_backend.exchanges.venue_credentials", return_value=("k", "s")), \
-             patch.object(sfl, "DATA_DIR", "/nonexistent-r20-tmp"):
+        with patch("astra_backend.exchanges.get_adapter", return_value=ad), \
+             patch("astra_backend.exchanges.venue_credentials", return_value=("k", "s")), \
+             patch.object(sfl, "DATA_DIR", "/nonexistent-astra-tmp"):
             out = sfl.fetch_gate_closed_trades("live", tz_bj=TZ_BJ)
         self.assertEqual((out[0]["account_mode"], out[0]["environment"]), ("LIVE", "live"))
 
@@ -859,8 +859,8 @@ class CalculusSnapshotAttachmentTests(unittest.TestCase):
             "/fapi/v1/userTrades": [{"id": "T1", "side": "SELL", "price": "100",
                                      "qty": "1", "commission": "0"}],
         })
-        with patch("r20_backend.exchanges.get_adapter", return_value=ad), \
-             patch("r20_backend.exchanges.venue_credentials", return_value=("k", "s")), \
+        with patch("astra_backend.exchanges.get_adapter", return_value=ad), \
+             patch("astra_backend.exchanges.venue_credentials", return_value=("k", "s")), \
              patch.object(sfl, "DATA_DIR", str(self.root)):
             out = sfl.fetch_binance_closed_trades("demo", tz_bj=TZ_BJ)
         self.assertIsNotNone(out[0]["signal_snapshot"])
@@ -876,8 +876,8 @@ class CalculusSnapshotAttachmentTests(unittest.TestCase):
             "/fapi/v1/userTrades": [{"id": "T1", "side": "SELL", "price": "100",
                                      "qty": "1", "commission": "0"}],
         })
-        with patch("r20_backend.exchanges.get_adapter", return_value=ad), \
-             patch("r20_backend.exchanges.venue_credentials", return_value=("k", "s")), \
+        with patch("astra_backend.exchanges.get_adapter", return_value=ad), \
+             patch("astra_backend.exchanges.venue_credentials", return_value=("k", "s")), \
              patch.object(sfl, "DATA_DIR", str(self.root)), \
              patch("scripts.trader.signal_snapshot.build_signal_snapshot",
                    side_effect=RuntimeError("boom")):
@@ -894,8 +894,8 @@ class CalculusSnapshotAttachmentTests(unittest.TestCase):
             "/fapi/v2/positionRisk": [],
             "/fapi/v1/userTrades": [],
         })
-        with patch("r20_backend.exchanges.get_adapter", return_value=ad), \
-             patch("r20_backend.exchanges.venue_credentials", return_value=("k", "s")), \
+        with patch("astra_backend.exchanges.get_adapter", return_value=ad), \
+             patch("astra_backend.exchanges.venue_credentials", return_value=("k", "s")), \
              patch.object(sfl, "DATA_DIR", str(self.root)):
             out = sfl.fetch_binance_closed_trades("demo", tz_bj=TZ_BJ)
         self.assertIsNone(out[0]["signal_snapshot"])
@@ -910,8 +910,8 @@ class CalculusSnapshotAttachmentTests(unittest.TestCase):
                                                      "accum_size": "1"}],
             "/api/v4/futures/usdt/positions": [],
         })
-        with patch("r20_backend.exchanges.get_adapter", return_value=ad), \
-             patch("r20_backend.exchanges.venue_credentials", return_value=("k", "s")), \
+        with patch("astra_backend.exchanges.get_adapter", return_value=ad), \
+             patch("astra_backend.exchanges.venue_credentials", return_value=("k", "s")), \
              patch.object(sfl, "DATA_DIR", str(self.root)):
             out = sfl.fetch_gate_closed_trades("sandbox", tz_bj=TZ_BJ)
         self.assertIsNotNone(out[0]["signal_snapshot"])
@@ -927,8 +927,8 @@ class CalculusSnapshotAttachmentTests(unittest.TestCase):
                                                      "accum_size": "1"}],
             "/api/v4/futures/usdt/positions": [],
         })
-        with patch("r20_backend.exchanges.get_adapter", return_value=ad), \
-             patch("r20_backend.exchanges.venue_credentials", return_value=("k", "s")), \
+        with patch("astra_backend.exchanges.get_adapter", return_value=ad), \
+             patch("astra_backend.exchanges.venue_credentials", return_value=("k", "s")), \
              patch.object(sfl, "DATA_DIR", str(self.root)), \
              patch("scripts.trader.signal_snapshot.build_signal_snapshot",
                    side_effect=RuntimeError("boom")):
@@ -936,8 +936,8 @@ class CalculusSnapshotAttachmentTests(unittest.TestCase):
         self.assertIsNone(out[0]["signal_snapshot"])
 
     def test_fetch_failures_are_marked_failed_on_the_sidecar_status(self):
-        with patch("r20_backend.exchanges.get_adapter", side_effect=RuntimeError("no net")), \
-             patch("r20_backend.exchanges.venue_credentials", return_value=("k", "s")), \
+        with patch("astra_backend.exchanges.get_adapter", side_effect=RuntimeError("no net")), \
+             patch("astra_backend.exchanges.venue_credentials", return_value=("k", "s")), \
              patch.object(sfl, "_FETCH_STATUS", {}):
             self.assertEqual(sfl.fetch_binance_closed_trades("demo", tz_bj=TZ_BJ), [])
             self.assertEqual(sfl._FETCH_STATUS["binance"]["status"], "failed")
@@ -975,10 +975,10 @@ class BuildLifecycleReadTests(_Sandbox, unittest.TestCase):
                          [{"id": "keep"}], "fail-closed：既有台账保持不动")
 
     def test_unconfigured_okx_allows_alt_only_sync_when_flag_enabled(self):
-        """当开启 R20_ALLOW_ALT_ONLY_SYNC 且外所凭证就绪时，允许未配置 OKX 也能同步外所台账。"""
+        """当开启 ASTRA_ALLOW_ALT_ONLY_SYNC 且外所凭证就绪时，允许未配置 OKX 也能同步外所台账。"""
         self.ledger.write_text('[{"id": "keep"}]', encoding="utf-8")
-        with patch.dict(os.environ, {"R20_ALLOW_ALT_ONLY_SYNC": "1"}), \
-             patch("r20_backend.exchanges.venue_credentials", lambda v, e: ("key", "sec")):
+        with patch.dict(os.environ, {"ASTRA_ALLOW_ALT_ONLY_SYNC": "1"}), \
+             patch("astra_backend.exchanges.venue_credentials", lambda v, e: ("key", "sec")):
             trades = self._build(extra=[
                 patch.object(sfl.okx_runtime, "current_environment", lambda: self._env(configured=False)),
                 patch.object(sfl, "fetch_binance_closed_trades", lambda *a, **k: [{"id": "bn1", "status": "closed"}])
@@ -989,8 +989,8 @@ class BuildLifecycleReadTests(_Sandbox, unittest.TestCase):
     def test_unconfigured_okx_allows_alt_only_sync_when_preferred_alt(self):
         """当选所路由 preferred_venue 明确指定外所且凭证就绪时，自动放行外所台账同步。"""
         self.ledger.write_text('[{"id": "keep"}]', encoding="utf-8")
-        with patch("r20_backend.exchanges.routing_policy.load_preferred_venue", lambda: "binance"), \
-             patch("r20_backend.exchanges.venue_credentials", lambda v, e: ("key", "sec")):
+        with patch("astra_backend.exchanges.routing_policy.load_preferred_venue", lambda: "binance"), \
+             patch("astra_backend.exchanges.venue_credentials", lambda v, e: ("key", "sec")):
             trades = self._build(extra=[
                 patch.object(sfl.okx_runtime, "current_environment", lambda: self._env(configured=False)),
                 patch.object(sfl, "fetch_binance_closed_trades", lambda *a, **k: [{"id": "bn2", "status": "closed"}])

@@ -29,7 +29,7 @@ import unittest
 from decimal import Decimal
 from unittest import mock
 
-from r20_backend import okx_trade_service as OT
+from astra_backend import okx_trade_service as OT
 
 
 def _env(mode="demo", identity="demo-id", configured=True):
@@ -316,7 +316,7 @@ class FastCloseTests(_Base):
         self.assertEqual(payload["mgnMode"], "isolated")
         self.assertEqual(payload["posSide"], "long")
         self.assertTrue(payload["autoCxl"])
-        self.assertTrue(payload["clOrdId"].startswith("r20close"))
+        self.assertTrue(payload["clOrdId"].startswith("astraclose"))
         # ⚠️ tag 不在此处断言：本用例把 `okx_rest.close_position` 整个换成替身，
         # 而 tag 正是**由那个函数内部**统一挂上的（替身自然看不到）。
         # 「应急平仓的 HTTP 体真的带 tag」由 tests/venues/test_okx_private_channel_unified.py

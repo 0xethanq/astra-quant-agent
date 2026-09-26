@@ -18,7 +18,7 @@
 
 ## 判据
 
-在 `scripts/`、`r20_backend/` 里，对**按所分流的能力**（至少一所有、至少一所无）的调用，
+在 `scripts/`、`astra_backend/` 里，对**按所分流的能力**（至少一所有、至少一所无）的调用，
 必须能在其所在函数里找到下列**任一**守卫：
 
 1. `hasattr(同一接收者, "方法")` / `getattr(同一接收者, "方法", …)` —— 能力探针；
@@ -41,7 +41,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-SCAN_DIRS = ("scripts", "r20_backend", "r20_gateway", "plugins")
+SCAN_DIRS = ("scripts", "astra_backend", "astra_gateway", "plugins")
 VENUES = ("okx", "binance", "gate")
 VENUE_WORDS = set(VENUES)
 #: 形如 `_v` / `venue` / `_gv` 的"场所名变量"（用于结构化识别按所分流）
@@ -51,7 +51,7 @@ ALLOWLIST: dict[tuple[str, str, int], str] = {}
 
 
 def adapter_classes():
-    from r20_backend.exchanges import get_adapter
+    from astra_backend.exchanges import get_adapter
     return {v: type(get_adapter(v, environment="demo")) for v in VENUES}
 
 

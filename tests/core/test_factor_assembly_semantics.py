@@ -19,7 +19,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from r20_backend.dashboard_payload import factors as F
+from astra_backend.dashboard_payload import factors as F
 
 
 class AssemblySemanticsTest(unittest.TestCase):

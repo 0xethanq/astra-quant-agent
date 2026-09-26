@@ -19,7 +19,7 @@ import importlib
 import unittest
 from unittest.mock import MagicMock, patch
 
-from r20_backend.council.debate import _render_seat_prompt
+from astra_backend.council.debate import _render_seat_prompt
 
 TPL = "宏观:{{macro_4h}} | 未知:{{definitely_unknown_xyz}}"
 

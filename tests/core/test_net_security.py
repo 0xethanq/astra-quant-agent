@@ -27,7 +27,7 @@ import unittest
 import urllib.error
 from unittest import mock
 
-from r20_backend import net_security as NS
+from astra_backend import net_security as NS
 
 
 def _resolve(*addresses):

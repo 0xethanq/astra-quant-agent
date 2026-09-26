@@ -1,5 +1,5 @@
 /* =========================================================================
-   R20 Design Tokens · DeepSeek Harness 开发者工作台视觉基座
+   ASTRA Design Tokens · DeepSeek Harness 开发者工作台视觉基座
    -------------------------------------------------------------------------
    来源：https://www.deepseek.com/harness/ 的 --ds-* 令牌体系，逐条对照抄录。
 
@@ -8,7 +8,7 @@
    结构：
      1. 与主题无关的令牌（字体 / 间距 / 圆角 / 层级 / 动效）
      2. --ds-* 规范令牌（暗色 :root 为默认，浅色 :root[data-theme=light]）
-     3. --r20-* 自有扩展（DSH 无金融语义色与数据密集尺度）
+     3. --astra-* 自有扩展（DSH 无金融语义色与数据密集尺度）
      4. 兼容别名层（旧变量名 → 令牌，页面零改动即可继承新外观）
 
    与 DSH 的两处**有意偏离**（均为数据密集工作台的必然取舍，已于 5/6 节标注）：
@@ -236,9 +236,9 @@
 
   --ds-shadow-card: 0 1px 0 0 rgba(255, 255, 255, 0.08) inset, 0 12px 32px -4px rgba(0, 0, 0, 0.55);
   /* 浮层阴影：DSH 暗色未定义，此处为可用性必需扩展（下拉/弹窗需要脱离层叠感） */
-  --r20-shadow-float: 0 1px 0 0 rgba(255, 255, 255, 0.1) inset, 0 20px 48px -8px rgba(0, 0, 0, 0.75);
-  --r20-shadow-dialog: 0 1px 0 0 rgba(255, 255, 255, 0.12) inset, 0 24px 64px -12px rgba(0, 0, 0, 0.85);
-  --r20-overlay-scrim: rgba(0, 0, 0, 0.8);
+  --astra-shadow-float: 0 1px 0 0 rgba(255, 255, 255, 0.1) inset, 0 20px 48px -8px rgba(0, 0, 0, 0.75);
+  --astra-shadow-dialog: 0 1px 0 0 rgba(255, 255, 255, 0.12) inset, 0 24px 64px -12px rgba(0, 0, 0, 0.85);
+  --astra-overlay-scrim: rgba(0, 0, 0, 0.8);
 }
 
 /* =========================================================================
@@ -291,47 +291,47 @@
   --ds-btn-ghost-hover-border: rgba(0, 0, 0, 0.12);
 
   --ds-shadow-card: 0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 12px -2px rgba(0, 0, 0, 0.04);
-  --r20-shadow-float: 0 12px 32px -6px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.06);
-  --r20-shadow-dialog: 0 20px 48px -10px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.08);
-  --r20-overlay-scrim: rgba(0, 0, 0, 0.35);
+  --astra-shadow-float: 0 12px 32px -6px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.06);
+  --astra-shadow-dialog: 0 20px 48px -10px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.08);
+  --astra-overlay-scrim: rgba(0, 0, 0, 0.35);
 }
 
 /* =========================================================================
-   4 · R20 自有扩展 · 语义色
-   —— DSH 无金融语义色，此为主要色彩扩展，独立 --r20-* 命名空间
+   4 · ASTRA 自有扩展 · 语义色
+   —— DSH 无金融语义色，此为主要色彩扩展，独立 --astra-* 命名空间
       色相向 DSH 品牌蓝靠拢：低饱和、可长时间注视
    ========================================================================= */
 :root,
 :root[data-theme='dark'] {
-  --r20-up: #48c78e;
-  --r20-up-bg: rgba(72, 199, 142, 0.13);
-  --r20-up-line: rgba(72, 199, 142, 0.3);
-  --r20-down: #f07178;
-  --r20-down-bg: rgba(240, 113, 120, 0.12);
-  --r20-down-line: rgba(240, 113, 120, 0.3);
-  --r20-warn: #e0b155;
-  --r20-warn-bg: rgba(224, 177, 85, 0.12);
-  --r20-warn-line: rgba(224, 177, 85, 0.3);
-  --r20-brand-bg: rgba(59, 130, 246, 0.12);
-  --r20-brand-line: rgba(59, 130, 246, 0.28);
+  --astra-up: #48c78e;
+  --astra-up-bg: rgba(72, 199, 142, 0.13);
+  --astra-up-line: rgba(72, 199, 142, 0.3);
+  --astra-down: #f07178;
+  --astra-down-bg: rgba(240, 113, 120, 0.12);
+  --astra-down-line: rgba(240, 113, 120, 0.3);
+  --astra-warn: #e0b155;
+  --astra-warn-bg: rgba(224, 177, 85, 0.12);
+  --astra-warn-line: rgba(224, 177, 85, 0.3);
+  --astra-brand-bg: rgba(59, 130, 246, 0.12);
+  --astra-brand-line: rgba(59, 130, 246, 0.28);
 }
 :root[data-theme='light'] {
-  --r20-up: #1a7f5a;
-  --r20-up-bg: rgba(26, 127, 90, 0.1);
-  --r20-up-line: rgba(26, 127, 90, 0.28);
-  --r20-down: #c0392b;
-  --r20-down-bg: rgba(192, 57, 43, 0.09);
-  --r20-down-line: rgba(192, 57, 43, 0.26);
-  --r20-warn: #946a16;
-  --r20-warn-bg: rgba(148, 106, 22, 0.11);
-  --r20-warn-line: rgba(148, 106, 22, 0.28);
-  --r20-brand-bg: rgba(77, 107, 254, 0.09);
-  --r20-brand-line: rgba(77, 107, 254, 0.26);
+  --astra-up: #1a7f5a;
+  --astra-up-bg: rgba(26, 127, 90, 0.1);
+  --astra-up-line: rgba(26, 127, 90, 0.28);
+  --astra-down: #c0392b;
+  --astra-down-bg: rgba(192, 57, 43, 0.09);
+  --astra-down-line: rgba(192, 57, 43, 0.26);
+  --astra-warn: #946a16;
+  --astra-warn-bg: rgba(148, 106, 22, 0.11);
+  --astra-warn-line: rgba(148, 106, 22, 0.28);
+  --astra-brand-bg: rgba(77, 107, 254, 0.09);
+  --astra-brand-line: rgba(77, 107, 254, 0.26);
 }
 
 /* =========================================================================
    —— 图表色板（指标线 / 图例色点 / 十字光标）——
-   归属「分类标识色」，不承载涨跌语义，故与 --r20-* 分开命名。
+   归属「分类标识色」，不承载涨跌语义，故与 --astra-* 分开命名。
 
    ⚠️ 使用方式有硬约束：klinecharts 把指标线与覆盖物画在 <canvas> 上，
    **canvas 不解析 CSS var()**。因此：
@@ -357,7 +357,7 @@
   --chart-obv: #eab308;
   --chart-wr: #6366f1;
 }
-/* 浅色主题：同色相压深，保证白底上仍有足够对比度（与 --r20-up/down 的取舍一致） */
+/* 浅色主题：同色相压深，保证白底上仍有足够对比度（与 --astra-up/down 的取舍一致） */
 :root[data-theme='light'] {
   --chart-grid: rgba(0, 0, 0, 0.05);
   --chart-grid-active: #cbd5e1;
@@ -381,34 +381,34 @@
   /* 批 105：全站回归审计抓到 /news 的「做多」小标签只有 **4.40:1**（AA 要 4.5）。
      根因是色觉辅助的蓝 #6799fe 作为 11px 文字**落在自己的 13% 淡色底上**时不够亮：
      合成底色 rgb(42,53,78)。提亮到 #7aa6ff 后为 4.96:1（淡色底同步换成新色）。 */
-  --r20-up: #7aa6ff;
-  --r20-up-bg: rgba(122, 166, 255, 0.13);
-  --r20-up-line: rgba(122, 166, 255, 0.3);
-  --r20-down: #e8923f;
-  --r20-down-bg: rgba(232, 146, 63, 0.12);
-  --r20-down-line: rgba(232, 146, 63, 0.3);
+  --astra-up: #7aa6ff;
+  --astra-up-bg: rgba(122, 166, 255, 0.13);
+  --astra-up-line: rgba(122, 166, 255, 0.3);
+  --astra-down: #e8923f;
+  --astra-down-bg: rgba(232, 146, 63, 0.12);
+  --astra-down-line: rgba(232, 146, 63, 0.3);
   /* 批 103：开了色觉辅助后，「跌」从红粉挪到橙色 #e8923f，
      而「警告」仍是琥珀 #e0b155 —— 两者感知距离从 **ΔE 54.7 掉到 20.0**，
      也就是**为了让人分得清才打开的开关，反而让「跌」和「警告」糊成一色**。
      把警告改成更亮、更偏黄的金色：与「跌」拉开到 ΔE 31.1，与「涨」112，
      对卡片底色 10.9:1（当文字用也远超 4.5:1）。色相仍在金色系，语义不变。 */
-  --r20-warn: #f2d16b;
-  --r20-warn-bg: rgba(242, 209, 107, 0.12);
-  --r20-warn-line: rgba(242, 209, 107, 0.3);
+  --astra-warn: #f2d16b;
+  --astra-warn-bg: rgba(242, 209, 107, 0.12);
+  --astra-warn-line: rgba(242, 209, 107, 0.3);
 }
 :root[data-cvd='true'][data-theme='light'] {
-  --r20-up: #4d6bfe;
-  --r20-up-bg: rgba(77, 107, 254, 0.1);
-  --r20-up-line: rgba(77, 107, 254, 0.28);
-  --r20-down: #b45309;
-  --r20-down-bg: rgba(180, 83, 9, 0.1);
-  --r20-down-line: rgba(180, 83, 9, 0.28);
+  --astra-up: #4d6bfe;
+  --astra-up-bg: rgba(77, 107, 254, 0.1);
+  --astra-up-line: rgba(77, 107, 254, 0.28);
+  --astra-down: #b45309;
+  --astra-down-bg: rgba(180, 83, 9, 0.1);
+  --astra-down-line: rgba(180, 83, 9, 0.28);
   /* 同暗色：浅色+CVD 的「警告」原本**没有**跟着换（半覆盖），
      沿用普通浅色的 #946a16 与 CVD 跌色 #b45309 只差 ΔE 27.0。
      这里显式钉一个更偏黄的金褐 #8a6d1a：与跌 ΔE 33.5、与涨 128、对白底 4.90:1。 */
-  --r20-warn: #8a6d1a;
-  --r20-warn-bg: rgba(138, 109, 26, 0.11);
-  --r20-warn-line: rgba(138, 109, 26, 0.28);
+  --astra-warn: #8a6d1a;
+  --astra-warn-bg: rgba(138, 109, 26, 0.11);
+  --astra-warn-line: rgba(138, 109, 26, 0.28);
 }
 
 /* =========================================================================
@@ -449,7 +449,7 @@
 
 /* =========================================================================
    6 · 兼容别名层 · 旧变量名 → 令牌
-   —— 42 个既有消费点零改动继承新外观；逐页重构时逐步迁往 --ds-* / --r20-*
+   —— 42 个既有消费点零改动继承新外观；逐页重构时逐步迁往 --ds-* / --astra-*
    ========================================================================= */
 :root {
   /* 画布与分层：动态映射到 --ds-* 规范令牌，自适应浅色与深色主题 */
@@ -461,7 +461,7 @@
   --surface-3: var(--ds-color-bg-surface-3);
   --surface-head: var(--ds-color-bg-surface-inset);
   --surface-input: var(--ds-color-bg-input);
-  --overlay-scrim: var(--r20-overlay-scrim);
+  --overlay-scrim: var(--astra-overlay-scrim);
 
   /* 描边 */
   --line-1: var(--ds-color-border-default);
@@ -478,36 +478,36 @@
   --accent: var(--ds-btn-primary-bg);
   --accent-ink: var(--ds-btn-primary-text);
   --accent-hover: var(--ds-btn-primary-hover-bg);
-  --accent-bg: var(--r20-brand-bg);
-  --accent-line: var(--r20-brand-line);
+  --accent-bg: var(--astra-brand-bg);
+  --accent-line: var(--astra-brand-line);
   --brand: var(--ds-color-brand);
-  --brand-bg: var(--r20-brand-bg);
+  --brand-bg: var(--astra-brand-bg);
 
   /* 语义 */
-  --up: var(--r20-up);
-  --up-bg: var(--r20-up-bg);
-  --up-line: var(--r20-up-line);
-  --down: var(--r20-down);
-  --down-bg: var(--r20-down-bg);
-  --down-line: var(--r20-down-line);
-  --warn: var(--r20-warn);
-  --warn-bg: var(--r20-warn-bg);
-  --warn-line: var(--r20-warn-line);
+  --up: var(--astra-up);
+  --up-bg: var(--astra-up-bg);
+  --up-line: var(--astra-up-line);
+  --down: var(--astra-down);
+  --down-bg: var(--astra-down-bg);
+  --down-line: var(--astra-down-line);
+  --warn: var(--astra-warn);
+  --warn-bg: var(--astra-warn-bg);
+  --warn-line: var(--astra-warn-line);
   --info: var(--ds-color-brand);
-  --info-bg: var(--r20-brand-bg);
-  --info-line: var(--r20-brand-line);
+  --info-bg: var(--astra-brand-bg);
+  --info-line: var(--astra-brand-line);
 
   /* 图表（库消费，保持序列语义） */
-  --chart-1: var(--r20-up);
-  --chart-2: var(--r20-down);
-  --chart-3: var(--r20-warn);
+  --chart-1: var(--astra-up);
+  --chart-2: var(--astra-down);
+  --chart-3: var(--astra-warn);
   --chart-4: var(--ds-color-brand);
   --chart-5: #a78bfa;
 
   /* 阴影与焦点 */
   --shadow-card: var(--ds-shadow-card);
-  --shadow-float: var(--r20-shadow-float);
-  --shadow-dialog: var(--r20-shadow-dialog);
+  --shadow-float: var(--astra-shadow-float);
+  --shadow-dialog: var(--astra-shadow-dialog);
   --ring-accent: 0 0 0 2px var(--ds-color-brand);
 
   /* 字体别名 */

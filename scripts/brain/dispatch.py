@@ -72,7 +72,7 @@ def dispatch_llm_and_persist_decisions(*,
         # Transparent check: is Multi-Agent Council enabled?
         council_enabled = False
         try:
-            from r20_backend.council_manager import load_council_config, execute_council_debate
+            from astra_backend.council_manager import load_council_config, execute_council_debate
             c_cfg = load_council_config()
             council_enabled = bool(c_cfg.get("enabled"))
         except Exception:
@@ -187,8 +187,8 @@ def dispatch_llm_and_persist_decisions(*,
         )
 
         # 审计③(2026-09-13)：整档覆盖与 trader 的 venue-decision 读-改-写互斥
-        # （r20_backend.file_locks，同锁文件路径即同临界区），防互相回退。
-        from r20_backend.file_locks import file_lock
+        # （astra_backend.file_locks，同锁文件路径即同临界区），防互相回退。
+        from astra_backend.file_locks import file_lock
         with file_lock(AI_DECISION_CACHE_FILE):
             atomic_write_json(AI_DECISION_CACHE_FILE, standard_cache)
         atomic_write_json(AI_POSITION_MANAGEMENT_FILE, {

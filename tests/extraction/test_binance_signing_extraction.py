@@ -1,7 +1,7 @@
 r"""Binance 签名串构建抽取对拍门（第一百一十五刀）。
 
-`r20_backend/exchanges/binance.py::BinanceAdapter.signed_request`（48 行）里 7 行 →
-`r20_backend/exchanges/binance_signing.py::build_signed_query`（2 入参 / 1 输出）。
+`astra_backend/exchanges/binance.py::BinanceAdapter.signed_request`（48 行）里 7 行 →
+`astra_backend/exchanges/binance_signing.py::build_signed_query`（2 入参 / 1 输出）。
 
 ## 本门钉的是**签名规则**（安全相关）
 
@@ -28,20 +28,21 @@ import subprocess
 import sys
 import unittest
 from pathlib import Path
+from tests.extraction.rename_baseline import legacy_rev_path, normalize
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 PRE = "a40f342"
-FACADE = ROOT / "r20_backend" / "exchanges" / "binance.py"
-MOD = ROOT / "r20_backend" / "exchanges" / "binance_signing.py"
+FACADE = ROOT / "astra_backend" / "exchanges" / "binance.py"
+MOD = ROOT / "astra_backend" / "exchanges" / "binance_signing.py"
 
 
 def _baseline_method() -> ast.FunctionDef:
-    r = subprocess.run(["git", "show", f"{PRE}:r20_backend/exchanges/binance.py"],
+    r = subprocess.run(["git", "show", legacy_rev_path(f"{PRE}:astra_backend/exchanges/binance.py")],
                        capture_output=True, text=True, cwd=str(ROOT))
     assert r.returncode == 0, f"基线取不到：{r.stderr[:200]}"
-    cls = next(n for n in ast.parse(r.stdout).body
+    cls = next(n for n in ast.parse(normalize(r.stdout)).body
                if isinstance(n, ast.ClassDef) and n.name == "BinanceAdapter")
     return next(n for n in cls.body
                 if isinstance(n, ast.FunctionDef) and n.name == "signed_request")
@@ -134,7 +135,7 @@ class BinanceSigningExtractionTest(unittest.TestCase):
     # ---------- 行为例 ----------
 
     def _build(self, params, secret="sk-test"):
-        from r20_backend.exchanges.binance_signing import build_signed_query
+        from astra_backend.exchanges.binance_signing import build_signed_query
         return build_signed_query(params=params, secret=secret)
 
     def test_contains_timestamp_and_recv_window(self):

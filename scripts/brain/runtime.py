@@ -29,7 +29,7 @@ def capture_policy_snapshot(*,
             policy_snapshot = generate_policy_snapshot()
         except Exception:
             try:
-                from r20_backend.policy_snapshot import generate_policy_snapshot
+                from astra_backend.policy_snapshot import generate_policy_snapshot
                 policy_snapshot = generate_policy_snapshot()
             except Exception as exc:
                 print(f"[AI Brain Batch] Policy snapshot warning: {exc}")
@@ -54,7 +54,7 @@ def resolve_llm_runtime(*,
     api_format = "openai_chat"
     thinking_timeout = float(os.environ.get("LLM_THINKING_TIMEOUT", os.environ.get("LLM_TIMEOUT_SECONDS", 120.0)))
     try:
-        from r20_backend.llm_manager import get_active_llm_runtime, execute_llm_request
+        from astra_backend.llm_manager import get_active_llm_runtime, execute_llm_request
         active_llm = get_active_llm_runtime()
         model_name = os.environ.get("LLM_MODEL") or active_llm.get("model") or model_name
         effort = os.environ.get("LLM_REASONING_EFFORT") or active_llm.get("reasoning_effort") or effort

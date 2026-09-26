@@ -52,7 +52,7 @@ def _same(a, b) -> bool:
 
 def _load_wrapper(path: Path, name: str):
     """只加载该薄壳函数本体，并**注入**它依赖的单一事实源（隔离其余模块副作用）。"""
-    from r20_backend.math_utils import safe_float as shared
+    from astra_backend.math_utils import safe_float as shared
     src = path.read_text(encoding="utf-8")
     tree = ast.parse(src)
     fn = next(n for n in ast.walk(tree)
@@ -77,10 +77,10 @@ class SafeFloatSingleSourceTest(unittest.TestCase):
                 call = body[0].value
                 self.assertIsInstance(call, ast.Call)
                 self.assertEqual(getattr(call.func, "id", ""), "_shared_safe_float",
-                                 "薄壳必须转调 r20_backend.math_utils.safe_float")
+                                 "薄壳必须转调 astra_backend.math_utils.safe_float")
 
     def test_battery_equivalence_across_entrypoints(self):
-        from r20_backend.math_utils import safe_float as shared
+        from astra_backend.math_utils import safe_float as shared
         for path, name in ENTRYPOINTS:
             wrapper = _load_wrapper(path, name)
             for value in BATTERY:
@@ -94,7 +94,7 @@ class SafeFloatSingleSourceTest(unittest.TestCase):
                 self.assertEqual(wrapper(float("nan"), -1.0), -1.0)
 
     def test_documented_semantics_of_the_single_source(self):
-        from r20_backend.math_utils import safe_float
+        from astra_backend.math_utils import safe_float
         for bad in (float("nan"), float("inf"), float("-inf"), "nan", "inf", "-inf",
                     "abc", None, "", [1], {"a": 1}):
             with self.subTest(bad=repr(bad)):

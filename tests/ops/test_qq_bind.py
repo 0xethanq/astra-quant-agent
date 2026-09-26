@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-from r20_backend import qq_bind
+from astra_backend import qq_bind
 
 
 def _encrypt_secret(key_b64: str, secret: str) -> str:
@@ -33,7 +33,7 @@ class QqBindTests(unittest.TestCase):
         import os
         import tempfile
         from pathlib import Path
-        from r20_backend import qq_gateway_daemon as d
+        from astra_backend import qq_gateway_daemon as d
 
         with tempfile.TemporaryDirectory() as td:
             with patch.object(d, "LOCK_FILE", Path(td) / "gw.lock"):
@@ -73,7 +73,7 @@ class QqBindTests(unittest.TestCase):
             qq_bind._decrypt_secret(tampered, key)
 
     def test_create_task_builds_official_connect_url(self):
-        with patch("r20_backend.qq_bind._post_qq", return_value={"task_id": "t-123"}) as post:
+        with patch("astra_backend.qq_bind._post_qq", return_value={"task_id": "t-123"}) as post:
             task = qq_bind.create_bind_task()
         self.assertEqual(post.call_args[0][0], "/lite/create_bind_task")
         self.assertEqual(task["task_id"], "t-123")
@@ -83,7 +83,7 @@ class QqBindTests(unittest.TestCase):
         self.assertEqual(len(key), 32)
 
     def test_poll_bound_persists_credentials_without_plaintext_leak(self):
-        with patch("r20_backend.qq_bind._post_qq", return_value={"task_id": "t-9"}):
+        with patch("astra_backend.qq_bind._post_qq", return_value={"task_id": "t-9"}):
             qq_bind.create_bind_task()
         task = qq_bind._TASKS["t-9"]
         encrypted = _encrypt_secret(task.key_b64, "topsecret-value")
@@ -91,8 +91,8 @@ class QqBindTests(unittest.TestCase):
             {"status": 1},
             {"status": 2, "bot_appid": "100456789", "bot_encrypt_secret": encrypted, "user_openid": "OPENID-USER"},
         ])
-        with patch("r20_backend.qq_bind._post_qq", side_effect=lambda path, payload, timeout=12: next(responses)), \
-             patch("r20_backend.qq_bind._persist") as persist:
+        with patch("astra_backend.qq_bind._post_qq", side_effect=lambda path, payload, timeout=12: next(responses)), \
+             patch("astra_backend.qq_bind._persist") as persist:
             first = qq_bind.poll_bind_task("t-9")
             task.last_poll = 0
             second = qq_bind.poll_bind_task("t-9")
@@ -106,16 +106,16 @@ class QqBindTests(unittest.TestCase):
         self.assertNotIn("bot_encrypt_secret", json.dumps(second))
 
     def test_poll_bound_without_openid_transitions_to_awaiting_message(self):
-        with patch("r20_backend.qq_bind._post_qq", return_value={"task_id": "t-await"}):
+        with patch("astra_backend.qq_bind._post_qq", return_value={"task_id": "t-await"}):
             qq_bind.create_bind_task()
         task = qq_bind._TASKS["t-await"]
         encrypted = _encrypt_secret(task.key_b64, "my-secret")
         responses = iter([
             {"status": 2, "bot_appid": "1905549905", "bot_encrypt_secret": encrypted, "user_openid": ""},
         ])
-        with patch("r20_backend.qq_bind._post_qq", side_effect=lambda path, payload, timeout=12: next(responses)), \
-             patch("r20_backend.qq_bind._persist") as persist, \
-             patch("r20_backend.qq_bind.start_openid_capture", return_value={"capture_id": "cap-auto-1"}) as start_cap:
+        with patch("astra_backend.qq_bind._post_qq", side_effect=lambda path, payload, timeout=12: next(responses)), \
+             patch("astra_backend.qq_bind._persist") as persist, \
+             patch("astra_backend.qq_bind.start_openid_capture", return_value={"capture_id": "cap-auto-1"}) as start_cap:
             res = qq_bind.poll_bind_task("t-await")
         self.assertEqual(res["status"], "awaiting_message")
         self.assertEqual(res["capture_id"], "cap-auto-1")
@@ -146,11 +146,11 @@ class QqBindTests(unittest.TestCase):
             self.assertEqual(polled_after["openid"], "USER_OPENID_9999")
 
     def test_poll_expired_task_marks_expired(self):
-        with patch("r20_backend.qq_bind._post_qq", return_value={"task_id": "t-e"}):
+        with patch("astra_backend.qq_bind._post_qq", return_value={"task_id": "t-e"}):
             qq_bind.create_bind_task()
         task = qq_bind._TASKS["t-e"]
         task.created_at -= qq_bind.TASK_TTL_SECONDS + 5
-        with patch("r20_backend.qq_bind._post_qq") as post:
+        with patch("astra_backend.qq_bind._post_qq") as post:
             view = qq_bind.poll_bind_task("t-e")
         self.assertEqual(view["status"], "expired")
         post.assert_not_called()
@@ -160,14 +160,14 @@ class QqBindTests(unittest.TestCase):
             qq_bind.poll_bind_task("missing")
 
     def test_persist_writes_secret_store_and_env_only(self):
-        with patch("r20_gateway.secrets.save_secrets") as save, patch("r20_backend.settings_store.update_env") as env:
+        with patch("astra_gateway.secrets.save_secrets") as save, patch("astra_backend.settings_store.update_env") as env:
             qq_bind._persist("100", "sekret", "OPEN")
-        save.assert_called_once_with({"R20_QQ_CLIENT_SECRET": "sekret", "R20_QQ_OPENID": "OPEN"})
-        env.assert_called_once_with({"R20_QQ_APP_ID": "100", "R20_QQ_OPENID": "OPEN"})
+        save.assert_called_once_with({"ASTRA_QQ_CLIENT_SECRET": "sekret", "ASTRA_QQ_OPENID": "OPEN"})
+        env.assert_called_once_with({"ASTRA_QQ_APP_ID": "100", "ASTRA_QQ_OPENID": "OPEN"})
 
     def test_active_task_cap(self):
         counter = iter(f"task-{i}" for i in range(10))
-        with patch("r20_backend.qq_bind._post_qq", side_effect=lambda path, payload, timeout=12: {"task_id": next(counter)}):
+        with patch("astra_backend.qq_bind._post_qq", side_effect=lambda path, payload, timeout=12: {"task_id": next(counter)}):
             for _ in range(qq_bind.MAX_ACTIVE_TASKS):
                 qq_bind.create_bind_task()
             with self.assertRaises(RuntimeError):

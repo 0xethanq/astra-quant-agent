@@ -21,7 +21,7 @@
  *
  * ## ⚠️ 探针本身也被修了（工具 bug 4，已写进工具文件头）
  *
- * 旧规则只读 `textContent`，会把 `<a><img alt="R20 首页"></a>` 判成无名 ——
+ * 旧规则只读 `textContent`，会把 `<a><img alt="ASTRA 首页"></a>` 判成无名 ——
  * 而 `img[alt]` 是**合法**的名字来源。正确的简化 accname 顺序：
  * `aria-labelledby` → `aria-label` → 后代 `img[alt]` / `svg > title` → 文本。
  * **但 `alt=""` 不算名字**（它就是「别读我」的声明）。

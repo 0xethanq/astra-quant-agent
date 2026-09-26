@@ -28,7 +28,7 @@ export const enAdminAbout = {
   confirmSubtitle: "About AstraQuant: pull the latest main-branch code with fast-forward",
   confirmPrefix: "To prevent mistakes, type the confirmation phrase below",
   confirmSuffix: ":",
-  phrasePlaceholder: "Enter UPDATE R20",
+  phrasePlaceholder: "Enter UPDATE ASTRA",
   cancel: "Cancel",
   updating: "Updating...",
   confirmNow: "Confirm and update now",

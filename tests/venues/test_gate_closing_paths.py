@@ -7,7 +7,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from r20_backend.exchanges.gate import GateAdapter, GateAPIError
+from astra_backend.exchanges.gate import GateAdapter, GateAPIError
 
 
 class _Base(unittest.TestCase):
@@ -75,11 +75,11 @@ class SpecKeysPositionsTest(_Base):
 
     def test_real_keys_returns_the_pair_and_refuses_half_of_it(self):
         """走**真** `_keys`：齐备 ⇒ 返回；缺一半 ⇒ 拒（半份凭证等于没有）。"""
-        from r20_backend.exchanges import ExchangeCapabilityError
-        with patch("r20_backend.exchanges.registry.venue_credentials",
+        from astra_backend.exchanges import ExchangeCapabilityError
+        with patch("astra_backend.exchanges.registry.venue_credentials",
                    return_value=("K", "S")):
             self.assertEqual(GateAdapter._keys(self.ad), ("K", "S"))
-        with patch("r20_backend.exchanges.registry.venue_credentials",
+        with patch("astra_backend.exchanges.registry.venue_credentials",
                    return_value=("K", "")):
             with self.assertRaises(ExchangeCapabilityError):
                 GateAdapter._keys(self.ad)

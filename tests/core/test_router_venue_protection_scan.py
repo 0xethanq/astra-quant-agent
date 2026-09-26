@@ -18,7 +18,7 @@ from unittest.mock import MagicMock, patch
 
 from fastapi import HTTPException
 
-from r20_backend.routers import exchanges as R
+from astra_backend.routers import exchanges as R
 
 VP = "scripts.trader.venue_protection"
 
@@ -35,7 +35,7 @@ class ScanTest(unittest.TestCase):
         p2 = patch("scripts.okx_runtime.current_environment", return_value=_env())
         p2.start()
         self.addCleanup(p2.stop)
-        p3 = patch("r20_backend.close_intent.adapter_environment",
+        p3 = patch("astra_backend.close_intent.adapter_environment",
                    side_effect=lambda v, e: e)
         p3.start()
         self.addCleanup(p3.stop)
@@ -48,7 +48,7 @@ class ScanTest(unittest.TestCase):
         self.addCleanup(p5.stop)
 
     def _run(self, adapters):
-        p = patch("r20_backend.exchanges.get_adapter",
+        p = patch("astra_backend.exchanges.get_adapter",
                   side_effect=lambda v, environment=None: adapters[v])
         p.start()
         self.addCleanup(p.stop)
@@ -95,10 +95,10 @@ class ScanTest(unittest.TestCase):
         **宁可不写，也不写一条自欺的用例。**
         """
         import scripts.ai_factor_trader as aft
-        with patch.object(aft, "R20_VENUE_PROTECTION_WATCHDOG", True, create=True):
+        with patch.object(aft, "ASTRA_VENUE_PROTECTION_WATCHDOG", True, create=True):
             out = self._run({v: MagicMock() for v in ("okx", "gate", "binance")})
         self.assertIs(out["watchdog_enabled"], True)
-        with patch.object(aft, "R20_VENUE_PROTECTION_WATCHDOG", False, create=True):
+        with patch.object(aft, "ASTRA_VENUE_PROTECTION_WATCHDOG", False, create=True):
             out2 = self._run({v: MagicMock() for v in ("okx", "gate", "binance")})
         self.assertIs(out2["watchdog_enabled"], False, "关 与 开 必须可区分")
 
@@ -145,7 +145,7 @@ class ListingStatusTest(unittest.TestCase):
 
     def test_venue_specific_listing_environment_and_payload(self):
         seen = []
-        with patch("r20_backend.exchanges.listing.listing_snapshot",
+        with patch("astra_backend.exchanges.listing.listing_snapshot",
                    side_effect=lambda v, e: (seen.append((v, e)), self._snap())[1]):
             out = R.listing_status(" demo ", None, None)
         self.assertEqual(seen, [("okx", "demo"), ("gate", "sandbox"),
@@ -161,7 +161,7 @@ class ListingStatusTest(unittest.TestCase):
     def test_missing_sample_symbols_default_to_empty_list(self):
         snap = types.SimpleNamespace(ok=False, reason="上游超时", listed_count=0,
                                      source="rest", checked_at=0)
-        with patch("r20_backend.exchanges.listing.listing_snapshot", return_value=snap):
+        with patch("astra_backend.exchanges.listing.listing_snapshot", return_value=snap):
             out = R.listing_status("live", None, None)
         self.assertEqual(out["venues"]["okx"]["sample_symbols"], [],
                          "缺字段不炸，给空表")

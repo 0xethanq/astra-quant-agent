@@ -10,7 +10,7 @@ from tests.config_sandbox import isolate_config
 
 class ConfigSandboxTests(unittest.TestCase):
     def test_bound_aliases_restore_and_temporary_files_are_removed(self):
-        import r20_backend.llm_manager as lm
+        import astra_backend.llm_manager as lm
         original = lm.LLM_CONFIG_FILE
         consumer = types.ModuleType('scripts._sandbox_consumer')
         consumer.CONFIG_PATH = original
@@ -32,9 +32,9 @@ class ConfigSandboxTests(unittest.TestCase):
             self.assertFalse(root.exists())
 
     def test_encrypted_storage_uses_real_temporary_paths(self):
-        import r20_gateway.secrets as secrets
+        import astra_gateway.secrets as secrets
         # The imported function alias still resolves its defining module's paths.
-        from r20_gateway.secrets import save_secrets
+        from astra_gateway.secrets import save_secrets
         root = isolate_config(self)
         self.assertTrue(secrets.KEY_FILE.is_relative_to(root))
         self.assertTrue(secrets.STORE_FILE.is_relative_to(root))
@@ -44,8 +44,8 @@ class ConfigSandboxTests(unittest.TestCase):
         self.assertEqual(secrets.load_secrets()['LLM_API_KEY'], 'fake-sandbox-only')
 
     def test_nested_policy_paths_share_one_sandbox(self):
-        import r20_backend.policy_snapshot as policy
-        import r20_backend.council_manager as council
+        import astra_backend.policy_snapshot as policy
+        import astra_backend.council_manager as council
         import scripts.prompt_library as prompts
         root = isolate_config(self)
         for path in (policy.ARCHIVE_INDEX_FILE, council.COUNCIL_CONFIG_FILE,

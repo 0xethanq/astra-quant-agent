@@ -1,4 +1,4 @@
-"""本地快照与历史读取装配（`r20_backend/dashboard_payload/local_reads.py`）残余分支收口测试 —— 第 359 刀。
+"""本地快照与历史读取装配（`astra_backend/dashboard_payload/local_reads.py`）残余分支收口测试 —— 第 359 刀。
 
 本模块 108 行，负责操盘看板本地快照曲线、复盘情报、长提示词历史收敛与磁盘信息装配：
 - 快照文件损坏自愈（`snapshots_file` 读取/解析异常静默忽略，只追加当前实时快照点）；
@@ -12,12 +12,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from r20_backend.dashboard_payload.local_reads import load_local_reads
+from astra_backend.dashboard_payload.local_reads import load_local_reads
 
 
 class DashboardLocalReadsTailsTests(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(prefix="r20_dashboard_local_reads_tails_")
+        self.tmp = tempfile.TemporaryDirectory(prefix="astra_dashboard_local_reads_tails_")
         self.addCleanup(self.tmp.cleanup)
         self.tmp_path = Path(self.tmp.name)
         self.dummy_file = self.tmp_path / "dummy.json"

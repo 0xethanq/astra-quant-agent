@@ -14,7 +14,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from r20_backend.dashboard_payload import factors as F
+from astra_backend.dashboard_payload import factors as F
 
 LIB = {"BTC-USDT-SWAP": {"score": 8, "smart_money_derivative": "long"}}
 DEC = {"BTC-USDT-SWAP": {"adx_1h": 30, "smart_money": 1, "note": "x"}}

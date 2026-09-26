@@ -192,7 +192,7 @@ class EvolutionFallbackModelTests(unittest.TestCase):
 
     def test_picks_first_non_active_in_config_order(self):
         cfg = self._cfg("qwen3.8-flash", ["gemini-3.8-flash-high", "deepseek-v4-flash-0731", "qwen3.8-flash"])
-        with patch("r20_backend.llm_manager.init_llm_config", return_value=cfg):
+        with patch("astra_backend.llm_manager.init_llm_config", return_value=cfg):
             self.assertEqual(sie.evolution_fallback_model(), "gemini-3.8-flash-high")
 
     def test_prefers_same_gateway_as_active(self):
@@ -203,16 +203,16 @@ class EvolutionFallbackModelTests(unittest.TestCase):
             {"id": "deepseek-v4-flash-0731", "base_url": "https://tokenrhythm.studio/v1"},
             {"id": "qwen3.8-flash", "base_url": "https://tokenrhythm.studio/v1"},
         ]}
-        with patch("r20_backend.llm_manager.init_llm_config", return_value=cfg):
+        with patch("astra_backend.llm_manager.init_llm_config", return_value=cfg):
             self.assertEqual(sie.evolution_fallback_model(), "deepseek-v4-flash-0731")
 
     def test_none_when_only_active_model_configured(self):
         cfg = self._cfg("qwen3.8-flash", ["qwen3.8-flash"])
-        with patch("r20_backend.llm_manager.init_llm_config", return_value=cfg):
+        with patch("astra_backend.llm_manager.init_llm_config", return_value=cfg):
             self.assertIsNone(sie.evolution_fallback_model())
 
     def test_none_on_config_exception(self):
-        with patch("r20_backend.llm_manager.init_llm_config", side_effect=RuntimeError("corrupt")):
+        with patch("astra_backend.llm_manager.init_llm_config", side_effect=RuntimeError("corrupt")):
             self.assertIsNone(sie.evolution_fallback_model())
 
 

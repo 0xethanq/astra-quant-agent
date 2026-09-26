@@ -27,14 +27,14 @@
    本模块不在重载名单里，所以**任何在 import 期烘焙的风控值都不会被刷新** ——
    基线风控测试会随机翻红。注入式调用从结构上消除了这个陷阱。
 """
-from r20_backend.math_utils import clamp as _clamp
+from astra_backend.math_utils import clamp as _clamp
 
 
 def clamp(value, lower, upper, default):
     """把 value 夹到 [lower, upper]；不可比较时返回 default。
 
     结构优化阶段 4·B3 第五十一刀：本函数与 ``scripts/self_improvement_engine.py`` 的同名函数原为逐字重复，
-    已收敛到 `r20_backend.math_utils.clamp`。
+    已收敛到 `astra_backend.math_utils.clamp`。
 
     ⚠️ 名字保留在本模块：调用点按全局名查找，且 `patch.object(模块, "clamp")`
     是既有接缝（别名赋值会让它失效）。

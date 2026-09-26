@@ -1,9 +1,9 @@
 {
-  "__comment": "AstraQuant 观测面板。/metrics 端点族名由 r20_backend/metrics.py 单一来源产出；本文件引用的每个族名都有门禁与真实渲染结果对照（tests/ops/test_observability_artifacts.py），改名会立刻翻红。",
-  "uid": "r20-quantum-trader",
+  "__comment": "AstraQuant 观测面板。/metrics 端点族名由 astra_backend/metrics.py 单一来源产出；本文件引用的每个族名都有门禁与真实渲染结果对照（tests/ops/test_observability_artifacts.py），改名会立刻翻红。",
+  "uid": "astra-quant-trader",
   "title": "AstraQuant — 执行与行情健康",
   "tags": [
-    "r20",
+    "astra",
     "trading"
   ],
   "timezone": "browser",
@@ -48,7 +48,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "r20_up",
+          "expr": "astra_up",
           "legendFormat": "up"
         }
       ],
@@ -113,7 +113,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "count(r20_metrics_source_ok{required=\"1\"} == 0)",
+          "expr": "count(astra_metrics_source_ok{required=\"1\"} == 0)",
           "legendFormat": "missing sources"
         }
       ],
@@ -163,7 +163,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "r20_market_data_snapshot_age_seconds",
+          "expr": "astra_market_data_snapshot_age_seconds",
           "legendFormat": "age"
         }
       ],
@@ -218,7 +218,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "r20_metrics_source_ok",
+          "expr": "astra_metrics_source_ok",
           "format": "table",
           "instant": true,
           "legendFormat": "{{source}} required={{required}}"
@@ -264,7 +264,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (kind) (rate(r20_market_data_calls_total[5m]))",
+          "expr": "sum by (kind) (rate(astra_market_data_calls_total[5m]))",
           "legendFormat": "{{kind}}"
         }
       ],
@@ -297,12 +297,12 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (kind) (increase(r20_market_data_call_failures_total[15m]))",
+          "expr": "sum by (kind) (increase(astra_market_data_call_failures_total[15m]))",
           "legendFormat": "{{kind}}"
         },
         {
           "refId": "B",
-          "expr": "sum by (kind) (increase(r20_market_data_failures_reported_total[15m]))",
+          "expr": "sum by (kind) (increase(astra_market_data_failures_reported_total[15m]))",
           "legendFormat": "{{kind}} (reported)"
         }
       ],
@@ -335,12 +335,12 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "max by (kind) (r20_market_data_latency_p50_seconds)",
+          "expr": "max by (kind) (astra_market_data_latency_p50_seconds)",
           "legendFormat": "{{kind}} p50"
         },
         {
           "refId": "B",
-          "expr": "max by (kind) (r20_market_data_latency_p95_seconds)",
+          "expr": "max by (kind) (astra_market_data_latency_p95_seconds)",
           "legendFormat": "{{kind}} p95"
         }
       ],
@@ -373,7 +373,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "max by (kind) (r20_market_data_last_success_age_seconds)",
+          "expr": "max by (kind) (astra_market_data_last_success_age_seconds)",
           "legendFormat": "{{kind}}"
         }
       ],
@@ -419,12 +419,12 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "r20_venue_instruments_ok",
+          "expr": "astra_venue_instruments_ok",
           "legendFormat": "{{venue}} ok"
         },
         {
           "refId": "B",
-          "expr": "r20_venue_instruments_failed",
+          "expr": "astra_venue_instruments_failed",
           "legendFormat": "{{venue}} failed"
         }
       ],
@@ -456,7 +456,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "r20_venue_latency_avg_ms",
+          "expr": "astra_venue_latency_avg_ms",
           "legendFormat": "{{venue}}"
         }
       ],
@@ -489,22 +489,22 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "increase(r20_model_calls_total[1h])",
+          "expr": "increase(astra_model_calls_total[1h])",
           "legendFormat": "calls/h"
         },
         {
           "refId": "B",
-          "expr": "increase(r20_model_calls_successful_total[1h])",
+          "expr": "increase(astra_model_calls_successful_total[1h])",
           "legendFormat": "success/h"
         },
         {
           "refId": "C",
-          "expr": "100 * increase(r20_model_calls_successful_total[1h]) / clamp_min(increase(r20_model_calls_total[1h]), 1)",
+          "expr": "100 * increase(astra_model_calls_successful_total[1h]) / clamp_min(increase(astra_model_calls_total[1h]), 1)",
           "legendFormat": "success %"
         },
         {
           "refId": "D",
-          "expr": "r20_model_call_duration_ms_avg",
+          "expr": "astra_model_call_duration_ms_avg",
           "legendFormat": "avg duration (ms)"
         }
       ],
@@ -535,7 +535,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "r20_model_tokens_total",
+          "expr": "astra_model_tokens_total",
           "legendFormat": "tokens"
         }
       ],
@@ -568,7 +568,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "r20_risk_limit",
+          "expr": "astra_risk_limit",
           "format": "table",
           "instant": true
         }
@@ -595,7 +595,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "r20_venue_testnet",
+          "expr": "astra_venue_testnet",
           "format": "table",
           "instant": true
         }
@@ -651,32 +651,32 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (venue) (rate(r20_market_stream_ticks_total[5m]))",
+          "expr": "sum by (venue) (rate(astra_market_stream_ticks_total[5m]))",
           "legendFormat": "{{venue}} ticks/s"
         },
         {
           "refId": "B",
-          "expr": "max by (venue) (r20_market_stream_tick_age_seconds)",
+          "expr": "max by (venue) (astra_market_stream_tick_age_seconds)",
           "legendFormat": "{{venue}} tick age (s)"
         },
         {
           "refId": "C",
-          "expr": "sum by (venue) (increase(r20_market_stream_errors_total[15m]))",
+          "expr": "sum by (venue) (increase(astra_market_stream_errors_total[15m]))",
           "legendFormat": "{{venue}} errors/15m"
         },
         {
           "refId": "D",
-          "expr": "sum by (venue) (increase(r20_market_stream_parse_errors_total[15m]))",
+          "expr": "sum by (venue) (increase(astra_market_stream_parse_errors_total[15m]))",
           "legendFormat": "{{venue}} parse errors/15m"
         },
         {
           "refId": "E",
-          "expr": "sum by (venue) (increase(r20_market_stream_frames_total[5m]))",
+          "expr": "sum by (venue) (increase(astra_market_stream_frames_total[5m]))",
           "legendFormat": "{{venue}} frames/5m"
         },
         {
           "refId": "F",
-          "expr": "r20_market_stream_snapshot_age_seconds",
+          "expr": "astra_market_stream_snapshot_age_seconds",
           "legendFormat": "snapshot age (s)"
         }
       ],

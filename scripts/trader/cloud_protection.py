@@ -27,12 +27,17 @@ from __future__ import annotations
 import time
 from typing import Any, Dict, List, Tuple
 
+try:
+    from scripts.tag_markers import normalize_legacy_markers
+except ImportError:      # scripts/ 在 sys.path 上（双拼写铁律）
+    from tag_markers import normalize_legacy_markers
+
 
 def amend_venue_stop_loss(ad, symbol: str, pos_side: str, new_sl: float,
                           contracts: float) -> Tuple[bool, str]:
     """审计 C3（后半）：跨所云端 SL 棘轮——旧实现每轮只 attach 新单、不撤不改旧单，
     云端止损随棘轮轮次堆积（宽松旧单可能先于新单触发/占额度）。
-    策略：先枚举现存 SL 触发单（Gate 腿带 text=t-r20sl* 标签、Binance 腿 type 含
+    策略：先枚举现存 SL 触发单（Gate 腿带 text=t-astrasl* 标签、Binance 腿 type 含
     STOP）；有旧单且该所支持 amend_stop_loss → 原生改单（同单改触发价，天然无裸仓
     缝隙），残余旧单一律撤掉；否则安全序列：先挂新 SL（收紧即刻生效、更新无裸仓
     窗口）→ 再撤全部旧 SL。旧单撤失败只 warn——新单已生效，旧 reduce_only 双单
@@ -45,11 +50,12 @@ def amend_venue_stop_loss(ad, symbol: str, pos_side: str, new_sl: float,
                 continue
             _order = row.get("order")
             _init = row.get("initial")
-            text = (str(_order.get("text") or "") if isinstance(_order, dict) else "") \
-                + (str(_init.get("text") or "") if isinstance(_init, dict) else "") \
-                + str(row.get("text") or "") + str(row.get("type") or "")
+            text = normalize_legacy_markers(
+                (str(_order.get("text") or "") if isinstance(_order, dict) else "")
+                + (str(_init.get("text") or "") if isinstance(_init, dict) else "")
+                + str(row.get("text") or "") + str(row.get("type") or ""))
             rid = str(row.get("id") or row.get("algo_id") or row.get("order_id") or "")
-            if rid and ("r20sl" in text.lower() or "STOP" in text.upper()):
+            if rid and ("astrasl" in text.lower() or "STOP" in text.upper()):
                 old_ids.append(rid)
     except Exception as exc:
         list_error = str(exc)[:160]

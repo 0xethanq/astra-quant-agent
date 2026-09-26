@@ -23,7 +23,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from r20_gateway import agents as AG
+from astra_gateway import agents as AG
 
 
 class _Base(unittest.TestCase):
@@ -217,7 +217,7 @@ class RealRootContractTests(_Base):
     def test_the_real_registry_root_is_the_repo_root(self):
         """反证：临时 ROOT 只是测试脚手架，真登记表的 ROOT 仍是仓库根。"""
         real_root = Path(AG.__file__).resolve().parents[1]
-        self.assertTrue((real_root / "r20_gateway" / "agents.py").exists())
+        self.assertTrue((real_root / "astra_gateway" / "agents.py").exists())
         self.assertNotEqual(real_root, self.root)
 
     def test_agent_statuses_does_not_mutate_the_registry(self):

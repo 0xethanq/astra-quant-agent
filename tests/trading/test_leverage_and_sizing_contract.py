@@ -20,7 +20,7 @@ from scripts.trader.sizing import size_for_decision
 
 
 def _quantize(sz, step):
-    """交易所式量化：按步长向下取整（与 r20_backend.execution.sizing 同义）。"""
+    """交易所式量化：按步长向下取整（与 astra_backend.execution.sizing 同义）。"""
     if not step or step <= 0:
         return sz
     return math.floor(sz / step + 1e-9) * step

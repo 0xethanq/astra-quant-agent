@@ -159,7 +159,7 @@ def reanchor_brackets_to_market(*, entry, tp, sl, market, is_long, prec=4):
 
     ## 为什么必须有这一步
 
-    后台可切「市价单」（`R20_ORDER_MODE=market`）。但 `entry`/`tp`/`sl` 三价是
+    后台可切「市价单」（`ASTRA_ORDER_MODE=market`）。但 `entry`/`tp`/`sl` 三价是
     **按限价挂单的计划**算出来的（AI 的 `entry_price`，或买一/卖一兜底）——
     市价单根本不在这个价成交，而 TP/SL 却仍按计划价下单。危险形态：
 

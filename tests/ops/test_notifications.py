@@ -1,24 +1,24 @@
 import unittest
 from unittest.mock import patch, MagicMock
 
-from r20_backend import notifications
+from astra_backend import notifications
 
 
 class NotificationsTests(unittest.TestCase):
     def setUp(self):
         self.env = {
-            "R20_NOTIFY_WEBHOOK_ENABLED": "1",
-            "R20_NOTIFICATION_WEBHOOK": "https://oapi.dingtalk.com/robot/send?access_token=mock",
-            "R20_NOTIFY_WECHAT_ENABLED": "1",
-            "R20_WECHAT_WEBHOOK": "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=mock",
-            "R20_NOTIFY_TELEGRAM_ENABLED": "1",
-            "R20_TELEGRAM_BOT_TOKEN": "bot123456:mocktoken",
-            "R20_TELEGRAM_CHAT_ID": "12345678",
-            "R20_TELEGRAM_API_BASE": "https://custom-tg-proxy.example.com",
-            "R20_NOTIFY_QQ_ENABLED": "1",
-            "R20_QQ_APP_ID": "1905549905",
-            "R20_QQ_CLIENT_SECRET": "mocksecret",
-            "R20_QQ_OPENID": "MOCK_USER_OPENID",
+            "ASTRA_NOTIFY_WEBHOOK_ENABLED": "1",
+            "ASTRA_NOTIFICATION_WEBHOOK": "https://oapi.dingtalk.com/robot/send?access_token=mock",
+            "ASTRA_NOTIFY_WECHAT_ENABLED": "1",
+            "ASTRA_WECHAT_WEBHOOK": "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=mock",
+            "ASTRA_NOTIFY_TELEGRAM_ENABLED": "1",
+            "ASTRA_TELEGRAM_BOT_TOKEN": "bot123456:mocktoken",
+            "ASTRA_TELEGRAM_CHAT_ID": "12345678",
+            "ASTRA_TELEGRAM_API_BASE": "https://custom-tg-proxy.example.com",
+            "ASTRA_NOTIFY_QQ_ENABLED": "1",
+            "ASTRA_QQ_APP_ID": "1905549905",
+            "ASTRA_QQ_CLIENT_SECRET": "mocksecret",
+            "ASTRA_QQ_OPENID": "MOCK_USER_OPENID",
         }
 
     def test_diagnose_ready_and_incomplete(self):
@@ -26,14 +26,14 @@ class NotificationsTests(unittest.TestCase):
         self.assertEqual(diag["status"], "ready")
 
         incomplete_env = dict(self.env)
-        incomplete_env["R20_QQ_OPENID"] = ""
+        incomplete_env["ASTRA_QQ_OPENID"] = ""
         diag2 = notifications.diagnose_channel("qq", incomplete_env)
         self.assertEqual(diag2["status"], "incomplete")
         self.assertIn("自动获取 OpenID", diag2["detail"])
 
     def test_send_webhook_smart_payload_dingtalk(self):
-        with patch("r20_backend.notifications.validate_outbound_url", return_value="https://oapi.dingtalk.com/robot/send?access_token=mock"), \
-             patch("r20_backend.notifications._post_json", return_value=(True, "HTTP 200", {"errcode": 0})) as mock_post:
+        with patch("astra_backend.notifications.validate_outbound_url", return_value="https://oapi.dingtalk.com/robot/send?access_token=mock"), \
+             patch("astra_backend.notifications._post_json", return_value=(True, "HTTP 200", {"errcode": 0})) as mock_post:
             ok, detail = notifications.send_channel("webhook", "钉钉测试消息", self.env)
             self.assertTrue(ok)
             self.assertIn("accepted", detail)
@@ -42,9 +42,9 @@ class NotificationsTests(unittest.TestCase):
 
     def test_send_webhook_smart_payload_feishu(self):
         env = dict(self.env)
-        env["R20_NOTIFICATION_WEBHOOK"] = "https://open.feishu.cn/open-apis/bot/v2/hook/mock"
-        with patch("r20_backend.notifications.validate_outbound_url", return_value=env["R20_NOTIFICATION_WEBHOOK"]), \
-             patch("r20_backend.notifications._post_json", return_value=(True, "HTTP 200", {"code": 0})) as mock_post:
+        env["ASTRA_NOTIFICATION_WEBHOOK"] = "https://open.feishu.cn/open-apis/bot/v2/hook/mock"
+        with patch("astra_backend.notifications.validate_outbound_url", return_value=env["ASTRA_NOTIFICATION_WEBHOOK"]), \
+             patch("astra_backend.notifications._post_json", return_value=(True, "HTTP 200", {"code": 0})) as mock_post:
             ok, detail = notifications.send_channel("webhook", "飞书测试消息", env)
             self.assertTrue(ok)
             args, _ = mock_post.call_args
@@ -52,9 +52,9 @@ class NotificationsTests(unittest.TestCase):
 
     def test_send_webhook_smart_payload_discord(self):
         env = dict(self.env)
-        env["R20_NOTIFICATION_WEBHOOK"] = "https://discord.com/api/webhooks/mock"
-        with patch("r20_backend.notifications.validate_outbound_url", return_value=env["R20_NOTIFICATION_WEBHOOK"]), \
-             patch("r20_backend.notifications._post_json", return_value=(True, "HTTP 200", {})) as mock_post:
+        env["ASTRA_NOTIFICATION_WEBHOOK"] = "https://discord.com/api/webhooks/mock"
+        with patch("astra_backend.notifications.validate_outbound_url", return_value=env["ASTRA_NOTIFICATION_WEBHOOK"]), \
+             patch("astra_backend.notifications._post_json", return_value=(True, "HTTP 200", {})) as mock_post:
             ok, detail = notifications.send_channel("webhook", "Discord消息", env)
             self.assertTrue(ok)
             args, _ = mock_post.call_args
@@ -63,8 +63,8 @@ class NotificationsTests(unittest.TestCase):
     def test_send_telegram_uses_custom_api_base(self):
         # 审计修复A6后 telegram 也过 validate_outbound_url（与 webhook/wechat 对齐）；
         # 假域名按本文件既有惯例打恒等补丁，真实拒绝路径由批1审计回归测试覆盖。
-        with patch("r20_backend.notifications.validate_outbound_url", side_effect=lambda u, **k: u), \
-             patch("r20_backend.notifications._post_json", return_value=(True, "HTTP 200", {"ok": True, "result": {"message_id": 999}})) as mock_post:
+        with patch("astra_backend.notifications.validate_outbound_url", side_effect=lambda u, **k: u), \
+             patch("astra_backend.notifications._post_json", return_value=(True, "HTTP 200", {"ok": True, "result": {"message_id": 999}})) as mock_post:
             ok, detail = notifications.send_channel("telegram", "Telegram测试", self.env)
             self.assertTrue(ok)
             self.assertIn("accepted", detail)
@@ -72,7 +72,7 @@ class NotificationsTests(unittest.TestCase):
             self.assertTrue(args[0].startswith("https://custom-tg-proxy.example.com/botbot123456:mocktoken/sendMessage"))
 
     def test_send_qq_token_and_message_success(self):
-        with patch("r20_backend.notifications._post_json") as mock_post:
+        with patch("astra_backend.notifications._post_json") as mock_post:
             mock_post.side_effect = [
                 (True, "HTTP 200", {"access_token": "valid_token_xyz"}),
                 (True, "HTTP 200", {"id": "msg-12345"}),
@@ -87,7 +87,7 @@ class NotificationsTests(unittest.TestCase):
             self.assertIn("/v2/users/MOCK_USER_OPENID/messages", second_url)
 
     def test_send_qq_handles_11255_gracefully(self):
-        with patch("r20_backend.notifications._post_json") as mock_post:
+        with patch("astra_backend.notifications._post_json") as mock_post:
             mock_post.side_effect = [
                 (True, "HTTP 200", {"access_token": "valid_token_xyz"}),
                 (False, "HTTP 400 Bad Request", {"code": 11255, "message": "请求的资源不存在"}),
@@ -99,9 +99,9 @@ class NotificationsTests(unittest.TestCase):
 
     def test_send_webhook_dingtalk_with_secret_signature(self):
         env = dict(self.env)
-        env["R20_DINGTALK_SECRET"] = "SEC_test_secret_key"
-        with patch("r20_backend.notifications.validate_outbound_url", side_effect=lambda u, **k: u), \
-             patch("r20_backend.notifications._post_json", return_value=(True, "HTTP 200", {"errcode": 0})) as mock_post:
+        env["ASTRA_DINGTALK_SECRET"] = "SEC_test_secret_key"
+        with patch("astra_backend.notifications.validate_outbound_url", side_effect=lambda u, **k: u), \
+             patch("astra_backend.notifications._post_json", return_value=(True, "HTTP 200", {"errcode": 0})) as mock_post:
             ok, detail = notifications.send_channel("webhook", "加签钉钉消息", env)
             self.assertTrue(ok)
             url_called, payload = mock_post.call_args[0]
@@ -111,10 +111,10 @@ class NotificationsTests(unittest.TestCase):
 
     def test_send_webhook_feishu_with_secret_signature(self):
         env = dict(self.env)
-        env["R20_NOTIFICATION_WEBHOOK"] = "https://open.feishu.cn/open-apis/bot/v2/hook/mock"
-        env["R20_FEISHU_SECRET"] = "FS_test_secret_key"
-        with patch("r20_backend.notifications.validate_outbound_url", side_effect=lambda u, **k: u), \
-             patch("r20_backend.notifications._post_json", return_value=(True, "HTTP 200", {"code": 0})) as mock_post:
+        env["ASTRA_NOTIFICATION_WEBHOOK"] = "https://open.feishu.cn/open-apis/bot/v2/hook/mock"
+        env["ASTRA_FEISHU_SECRET"] = "FS_test_secret_key"
+        with patch("astra_backend.notifications.validate_outbound_url", side_effect=lambda u, **k: u), \
+             patch("astra_backend.notifications._post_json", return_value=(True, "HTTP 200", {"code": 0})) as mock_post:
             ok, detail = notifications.send_channel("webhook", "加签飞书消息", env)
             self.assertTrue(ok)
             _, payload = mock_post.call_args[0]
@@ -125,9 +125,9 @@ class NotificationsTests(unittest.TestCase):
 
     def test_send_webhook_bark(self):
         env = dict(self.env)
-        env["R20_NOTIFICATION_WEBHOOK"] = "https://api.day.app/mock-key/"
-        with patch("r20_backend.notifications.validate_outbound_url", side_effect=lambda u, **k: u), \
-             patch("r20_backend.notifications._post_json", return_value=(True, "HTTP 200", {})) as mock_post:
+        env["ASTRA_NOTIFICATION_WEBHOOK"] = "https://api.day.app/mock-key/"
+        with patch("astra_backend.notifications.validate_outbound_url", side_effect=lambda u, **k: u), \
+             patch("astra_backend.notifications._post_json", return_value=(True, "HTTP 200", {})) as mock_post:
             ok, detail = notifications.send_channel("webhook", "Bark测试消息", env)
             self.assertTrue(ok)
             _, payload = mock_post.call_args[0]

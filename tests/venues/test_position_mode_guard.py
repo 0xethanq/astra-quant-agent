@@ -2,7 +2,7 @@
 
 ## 背景：一条写在代码里、却一直没被执行的政策
 
-`r20_backend/exchanges/gate.py` 的模块头早就写着：
+`astra_backend/exchanges/gate.py` 的模块头早就写着：
 
 > ⚠️ 仅能力声明+只读检测——本系统**永不自动切换用户账户模式**；dual_plus 拆仓
 > 不得折叠成净仓/双向解读，**检测不支持时禁新开仓并显示原因**（审计 §2 Gate）。
@@ -29,8 +29,8 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from r20_backend.exchanges.base import ExchangeCapabilityError  # noqa: E402
-from r20_backend.exchanges.gate import (  # noqa: E402
+from astra_backend.exchanges.base import ExchangeCapabilityError  # noqa: E402
+from astra_backend.exchanges.gate import (  # noqa: E402
     AUTO_SIZE_CLOSE_LONG, AUTO_SIZE_CLOSE_SHORT, GateAdapter, GateAPIError,
     interpret_position_mode,
 )
@@ -177,7 +177,7 @@ class _EntryStub(GateAdapter):
         return list(self._positions)
 
     def fetch_instrument_spec(self, symbol, refresh=False):
-        from r20_backend.exchanges import InstrumentSpec
+        from astra_backend.exchanges import InstrumentSpec
         return InstrumentSpec(venue="gate", inst_id="BTC_USDT", base="BTC",
                               tick_size=0.1, step_size=0.0001, ct_val=0.0001, min_size=1)
 
@@ -205,7 +205,7 @@ class _EntryStub(GateAdapter):
 
 class EntryGuardTest(unittest.TestCase):
     def setUp(self):
-        from r20_backend import execution_router
+        from astra_backend import execution_router
         self.router = execution_router
         self._pool_patch = patch.object(self.router, "_load_venue_pool_soft",
                                        lambda venue: {"assets": ["BTC"], "max_open": 5,
@@ -280,7 +280,7 @@ class EntryGuardTest(unittest.TestCase):
     def test_no_auto_switch_call_anywhere(self):
         """政策钉：本系统**永不**自动切换用户账户的持仓模式。"""
         hits = []
-        for base in (ROOT / "r20_backend", ROOT / "scripts"):
+        for base in (ROOT / "astra_backend", ROOT / "scripts"):
             for path in base.rglob("*.py"):
                 if "__pycache__" in path.parts:
                     continue
@@ -292,12 +292,12 @@ class EntryGuardTest(unittest.TestCase):
 
 class CapabilityDeclarationTest(unittest.TestCase):
     def test_gate_declares_position_modes(self):
-        from r20_backend.exchanges.gate import GateAdapter as _G
+        from astra_backend.exchanges.gate import GateAdapter as _G
         self.assertEqual(tuple(_G.capabilities.position_modes),
                          ("single", "dual", "dual_plus"))
 
     def test_interpreted_mode_is_always_in_declared_set_or_unknown(self):
-        from r20_backend.exchanges.gate import POSITION_MODES
+        from astra_backend.exchanges.gate import POSITION_MODES
         for payload in ({}, REAL_DUAL_ACCOUNT, {"position_mode": "dual_plus"}):
             self.assertIn(interpret_position_mode(payload), set(POSITION_MODES) | {"unknown"})
 
@@ -312,21 +312,21 @@ class BinancePositionModeTest(unittest.TestCase):
     740 行 positionRisk 全为 `positionSide=BOTH` ⇒ **净模式**。"""
 
     def test_real_demo_payload_is_net(self):
-        from r20_backend.exchanges.binance import interpret_dual_side_position as ib
+        from astra_backend.exchanges.binance import interpret_dual_side_position as ib
         self.assertEqual(ib({"dualSidePosition": False}), "net")
         self.assertEqual(ib({"dualSidePosition": True}), "long_short")
         self.assertEqual(ib({"dualSidePosition": "false"}), "net")
 
     def test_unreadable_is_unknown(self):
-        from r20_backend.exchanges.binance import interpret_dual_side_position as ib
+        from astra_backend.exchanges.binance import interpret_dual_side_position as ib
         for bad in ({}, None, [], {"dualSidePosition": None}, {"dualSidePosition": "maybe"}):
             with self.subTest(bad=bad):
                 self.assertEqual(ib(bad), "unknown")
 
     def test_gate_and_binance_vocabularies_are_separate(self):
         """两所模式词汇不同（single/dual/dual_plus vs net/long_short）——绝不共用一个枚举。"""
-        from r20_backend.exchanges.binance import BinanceAdapter
-        from r20_backend.exchanges.gate import GateAdapter
+        from astra_backend.exchanges.binance import BinanceAdapter
+        from astra_backend.exchanges.gate import GateAdapter
         self.assertEqual(tuple(GateAdapter.capabilities.position_modes),
                          ("single", "dual", "dual_plus"))
         self.assertEqual(tuple(BinanceAdapter.capabilities.position_modes),
@@ -336,7 +336,7 @@ class BinancePositionModeTest(unittest.TestCase):
                          "两所声明域不该有交集（否则一定是有人合并了枚举）")
 
     def test_detect_uses_read_only_endpoint_and_fails_soft(self):
-        from r20_backend.exchanges.binance import BinanceAdapter
+        from astra_backend.exchanges.binance import BinanceAdapter
         ad = BinanceAdapter.__new__(BinanceAdapter)
         calls = []
 
@@ -352,8 +352,8 @@ class BinancePositionModeTest(unittest.TestCase):
         self.assertEqual(ad.detect_position_mode(), "unknown", "探测失败必须 fail-soft")
 
     def test_entry_ready_subset_declared_for_both_venues(self):
-        from r20_backend.exchanges.binance import BinanceAdapter
-        from r20_backend.exchanges.gate import GateAdapter
+        from astra_backend.exchanges.binance import BinanceAdapter
+        from astra_backend.exchanges.gate import GateAdapter
         self.assertEqual(tuple(BinanceAdapter.capabilities.entry_ready_position_modes), ("net",),
                          "hedge 载荷未核验 ⇒ 不在可交易子集内")
         self.assertEqual(tuple(GateAdapter.capabilities.entry_ready_position_modes),
@@ -372,8 +372,8 @@ class BinancePositionModeTest(unittest.TestCase):
         本用例**不覆盖**币安的挂牌与规格链路（那有各自的门）。
         """
         import dataclasses
-        from r20_backend.exchanges.binance import BinanceAdapter
-        from r20_backend import execution_router
+        from astra_backend.exchanges.binance import BinanceAdapter
+        from astra_backend import execution_router
         ad = _EntryStub(mode="long_short")
         # 模式词汇与"已验证可交易子集"取**真实币安声明**；其余能力沿用 Gate 形状，
         # 因为本桩的规格/换算打桩是 Gate 口径（只需把币安那两个字段换过来即可隔离守卫行为）。
@@ -407,17 +407,17 @@ class OkxInterpretPositionModeTest(unittest.TestCase):
     """
 
     def test_long_short_mode(self):
-        from r20_backend.exchanges.okx import interpret_position_mode
+        from astra_backend.exchanges.okx import interpret_position_mode
         self.assertEqual(interpret_position_mode({"data": [{"posMode": "long_short_mode"}]}),
                          "long_short")
 
     def test_net_mode(self):
-        from r20_backend.exchanges.okx import interpret_position_mode
+        from astra_backend.exchanges.okx import interpret_position_mode
         self.assertEqual(interpret_position_mode({"data": [{"posMode": "net_mode"}]}), "net")
 
     def test_unreadable_is_unknown_not_a_default(self):
         """读不出**绝不**给默认值（闸对 unknown 的处置是禁新开仓）。"""
-        from r20_backend.exchanges.okx import interpret_position_mode
+        from astra_backend.exchanges.okx import interpret_position_mode
         for payload in (None, {}, {"data": []}, {"data": [None]}, {"data": "x"},
                         {"data": [{"posMode": ""}]}, {"data": [{"posMode": "??"}]},
                         {"data": [{"posMode": "LONG_SHORT"}]}):
@@ -425,13 +425,13 @@ class OkxInterpretPositionModeTest(unittest.TestCase):
                 self.assertEqual(interpret_position_mode(payload), "unknown")
 
     def test_accepts_bare_list_too(self):
-        from r20_backend.exchanges.okx import interpret_position_mode
+        from astra_backend.exchanges.okx import interpret_position_mode
         self.assertEqual(interpret_position_mode([{"posMode": "net_mode"}]), "net")
 
 
 class OkxDetectPositionModeTest(unittest.TestCase):
     def _adapter(self):
-        from r20_backend.exchanges.okx import OKXAdapter
+        from astra_backend.exchanges.okx import OKXAdapter
         ad = OKXAdapter.__new__(OKXAdapter)          # 不跑 __init__（避免读凭证/环境）
         ad._get_okx_env = lambda: None               # type: ignore[method-assign]
         return ad
@@ -478,7 +478,7 @@ class ModeDeclarationConsistencyTest(unittest.TestCase):
     """
 
     def test_every_adapter_declaring_modes_can_be_probed(self):
-        from r20_backend.exchanges import get_adapter
+        from astra_backend.exchanges import get_adapter
         offenders = []
         for venue in ("okx", "binance", "gate"):
             ad = get_adapter(venue, environment="demo")
@@ -502,7 +502,7 @@ class ModeDeclarationConsistencyTest(unittest.TestCase):
         self.assertEqual(offenders_of({"x": (("net",), True)}), [])
 
     def test_okx_is_now_entry_ready_in_long_short(self):
-        from r20_backend.exchanges import get_adapter
+        from astra_backend.exchanges import get_adapter
         caps = get_adapter("okx", environment="demo").capabilities
         self.assertEqual(tuple(caps.entry_ready_position_modes), ("long_short",))
         self.assertIn("long_short", tuple(caps.position_modes))

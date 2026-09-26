@@ -25,8 +25,8 @@ from tests import coverage_probe
 
 class TracedImportAttributionTest(unittest.TestCase):
     def setUp(self):
-        self.dir = tempfile.mkdtemp(prefix="r20_probe_fixture_")
-        self.name = "r20_probe_fixture_mod"
+        self.dir = tempfile.mkdtemp(prefix="astra_probe_fixture_")
+        self.name = "astra_probe_fixture_mod"
         self.path = Path(self.dir, f"{self.name}.py")
         # 第 1-7 行：走到；第 8-12 行：except 兜底（**不会**走到）
         self.path.write_text(textwrap.dedent("""
@@ -37,7 +37,7 @@ class TracedImportAttributionTest(unittest.TestCase):
             def touched():
                 return VALUE
 
-            if os.environ.get("R20_PROBE_FIXTURE_ON") == "1":   # 真分支，但本轮**不走**
+            if os.environ.get("ASTRA_PROBE_FIXTURE_ON") == "1":   # 真分支，但本轮**不走**
                 NEVER_EXECUTED = "不应被执行"
         """).lstrip(), encoding="utf-8")
         # ⚠️ 夹具第一版我用的是 `try: from 不存在的模块 import … except ImportError:` —— 那个
@@ -60,7 +60,7 @@ class TracedImportAttributionTest(unittest.TestCase):
         try:
             # ⚠️ 传**相对模块路径**：`traced_import` 由路径推模块名（`/`→`.`）。
             # 绝对路径会推出 `.tmp.xxx.mod` 这种名字 ⇒ 相对导入报错。
-            # （真实调用方传的就是 `r20_backend/exchanges/binance.py` 这类仓库相对路径。）
+            # （真实调用方传的就是 `astra_backend/exchanges/binance.py` 这类仓库相对路径。）
             failures = coverage_probe.traced_import([f"{self.name}.py"])
         finally:
             sys.settrace(None)
@@ -76,7 +76,7 @@ class TracedImportAttributionTest(unittest.TestCase):
         seen, _ = self._trace_import()
         src = self.path.read_text(encoding="utf-8").splitlines()
         untaken_body = {i for i, line in enumerate(src, start=1) if "NEVER_EXECUTED" in line}
-        taken_guard = {i for i, line in enumerate(src, start=1) if "R20_PROBE_FIXTURE_ON" in line}
+        taken_guard = {i for i, line in enumerate(src, start=1) if "ASTRA_PROBE_FIXTURE_ON" in line}
         self.assertTrue(untaken_body, "夹具自身要含未走到的分支体")
         self.assertFalse(untaken_body & seen,
                          f"未走到的分支被当成已执行了：{sorted(untaken_body & seen)}")

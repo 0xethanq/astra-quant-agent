@@ -1,15 +1,15 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
   <defs>
-    <linearGradient id="r20-bg" x1="4" y1="4" x2="44" y2="44" gradientUnits="userSpaceOnUse">
+    <linearGradient id="astra-bg" x1="4" y1="4" x2="44" y2="44" gradientUnits="userSpaceOnUse">
       <stop offset="0%" stop-color="#1E293B"/>
       <stop offset="100%" stop-color="#0B1220"/>
     </linearGradient>
-    <linearGradient id="r20-line" x1="8" y1="40" x2="40" y2="10" gradientUnits="userSpaceOnUse">
+    <linearGradient id="astra-line" x1="8" y1="40" x2="40" y2="10" gradientUnits="userSpaceOnUse">
       <stop offset="0%" stop-color="#C2600C"/>
       <stop offset="100%" stop-color="#F7931A"/>
     </linearGradient>
   </defs>
-  <rect x="1.5" y="1.5" width="45" height="45" rx="11" fill="url(#r20-bg)" stroke="#F7931A" stroke-opacity="0.35" stroke-width="1.5"/>
+  <rect x="1.5" y="1.5" width="45" height="45" rx="11" fill="url(#astra-bg)" stroke="#F7931A" stroke-opacity="0.35" stroke-width="1.5"/>
   <!-- 蜡烛：红1绿2 -->
   <g>
     <line x1="15" y1="13" x2="15" y2="33" stroke="#EF5350" stroke-width="2" stroke-linecap="round"/>
@@ -20,6 +20,6 @@
     <rect x="32.5" y="20" width="9" height="11" rx="1.8" fill="#22C55E"/>
   </g>
   <!-- 上升轨迹：BTC 橙 -->
-  <polyline points="8,38 18,26 28,30 40,11" fill="none" stroke="url(#r20-line)" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="8,38 18,26 28,30 40,11" fill="none" stroke="url(#astra-line)" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
   <circle cx="40" cy="11" r="2.6" fill="#F7931A"/>
 </svg>

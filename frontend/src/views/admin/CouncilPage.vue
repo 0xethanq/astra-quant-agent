@@ -234,7 +234,7 @@ async function exportConfig() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `r20-council-config-${fmtDate(new Date())}.json`;
+    a.download = `astra-council-config-${fmtDate(new Date())}.json`;
     a.click();
     URL.revokeObjectURL(url);
     toast.ok(t('admin.council.exportOk'));
@@ -1153,7 +1153,7 @@ onMounted(loadData);
 }
 .cn-avatar.is-cio {
   color: var(--brand);
-  background-color: var(--r20-brand-bg);
+  background-color: var(--astra-brand-bg);
 }
 .cn-avatar.is-muted {
   opacity: 0.45;

@@ -5,7 +5,7 @@
 | 语义 | 口径 |
 |---|---|
 | ★ **归档抽取路径安全** | `restore` 逐成员校验：绝对路径 / `..` 逃逸 / 越界解析 / 符号链接指向项目外 / 特殊设备节点 —— 任一命中 ⇒ **400 且不解压**；正常成员才落到 `_get_root()` 下 |
-| ★ **短语不许省** | `BACKUP {job_id}` / `BACKUP R20` / `RESTORE R20` 逐字校验 ⇒ 400（**先验短语后动手**）；工作区/归档路径含 `..` ⇒ 400 |
+| ★ **短语不许省** | `BACKUP {job_id}` / `BACKUP ASTRA` / `RESTORE ASTRA` 逐字校验 ⇒ 400（**先验短语后动手**）；工作区/归档路径含 `..` ⇒ 400 |
 | ★ **调用 ≠ 成功** | 备份脚本退出码非 0 ⇒ **502** + 审计 `failed`；`verify_archive` 抛错 ⇒ **409**；删除任务 `ValueError` ⇒ **409**（与新建/更新的 400 区分）|
 | 目标映射 | `simple` 端点：显式 enabled 目标优先，否则退回 local；`baidu` 仅在 `auth_mode==oauth` 时算新版，否则 `legacy_bypy` + 提示迁移 |
 | 就绪判定 | `configured` 现算 `backup_credential_status`（**不读**只在另一端点注入的 `credential_status`）；`test` 端点缺字段**逐个点名** |
@@ -38,8 +38,8 @@ from unittest import mock
 from fastapi import HTTPException
 from fastapi.responses import FileResponse
 
-from r20_backend.routers.gateway import backups as BT
-from r20_backend.schemas import (
+from astra_backend.routers.gateway import backups as BT
+from astra_backend.schemas import (
     BackupJobCreateRequest,
     BackupJobImportRequest,
     BackupJobRunRequest,
@@ -83,7 +83,7 @@ class _BackupBase(unittest.TestCase):
 
     def setUp(self):
         self.audits = []
-        self.tmp = Path(tempfile.mkdtemp(prefix="r20-backup-test-"))
+        self.tmp = Path(tempfile.mkdtemp(prefix="astra-backup-test-"))
         self.addCleanup(shutil.rmtree, self.tmp, True)
         self.root = self.tmp
         (self.root / "backups").mkdir(parents=True, exist_ok=True)
@@ -113,12 +113,12 @@ class SimpleBackupConfigTests(_BackupBase):
     def test_missing_primary_job_is_404(self):
         self._start(mock.patch.object(BT, "list_backup_jobs", return_value=[]))
         with self.assertRaises(HTTPException) as ctx:
-            BT.simple_backup_config(x_r20_admin_token="tok")
+            BT.simple_backup_config(x_astra_admin_token="tok")
         self.assertEqual(ctx.exception.status_code, 404)
 
     def test_enabled_target_wins_and_local_maps_to_local(self):
         self._start(mock.patch.object(BT, "list_backup_jobs", return_value=[_job()]))
-        out = BT.simple_backup_config(x_r20_admin_token="tok")
+        out = BT.simple_backup_config(x_astra_admin_token="tok")
         self.assertEqual(out["job_id"], "nightly-default")
         self.assertEqual(out["destination"], "local")
         self.assertEqual(out["schedule_time"], "02:00")
@@ -131,7 +131,7 @@ class SimpleBackupConfigTests(_BackupBase):
         job = _job(targets=[{"id": "b", "type": "baidu", "enabled": True,
                              "auth_mode": "bypy", "retention": 5}])
         self._start(mock.patch.object(BT, "list_backup_jobs", return_value=[job]))
-        out = BT.simple_backup_config(x_r20_admin_token="tok")
+        out = BT.simple_backup_config(x_astra_admin_token="tok")
         self.assertTrue(out["legacy_bypy"])
         self.assertEqual(out["destination"], "local")
         self.assertIn("迁移", out["migration_note"])
@@ -140,7 +140,7 @@ class SimpleBackupConfigTests(_BackupBase):
         job = _job(targets=[{"id": "b", "type": "baidu", "enabled": True,
                              "auth_mode": "oauth", "retention": 1}])
         self._start(mock.patch.object(BT, "list_backup_jobs", return_value=[job]))
-        out = BT.simple_backup_config(x_r20_admin_token="tok")
+        out = BT.simple_backup_config(x_astra_admin_token="tok")
         self.assertEqual(out["destination"], "baidu_oauth")
         self.assertFalse(out["legacy_bypy"])
 
@@ -149,7 +149,7 @@ class SimpleBackupConfigTests(_BackupBase):
             {"id": "s3", "type": "s3", "enabled": False, "bucket": "b"},
             {"id": "l", "type": "local", "enabled": False, "retention": 2}])
         self._start(mock.patch.object(BT, "list_backup_jobs", return_value=[job]))
-        out = BT.simple_backup_config(x_r20_admin_token="tok")
+        out = BT.simple_backup_config(x_astra_admin_token="tok")
         self.assertEqual(out["destination"], "local", "没有 enabled 目标 ⇒ 退回 local 目标")
 
     def test_latest_matching_manifest_is_returned_and_corrupt_ones_skipped(self):
@@ -168,13 +168,13 @@ class SimpleBackupConfigTests(_BackupBase):
         os.utime(other, (now - 10, now - 10))
         os.utime(bad, (now, now))
         self._start(mock.patch.object(BT, "list_backup_jobs", return_value=[_job()]))
-        out = BT.simple_backup_config(x_r20_admin_token="tok")
+        out = BT.simple_backup_config(x_astra_admin_token="tok")
         self.assertEqual(out["latest"]["bytes"], 10)
 
     def test_public_fallback_job_is_first_when_default_absent(self):
         self._start(mock.patch.object(BT, "list_backup_jobs",
                                       return_value=[_job(id="custom")]))
-        out = BT.simple_backup_config(x_r20_admin_token="tok")
+        out = BT.simple_backup_config(x_astra_admin_token="tok")
         self.assertEqual(out["job_id"], "custom")
 
 
@@ -193,7 +193,7 @@ class UpdateSimpleBackupTests(_BackupBase):
         self.jobs.return_value = []
         with self.assertRaises(HTTPException) as ctx:
             BT.update_simple_backup(SimpleBackupUpdateRequest(destination="local"),
-                                    x_r20_session="s")
+                                    x_astra_session="s")
         self.assertEqual(ctx.exception.status_code, 404)
 
     def test_creating_a_new_s3_target_disables_the_others(self):
@@ -201,7 +201,7 @@ class UpdateSimpleBackupTests(_BackupBase):
                                             bucket="bkt", retention=4, enabled=True,
                                             schedule_time="03:30",
                                             credentials={"access_key_id": "k"})
-        out = BT.update_simple_backup(payload, x_r20_session="s")
+        out = BT.update_simple_backup(payload, x_astra_session="s")
         saved = self.update.call_args[0][1]
         types = {t["type"]: t for t in saved["targets"]}
         self.assertTrue(types["s3"]["enabled"])
@@ -216,28 +216,28 @@ class UpdateSimpleBackupTests(_BackupBase):
 
     def test_baidu_oauth_forces_the_oauth_auth_mode(self):
         payload = SimpleBackupUpdateRequest(destination="baidu_oauth", enabled=False)
-        BT.update_simple_backup(payload, x_r20_session="s")
+        BT.update_simple_backup(payload, x_astra_session="s")
         saved = self.update.call_args[0][1]
         baidu = [t for t in saved["targets"] if t["type"] == "baidu"][0]
         self.assertEqual(baidu["auth_mode"], "oauth")
 
     def test_local_retention_is_kept_and_value_error_is_400(self):
         payload = SimpleBackupUpdateRequest(destination="local", retention=9)
-        BT.update_simple_backup(payload, x_r20_session="s")
+        BT.update_simple_backup(payload, x_astra_session="s")
         saved = self.update.call_args[0][1]
         local = [t for t in saved["targets"] if t["type"] == "local"][0]
         self.assertEqual(local["retention"], 9)
 
         self.update.side_effect = ValueError("计划时间冲突")
         with self.assertRaises(HTTPException) as ctx:
-            BT.update_simple_backup(payload, x_r20_session="s")
+            BT.update_simple_backup(payload, x_astra_session="s")
         self.assertEqual(ctx.exception.status_code, 400)
 
 
 class TestSimpleBackupTests(_BackupBase):
     def test_local_directory_is_probed_and_cleaned(self):
         out = BT.test_simple_backup(SimpleBackupUpdateRequest(destination="local"),
-                                    x_r20_session="s")
+                                    x_astra_session="s")
         self.assertEqual(out["status"], "ready")
         self.assertFalse(out["sent"])
         self.assertFalse((self.root / "backups" / "local" / ".test_write.tmp").exists(),
@@ -248,17 +248,17 @@ class TestSimpleBackupTests(_BackupBase):
         (self.root / "backups" / "local").write_text("x", encoding="utf-8")
         with self.assertRaises(HTTPException) as ctx:
             BT.test_simple_backup(SimpleBackupUpdateRequest(destination="local"),
-                                  x_r20_session="s")
+                                  x_astra_session="s")
         self.assertEqual(ctx.exception.status_code, 400)
         self.assertIn("不可写", ctx.exception.detail)
 
     def test_local_directory_symlinked_outside_backups_is_400(self):
-        outside = Path(tempfile.mkdtemp(prefix="r20-outside-"))
+        outside = Path(tempfile.mkdtemp(prefix="astra-outside-"))
         self.addCleanup(shutil.rmtree, outside, True)
         os.symlink(outside, self.root / "backups" / "local")
         with self.assertRaises(HTTPException) as ctx:
             BT.test_simple_backup(SimpleBackupUpdateRequest(destination="local"),
-                                  x_r20_session="s")
+                                  x_astra_session="s")
         self.assertEqual(ctx.exception.status_code, 400)
         self.assertIn("必须位于 backups/ 目录下", ctx.exception.detail)
         self.assertFalse((outside / ".test_write.tmp").exists())
@@ -268,39 +268,39 @@ class TestSimpleBackupTests(_BackupBase):
         payload = SimpleBackupUpdateRequest(destination="s3", endpoint="https://s3",
                                             bucket="b", credentials={})
         with self.assertRaises(HTTPException) as ctx:
-            BT.test_simple_backup(payload, x_r20_session="s")
+            BT.test_simple_backup(payload, x_astra_session="s")
         self.assertEqual(ctx.exception.status_code, 400)
         self.assertIn("access_key_id", ctx.exception.detail)
         self.assertIn("secret_access_key", ctx.exception.detail)
 
     def test_saved_credentials_are_merged_before_the_missing_check(self):
-        import r20_backend.backup_secrets as BS
+        import astra_backend.backup_secrets as BS
         self._start(mock.patch.object(BT, "list_backup_jobs", return_value=[_job(
             targets=[{"id": "s3", "type": "s3", "enabled": True,
                       "credential_ref": "backup:s3", "endpoint": "https://s3",
                       "bucket": "b"}])]))
         self._start(mock.patch.object(BS, "load_credentials", return_value={
             "access_key_id": "k", "secret_access_key": "s"}))
-        self._start(mock.patch("r20_backend.net_security.validate_outbound_url",
+        self._start(mock.patch("astra_backend.net_security.validate_outbound_url",
                                side_effect=lambda u: u))
         out = BT.test_simple_backup(SimpleBackupUpdateRequest(destination="s3",
                                                               endpoint="https://s3",
                                                               bucket="b"),
-                                    x_r20_session="s")
+                                    x_astra_session="s")
         self.assertEqual(out["status"], "ready")
         self.assertFalse(out["sent"])
 
     def test_endpoint_and_bucket_are_required_after_credentials(self):
-        import r20_backend.backup_secrets as BS
+        import astra_backend.backup_secrets as BS
         self._start(mock.patch.object(BT, "list_backup_jobs", return_value=[_job()]))
         self._start(mock.patch.object(BS, "load_credentials", return_value={}))
-        self._start(mock.patch("r20_backend.net_security.validate_outbound_url",
+        self._start(mock.patch("astra_backend.net_security.validate_outbound_url",
                                side_effect=lambda u: u))
         creds = {"access_key_id": "k", "secret_access_key": "s"}
         with self.assertRaises(HTTPException) as ctx:
             BT.test_simple_backup(SimpleBackupUpdateRequest(destination="s3",
                                                             credentials=creds),
-                                  x_r20_session="s")
+                                  x_astra_session="s")
         self.assertEqual(ctx.exception.status_code, 400)
         self.assertIn("Endpoint", ctx.exception.detail)
 
@@ -308,52 +308,52 @@ class TestSimpleBackupTests(_BackupBase):
             BT.test_simple_backup(SimpleBackupUpdateRequest(destination="s3",
                                                             endpoint="https://s3",
                                                             credentials=creds),
-                                  x_r20_session="s")
+                                  x_astra_session="s")
         self.assertEqual(ctx.exception.status_code, 400)
         self.assertIn("Bucket", ctx.exception.detail)
 
     def test_outbound_url_rejection_is_400(self):
-        import r20_backend.backup_secrets as BS
+        import astra_backend.backup_secrets as BS
         self._start(mock.patch.object(BT, "list_backup_jobs", return_value=[_job()]))
         self._start(mock.patch.object(BS, "load_credentials", return_value={}))
-        self._start(mock.patch("r20_backend.net_security.validate_outbound_url",
+        self._start(mock.patch("astra_backend.net_security.validate_outbound_url",
                                side_effect=ValueError("内网地址被拒绝")))
         with self.assertRaises(HTTPException) as ctx:
             BT.test_simple_backup(SimpleBackupUpdateRequest(
                 destination="s3", endpoint="http://127.0.0.1", bucket="b",
                 credentials={"access_key_id": "k", "secret_access_key": "s"}),
-                x_r20_session="s")
+                x_astra_session="s")
         self.assertEqual(ctx.exception.status_code, 400)
         self.assertIn("内网", ctx.exception.detail)
 
     def test_webdav_needs_no_credentials_only_an_endpoint(self):
         self._start(mock.patch.object(BT, "list_backup_jobs", return_value=[_job()]))
-        self._start(mock.patch("r20_backend.net_security.validate_outbound_url",
+        self._start(mock.patch("astra_backend.net_security.validate_outbound_url",
                                side_effect=lambda u: u))
         out = BT.test_simple_backup(SimpleBackupUpdateRequest(
-            destination="webdav", endpoint="https://dav"), x_r20_session="s")
+            destination="webdav", endpoint="https://dav"), x_astra_session="s")
         self.assertEqual(out["destination"], "webdav")
 
     def test_unreadable_saved_credentials_are_tolerated(self):
-        import r20_backend.backup_secrets as BS
+        import astra_backend.backup_secrets as BS
         self._start(mock.patch.object(BT, "list_backup_jobs", return_value=[_job(
             targets=[{"id": "s3", "type": "s3", "enabled": True,
                       "credential_ref": "backup:s3", "endpoint": "https://s3",
                       "bucket": "b"}])]))
         self._start(mock.patch.object(BS, "load_credentials",
                                       side_effect=RuntimeError("密文库损坏")))
-        self._start(mock.patch("r20_backend.net_security.validate_outbound_url",
+        self._start(mock.patch("astra_backend.net_security.validate_outbound_url",
                                side_effect=lambda u: u))
         out = BT.test_simple_backup(SimpleBackupUpdateRequest(
             destination="s3", endpoint="https://s3", bucket="b",
             credentials={"access_key_id": "k", "secret_access_key": "s"}),
-            x_r20_session="s")
+            x_astra_session="s")
         self.assertEqual(out["status"], "ready", "读不到旧凭证不阻断，改用本次提交的")
 
 
 class BackupTargetAndCredentialTests(_BackupBase):
     def test_target_types_are_advertised(self):
-        out = BT.backup_target_types(x_r20_admin_token="tok")
+        out = BT.backup_target_types(x_astra_admin_token="tok")
         types = {t["type"] for t in out["target_types"]}
         self.assertIn("local", types)
         self.assertIn("baidu", types)
@@ -366,7 +366,7 @@ class BackupTargetAndCredentialTests(_BackupBase):
         out = BT.update_backup_credentials(
             mock.Mock(credential_ref="backup:s3",
                       credentials={"access_key_id": "secret-value"}),
-            x_r20_session="s")
+            x_astra_session="s")
         self.assertTrue(out["saved"])
         self.assertEqual(out["status"]["fields"], ["access_key_id"])
         self.assertEqual(self._rec()[0][2]["fields"], ["access_key_id"])
@@ -377,7 +377,7 @@ class BackupTargetAndCredentialTests(_BackupBase):
                                       side_effect=ValueError("未知引用")))
         with self.assertRaises(HTTPException) as ctx:
             BT.update_backup_credentials(
-                mock.Mock(credential_ref="x", credentials={}), x_r20_session="s")
+                mock.Mock(credential_ref="x", credentials={}), x_astra_session="s")
         self.assertEqual(ctx.exception.status_code, 400)
 
 
@@ -393,7 +393,7 @@ class BackupJobsTests(_BackupBase):
         (manifests / "m.json").write_text(json.dumps({"job_id": "nightly-default"}),
                                           encoding="utf-8")
         (manifests / "bad.json").write_text("nope", encoding="utf-8")
-        out = BT.backup_jobs_api(x_r20_admin_token="tok")
+        out = BT.backup_jobs_api(x_astra_admin_token="tok")
         self.assertEqual(out["limits"]["maximum_jobs"], 12)
         self.assertEqual(out["recent_manifests"][0]["manifest_file"], "m.json")
         self.assertEqual(out["jobs"][0]["targets"][0]["credential_status"],
@@ -403,42 +403,42 @@ class BackupJobsTests(_BackupBase):
         self._start(mock.patch.object(BT, "create_backup_job",
                                       side_effect=ValueError("超上限")))
         with self.assertRaises(HTTPException) as ctx:
-            BT.create_backup_job_api(BackupJobCreateRequest(name="n"), x_r20_session="s")
+            BT.create_backup_job_api(BackupJobCreateRequest(name="n"), x_astra_session="s")
         self.assertEqual(ctx.exception.status_code, 400)
 
     def test_create_job_success_audits(self):
         self._start(mock.patch.object(BT, "create_backup_job",
                                       return_value={"id": "new"}))
-        out = BT.create_backup_job_api(BackupJobCreateRequest(name="n"), x_r20_session="s")
+        out = BT.create_backup_job_api(BackupJobCreateRequest(name="n"), x_astra_session="s")
         self.assertEqual(out, {"job": {"id": "new"}})
         self.assertEqual(self._rec()[0][1], "success")
 
     def test_update_job_returns_validation_and_maps_error_to_400(self):
         self._start(mock.patch.object(BT, "update_backup_job",
                                       return_value={"id": "j", "enabled": True}))
-        out = BT.update_backup_job_api("j", BackupJobUpdateRequest(job={}), x_r20_session="s")
+        out = BT.update_backup_job_api("j", BackupJobUpdateRequest(job={}), x_astra_session="s")
         self.assertEqual(out["validation"], {"ok": True})
 
         self._start(mock.patch.object(BT, "update_backup_job",
                                       side_effect=ValueError("坏 job")))
         with self.assertRaises(HTTPException) as ctx:
-            BT.update_backup_job_api("j", BackupJobUpdateRequest(job={}), x_r20_session="s")
+            BT.update_backup_job_api("j", BackupJobUpdateRequest(job={}), x_astra_session="s")
         self.assertEqual(ctx.exception.status_code, 400)
 
     def test_delete_job_conflict_is_409_not_400(self):
         self._start(mock.patch.object(BT, "delete_backup_job",
                                       side_effect=ValueError("主任务不可删")))
         with self.assertRaises(HTTPException) as ctx:
-            BT.delete_backup_job_api("nightly-default", x_r20_session="s")
+            BT.delete_backup_job_api("nightly-default", x_astra_session="s")
         self.assertEqual(ctx.exception.status_code, 409)
 
         self._start(mock.patch.object(BT, "delete_backup_job"))
-        self.assertEqual(BT.delete_backup_job_api("x", x_r20_session="s"),
+        self.assertEqual(BT.delete_backup_job_api("x", x_astra_session="s"),
                          {"deleted": True})
 
     def test_validate_route_is_read_only(self):
         out = BT.validate_backup_job_api(BackupJobUpdateRequest(job={"a": 1}),
-                                         x_r20_admin_token="tok")
+                                         x_astra_admin_token="tok")
         self.assertEqual(out, {"ok": True})
         self.assertEqual(self.audits, [], "校验不写审计")
 
@@ -446,7 +446,7 @@ class BackupJobsTests(_BackupBase):
         self._start(mock.patch.object(BT, "export_backup_job",
                                       side_effect=ValueError("没有")))
         with self.assertRaises(HTTPException) as ctx:
-            BT.export_backup_job_api("x", x_r20_admin_token="tok")
+            BT.export_backup_job_api("x", x_astra_admin_token="tok")
         self.assertEqual(ctx.exception.status_code, 404)
 
     def test_import_job_maps_error_to_400(self):
@@ -454,14 +454,14 @@ class BackupJobsTests(_BackupBase):
                                       side_effect=ValueError("结构不对")))
         with self.assertRaises(HTTPException) as ctx:
             BT.import_backup_job_api(BackupJobImportRequest(payload={}),
-                                     x_r20_session="s")
+                                     x_astra_session="s")
         self.assertEqual(ctx.exception.status_code, 400)
 
     def test_import_job_success_audits_the_new_id(self):
         self._start(mock.patch.object(BT, "import_backup_job",
                                       return_value={"id": "imported"}))
         out = BT.import_backup_job_api(BackupJobImportRequest(payload={"a": 1}),
-                                       x_r20_session="s")
+                                       x_astra_session="s")
         self.assertEqual(out, {"job": {"id": "imported"}})
         self.assertEqual(self._rec()[0][0], "backup.job.import")
         self.assertEqual(self._rec()[0][2]["job_id"], "imported")
@@ -479,7 +479,7 @@ class RunJobTests(_BackupBase):
         with self.assertRaises(HTTPException) as ctx:
             BT.run_backup_job_api("nightly-default",
                                   BackupJobRunRequest(confirmation="BACKUP other"),
-                                  x_r20_session="s")
+                                  x_astra_session="s")
         self.assertEqual(ctx.exception.status_code, 400)
 
     def test_unknown_job_is_404(self):
@@ -487,7 +487,7 @@ class RunJobTests(_BackupBase):
         with self.assertRaises(HTTPException) as ctx:
             BT.run_backup_job_api("nightly-default",
                                   BackupJobRunRequest(confirmation="backup nightly-default"),
-                                  x_r20_session="s")
+                                  x_astra_session="s")
         self.assertEqual(ctx.exception.status_code, 404)
 
     def test_failed_script_is_502_and_writes_the_log(self):
@@ -496,7 +496,7 @@ class RunJobTests(_BackupBase):
         with self.assertRaises(HTTPException) as ctx:
             BT.run_backup_job_api("nightly-default",
                                   BackupJobRunRequest(confirmation="BACKUP nightly-default"),
-                                  x_r20_session="s")
+                                  x_astra_session="s")
         self.assertEqual(ctx.exception.status_code, 502)
         self.assertIn("boom", ctx.exception.detail)
         self.assertEqual(self._rec()[0][1], "failed")
@@ -507,7 +507,7 @@ class RunJobTests(_BackupBase):
         self._start(mock.patch.object(BT.subprocess, "run", runner))
         out = BT.run_backup_job_api("nightly-default",
                                     BackupJobRunRequest(confirmation="backup nightly-default"),
-                                    x_r20_session="s")
+                                    x_astra_session="s")
         self.assertTrue(out["completed"])
         self.assertEqual(out["output"], "done")
         self.assertEqual(runner.call_args[0][0][-2:], ["--job-id", "nightly-default"])
@@ -520,7 +520,7 @@ class VerifyArchiveTests(_BackupBase):
         (self.root / "secret.tar.gz").write_bytes(b"x")
         with self.assertRaises(HTTPException) as ctx:
             BT.verify_backup_archive_api(
-                BackupVerifyRequest(archive_path="secret.tar.gz"), x_r20_session="s")
+                BackupVerifyRequest(archive_path="secret.tar.gz"), x_astra_session="s")
         self.assertEqual(ctx.exception.status_code, 400)
         self.assertIn("backups/", ctx.exception.detail)
 
@@ -531,7 +531,7 @@ class VerifyArchiveTests(_BackupBase):
             with self.assertRaises(HTTPException) as ctx:
                 BT.verify_backup_archive_api(
                     BackupVerifyRequest(archive_path="backups/a.tar.gz"),
-                    x_r20_session="s")
+                    x_astra_session="s")
         self.assertEqual(ctx.exception.status_code, 409)
 
     def test_success_audits_member_count(self):
@@ -539,7 +539,7 @@ class VerifyArchiveTests(_BackupBase):
         with _fake_backup_runtime(verify_archive=mock.Mock(
                 return_value={"members": 4, "sha256": "abc"})):
             out = BT.verify_backup_archive_api(
-                BackupVerifyRequest(archive_path="backups/a.tar.gz"), x_r20_session="s")
+                BackupVerifyRequest(archive_path="backups/a.tar.gz"), x_astra_session="s")
         self.assertEqual(out["members"], 4)
         self.assertEqual(self._rec()[0][2]["members"], 4)
 
@@ -550,7 +550,7 @@ class BackupMethodsTests(_BackupBase):
                                       local_retention=3, sqlite_enabled=False,
                                       sqlite_retention=3)
         with self.assertRaises(HTTPException) as ctx:
-            BT.update_backup_methods(payload, x_r20_admin_token="tok")
+            BT.update_backup_methods(payload, x_astra_admin_token="tok")
         self.assertEqual(ctx.exception.status_code, 400)
 
     def test_saving_methods_audits_the_enabled_flags(self):
@@ -562,7 +562,7 @@ class BackupMethodsTests(_BackupBase):
             BackupMethodsUpdate(baidu_enabled=False, local_enabled=True,
                                 local_retention=5, sqlite_enabled=True,
                                 sqlite_retention=7),
-            x_r20_admin_token="tok")
+            x_astra_admin_token="tok")
         self.assertEqual(saved[-1]["sqlite"]["retention"], 7)
         self.assertEqual(saved[-1]["baidu"]["retention"], 0)
         self.assertTrue(out["saved"])
@@ -576,21 +576,21 @@ class BackupMethodsTests(_BackupBase):
         (self.root / "backups" / "sqlite" / "snap.db").write_bytes(b"c")
         self._start(mock.patch.object(BT, "load_backup_methods", return_value={}))
         self._start(mock.patch.object(BT, "list_backup_jobs", return_value=[]))
-        out = BT.backup_status(x_r20_admin_token="tok")
+        out = BT.backup_status(x_astra_admin_token="tok")
         names = {a["name"] for a in out["local_archives"]}
         self.assertEqual(names, {"top.tar.gz", "local/inner.tar.gz"})
         self.assertEqual(out["sqlite_snapshots"][0]["name"], "snap.db")
         self.assertEqual(out["last_log"], "尚无后台手动灾备日志")
 
         self.log_file.write_text("previous run", encoding="utf-8")
-        out = BT.backup_status(x_r20_admin_token="tok")
+        out = BT.backup_status(x_astra_admin_token="tok")
         self.assertEqual(out["last_log"], "previous run")
 
 
 class RunBackupTests(_BackupBase):
     def test_confirmation_is_mandatory(self):
         with self.assertRaises(HTTPException) as ctx:
-            BT.run_backup(BackupRequest(confirmation="BACKUP"), x_r20_admin_token="tok")
+            BT.run_backup(BackupRequest(confirmation="BACKUP"), x_astra_admin_token="tok")
         self.assertEqual(ctx.exception.status_code, 400)
 
     def test_failure_is_502_and_success_reports_output(self):
@@ -599,13 +599,13 @@ class RunBackupTests(_BackupBase):
         (self.root / "scripts" / "nightly_backup_and_clean.py").write_text("x",
                                                                           encoding="utf-8")
         with self.assertRaises(HTTPException) as ctx:
-            BT.run_backup(BackupRequest(confirmation="backup r20"), x_r20_admin_token="tok")
+            BT.run_backup(BackupRequest(confirmation="backup astra"), x_astra_admin_token="tok")
         self.assertEqual(ctx.exception.status_code, 502)
         self.assertEqual(self._rec()[0][1], "failed")
 
         self._start(mock.patch.object(BT.subprocess, "run", return_value=mock.Mock(
             returncode=0, stdout="all good", stderr="")))
-        out = BT.run_backup(BackupRequest(confirmation="BACKUP R20"), x_r20_admin_token="tok")
+        out = BT.run_backup(BackupRequest(confirmation="BACKUP ASTRA"), x_astra_admin_token="tok")
         self.assertTrue(out["completed"])
         self.assertEqual(out["output"], "all good")
         self.assertEqual(self._rec()[0][1], "success")
@@ -621,22 +621,22 @@ class DownloadBackupTests(_BackupBase):
 
     def test_dotdot_is_400_before_any_lookup(self):
         with self.assertRaises(HTTPException) as ctx:
-            BT.download_backup_archive("../etc/passwd", x_r20_admin_token="tok")
+            BT.download_backup_archive("../etc/passwd", x_astra_admin_token="tok")
         self.assertEqual(ctx.exception.status_code, 400)
         self.assertIn("..", ctx.exception.detail)
 
     def test_missing_file_is_404(self):
         with self.assertRaises(HTTPException) as ctx:
-            BT.download_backup_archive("nope.tar.gz", x_r20_admin_token="tok")
+            BT.download_backup_archive("nope.tar.gz", x_astra_admin_token="tok")
         self.assertEqual(ctx.exception.status_code, 404)
 
     def test_session_can_come_from_the_query_token(self):
-        out = BT.download_backup_archive("b.tar.gz", token="sess", x_r20_admin_token=None)
+        out = BT.download_backup_archive("b.tar.gz", token="sess", x_astra_admin_token=None)
         self.assertIsInstance(out, FileResponse)
         self.admin.assert_called_once_with(None, "sess")
 
     def test_success_sets_attachment_headers_and_audits(self):
-        out = BT.download_backup_archive("b.tar.gz", x_r20_admin_token="tok")
+        out = BT.download_backup_archive("b.tar.gz", x_astra_admin_token="tok")
         self.assertEqual(out.media_type, "application/gzip")
         self.assertIn("attachment", out.headers["content-disposition"])
         self.assertEqual(self._rec()[0][0], "backup.download")
@@ -644,17 +644,17 @@ class DownloadBackupTests(_BackupBase):
     def test_nested_name_resolves_inside_backups(self):
         (self.root / "backups" / "nested").mkdir(exist_ok=True)
         (self.root / "backups" / "nested" / "n.tar.gz").write_bytes(b"n")
-        out = BT.download_backup_archive("nested/n.tar.gz", x_r20_admin_token="tok")
+        out = BT.download_backup_archive("nested/n.tar.gz", x_astra_admin_token="tok")
         self.assertIsInstance(out, FileResponse)
 
     def test_symlink_escaping_backups_is_400(self):
-        outside = Path(tempfile.mkdtemp(prefix="r20-outside-"))
+        outside = Path(tempfile.mkdtemp(prefix="astra-outside-"))
         self.addCleanup(shutil.rmtree, outside, True)
         target = outside / "real.tar.gz"
         target.write_bytes(b"x")
         os.symlink(target, self.root / "backups" / "esc.tar.gz")
         with self.assertRaises(HTTPException) as ctx:
-            BT.download_backup_archive("esc.tar.gz", x_r20_admin_token="tok")
+            BT.download_backup_archive("esc.tar.gz", x_astra_admin_token="tok")
         self.assertEqual(ctx.exception.status_code, 400)
         self.assertIn("非法文件路径", ctx.exception.detail)
 
@@ -672,20 +672,20 @@ class UploadBackupTests(_BackupBase):
     def test_extension_is_checked(self):
         with self.assertRaises(HTTPException) as ctx:
             asyncio.run(BT.upload_backup_archive(file=_Upload("a.zip", b"x"),
-                                                 x_r20_session="s"))
+                                                 x_astra_session="s"))
         self.assertEqual(ctx.exception.status_code, 400)
         self.assertIn(".tar.gz", ctx.exception.detail)
 
     def test_dotdot_in_the_clean_name_is_400(self):
         with self.assertRaises(HTTPException) as ctx:
             asyncio.run(BT.upload_backup_archive(file=_Upload("..hidden.tar.gz", b"x"),
-                                                 x_r20_session="s"))
+                                                 x_astra_session="s"))
         self.assertEqual(ctx.exception.status_code, 400)
         self.assertIn("非法文件名", ctx.exception.detail)
 
     def test_directory_traversal_is_neutralised_by_the_basename(self):
         out = asyncio.run(BT.upload_backup_archive(file=_Upload("../a.tar.gz", b"x"),
-                                                   x_r20_session="s"))
+                                                   x_astra_session="s"))
         self.assertEqual(out["filename"], "a.tar.gz")
         self.assertTrue((self.root / "backups" / "local" / "a.tar.gz").exists())
         self.assertFalse((self.root / "a.tar.gz").exists())
@@ -693,12 +693,12 @@ class UploadBackupTests(_BackupBase):
     def test_missing_filename_is_400(self):
         with self.assertRaises(HTTPException) as ctx:
             asyncio.run(BT.upload_backup_archive(file=_Upload(None, b"x"),
-                                                 x_r20_session="s"))
+                                                 x_astra_session="s"))
         self.assertEqual(ctx.exception.status_code, 400)
 
     def test_success_writes_into_backups_local(self):
         out = asyncio.run(BT.upload_backup_archive(file=_Upload("new.tar.gz", b"data"),
-                                                   x_r20_session="s"))
+                                                   x_astra_session="s"))
         self.assertTrue(out["uploaded"])
         self.assertEqual(out["bytes"], 4)
         self.assertTrue((self.root / "backups" / "local" / "new.tar.gz").exists())
@@ -727,14 +727,14 @@ class RestoreBackupTests(_BackupBase):
         with self.assertRaises(HTTPException) as ctx:
             BT.restore_backup_archive(
                 BackupRestoreRequest(archive_name="a.tar.gz", confirmation="RESTORE"),
-                x_r20_session="s")
+                x_astra_session="s")
         self.assertEqual(ctx.exception.status_code, 400)
 
         with self.assertRaises(HTTPException) as ctx:
             BT.restore_backup_archive(
                 BackupRestoreRequest(archive_name="../a.tar.gz",
-                                     confirmation="RESTORE R20"),
-                x_r20_session="s")
+                                     confirmation="RESTORE ASTRA"),
+                x_astra_session="s")
         self.assertEqual(ctx.exception.status_code, 400)
         self.assertIn("..", ctx.exception.detail)
 
@@ -742,8 +742,8 @@ class RestoreBackupTests(_BackupBase):
         with self.assertRaises(HTTPException) as ctx:
             BT.restore_backup_archive(
                 BackupRestoreRequest(archive_name="nope.tar.gz",
-                                     confirmation="RESTORE R20"),
-                x_r20_session="s")
+                                     confirmation="RESTORE ASTRA"),
+                x_astra_session="s")
         self.assertEqual(ctx.exception.status_code, 404)
 
     def test_restore_extracts_relative_members_and_audits(self):
@@ -755,8 +755,8 @@ class RestoreBackupTests(_BackupBase):
         with tarfile.open(path, "w:gz") as tar:
             tar.addfile(info, io.BytesIO(payload))
         out = BT.restore_backup_archive(
-            BackupRestoreRequest(archive_name="good.tar.gz", confirmation="RESTORE R20"),
-            x_r20_session="s")
+            BackupRestoreRequest(archive_name="good.tar.gz", confirmation="RESTORE ASTRA"),
+            x_astra_session="s")
         self.assertTrue(out["restored"])
         self.assertEqual(out["restored_count"], 1)
         self.assertTrue((self.root / "data" / "ok.txt").exists())
@@ -773,8 +773,8 @@ class RestoreBackupTests(_BackupBase):
         with self.assertRaises(HTTPException) as ctx:
             BT.restore_backup_archive(
                 BackupRestoreRequest(archive_name="abs.tar.gz",
-                                     confirmation="RESTORE R20"),
-                x_r20_session="s")
+                                     confirmation="RESTORE ASTRA"),
+                x_astra_session="s")
         self.assertEqual(ctx.exception.status_code, 400)
         self.assertIn("绝对路径", ctx.exception.detail)
 
@@ -789,8 +789,8 @@ class RestoreBackupTests(_BackupBase):
         with self.assertRaises(HTTPException) as ctx:
             BT.restore_backup_archive(
                 BackupRestoreRequest(archive_name="esc.tar.gz",
-                                     confirmation="RESTORE R20"),
-                x_r20_session="s")
+                                     confirmation="RESTORE ASTRA"),
+                x_astra_session="s")
         self.assertEqual(ctx.exception.status_code, 400)
         self.assertIn("逃逸", ctx.exception.detail)
         self.assertFalse((self.root.parent / "evil.txt").exists())
@@ -805,8 +805,8 @@ class RestoreBackupTests(_BackupBase):
         with self.assertRaises(HTTPException) as ctx:
             BT.restore_backup_archive(
                 BackupRestoreRequest(archive_name="link.tar.gz",
-                                     confirmation="RESTORE R20"),
-                x_r20_session="s")
+                                     confirmation="RESTORE ASTRA"),
+                x_astra_session="s")
         self.assertEqual(ctx.exception.status_code, 400)
         self.assertIn("符号链接", ctx.exception.detail)
 
@@ -819,8 +819,8 @@ class RestoreBackupTests(_BackupBase):
         with self.assertRaises(HTTPException) as ctx:
             BT.restore_backup_archive(
                 BackupRestoreRequest(archive_name="dev.tar.gz",
-                                     confirmation="RESTORE R20"),
-                x_r20_session="s")
+                                     confirmation="RESTORE ASTRA"),
+                x_astra_session="s")
         self.assertEqual(ctx.exception.status_code, 400)
         self.assertIn("设备节点", ctx.exception.detail)
 
@@ -829,8 +829,8 @@ class RestoreBackupTests(_BackupBase):
         with self.assertRaises(HTTPException) as ctx:
             BT.restore_backup_archive(
                 BackupRestoreRequest(archive_name="bad.tar.gz",
-                                     confirmation="RESTORE R20"),
-                x_r20_session="s")
+                                     confirmation="RESTORE ASTRA"),
+                x_astra_session="s")
         self.assertEqual(ctx.exception.status_code, 400)
         self.assertIn("损坏", ctx.exception.detail)
 
@@ -844,27 +844,27 @@ class RestoreBackupTests(_BackupBase):
         with tarfile.open(nested / "n.tar.gz", "w:gz") as tar:
             tar.addfile(info, io.BytesIO(payload))
         out = BT.restore_backup_archive(
-            BackupRestoreRequest(archive_name="nested/n.tar.gz", confirmation="RESTORE R20"),
-            x_r20_session="s")
+            BackupRestoreRequest(archive_name="nested/n.tar.gz", confirmation="RESTORE ASTRA"),
+            x_astra_session="s")
         self.assertEqual(out["restored_count"], 1)
         self.assertTrue((self.root / "data" / "nested.txt").exists())
 
     def test_symlink_escaping_backups_is_400(self):
-        outside = Path(tempfile.mkdtemp(prefix="r20-outside-"))
+        outside = Path(tempfile.mkdtemp(prefix="astra-outside-"))
         self.addCleanup(shutil.rmtree, outside, True)
         target = outside / "real.tar.gz"
         target.write_bytes(b"x")
         os.symlink(target, self.backups / "esc.tar.gz")
         with self.assertRaises(HTTPException) as ctx:
             BT.restore_backup_archive(
-                BackupRestoreRequest(archive_name="esc.tar.gz", confirmation="RESTORE R20"),
-                x_r20_session="s")
+                BackupRestoreRequest(archive_name="esc.tar.gz", confirmation="RESTORE ASTRA"),
+                x_astra_session="s")
         self.assertEqual(ctx.exception.status_code, 400)
         self.assertIn("路径不合法", ctx.exception.detail)
 
     def test_member_resolving_outside_via_a_symlinked_dir_is_400(self):
         import io
-        outside = Path(tempfile.mkdtemp(prefix="r20-outside-"))
+        outside = Path(tempfile.mkdtemp(prefix="astra-outside-"))
         self.addCleanup(shutil.rmtree, outside, True)
         os.symlink(outside, self.root / "linkdir")
         info = tarfile.TarInfo("linkdir/x.txt")
@@ -876,14 +876,14 @@ class RestoreBackupTests(_BackupBase):
         with self.assertRaises(HTTPException) as ctx:
             BT.restore_backup_archive(
                 BackupRestoreRequest(archive_name="resolve.tar.gz",
-                                     confirmation="RESTORE R20"),
-                x_r20_session="s")
+                                     confirmation="RESTORE ASTRA"),
+                x_astra_session="s")
         self.assertEqual(ctx.exception.status_code, 400)
         self.assertIn("越界", ctx.exception.detail)
         self.assertFalse((outside / "x.txt").exists())
 
     def test_symlink_target_resolving_outside_is_400(self):
-        outside = Path(tempfile.mkdtemp(prefix="r20-outside-"))
+        outside = Path(tempfile.mkdtemp(prefix="astra-outside-"))
         self.addCleanup(shutil.rmtree, outside, True)
         # linkname 既不是绝对路径也不含 ".."，但经 root 下的软链解析后落到项目外
         os.symlink(outside, self.root / "outdir")
@@ -896,8 +896,8 @@ class RestoreBackupTests(_BackupBase):
         with self.assertRaises(HTTPException) as ctx:
             BT.restore_backup_archive(
                 BackupRestoreRequest(archive_name="linktarget.tar.gz",
-                                     confirmation="RESTORE R20"),
-                x_r20_session="s")
+                                     confirmation="RESTORE ASTRA"),
+                x_astra_session="s")
         self.assertEqual(ctx.exception.status_code, 400)
         self.assertIn("符号链接指向项目外部", ctx.exception.detail)
 
@@ -912,26 +912,26 @@ class RestoreBackupTests(_BackupBase):
         with self.assertRaises(HTTPException) as ctx:
             BT.restore_backup_archive(
                 BackupRestoreRequest(archive_name="enc.tar.gz.aes256",
-                                     confirmation="RESTORE R20"),
-                x_r20_session="s")
+                                     confirmation="RESTORE ASTRA"),
+                x_astra_session="s")
         self.assertEqual(ctx.exception.status_code, 400)
         self.assertIn("加密密钥", ctx.exception.detail)
 
     def test_decrypt_failure_is_400_and_temp_is_cleaned(self):
         (self.backups / "enc.tar.gz.aes256").write_bytes(b"cipher")
-        os.environ["R20_TEST_KEY"] = "k"
-        self.addCleanup(lambda: os.environ.pop("R20_TEST_KEY", None))
+        os.environ["ASTRA_TEST_KEY"] = "k"
+        self.addCleanup(lambda: os.environ.pop("ASTRA_TEST_KEY", None))
         with _fake_backup_runtime(decrypt_archive=mock.Mock(
                 side_effect=RuntimeError("密钥不对"))):
             with self.assertRaises(HTTPException) as ctx:
                 BT.restore_backup_archive(
                     BackupRestoreRequest(archive_name="enc.tar.gz.aes256",
-                                         confirmation="RESTORE R20",
-                                         key_env="R20_TEST_KEY"),
-                    x_r20_session="s")
+                                         confirmation="RESTORE ASTRA",
+                                         key_env="ASTRA_TEST_KEY"),
+                    x_astra_session="s")
         self.assertEqual(ctx.exception.status_code, 400)
         self.assertIn("解密归档失败", ctx.exception.detail)
-        leftovers = [p for p in self.backups.iterdir() if p.name.startswith("r20-restore-")]
+        leftovers = [p for p in self.backups.iterdir() if p.name.startswith("astra-restore-")]
         self.assertEqual(leftovers, [], "失败后临时明文必须清理")
 
 

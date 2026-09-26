@@ -10,7 +10,7 @@
 |---|---|
 | ★ **文件优先于环境** | `INITIAL_CAPITAL` 只是**兜底**：文件里有值就用文件；文件里缺失/非法/非正 ⇒ 才回落到环境，环境再非法 ⇒ `DEFAULT_CAPITAL` |
 | ★ **非正数一律视为无效** | `_number` 对 `0`/负数/`"0"`/`"-5"` 全部回落默认（本金为 0 会让所有收益率除零）|
-| ★ **演进起点三级回落** | `R20_EVOLUTION_START_TIME`(环境) → 文件 `evolution_start_time` → 文件 `reset_time` → `"2026-09-01 00:00:00"`；**空串算缺失**（用 `or` 链，不是 `get` 的 None 判断）|
+| ★ **演进起点三级回落** | `ASTRA_EVOLUTION_START_TIME`(环境) → 文件 `evolution_start_time` → 文件 `reset_time` → `"2026-09-01 00:00:00"`；**空串算缺失**（用 `or` 链，不是 `get` 的 None 判断）|
 | ★ **`reset_time` 缺省是 1970 纪元** | 缺失或空串 ⇒ `"1970-01-01 00:00:00"`（与演进起点缺省**不同**，两者不是同一个兜底）|
 | ★ **非 dict 载荷不炸** | JSON 合法但是数组/字符串 ⇒ 当空档处理（`isinstance` 守卫），绝不 `AttributeError` |
 | ★ **更新是锁内 RMW** | `update_initial_capital` / `update_evolution_start_time` 都在 `file_lock(BASELINE_FILE)` 内 load→merge→原子替换 |
@@ -29,8 +29,8 @@ from datetime import timedelta
 from pathlib import Path
 from unittest import mock
 
-from r20_backend import account_baseline as AB
-from r20_backend import file_locks
+from astra_backend import account_baseline as AB
+from astra_backend import file_locks
 
 
 class _Base(unittest.TestCase):
@@ -40,7 +40,7 @@ class _Base(unittest.TestCase):
         return started
 
     def setUp(self):
-        self.tmp = Path(tempfile.mkdtemp(prefix="r20-baseline-"))
+        self.tmp = Path(tempfile.mkdtemp(prefix="astra-baseline-"))
         self.addCleanup(shutil.rmtree, self.tmp, True)
         self.file = self.tmp / "data" / "account_initial_state.json"
         self._start(mock.patch.object(AB, "BASELINE_FILE", self.file))
@@ -50,7 +50,7 @@ class _Base(unittest.TestCase):
 
     def _env(self, **values):
         clean = {k: v for k, v in os.environ.items()
-                 if k not in ("INITIAL_CAPITAL", "R20_EVOLUTION_START_TIME")}
+                 if k not in ("INITIAL_CAPITAL", "ASTRA_EVOLUTION_START_TIME")}
         clean.update(values)
         return self._start(mock.patch.dict(os.environ, clean, clear=True))
 
@@ -154,13 +154,13 @@ class LoadBaselineTests(_Base):
                          AB.DEFAULT_CAPITAL)
 
     def test_env_evolution_start_beats_the_file(self):
-        self._env(R20_EVOLUTION_START_TIME="2026-08-08 12:00:00")
+        self._env(ASTRA_EVOLUTION_START_TIME="2026-08-08 12:00:00")
         self._write({"evolution_start_time": "2026-06-06 00:00:00"})
         self.assertEqual(AB.load_account_baseline()["evolution_start_time"],
                          "2026-08-08 12:00:00")
 
     def test_blank_env_evolution_start_falls_through_to_the_file(self):
-        self._env(R20_EVOLUTION_START_TIME="   ")
+        self._env(ASTRA_EVOLUTION_START_TIME="   ")
         self._write({"evolution_start_time": "2026-06-06 00:00:00"})
         self.assertEqual(AB.load_account_baseline()["evolution_start_time"],
                          "2026-06-06 00:00:00")
@@ -322,7 +322,7 @@ class UpdateEvolutionStartTests(_Base):
 
     def test_env_override_still_wins_when_reading_back(self):
         AB.update_evolution_start_time("2026-07-01")
-        self._env(R20_EVOLUTION_START_TIME="2026-09-09 09:09:09")
+        self._env(ASTRA_EVOLUTION_START_TIME="2026-09-09 09:09:09")
         self.assertEqual(AB.load_account_baseline()["evolution_start_time"],
                          "2026-09-09 09:09:09",
                          "写入文件的只是回落值；环境变量仍然优先")

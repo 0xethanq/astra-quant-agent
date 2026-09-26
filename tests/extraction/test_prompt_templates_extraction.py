@@ -39,7 +39,7 @@
 3. **手写签名全错**：我以为 `base_template_text(profile, key)` 之类，
    实际签名逐个不同；改用 **AST 取真实签名** 生成薄壳。
 4. **忘了对外部调用者保持签名**：`pipeline_view` 等在
-   `r20_backend/routers/strategy/prompts.py` 有调用点，故新形参一律
+   `astra_backend/routers/strategy/prompts.py` 有调用点，故新形参一律
    **keyword-only 且由门面补齐**，公开签名对外不变。
 5. **漏了 `align_pipeline_sources` 也调 `base_template_text`** →
    最后改用 `base_text_resolver` 回调统一注入，而不是把
@@ -71,6 +71,7 @@ MOVED = ["stable_base_module_id", "_module", "text_to_modules", "compile_modules
 
 import prompt_library as pl  # noqa: E402
 import prompt_templates as pt  # noqa: E402
+from tests.extraction.rename_baseline import legacy_rev_path, normalize
 
 
 class FacadeSurfaceTest(unittest.TestCase):
@@ -297,12 +298,12 @@ class VerbatimCopyTest(unittest.TestCase):
     def test_moved_bodies_match_pre_extraction_except_injected_names(self):
         import subprocess
         old_src = subprocess.run(
-            ["git", "show", f"{PRE_EXTRACTION_COMMIT}:scripts/prompt_library.py"],
+            ["git", "show", legacy_rev_path(f"{PRE_EXTRACTION_COMMIT}:scripts/prompt_library.py")],
             capture_output=True, text=True, cwd=str(ROOT))
         self.assertEqual(old_src.returncode, 0, old_src.stderr)
         new_src = SHARED.read_text(encoding="utf-8")
 
-        old_tree = ast.parse(old_src.stdout)
+        old_tree = ast.parse(normalize(old_src.stdout))
         new_tree = ast.parse(new_src)
 
         for name in MOVED:

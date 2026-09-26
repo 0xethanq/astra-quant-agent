@@ -16,7 +16,7 @@ except ImportError:  # flat import when scripts/ itself is on sys.path
 def validate_quote_geometry_and_rr(action: str, entry: Any, tp: Any, sl: Any, enforce_max_rr: bool = False) -> Tuple[bool, str, float]:
     """Validates that opening quote prices are positive, finite numbers satisfying
     action-specific geometry, and that the calculated risk-reward ratio meets or exceeds
-    the configurable floor (R20_MIN_RISK_REWARD, default 2.0).
+    the configurable floor (ASTRA_MIN_RISK_REWARD, default 2.0).
     Returns (is_valid, failure_reason, rr_ratio).
     """
     raw_act = str(action or "").upper()

@@ -1,4 +1,0 @@
-# 占位：
-# `r20_backend/web_shell.py` 用 StaticFiles(directory=dashboard/static) 挂载 /static，
-# 默认 check_dir=True ⇒ 该目录**必须存在**，否则全新 clone 启动即失败。
-# 2026-09-15 归档了这里最后三个前端库（全仓零引用）后目录变空，故留此占位文件。

@@ -429,8 +429,8 @@ class PlaceOrderTests(_CaptureRequest):
 
     def test_a_client_order_id_is_forwarded(self):
         # ★ 第 283/284 行
-        okx.place_order("BTC-USDT-SWAP", "buy", 1, cl_ord_id="R20-1")
-        self.assertEqual(self.sent["params"]["clOrdId"], "R20-1")
+        okx.place_order("BTC-USDT-SWAP", "buy", 1, cl_ord_id="ASTRA-1")
+        self.assertEqual(self.sent["params"]["clOrdId"], "ASTRA-1")
 
     def test_a_falsy_client_order_id_is_omitted(self):
         okx.place_order("BTC-USDT-SWAP", "buy", 1, cl_ord_id="")

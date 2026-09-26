@@ -140,8 +140,8 @@ AstraQuant 是一套面向专业交易团队与量化交易员的**多交易所�
 | :--- | :--- | :--- | :--- |
 | `trader` | `logs/ai_factor_trader.log` | 量化交易主脑巡检进程 | 标的池行情获取、多席位辩论推演、置信度过滤、选所路由、保护单挂载与止损棘轮收紧 |
 | `backend` | `logs/uvicorn.log` | FastAPI / Uvicorn 异步服务 | HTTP 请求响应流水、中间件拦截、CORS、异常堆栈与只读数据面报错 |
-| `scheduler` | `logs/r20_gateway.log` | 调度守护进程 | 调度器单例锁抢占、定时任务触发、心跳租约与碎片清理 |
-| `audit` | `logs/r20_admin_audit.jsonl` | 安全审计子系统（Append-Only） | 操作时间戳、IP、动作类型与结果（登录鉴权、改密、凭证编辑、风控调参、紧急全平仓） |
+| `scheduler` | `logs/astra_gateway.log` | 调度守护进程 | 调度器单例锁抢占、定时任务触发、心跳租约与碎片清理 |
+| `audit` | `logs/astra_admin_audit.jsonl` | 安全审计子系统（Append-Only） | 操作时间戳、IP、动作类型与结果（登录鉴权、改密、凭证编辑、风控调参、紧急全平仓） |
 
 Prometheus + Grafana 观测栈见 [`deploy/observability/README.md`](deploy/observability/README.md)：把 `/api/v1/admin/metrics` 变成面板与告警，端口默认只绑 `127.0.0.1`。
 
@@ -190,7 +190,7 @@ node --test tests/*.test.mjs
 
 | 想了解 | 看这里 | 说明 |
 |---|---|---|
-| **后端分层体系** | `r20_backend/README.md` | 后端分层（L0 门面 / L1 装配 / L2 路由 / L3 领域 / L4 子包）、新模块抽取约定 |
+| **后端分层体系** | `astra_backend/README.md` | 后端分层（L0 门面 / L1 装配 / L2 路由 / L3 领域 / L4 子包）、新模块抽取约定 |
 | **运行时守护脚本** | `scripts/README.md` | 哪个是入口/守护、根层模块用途、调度周期与双拼写 import 规范 |
 | **前端组件与状态** | `frontend/src/components/admin/README.md` | 前端组件与 Composable 划分、Vue 3 后台与操盘看板状态机 |
 | **独立部署环境** | `STANDALONE.md` | 本地独立部署、环境变量配置与服务拉起 |
@@ -201,7 +201,7 @@ node --test tests/*.test.mjs
 **架构门禁保障机制**（这三道闸会盯着文档本身）：
 
 1. **子包模块全登记** —— `tests/audit/test_directory_docs_current.py` 强制受管子包的新增模块写入各自 `__init__.py` 清单；
-2. **根层模块全登记** —— `r20_backend/*.py` 与 `scripts/*.py` 根层模块必须登记在对应 `README.md` 的表格里；
+2. **根层模块全登记** —— `astra_backend/*.py` 与 `scripts/*.py` 根层模块必须登记在对应 `README.md` 的表格里；
 3. **文档数字防腐烂** —— `tests/core/test_readme_baseline_numbers.py` 要求基线测试数字与仓内真实用例数保持同量级对齐，漂到两倍就会被抓住。
 
 > 📌 **提交纪律**：门禁必须跑在**将要提交的那棵树**上（`git status --short` + 对每个新文件 `git ls-files --error-unmatch`）。
@@ -237,11 +237,11 @@ vim .env
 source .venv/bin/activate
 cd frontend && npm install && npm run build && cd ..
 
-python -m uvicorn r20_backend.app:app --host 0.0.0.0 --port 8080
+python -m uvicorn astra_backend.app:app --host 0.0.0.0 --port 8080
 # 或一键拉起：./start.sh
 ```
 
-Windows / PowerShell 用户可用 `start.ps1`。systemd 单元模板在 `deploy/`（见 `deploy/r20-quantum.service` 等三份）。
+Windows / PowerShell 用户可用 `start.ps1`。systemd 单元模板在 `deploy/`（见 `deploy/astra-quant.service` 等三份）。
 
 ---
 
@@ -264,21 +264,49 @@ Windows / PowerShell 用户可用 `start.ps1`。systemd 单元模板在 `deploy/
 
 ---
 
-## 🏷️ 品牌与内部代号（改名时必读）
+## 🏷️ 品牌与内部命名空间（改名时必读）
 
-**对外品牌：AstraQuant**（官网 <https://www.astraquant.tech>，英文/中文文档见 [README.md](README.md) / [README.zh-CN.md](README.zh-CN.md)）。**内部代号：R20。**
+**对外品牌：AstraQuant**（官网 <https://www.astraquant.tech>；中/英文档见 [README.zh-CN.md](README.zh-CN.md) / [README.md](README.md)）。
+**内部命名空间：`astra`。**
 
-2026-09 做过一次品牌改名，**只改了对外可见的那一层**，内部标识**有意保留**：
+### `r20` 命名空间已经不存在了 —— 改名已完成
 
-| 层 | 内容 | 状态 |
+分三档做完，2026-09-27 收口：
+
+| 档 | 范围 | 现状 |
 |---|---|---|
-| **对外** | 仓库名 · description · topics · README · 界面品牌串 · 通知标题 · 容器镜像名 · robots/sitemap/canonical | **AstraQuant** |
-| **内部** | Python 包名 `r20_backend` / `r20_gateway` · **`R20_*` 环境变量键** · 含 r20 的文件名 · DB 文件名 | **保留 R20** |
-| **内部（有线契约）** | 会话头 `X-R20-Session` · 高危操作确认短语 `UPDATE R20` / `BACKUP R20` / `RESTORE R20` · 备份归档魔数 `R20GCM2` · Grafana 面板 UID `r20-quantum-trader` · systemd 单元里的 `/opt/r20-quantum-trader` | **保留 R20** |
+| 1 | 对外品牌串：仓库名 · description · topics · README · 界面文案 · 通知标题 · 容器镜像名 · canonical / robots / sitemap | **AstraQuant** |
+| 2 | Python 包 `r20_backend` / `r20_gateway` → `astra_*`；**154 个文件名**；systemd 单元；Grafana 面板；部署路径 | **astra** |
+| 3 | **129 个 `R20_*` 环境变量键** → `ASTRA_*` · 会话头 → `X-Astra-Session` · 高危操作确认短语 → `UPDATE` / `BACKUP` / `RESTORE ASTRA` · 库/锁/日志文件名 | **astra** |
 
-**为什么内部不一起改**：`R20_*` 是**用户已经写进 `.env` 的配置契约** —— 改前缀会让所有已部署实例**静默失去配置**（回到"未就绪"），而对外一分流量都换不来；包名牵连 2000+ 处 import；确认短语与会话头是前后端**逐字校验**的线上契约，单边改会让高危操作用不了。所以后来者若要"把改名做彻底"，请先读本节：**那不是遗留未完成，是有意为之**。
+**第 3 档是硬切**：应用不再读取 `R20_*`，没有兼容别名层。
 
-给用户看的文案里出现 `R20_*` 变量名是正确的（那是**接口名**，不是品牌名）。
+### 已有部署怎么升级
+
+```bash
+# 1) 停服
+# 2) 改自己的 .env 键名
+sed -i 's/^R20_/ASTRA_/' .env
+# 3) 迁移运行态数据 —— 先 dry-run，它会打印计划
+python scripts/migrate_r20_to_astra.py
+python scripts/migrate_r20_to_astra.py --apply
+```
+
+启动路径会跑 `--check`，一旦检测到未迁移就**fail-closed**并打印上面那条命令 ——
+"拿空台账悄悄启动"是我们唯一拒绝接受的结局。
+
+### 哪些地方**有意**还写着 `r20`
+
+有三样东西改了就会毁数据，它们被登记在一份受门禁保护的显式清单里
+（`tests/audit/test_brand_strings_are_consistent.py`）：
+
+| 保留项 | 为什么 |
+|---|---|
+| 交易所侧的旧腿标记 `t-r20sl*` / `t-r20tp*` | 改名**之前**创建的保护腿还挂在 OKX / Gate / Binance 上。`scripts/tag_markers.py` 把它们归一，云端棘轮才继续管得住那些仓位；改名前之后新写的腿用 `astrasl` / `astratp` |
+| 旧备份归档魔数（`R20GCM2` + NUL） | 用户手里已有的归档必须仍能解密。读取侧**双魔数**识别（两串等长，故头部偏移不变）；新归档写 `ASTRAGCM` |
+| 测试夹具里的 `cpa.r20.cn` | 那是维护者**自己的 DNS**，也是线上模型网关，不属于本项目的命名空间 |
+
+其余一切 —— 包括仓库里**每一个文件名** —— 都是 `astra`。
 
 ---
 
