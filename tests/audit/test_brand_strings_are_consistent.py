@@ -115,6 +115,9 @@ LEGACY_ALLOWED: "dict[str, str]" = {
     "tests/llm/test_rename_keeps_prompt_module_ids_safe.py":
         "种子安全性判据本身：它必须写出**改名前的种子**才能断言活代码里不再用它，"
         "并证明出厂基线没持久化这类 id、合并按标题而非 id 匹配。",
+    "tests/audit/test_runtime_config_has_no_legacy_namespace.py":
+        "运行态配置判据自身：它必须写出 `R20_` 形态的记号，才能定义什么算旧名，"
+        "并逐条登记 `R20_Backups` 这类有意保留的外部位置名。",
     # —— 其它门禁的注释/夹具 ——
     "tests/core/test_dependency_manifest_unchanged.py":
         "注释记录「改名只动了 requirements.txt 的表头注释、依赖项零变动」这件事本身。",

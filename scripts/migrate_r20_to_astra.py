@@ -107,6 +107,13 @@ CONFIG_TEXT_TOKENS = (
     ("data/r20_gateway.sqlite3", "data/astra_gateway.sqlite3"),
     ("r20_secrets.enc", "astra_secrets.enc"),
     (".r20_secret_key", ".astra_secret_key"),
+    # ⚠️ **环境变量名也会出现在配置值里**，而它不会被"改文件名"覆盖到。
+    #    本机实测：`data/backup_methods.json` 的 `encryption.key_env` 写着
+    #    `R20_BACKUP_ENCRYPTION_KEY`，而代码默认值已随改名变成
+    #    `ASTRA_BACKUP_ENCRYPTION_KEY`。加密当前是关的，所以它**今天不报错** ——
+    #    等用户哪天打开备份加密，任务就会去找一个不存在的键并直接失败。
+    #    这类"潜伏到某个开关被打开才炸"的漏迁最难查，必须一并改掉。
+    ("R20_BACKUP_ENCRYPTION_KEY", "ASTRA_BACKUP_ENCRYPTION_KEY"),
 )
 
 #: 两代文件同时存在时，被接管（移走）的旧目标放这里 —— **只移不删**，便于人工复核。
@@ -181,7 +188,7 @@ def _finish() -> int:
     """
     print("=== 第 3 步：data/ 配置文件里的旧名记号 ===")
     n_cfg = _migrate_config_texts(apply=True)
-    print(f"  ✓ 改写 {n_cfg} 个配置文件（原文件留档为 *.pre-astra）" if n_cfg
+    print(f"  ✓ 改写 {n_cfg} 个配置文件（原文件留档于 .archive/astra-migration-config-backup/）" if n_cfg
           else "  · 没有需要改写的配置")
     print("\n✅ 迁移完成。请用新包名重启服务。")
     return 0
