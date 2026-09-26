@@ -112,6 +112,9 @@ LEGACY_ALLOWED: "dict[str, str]" = {
     "tests/ui/test_sync_web_data_single_read.py":
         "注释在说明依赖对拍为什么要先做命名空间归一（基线取自改名前的提交，"
         "直接比会把迁移误判成「新增第三方依赖」），必须点出旧包名才能讲清。",
+    "tests/llm/test_rename_keeps_prompt_module_ids_safe.py":
+        "种子安全性判据本身：它必须写出**改名前的种子**才能断言活代码里不再用它，"
+        "并证明出厂基线没持久化这类 id、合并按标题而非 id 匹配。",
     # —— 其它门禁的注释/夹具 ——
     "tests/core/test_dependency_manifest_unchanged.py":
         "注释记录「改名只动了 requirements.txt 的表头注释、依赖项零变动」这件事本身。",
