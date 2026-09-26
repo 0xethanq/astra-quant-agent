@@ -29,6 +29,29 @@ fi
 # 3. Create required runtime directories
 mkdir -p data logs backups
 
+# ---------------------------------------------------------------------------
+# 2.5 改名前置检查（fail-closed）：`r20` → `astra` 的运行态数据是否已迁移。
+#
+# 2026-09-27 把内部代号全量改名。**配置契约是硬切**（旧的 `R20_*` 不再被读取），
+# 但运行态数据不能硬切：库名/凭证库/锁/心跳还叫 `r20_*` 时直接启动，
+# 系统会"认不出自己的台账与凭证"—— 表现为**空的持仓台账 + 三所全部 NOT READY**，
+# 而且不报错、只是安静地用新库跑起来。这是最难排查的一类事故。
+#
+# 故在此 fail-closed：检测到未迁移就停在这里，并把该敲的命令原样打出来。
+# 退出码 3 = 检测到遗留；0 = 无需迁移；其它 = 检查本身出问题（同样停下）。
+# 全新安装与已迁移实例都返回 0，不受影响。
+# ---------------------------------------------------------------------------
+if [ -f "$ROOT_DIR/scripts/migrate_r20_to_astra.py" ]; then
+    python3 "$ROOT_DIR/scripts/migrate_r20_to_astra.py" --check || {
+        rc=$?
+        if [ "$rc" != "0" ]; then
+            echo "❌ [Entrypoint] 启动前检查未通过（退出码 $rc）：拒绝在未迁移的数据上启动。" >&2
+            exit 1
+        fi
+    }
+fi
+
+
 # 3.1 Initialize default instrument pool if not present (prevents untrusted pool blocking entry)
 if [ ! -f "data/instrument_pool.json" ]; then
     echo "📋 Initializing default instrument pool..."

@@ -93,6 +93,10 @@ data/.astra_*
 #    扩展名白名单）提交过一次心跳文件。故旧形态必须同时被忽略。
 #    何时可删：确认所有实例都已完成迁移、磁盘上不再有 `.r20_*` 之后。
 data/.r20_*
+# 迁移工具旧版本把配置留档写成了 `data/<名>.pre-astra` —— 多一段后缀的名字匹配
+# 不上 `data/*.json`，实测被 `git add -A` 收进过仓库。新版本已改到 .archive/，
+# 这里同时挡住残留。
+data/*.pre-astra
 data/credentials/
 data/policy_archives/
 trading.html

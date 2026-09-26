@@ -203,8 +203,15 @@ class EndToEndSingleReadTest(unittest.TestCase):
         led = str(pathlib.Path(sync_web_data.LEDGER_JSON_FILE))
         # 先确认"我们面对的是生产目录"—— 若哪天它变成临时目录，本用例的安全
         # 假设就不再成立，应当显式知道（而不是静默地继续）。
-        self.assertTrue(str(prod).endswith("/data/dsh/home/astra/data"),
-                        f"DATA_DIR 不是预期中的生产目录: {prod}")
+        # ⚠️ 原来这里钉的是**检出目录的字面名字**（`/data/dsh/home/<检出目录>/data`）。
+        #    2026-09-27「r20 → astra 全量改名」把它一起改掉了，于是它开始断言一个
+        #    不存在的路径 —— 同一类问题在本轮共出现三处。改判真正要钉的性质：
+        #    DATA_DIR 就是**本模块所在仓库根**下的 data/，且不在临时目录里。
+        repo_root = pathlib.Path(sync_web_data.__file__).resolve().parents[1]
+        self.assertEqual(prod, (repo_root / "data").resolve(),
+                         f"DATA_DIR 不是仓库根的 data/：{prod}")
+        self.assertFalse(str(prod).startswith(("/tmp", "/var/folders")),
+                         f"DATA_DIR 落在临时目录里，本用例的安全假设不再成立：{prod}")
 
         real_open, seen, blocked = open, {}, []
 
@@ -307,7 +314,11 @@ class NoRawDualReadTest(unittest.TestCase):
                     out.add(n.module.split(".")[0])
             return out
 
-        added = mods_of(MODULE.read_text(encoding="utf-8")) - mods_of(old.stdout)
+        # ⚠️ 基线取自**改名前**的提交（`r20_backend.*`），直接比会把命名空间迁移
+        #    误判成"新增第三方依赖 `astra_backend`"。用本仓已有的基线归一助手，
+        #    把两侧放到同一命名空间下再比（这是"声明一次"而非临时放行）。
+        from tests.extraction.rename_baseline import normalize
+        added = mods_of(MODULE.read_text(encoding="utf-8")) - mods_of(normalize(old.stdout))
         # ⚠️ 用户约束是"禁止增减**依赖**"，指的是第三方包；标准库不是依赖。
         #    本刀只新增了 `typing`（stdlib），故按 stdlib 白名单放行，
         #    第三方新增仍然会被抓住。

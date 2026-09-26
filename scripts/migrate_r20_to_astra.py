@@ -51,27 +51,39 @@ LOGS = ROOT / "logs"
 
 #: 需要原子改名的运行态文件（旧名 → 新名）。
 #: SQLite 的 `-wal` / `-shm` **必须跟着一起走** —— 只搬主库会把最后一批已提交事务留在旧名里。
-RENAME_PAIRS = (
-    (DATA / "r20_admin.db", DATA / "astra_admin.db"),
-    (DATA / "r20_quant.db", DATA / "astra_quant.db"),
-    (DATA / "r20_gateway.db", DATA / "astra_gateway.db"),
-    (DATA / "r20_gateway.sqlite3", DATA / "astra_gateway.sqlite3"),
-    (DATA / "r20_secrets.enc", DATA / "astra_secrets.enc"),
-    (DATA / ".r20_secret_key", DATA / ".astra_secret_key"),
-    (DATA / "r20_backup_secrets.enc", DATA / "astra_backup_secrets.enc"),
-    (DATA / ".r20_backup_secret_key", DATA / ".astra_backup_secret_key"),
-    (DATA / "r20_backend.pid", DATA / "astra_backend.pid"),
-    (DATA / "r20_gateway.pid", DATA / "astra_gateway.pid"),
-    (DATA / ".r20_gateway.lock", DATA / ".astra_gateway.lock"),
-    (DATA / ".r20_gateway_heartbeat", DATA / ".astra_gateway_heartbeat"),
-    (DATA / ".r20_watchdog.lock", DATA / ".astra_watchdog.lock"),
-    (DATA / ".r20_watchdog.gateway.lock", DATA / ".astra_watchdog.gateway.lock"),
-    (DATA / ".r20_scheduler.lock", DATA / ".astra_scheduler.lock"),
-    (LOGS / "r20_backend.log", LOGS / "astra_backend.log"),
-    (LOGS / "r20_gateway.log", LOGS / "astra_gateway.log"),
-    (LOGS / "r20_watchdog.log", LOGS / "astra_watchdog.log"),
-    (LOGS / "r20_admin_audit.jsonl", LOGS / "astra_admin_audit.jsonl"),
+#: 运行态文件的**相对仓库根**旧名 → 新名。
+#: `RENAME_PAIRS` 由它派生 —— 这样门禁可以把整张表重定位到临时目录，在不碰真实
+#: 运行态的前提下验证迁移逻辑（模块级写死绝对路径就做不到这件事，只能去改生产文件）。
+RUNTIME_FILE_NAMES = (
+    ("data/r20_admin.db", "data/astra_admin.db"),
+    ("data/r20_quant.db", "data/astra_quant.db"),
+    ("data/r20_gateway.db", "data/astra_gateway.db"),
+    ("data/r20_gateway.sqlite3", "data/astra_gateway.sqlite3"),
+    ("data/r20_secrets.enc", "data/astra_secrets.enc"),
+    ("data/r20_secrets.enc.bak", "data/astra_secrets.enc.bak"),
+    ("data/.r20_secret_key", "data/.astra_secret_key"),
+    ("data/r20_backup_secrets.enc", "data/astra_backup_secrets.enc"),
+    ("data/.r20_backup_secret_key", "data/.astra_backup_secret_key"),
+    ("data/r20_backend.pid", "data/astra_backend.pid"),
+    ("data/r20_gateway.pid", "data/astra_gateway.pid"),
+    ("data/.r20_gateway.lock", "data/.astra_gateway.lock"),
+    ("data/.r20_gateway_heartbeat", "data/.astra_gateway_heartbeat"),
+    ("data/.r20_watchdog.lock", "data/.astra_watchdog.lock"),
+    ("data/.r20_watchdog.gateway.lock", "data/.astra_watchdog.gateway.lock"),
+    ("data/.r20_scheduler.lock", "data/.astra_scheduler.lock"),
+    ("logs/r20_backend.log", "logs/astra_backend.log"),
+    ("logs/r20_gateway.log", "logs/astra_gateway.log"),
+    ("logs/r20_watchdog.log", "logs/astra_watchdog.log"),
+    ("logs/r20_admin_audit.jsonl", "logs/astra_admin_audit.jsonl"),
 )
+
+
+def _pairs(root: Path) -> "tuple[tuple[Path, Path], ...]":
+    """把相对名表挂到给定根目录上（测试传入临时目录即可整体重定位）。"""
+    return tuple((root / o, root / n) for o, n in RUNTIME_FILE_NAMES)
+
+
+RENAME_PAIRS = _pairs(ROOT)
 
 #: SQLite 侧车文件后缀（跟着主库一起搬）
 SQLITE_SIDECARS = ("-wal", "-shm", "-journal")
@@ -80,6 +92,22 @@ SQLITE_SIDECARS = ("-wal", "-shm", "-journal")
 SECRET_KEY_PREFIX = ("R20_", "ASTRA_")
 
 MIGRATION_CMD = "python scripts/migrate_r20_to_astra.py --apply"
+
+#: `data/` 下**配置文件**里出现的旧名记号（改文件名改不到它们）。
+#: 本机实测 `data/backup_methods.json` 里 `scope` 写着 `r20_backend`/`r20_gateway`、
+#: `exclude` 写着 `data/r20_admin.db*` —— 两个方向都错：前者指向已不存在的目录
+#: ⇒ 每晚备份**静默漏掉整个后端**；后者不再匹配真实库名 ⇒ 管理员库反而被打进备份。
+#: 这类"改名改不到的配置"比文件本身更危险，因为它不报错、只是悄悄少做一件事。
+CONFIG_TEXT_TOKENS = (
+    ("r20_backend", "astra_backend"),
+    ("r20_gateway", "astra_gateway"),
+    ("data/r20_admin.db", "data/astra_admin.db"),
+    ("data/r20_quant.db", "data/astra_quant.db"),
+    ("data/r20_gateway.db", "data/astra_gateway.db"),
+    ("data/r20_gateway.sqlite3", "data/astra_gateway.sqlite3"),
+    ("r20_secrets.enc", "astra_secrets.enc"),
+    (".r20_secret_key", ".astra_secret_key"),
+)
 
 #: 两代文件同时存在时，被接管（移走）的旧目标放这里 —— **只移不删**，便于人工复核。
 SUPERSEDED_DIR = ROOT / ".archive" / "astra-migration-superseded"
@@ -111,18 +139,87 @@ def _plan() -> "list[tuple[Path, Path]]":
     """待迁移项：旧名存在且新名不存在。新名已存在则视为已迁移（绝不覆盖）。"""
     todo = []
     for old, new in RENAME_PAIRS:
-        candidates = [(old, new)]
-        if old.suffix in (".db", ".sqlite3"):
-            candidates += [(Path(str(old) + sfx), Path(str(new) + sfx)) for sfx in SQLITE_SIDECARS]
-        for o, n in candidates:
-            if o.exists() and not n.exists():
-                todo.append((o, n))
+        if old.exists() and not new.exists():
+            todo.append((old, new))
+    # ⚠️ sidecar（`-wal`/`-shm`）**不在这里列**，见 `_sweep_sidecars()` 的理由。
     # `.r20-env-*` 之类的临时文件（env 写入用），按前缀扫
     for o in sorted(DATA.glob(".r20-env-*")):
         n = DATA / o.name.replace(".r20-env-", ".astra-env-", 1)
         if not n.exists():
             todo.append((o, n))
     return todo
+
+
+def _sweep_sidecars(old: Path, new: Path) -> "list[Path]":
+    """把某个库的 `-wal`/`-shm` 跟着主库一起搬，返回实际搬走的路径。
+
+    ⚠️ 必须**在**完整性探针之后调用，不能在算计划时预先列好：
+    `_sqlite_ok()` 会以只读方式打开 WAL 模式的库，而 SQLite 单是打开就会
+    创建 `-shm`（有时还有 0 字节的 `-wal`）。第一版把 sidecar 写进了改名计划，
+    计划却是探针**之前**算的 ⇒ 探针新造出来的 sidecar 不在计划里，被留在原地，
+    变成无主的 `r20_*.db-wal`/`-shm` 孤儿（本机实测，且正是启动前检查抓出来的）。
+    """
+    moved = []
+    if old.suffix not in (".db", ".sqlite3"):
+        return moved
+    for sfx in SQLITE_SIDECARS:
+        so, sn = Path(str(old) + sfx), Path(str(new) + sfx)
+        if so.exists() and not sn.exists():
+            os.rename(so, sn)
+            moved.append(sn)
+    return moved
+
+
+def _finish() -> int:
+    """迁移的**统一收尾**：第 3 步（配置文本）+ 完成语。
+
+    ⚠️ 为什么必须收敛成一个函数：`apply()` 里有三条提前返回路径
+    （无待迁移 / 密文库未就绪 / 无旧前缀键）。第一版把第 3 步只写在其中一条上，
+    于是走"无旧前缀键"这条路时**配置文本被打印了却根本没写下去**
+    （本机实测：`data/backup_methods.json` 报了 3 处命中，文件却没变）。
+    凡是"必须发生"的步骤，都不能挂在某个分支上。
+    """
+    print("=== 第 3 步：data/ 配置文件里的旧名记号 ===")
+    n_cfg = _migrate_config_texts(apply=True)
+    print(f"  ✓ 改写 {n_cfg} 个配置文件（原文件留档为 *.pre-astra）" if n_cfg
+          else "  · 没有需要改写的配置")
+    print("\n✅ 迁移完成。请用新包名重启服务。")
+    return 0
+
+
+def _migrate_config_texts(apply: bool) -> int:
+    """改写 `data/*.json` 里残留的旧名记号。返回改动的文件数。
+
+    **只动 `data/` 下的 JSON 配置文件**，且只在**逐字命中** `CONFIG_TEXT_TOKENS` 时改写；
+    不做正则、不做模糊匹配 —— 用户自己的策略/池配置里可能有意写着别的 `r20` 字样。
+    """
+    touched = 0
+    for path in sorted(DATA.glob("*.json")):
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        new_text, hits = text, []
+        for old_tok, new_tok in CONFIG_TEXT_TOKENS:
+            if old_tok in new_text:
+                hits.append(f"{old_tok}→{new_tok}×{new_text.count(old_tok)}")
+                new_text = new_text.replace(old_tok, new_tok)
+        if not hits:
+            continue
+        touched += 1
+        print(f"  {path.relative_to(ROOT)}: " + "、".join(hits))
+        if apply:
+            # ⚠️ 留档放 `.archive/`（已忽略），**不要**写在原文件旁边：
+            #    `data/backup_methods.json.pre-astra` 这种"多一段后缀"的名字
+            #    匹配不上 `.gitignore` 的 `data/*.json`，会静默滑进 `git add -A`
+            #    ——本机实测已发生一次（与改名时那个无扩展名心跳文件同族）。
+            cfg_backup_dir = ROOT / ".archive" / "astra-migration-config-backup"
+            cfg_backup_dir.mkdir(parents=True, exist_ok=True)
+            backup = cfg_backup_dir / path.name
+            if not backup.exists():
+                backup.write_text(text, encoding="utf-8")
+            path.write_text(new_text, encoding="utf-8")
+    return touched
 
 
 def _conflicts() -> "list[tuple[Path, Path]]":
@@ -190,7 +287,7 @@ def _sqlite_ok(path: Path) -> str:
 def check() -> int:
     todo = _plan()
     rekey = _pending_secret_rekey()
-    if not todo and not rekey:
+    if not todo and not rekey and _migrate_config_texts(apply=False) == 0:
         return 0
     print("⚠️ 检测到改名前的运行态数据（r20 → astra 尚未迁移）。", file=sys.stderr)
     for o, n in todo:
@@ -240,9 +337,9 @@ def apply(supersede: bool = False) -> int:
                   f"{target.relative_to(ROOT)}（{basis}，未删除）")
 
     todo = _plan()
-    if not todo and not _pending_secret_rekey():
+    if not todo and not _pending_secret_rekey() and _migrate_config_texts(apply=False) == 0:
         print("✅ 没有需要迁移的东西（已迁移或全新安装）。")
-        return 0
+        return _finish()
 
     print(f"=== 第 1 步：原子改名 {len(todo)} 个文件 ===")
     for o, n in todo:
@@ -257,12 +354,14 @@ def apply(supersede: bool = False) -> int:
                 return 4
         os.rename(o, n)                     # 同盘原子
         os.chmod(n, 0o600) if o.name.startswith(".") else None
-        print(f"  ✓ {o.relative_to(ROOT)} → {n.relative_to(ROOT)}")
+        sidecars = _sweep_sidecars(o, n)
+        tail = ("（含 " + "、".join(x.name for x in sidecars) + "）") if sidecars else ""
+        print(f"  ✓ {o.relative_to(ROOT)} → {n.relative_to(ROOT)}{tail}")
 
     store, key = DATA / "astra_secrets.enc", DATA / ".astra_secret_key"
     if not (store.exists() and key.exists()):
         print("=== 第 2 步：密文库不存在或未就绪，跳过键重映射 ===")
-        return 0
+        return _finish()
 
     print("=== 第 2 步：密文库键重映射（R20_* → ASTRA_*）===")
     try:
@@ -273,7 +372,7 @@ def apply(supersede: bool = False) -> int:
     remap = {k: k.replace("R20_", "ASTRA_", 1) for k in before if k.startswith("R20_")}
     if not remap:
         print("  · 没有旧前缀键，无需重映射")
-        return 0
+        return _finish()
     after = {(remap.get(k, k)): v for k, v in before.items()}
     if len(after) != len(before):
         print("  ✗ 重映射后键数变化（新旧键撞名），拒绝写入")
@@ -285,8 +384,7 @@ def apply(supersede: bool = False) -> int:
         return 4
     print(f"  ✓ 已重映射 {len(remap)} 个键：" + ", ".join(sorted(remap)))
     print(f"  ✓ 回读校验通过（值逐字节一致，共 {len(verify)} 个键）")
-    print("\n✅ 迁移完成。请用新包名重启服务。")
-    return 0
+    return _finish()
 
 
 def main(argv: "list[str] | None" = None) -> int:
@@ -307,6 +405,9 @@ def main(argv: "list[str] | None" = None) -> int:
         for o, n in todo:
             print(f"  {o.relative_to(ROOT)} → {n.relative_to(ROOT)}")
         print(f"  密文库旧前缀键：{len(rekey) if rekey else 0} 个")
+        print("  data/ 配置文件待改写：")
+        if _migrate_config_texts(apply=False) == 0:
+            print("    （无）")
         if not todo and not rekey:
             print("  （无需迁移）")
         else:

@@ -106,6 +106,12 @@ LEGACY_ALLOWED: "dict[str, str]" = {
         "注释在说明白名单为什么必须放行一次性迁移工具（它要按新旧两个名字搬迁 pid 文件）。",
     "tests/trading/test_venue_protection.py":
         "注释在记录本类原来写死的行号被改名打红这件事，以及为什么改为由 AST 现求。",
+    "tests/ops/test_migrate_r20_to_astra.py":
+        "迁移工具自身的门禁：它必须写出旧名与旧记号，才能验证「搬迁」这件事真的发生"
+        "（`RUNTIME_FILE_NAMES`、`CONFIG_TEXT_TOKENS`、退出码 3 等）。",
+    "tests/ui/test_sync_web_data_single_read.py":
+        "注释在说明依赖对拍为什么要先做命名空间归一（基线取自改名前的提交，"
+        "直接比会把迁移误判成「新增第三方依赖」），必须点出旧包名才能讲清。",
     # —— 其它门禁的注释/夹具 ——
     "tests/core/test_dependency_manifest_unchanged.py":
         "注释记录「改名只动了 requirements.txt 的表头注释、依赖项零变动」这件事本身。",
@@ -130,6 +136,12 @@ LEGACY_ALLOWED: "dict[str, str]" = {
     "tests/audit/test_directory_docs_current.py":
         "子包判据的注释在记录一个历史洞：旧包名 `r20_backend` 含数字，正则 `[a-z_]+` "
         "匹配不到，所以那个误判直到改名成 `astra_backend` 才暴露。",
+    "deploy/docker-entrypoint.sh":
+        "启动前置检查的注释必须写明被检查的是什么（改名前的运行态数据），"
+        "否则下一个人看到这段 fail-closed 会不知道它在防哪一类事故。",
+    "start.sh":
+        "与 docker-entrypoint 同一段前置检查：两个启动入口都必须接上，"
+        "漏接一个就等于那条 fail-closed 形同虚设（注释里必须点明被检查的是什么）。",
     # —— 文档与历史素材 ——
     "README.md":
         "「Brand & codename」一节必须写明**哪些历史形态是有意保留的**（含旧域名与旧魔数），"
@@ -275,7 +287,9 @@ class LegacyNamespaceIsContainedTest(unittest.TestCase):
         # ⚠️ 唯一允许带旧代号的文件名：一次性迁移工具。它的名字必须让人一眼看懂"这是把
         #    r20 时代的数据搬到 astra 的入口"，改成别的名字反而会让人找不到它。
         MIGRATION_TOOL = "scripts/migrate_r20_to_astra.py"
-        legacy = [f for f in files if "r20" in f.lower() and f != MIGRATION_TOOL]
+        MIGRATION_GATE = "tests/ops/test_migrate_r20_to_astra.py"
+        legacy = [f for f in files
+                  if "r20" in f.lower() and f not in (MIGRATION_TOOL, MIGRATION_GATE)]
         self.assertEqual(legacy, [], f"仍有文件名带 r20：{legacy}")
 
 
