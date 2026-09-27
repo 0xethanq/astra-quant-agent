@@ -1,6 +1,7 @@
 """Per-test configuration sandbox: patch source constants AND imported path aliases."""
 import importlib
 import os
+import shutil
 import sys
 import tempfile
 from pathlib import Path
@@ -17,6 +18,40 @@ def skip_if_offline_suite(test, reason='本用例以 spawn 子进程/网络栈�
     """
     if os.environ.get("OFFLINE_SUITE_RUNNING"):
         test.skipTest(reason)
+
+
+#: 沙箱**负责**的模块白名单（原先是内联在 `isolate_config` 里的字面元组）。
+#: 为什么提出来：`tests/audit/test_sandbox_is_fixture_complete.py` 需要按**同一份**清单
+#: 去核查"哪些生产配置在沙箱里被静默清空"。此前那道门扫的是 `sys.modules` 里所有
+#: 命中前缀的模块 ⇒ 清空集合随**测试收集顺序**变化，门禁自己变成"单跑绿、全量红"
+#: （实测）。清单同源之后，"被清空的配置"是确定的。
+#: 增删本清单 = 改变沙箱管辖范围，请同时更新上述门禁的声明桶。
+SANDBOXED_MODULES = (
+    'astra_backend.llm_manager',
+    'astra_backend.council_manager',
+    'astra_backend.policy_snapshot',
+    'astra_backend.interceptor_manager',
+    'scripts.prompt_library',
+    'scripts.evolution_shield',
+    'astra_gateway.secrets',
+    'astra_backend.dashboard_cache',
+    'astra_backend.risk_reservation',
+    'astra_backend.account_baseline',
+    'astra_backend.admin_auth',
+    'astra_backend.backup_secrets',
+    'astra_backend.backup_store',
+    'astra_backend.exchanges.env_profiles',
+    'astra_backend.exchanges.routing_policy',
+    'astra_backend.qq_gateway_daemon',
+    'astra_backend.routers.dashboard',
+    'astra_backend.routers.strategy',
+    'astra_backend.schedule_store',
+    'scripts.archive_ledger',
+    'astra_gateway.agents',
+    'astra_gateway.publisher',
+    'astra_gateway.supervisor',
+    'astra_gateway.worker',
+)
 
 
 def isolate_config(test):
@@ -41,6 +76,43 @@ def isolate_config(test):
         else:
             _os.environ[_env_key] = _prev
     test.addCleanup(_restore_env)
+    # ⚠️⚠️ 第二百三十六刀（2026-09-27）：沙箱必须**夹具完整**，不能只是"目录可写"。
+    #
+    # 本函数此前只把 data/ 路径重定向到一个**空**目录。于是任何"按 `PATH.exists()`
+    # 分支、或按配置值走不同分支"的生产代码，在隔离窗口里会静默落到**内置默认**。
+    # 实测（探针留在 `tests/audit/test_sandbox_is_fixture_complete.py`）：
+    #   `routing_policy.ROUTING_FILE` 从会话沙箱的夹具（exists=True）
+    #   变成 `<per-test>/data/venue_routing.json`（exists=False），
+    #   于是 `load_venue_pool("gate")` 从 `dry_run=False, assets=8`
+    #   变成 `dry_run=True, assets=0` —— **实盘姿态被判成本地演算**。
+    # 那不是隔离，那是**悄悄换了一套配置**；本仓那批"stage 漂移"红例
+    #   （`venue_dry_run != protective/leverage/sizing`）就是踩在这个坑上。
+    #
+    # 修法：把**会话级配置沙箱**里的夹具文件原样继承到本沙箱的同名相对路径。
+    # 为什么是"继承夹具"而不是"复制生产"：本仓既有政策是**把形状/常量抄成
+    # 固定夹具，而不是每次去读生产**（见 `tests/__init__.py` 里池夹具的注释）——
+    # 复制生产会让用例随线上配置漂移而红。夹具是静态的：继承它既确定、又不丢语义。
+    try:
+        from tests import session_sandbox_roots
+        for _sroot in session_sandbox_roots():
+            for _src in _sroot.rglob("*"):
+                if not _src.is_file():
+                    continue
+                _rel = _src.relative_to(_sroot)
+                # ⚠️ 两个沙箱**布局不同**，必须都补：会话沙箱是**扁平**放的
+                #    （`<sroot>/venue_routing.json`），而本函数把生产 `project/data`
+                #    映射成 `<root>/data/…`。第一版只按 `_rel` 复制 ⇒ 夹具落在
+                #    `<root>/venue_routing.json`，而被重定向的常量指向
+                #    `<root>/data/venue_routing.json` —— 于是"补了等于没补"，
+                #    探针复现依旧是 `dry_run=True, assets=0`（实测）。
+                for _dst in (root / "data" / _rel, root / _rel):
+                    if _dst.exists():
+                        continue    # 本沙箱已有的（用例自己写的）优先，绝不覆盖
+                    _dst.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(_src, _dst)
+    except Exception:
+        # 沙箱继承失败不该把用例炸掉：会话沙箱未启用（ALLOW_REAL_DATA）时本就为空。
+        pass
     # ⚠️⚠️ 第八十刀（顺序即 bug）：必须发生在**下面的白名单 import 之前** ——
     # `astra_backend/dashboard_cache.py` 模块**顶层末尾**就有 `start_dashboard_background_worker()`
     # （L549，实测），于是"import astra_backend.dashboard_cache"这个动作本身就点起
@@ -69,48 +141,7 @@ def isolate_config(test):
                 _dash_mod, "_fetch_json",
                 lambda *a, **k: (False, None, "tests 沙箱已压制出站取数（isolate_config）"))
             _p_fetch.start(); test.addCleanup(_p_fetch.stop)
-    for name in ('astra_backend.llm_manager', 'astra_backend.council_manager',
-                 'astra_backend.policy_snapshot', 'astra_backend.interceptor_manager',
-                 'scripts.prompt_library', 'scripts.evolution_shield',
-                 'astra_gateway.secrets',
-                 # `astra_backend.dashboard_cache` 的一批大写路径常量（DASHBOARD_CACHE_FILE、
-                 # LOG_FILE、STATE_JSON_FILE、LEDGER_JSON_FILE…）此前**不在任何
-                 # 白名单里**，于是直调 `update_cache_cycle()` 的测试会写生产
-                 # `data/dashboard_last_good.json`（实测有告警但无人处理）。
-                 # 它内部会调 `load_persisted_dashboard_cache()`，但那只是读一个
-                 # JSON，且所有跑过仪表盘的测试本来就会 import 它。
-                 'astra_backend.dashboard_cache',
-                 # ---- 第七十三刀补：下面 15 个模块用内联 `ROOT / "data" / …`
-                 # 拼生产路径。**沙箱只 patch 已 import 模块的大写常量**，
-                 # 所以"模块不在这个白名单里"就等于"它的路径常量不受管辖"
-                 # —— 无论写法多规范都一样漏（实测 `scripts/instrument_pool.py`
-                 # 的 `TRADING_STATE_FILE` 提成模块级常量后，
-                 # 不 import 它依然不被重定向）。
-                 #
-                 # 逐个确认过：15 个都能在**零副作用**下 import
-                 # （无网络、无起进程、无端口绑定），与既有白名单同性质。
-                 # 对应回归测试：`tests/audit/test_production_data_isolation.py`。
-                 # ---- 第一百一十四刀补：风控预留库（`data/risk_reservation.db`）。
-                 # 实测两处测试**只夹带渲染仪表盘**就经 `dashboard_payload.market`
-                 # 的 `get_manager()` 连到生产预留库（`RiskReservationManager.__init__`
-                 # 会建表）——而本模块此前既不在白名单、常量又是惰性 import 后才求值，
-                 # 于是永远没人重定向它。白名单 import 保证"先 import 后重定向"的顺序。
-                 'astra_backend.risk_reservation',
-                 'astra_backend.account_baseline',
-                 'astra_backend.admin_auth',
-                 'astra_backend.backup_secrets',
-                 'astra_backend.backup_store',
-                 'astra_backend.exchanges.env_profiles',
-                 'astra_backend.exchanges.routing_policy',
-                 'astra_backend.qq_gateway_daemon',
-                 'astra_backend.routers.dashboard',
-                 'astra_backend.routers.strategy',
-                 'astra_backend.schedule_store',
-                 'scripts.archive_ledger',
-                 'astra_gateway.agents',
-                 'astra_gateway.publisher',
-                 'astra_gateway.supervisor',
-                 'astra_gateway.worker'):
+    for name in SANDBOXED_MODULES:
         importlib.import_module(name)
     # Patch every already-bound alias, not just the defining module (law 2).
     # 白名单必须覆盖**顶层名**形式的兄弟模块：`scripts/` 在 sys.path 上，脚本以

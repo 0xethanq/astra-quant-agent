@@ -159,6 +159,14 @@ class InstrumentPoolTrustTests(_Base):
         self.ip.POOL_FILE = self.pool_file
 
     def test_missing_file_is_marked_missing(self):
+        # ⚠️ **显式**造出"文件不存在"这个前置条件，别依赖"沙箱恰好是空的"。
+        #    本类 setUp 把 POOL_FILE 指向按测试沙箱，而沙箱自 2026-09-27 起会
+        #    **继承会话夹具**（`tests/audit/test_sandbox_is_fixture_complete.py` 钉住）——
+        #    "沙箱里没有这个文件"不再是必然，而是实现的副产品。
+        #    凡是"测缺失/测空"的用例，前置条件都该自己写出来：
+        #    依赖"环境恰好为空"的写法会在某次无关改动后静默失效（本用例就是如此）。
+        if self.pool_file.exists():
+            self.pool_file.unlink()
         got = self.ip.load_instruments()
         self.assertTrue(got, "仍要返回可展示的数据")
         self.assertFalse(self.ip.pool_is_trustworthy())

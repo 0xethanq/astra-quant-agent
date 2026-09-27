@@ -70,6 +70,10 @@ class PidfileStructureTest(unittest.TestCase):
                 #    两个名字。它不是运行时容器，不参与"路径常量单一来源"那条约束。
                 if path.name == "migrate_r20_to_astra.py":
                     continue
+                # ⚠️ 同理：`tests/audit/test_sandbox_is_fixture_complete.py` 必须写出
+                #    `astra_gateway.pid` 才能把"沙箱里被清空的运行态文件"分类登记。
+                if path.name == "test_sandbox_is_fixture_complete.py":
+                    continue
                 try:
                     tree = ast.parse(path.read_text(encoding="utf-8"))
                 except (OSError, SyntaxError, UnicodeDecodeError):
