@@ -7,6 +7,7 @@ from .strategy import router as strategy_router
 from .llm import router as llm_router
 from .gateway import router as gateway_router
 from .dashboard import router as dashboard_router
+from .plaza import router as plaza_router
 
 __all__ = [
     "auth_router",
@@ -17,4 +18,5 @@ __all__ = [
     "llm_router",
     "gateway_router",
     "dashboard_router",
+    "plaza_router",
 ]

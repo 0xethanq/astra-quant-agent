@@ -47,7 +47,7 @@ import BaseSwitch from '../../components/base/BaseSwitch.vue'
 import BaseDialog from '../../components/base/BaseDialog.vue'
 import BaseEmpty from '../../components/base/BaseEmpty.vue'
 import { Save, RefreshCw, Layers, Trash2, Zap, ShieldCheck, Route, KeyRound,
-  Wallet, Activity, AlertTriangle, Loader2, Radar } from 'lucide-vue-next'
+  Wallet, Activity, AlertTriangle, Loader2, Radar, Share2, Copy, Eye } from 'lucide-vue-next'
 import BaseLoadingAnnounce from '../../components/base/BaseLoadingAnnounce.vue';
 
 const { api } = useApi()
@@ -657,7 +657,93 @@ const healthAllOk = computed(() => {
   return chips.length > 0 && chips.every((h: any) => h.ok === h.total)
 })
 
-onMounted(() => { loadAll(); loadMx(); loadChannels() })
+// ---- Strategy Plaza Sharing ----
+const plazaSettings = ref({
+  enabled: false,
+  nickname: '0xEthan',
+  show_performance: true,
+  show_balance: false,
+  show_model: true,
+  show_strategy_params: true,
+  plaza_hub_url: 'https://hub.astraquant.tech',
+})
+const plazaIsLive = ref(false)
+const loadingPlaza = ref(false)
+const savingPlaza = ref(false)
+const showPlazaPreview = ref(false)
+const plazaPreviewData = ref<any>(null)
+const loadingPlazaPreview = ref(false)
+
+const plazaPublicUrl = computed(() => {
+  if (typeof window !== 'undefined' && window.location) {
+    return `${window.location.origin}/api/v1/public/plaza/profile`
+  }
+  return '/api/v1/public/plaza/profile'
+})
+
+async function loadPlazaSettings() {
+  loadingPlaza.value = true
+  try {
+    const res = await api<any>('/api/v1/admin/plaza/settings')
+    if (res?.settings) {
+      plazaSettings.value = { ...plazaSettings.value, ...res.settings }
+    }
+    plazaIsLive.value = Boolean(res?.is_live)
+  } catch {
+    // Keep defaults
+  } finally {
+    loadingPlaza.value = false
+  }
+}
+
+async function savePlazaSettings() {
+  savingPlaza.value = true
+  try {
+    const res = await api<any>('/api/v1/admin/plaza/settings', {
+      method: 'POST',
+      body: JSON.stringify(plazaSettings.value),
+    })
+    if (res?.settings) {
+      plazaSettings.value = { ...plazaSettings.value, ...res.settings }
+    }
+    plazaIsLive.value = Boolean(res?.is_live)
+    toast.show(t('admin.security.toastPlazaSaved'))
+  } catch (err: any) {
+    toast.show(t('admin.security.errSaveFailed', undefined, { msg: err.message || 'Error' }), 'error')
+  } finally {
+    savingPlaza.value = false
+  }
+}
+
+function copyPlazaUrl() {
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(plazaPublicUrl.value)
+    toast.show(t('admin.security.toastPlazaCopied'))
+  }
+}
+
+async function openPlazaPreview() {
+  showPlazaPreview.value = true
+  loadingPlazaPreview.value = true
+  try {
+    const res = await api<any>('/api/v1/public/plaza/profile')
+    plazaPreviewData.value = res
+  } catch (err: any) {
+    plazaPreviewData.value = { error: err.message }
+  } finally {
+    loadingPlazaPreview.value = false
+  }
+}
+
+function copyCloneParams() {
+  if (plazaPreviewData.value?.strategy_clone_payload && navigator.clipboard) {
+    const jsonStr = JSON.stringify(plazaPreviewData.value.strategy_clone_payload, null, 2)
+    navigator.clipboard.writeText(jsonStr)
+    toast.show(t('admin.security.plazaCloneSuccess'))
+  }
+}
+
+onMounted(() => { loadAll(); loadMx(); loadChannels(); loadPlazaSettings() })
 </script>
 
 <template>
@@ -767,6 +853,144 @@ onMounted(() => { loadAll(); loadMx(); loadChannels() })
             <p class="sc-hint">
               {{ isUnifiedLive ? t('admin.security.unifiedLiveHint') : t('admin.security.unifiedDemoHint') }}
             </p>
+          </div>
+        </SettingsSection>
+
+        <!-- 策略广场实盘共享 -->
+        <SettingsSection :title="t('admin.security.plazaShareTitle')" :description="t('admin.security.plazaShareDesc')" :icon="Share2">
+          <template #actions>
+            <span class="badge mono" :class="!isUnifiedLive ? 'badge-warn' : plazaSettings.enabled ? 'badge-accent' : ''">
+              {{ !isUnifiedLive ? t('admin.security.plazaDemoLocked') : plazaSettings.enabled ? t('admin.security.plazaActive') : t('admin.security.plazaOff') }}
+            </span>
+          </template>
+
+          <div class="sc-group">
+            <!-- 模拟盘锁定提示 -->
+            <p v-if="!isUnifiedLive" class="sc-hint flex items-center gap-1.5 text-amber-400">
+              <AlertTriangle :size="13" class="shrink-0" />
+              <span>{{ t('admin.security.plazaLiveOnlyAlert') }}</span>
+            </p>
+
+            <!-- 主开关 -->
+            <div class="flex items-center justify-between py-2 border-b border-[var(--border-subtle)]">
+              <div>
+                <span class="font-medium text-sm text-[var(--text-primary)]">{{ t('admin.security.plazaEnableLabel') }}</span>
+                <p class="text-xs text-[var(--text-muted)] mt-0.5">{{ t('admin.security.plazaShareDesc') }}</p>
+              </div>
+              <BaseSwitch
+                v-model="plazaSettings.enabled"
+                :disabled="!isUnifiedLive || savingPlaza"
+                :label="t('admin.security.plazaEnableLabel')"
+              />
+            </div>
+
+            <!-- 详细配置与链接 -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+              <div class="space-y-1">
+                <label for="plaza-nickname-input" class="form-label text-xs">{{ t('admin.security.plazaNicknameLabel') }}</label>
+                <input
+                  id="plaza-nickname-input"
+                  v-model="plazaSettings.nickname"
+                  type="text"
+                  class="field text-xs disabled:opacity-40 disabled:cursor-not-allowed"
+                  maxlength="40"
+                  :disabled="!isUnifiedLive || savingPlaza"
+                  :placeholder="t('admin.security.plazaNicknamePlaceholder')"
+                />
+              </div>
+
+              <div class="space-y-1">
+                <label for="plaza-api-url-input" class="form-label text-xs">{{ t('admin.security.plazaApiUrlLabel') }}</label>
+                <div class="flex items-center gap-2">
+                  <input
+                    id="plaza-api-url-input"
+                    type="text"
+                    readonly
+                    class="field text-xs mono text-[var(--text-muted)] select-all disabled:opacity-40 disabled:cursor-not-allowed"
+                    :value="plazaPublicUrl"
+                  />
+                  <button
+                    type="button"
+                    class="btn btn-quiet btn-sm shrink-0"
+                    :disabled="!plazaSettings.enabled || !isUnifiedLive"
+                    @click="copyPlazaUrl"
+                  >
+                    <Copy :size="12" />
+                    <span>{{ t('admin.security.plazaCopyUrl') }}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 隐私细分选项 -->
+            <div class="space-y-2 pt-2 border-t border-[var(--border-subtle)]">
+              <span class="form-label text-xs">{{ t('admin.security.plazaPrivacyCustom') }}</span>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                <label class="flex items-center gap-2 cursor-pointer text-[var(--text-secondary)]">
+                  <input
+                    type="checkbox"
+                    v-model="plazaSettings.show_performance"
+                    :disabled="!isUnifiedLive || savingPlaza"
+                    class="rounded border-[var(--border-base)] text-[var(--color-primary)] disabled:opacity-40 disabled:cursor-not-allowed"
+                  />
+                  <span>{{ t('admin.security.plazaShowPerf') }}</span>
+                </label>
+
+                <label class="flex items-center gap-2 cursor-pointer text-[var(--text-secondary)]">
+                  <input
+                    type="checkbox"
+                    v-model="plazaSettings.show_balance"
+                    :disabled="!isUnifiedLive || savingPlaza"
+                    class="rounded border-[var(--border-base)] text-[var(--color-primary)] disabled:opacity-40 disabled:cursor-not-allowed"
+                  />
+                  <span>{{ t('admin.security.plazaShowBalance') }}</span>
+                </label>
+
+                <label class="flex items-center gap-2 cursor-pointer text-[var(--text-secondary)]">
+                  <input
+                    type="checkbox"
+                    v-model="plazaSettings.show_model"
+                    :disabled="!isUnifiedLive || savingPlaza"
+                    class="rounded border-[var(--border-base)] text-[var(--color-primary)] disabled:opacity-40 disabled:cursor-not-allowed"
+                  />
+                  <span>{{ t('admin.security.plazaShowModel') }}</span>
+                </label>
+
+                <label class="flex items-center gap-2 cursor-pointer text-[var(--text-secondary)]">
+                  <input
+                    type="checkbox"
+                    v-model="plazaSettings.show_strategy_params"
+                    :disabled="!isUnifiedLive || savingPlaza"
+                    class="rounded border-[var(--border-base)] text-[var(--color-primary)] disabled:opacity-40 disabled:cursor-not-allowed"
+                  />
+                  <span>{{ t('admin.security.plazaShowParams') }}</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- 底部操作按钮 -->
+            <div class="flex items-center justify-between pt-3 border-t border-[var(--border-subtle)]">
+              <button
+                type="button"
+                class="btn btn-ghost btn-sm"
+                :disabled="!isUnifiedLive || !plazaSettings.enabled"
+                @click="openPlazaPreview"
+              >
+                <Eye :size="13" />
+                <span>{{ t('admin.security.plazaPreviewCard') }}</span>
+              </button>
+
+              <button
+                type="button"
+                class="btn btn-primary btn-sm"
+                :disabled="!isUnifiedLive || savingPlaza"
+                @click="savePlazaSettings"
+              >
+                <Loader2 v-if="savingPlaza" :size="13" class="animate-spin shrink-0" />
+                <Save v-else :size="13" />
+                <span>{{ savingPlaza ? t('admin.security.saving') : t('admin.security.plazaSaveSettings') }}</span>
+              </button>
+            </div>
           </div>
         </SettingsSection>
 
@@ -1402,6 +1626,75 @@ onMounted(() => { loadAll(); loadMx(); loadChannels() })
           <span>{{ closing ? t('admin.security.closing') : t('admin.security.confirmClose') }}</span>
         </button>
       </template>
+    </BaseDialog>
+
+    <!-- ══════════ 策略广场名片预览 ══════════ -->
+    <BaseDialog
+      :open="showPlazaPreview"
+      :title="t('admin.security.plazaPreviewTitle')"
+      size="md"
+      @close="showPlazaPreview = false"
+    >
+      <div v-if="loadingPlazaPreview" class="py-8 flex justify-center items-center">
+        <Loader2 :size="24" class="animate-spin shrink-0 text-[var(--color-primary)]" />
+      </div>
+      <div v-else-if="plazaPreviewData" class="space-y-4">
+        <!-- 模拟策略广场卡片 -->
+        <div class="card p-4 border border-[var(--border-base)] bg-[var(--bg-elevated)] space-y-3">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="font-bold text-sm text-[var(--text-primary)]">{{ plazaPreviewData.node_info?.nickname || plazaSettings.nickname }}</span>
+              <span class="badge badge-accent label-caps">{{ t('admin.security.plazaVerifiedBadge') }}</span>
+            </div>
+            <span class="text-xs text-[var(--text-muted)] mono">{{ plazaPreviewData.node_info?.system_version }}</span>
+          </div>
+
+          <div v-if="plazaPreviewData.performance?.visible" class="grid grid-cols-3 gap-2 py-2 border-y border-[var(--border-subtle)] text-center">
+            <div>
+              <span class="text-xs text-[var(--text-muted)]">{{ t('admin.security.plazaRoi') }}</span>
+              <p class="text-base font-bold text-emerald-400 font-mono">{{ plazaPreviewData.performance?.total_roi_pct >= 0 ? '+' : '' }}{{ plazaPreviewData.performance?.total_roi_pct }}%</p>
+            </div>
+            <div>
+              <span class="text-xs text-[var(--text-muted)]">{{ t('admin.security.plazaWinRate') }}</span>
+              <p class="text-base font-bold text-[var(--text-primary)] font-mono">{{ plazaPreviewData.performance?.win_rate_pct }}%</p>
+            </div>
+            <div>
+              <span class="text-xs text-[var(--text-muted)]">{{ t('admin.security.plazaTotalTrades') }}</span>
+              <p class="text-base font-bold text-[var(--text-primary)] font-mono">{{ plazaPreviewData.performance?.all_trades }} {{ t('admin.security.plazaTradeUnit') }}</p>
+            </div>
+          </div>
+
+          <div v-if="plazaPreviewData.model_specs?.visible" class="text-xs space-y-1">
+            <span class="text-[var(--text-muted)]">{{ t('admin.security.plazaDriverModel') }}:</span>
+            <span class="ml-2 font-mono font-medium text-[var(--color-primary)]">{{ plazaPreviewData.model_specs?.primary_model }}</span>
+            <span class="text-[var(--text-muted)] ml-2">({{ plazaPreviewData.model_specs?.reasoning_effort }} effort)</span>
+          </div>
+
+          <div v-if="plazaPreviewData.strategy_clone_payload?.visible" class="text-xs space-y-1">
+            <span class="text-[var(--text-muted)]">{{ t('admin.security.plazaRiskConfig') }}:</span>
+            <span class="ml-2 font-mono">{{ t('admin.security.plazaRiskSummary', undefined, { min: plazaPreviewData.strategy_clone_payload?.risk_settings?.min_leverage, max: plazaPreviewData.strategy_clone_payload?.risk_settings?.max_leverage, pct: (Number(plazaPreviewData.strategy_clone_payload?.risk_settings?.max_margin_equity_ratio || 0.35) * 100).toFixed(0) }) }}</span>
+          </div>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-2">
+          <button
+            v-if="plazaPreviewData.strategy_clone_payload?.visible"
+            type="button"
+            class="btn btn-quiet btn-sm"
+            @click="copyCloneParams"
+          >
+            <Copy :size="13" />
+            <span>{{ t('admin.security.plazaTestCopy') }}</span>
+          </button>
+          <button
+            type="button"
+            class="btn btn-primary btn-sm"
+            @click="showPlazaPreview = false"
+          >
+            {{ t('admin.security.plazaPreviewClose') }}
+          </button>
+        </div>
+      </div>
     </BaseDialog>
   </div>
 </template>

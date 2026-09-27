@@ -42,7 +42,7 @@
 
 ### L1 启动与装配
 
-`app.py`（FastAPI 装配，`include_router` 8 个路由）、`scheduler.py`、
+`app.py`（FastAPI 装配，`include_router` 9 个路由）、`scheduler.py`、
 `spawn.py`、`web_shell.py`、`config.py`、`settings_store.py`、`version.py`、
 `dependencies.py`、`routers/`。
 
@@ -51,7 +51,7 @@
 ### L2 HTTP 边界 — `routers/`
 
 `auth` / `system` / `exchanges` / `risk` / `strategy` / `llm` / `gateway` /
-`dashboard`。**路由层只做参数校验与调用编排，不放业务逻辑。**
+`dashboard` / `plaza`。**路由层只做参数校验与调用编排，不放业务逻辑。**
 路由瘦身的正确做法是把业务下沉到 `exchanges/`、`execution/`、
 `dashboard_payload/`，路由保留薄壳（与 `astra_backend/dashboard_cache.py` 降为纯库同一手法）。
 
@@ -77,7 +77,7 @@
 | 风控与安全 | `risk_config.py`、`net_security.py`、`login_guard.py`、`client_ip.py`、`admin_auth.py`、`interceptor_manager.py`、`redact.py` |
 | 通知与外部通道 | `notifications.py`、`qq_bind.py`、`qq_gateway_daemon.py` |
 | 审计与备份 | `audit.py`、`backup_store.py`、`backup_secrets.py`、`file_locks.py` |
-| 组合与账户 | `portfolio_aggregator.py`、`account_baseline.py` |
+| 组合与账户 | `portfolio_aggregator.py`、`account_baseline.py`、`plaza_share.py` |
 | 提示词 | `prompt_views.py`、`dashboard_payload/prompts*` |
 | 通用 | `time_utils.py`、`math_utils.py`、`schemas.py`、`schedule_store.py` |
 | 可观测性 | `metrics.py`（Prometheus 文本 exposition 的唯一渲染点；路由薄壳在 `routers/system.py::admin_metrics`） |
