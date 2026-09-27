@@ -282,7 +282,7 @@ def construct_full_market_prompt(packages: List[Dict[str, Any]], pos_summary: st
       "action": "BUY_LONG" | "SELL_SHORT" | "WAIT",
       "confidence": 0~100,
       "leverage": {int(max(min_leverage, min(max_leverage, (min_leverage + max_leverage) / 2)))} (杠杆必须落在 {min_leverage:g}~{max_leverage:g} 区间内按信心强弱自主取值：一般信号取下限侧、P0 全通过且概率优势显著才取上限侧；本模板数字仅为占位，严禁无差别照抄),
-      "margin_usdt": float (必须取自上方【本周期风险预算】的常规单笔区间；示例: 可用余额 80U → 2.4~9.6，可用余额 4000U → 120~480。严禁套用任何固定绝对金额),
+      "margin_usdt": float (根据信号强度自主取值：常规机会取上方【本周期风险预算】常规单笔区间，强信号可上浮至强信号单笔上限；严禁套用任何固定绝对金额),
       "entry_price": float,
       "take_profit_price": float,
       "stop_loss_price": float,

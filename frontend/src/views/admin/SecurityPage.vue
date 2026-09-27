@@ -153,6 +153,59 @@ const savingMx = ref(false)
 const savingOkx = ref(false)
 const savingVenue = ref<'binance' | 'gate' | ''>('')
 const probingVenue = ref<'binance' | 'gate' | 'okx' | ''>('')
+const savingUnifiedEnv = ref(false)
+const isUnifiedLive = computed(() => config.value?.editable?.okx_environment === 'live')
+
+async function requestUnifiedEnvSwitch(targetEnv: 'demo' | 'live') {
+  if (savingUnifiedEnv.value) return
+  if (targetEnv === (isUnifiedLive.value ? 'live' : 'demo')) return
+
+  if (targetEnv === 'live') {
+    const _ok = await ask({
+      title: t('admin.security.confirmUnifiedLiveTitle'),
+      desc: t('admin.security.confirmUnifiedLiveDesc'),
+      detail: t('admin.security.confirmUnifiedLiveDetail'),
+      danger: true,
+      confirmPhrase: 'LIVE',
+      okText: t('common.switchLive'),
+    })
+    if (!_ok) {
+      toast.warn(t('admin.security.warnNotConfirmed'))
+      return
+    }
+  }
+
+  savingUnifiedEnv.value = true
+  try {
+    const isDemo = targetEnv === 'demo'
+    await api('/api/v1/admin/multi-exchange', {
+      method: 'PUT',
+      body: JSON.stringify({
+        okx_environment: targetEnv,
+        binance_testnet: isDemo,
+        gate_testnet: isDemo,
+      }),
+    })
+    await api('/api/v1/admin/config', {
+      method: 'PUT',
+      body: JSON.stringify({
+        okx_environment: targetEnv,
+      }),
+    })
+    if (config.value?.editable) {
+      config.value.editable.okx_environment = targetEnv
+    }
+    mxTestnet.value.binance = isDemo
+    mxTestnet.value.gate = isDemo
+    okxCredViewLive.value = (targetEnv === 'live')
+    toast.ok(t('admin.security.toastUnifiedEnvSaved', undefined, { env: targetEnv.toUpperCase() }))
+    await Promise.all([loadAll(), loadMx()])
+  } catch (e: any) {
+    toast.err(t('admin.security.errSaveFailed', undefined, { msg: e.message }))
+  } finally {
+    savingUnifiedEnv.value = false
+  }
+}
 
 async function loadAll() {
   loading.value = true
@@ -193,23 +246,6 @@ function applyRuntime(rt: any) {
 
 async function saveEnvironment() {
   const environment = config.value.editable.okx_environment
-  if (environment === 'live') {
-    // 批C(2026-09-13)：切 LIVE 是全站最高风险动作（真实资金），原先用 prompt() 收短语
-    // ——移动端 prompt 常被弱化，且样式/焦点不可控。改用项目危险操作确认框，
-    // 要求逐字输入 LIVE（与其余危险操作同一套门禁语义）。
-    const _ok = await ask({
-      title: t('admin.security.confirmLiveTitle'),
-      desc: t('admin.security.confirmLiveDesc'),
-      detail: t('admin.security.confirmLiveDetail'),
-      danger: true,
-      confirmPhrase: 'LIVE',
-      okText: t('common.switchLive'),
-    })
-    if (!_ok) {
-      toast.warn(t('admin.security.warnNotConfirmed'))
-      return
-    }
-  }
   savingOkx.value = true
   try {
     const body: any = { okx_environment: environment }
@@ -221,7 +257,7 @@ async function saveEnvironment() {
     if (keys.value.demo_pass) body.okx_demo_passphrase = keys.value.demo_pass
     await api('/api/v1/admin/config', { method: 'PUT', body: JSON.stringify(body) })
     keys.value = { live_key: '', live_secret: '', live_pass: '', demo_key: '', demo_secret: '', demo_pass: '' }
-    toast.ok(t('admin.security.toastEnvSaved', undefined, { env: environment.toUpperCase() }))
+    toast.ok(t('admin.security.toastOkxCredsSaved'))
     await loadAll()
   } catch (e: any) {
     toast.err(t('admin.security.errSaveFailed', undefined, { msg: e.message }))
@@ -527,11 +563,35 @@ const okxEnvText = computed(() => okxEnvTextOf(config.value?.editable?.okx_envir
 const binanceEnvText = computed(() => envTextOf('binance', t('admin.security.envDemoBinance'), mx.value, mxTestnet.value, t))
 const gateEnvText = computed(() => envTextOf('gate', t('admin.security.envDemoGate'), mx.value, mxTestnet.value, t))
 
-function setOkxMode(mode: 'demo' | 'live') {
-  if (!config.value?.editable) return
-  config.value.editable.okx_environment = mode
-  okxCredViewLive.value = (mode === 'live')
-}
+const venueReadiness = computed(() => {
+  const okxReady = okxLinked.value
+  const b = mx.value?.venues?.binance
+  const binanceReady = !!(b?.has_api_key && b?.execution_open)
+  const g = mx.value?.venues?.gate
+  const gateReady = !!(g?.has_api_key && g?.execution_open)
+
+  const list: Array<{ id: string; name: string; ready: boolean }> = [
+    { id: 'okx', name: t('admin.security.okxNameShort'), ready: okxReady },
+    { id: 'binance', name: 'Binance', ready: binanceReady },
+    { id: 'gate', name: 'Gate.io', ready: gateReady },
+  ]
+  const readyList = list.filter((v) => v.ready)
+  return {
+    all: list,
+    ready: readyList,
+    readyCount: readyList.length,
+    readyNames: readyList.map((v) => v.name).join('、'),
+  }
+})
+
+const preferredVenueConflict = computed(() => {
+  if (preferredVenue.value === 'auto') return null
+  const target = venueReadiness.value.all.find((v) => v.id === preferredVenue.value)
+  if (!target || !target.ready) {
+    return target?.name || preferredVenue.value.toUpperCase()
+  }
+  return null
+})
 
 const TABS = computed<Array<{ key: TabKey; label: string; icon: any }>>(() => [
   { key: 'venues', label: t('admin.security.tabVenues'), icon: Route },
@@ -604,6 +664,9 @@ onMounted(() => { loadAll(); loadMx(); loadChannels() })
   <div class="sc">
     <PageHeader :title="t('nav.admin.security')" :description="t('admin.security.desc')">
       <template #actions>
+        <span class="badge mono" :class="isUnifiedLive ? 'badge-warn' : 'badge-accent'">
+          {{ isUnifiedLive ? t('admin.security.envLive') : t('admin.security.optDemo') }}
+        </span>
         <span class="badge badge-accent mono">
           {{ t('admin.security.chipRouting') }} {{ routingMode.toUpperCase() }}
         </span>
@@ -667,6 +730,46 @@ onMounted(() => { loadAll(); loadMx(); loadChannels() })
 
       <!-- ══════════ 页签 1：交易所与路由 ══════════ -->
       <template v-if="activeTab === 'venues'">
+        <!-- 全局统一交易环境一键切换 -->
+        <SettingsSection :title="t('admin.security.unifiedEnvTitle')" :description="t('admin.security.unifiedEnvDesc')" :icon="ShieldCheck">
+          <template #actions>
+            <span class="badge mono" :class="isUnifiedLive ? 'badge-warn' : 'badge-accent'">
+              {{ isUnifiedLive ? t('admin.security.envLive') : t('admin.security.optDemo') }}
+            </span>
+          </template>
+
+          <div class="sc-group">
+            <span class="form-label">{{ t('admin.security.unifiedEnvLabel') }}</span>
+            <div class="seg seg-compact" role="group" :aria-label="t('admin.security.unifiedEnvLabel')">
+              <button
+                type="button"
+                class="disabled:opacity-40 disabled:cursor-not-allowed"
+                :aria-pressed="!isUnifiedLive"
+                :class="{ 'seg-on': !isUnifiedLive }"
+                :disabled="savingUnifiedEnv"
+                @click="requestUnifiedEnvSwitch('demo')"
+              >
+                <Loader2 v-if="savingUnifiedEnv && !isUnifiedLive" :size="12" class="animate-spin shrink-0" />
+                <span>{{ t('admin.security.optDemo') }} · {{ t('admin.security.envDemoOkx') }}</span>
+              </button>
+              <button
+                type="button"
+                class="disabled:opacity-40 disabled:cursor-not-allowed"
+                :aria-pressed="isUnifiedLive"
+                :class="{ 'seg-on': isUnifiedLive }"
+                :disabled="savingUnifiedEnv"
+                @click="requestUnifiedEnvSwitch('live')"
+              >
+                <Loader2 v-if="savingUnifiedEnv && isUnifiedLive" :size="12" class="animate-spin shrink-0" />
+                <span>{{ t('admin.security.optLive') }} · {{ t('admin.security.envLive') }}</span>
+              </button>
+            </div>
+            <p class="sc-hint">
+              {{ isUnifiedLive ? t('admin.security.unifiedLiveHint') : t('admin.security.unifiedDemoHint') }}
+            </p>
+          </div>
+        </SettingsSection>
+
         <SettingsSection :title="t('admin.security.routingTitle')" :description="t('admin.security.routingDesc')" :icon="Route">
           <template #actions>
             <button type="button" class="btn btn-primary btn-sm" :disabled="savingMx" @click="saveRouting">
@@ -692,6 +795,41 @@ onMounted(() => { loadAll(); loadMx(); loadChannels() })
                 </span>
               </label>
             </div>
+
+            <!-- 选所就绪度与协调说明卡 -->
+            <div class="sc-coord-panel" :class="{ 'is-danger': venueReadiness.readyCount === 0 }">
+              <div class="sc-coord-header">
+                <span class="badge mono" :class="venueReadiness.readyCount === 0 ? 'badge-warn' : 'badge-accent'">
+                  <Activity :size="11" />
+                  {{ t('admin.security.readyVenuesCount', undefined, { count: venueReadiness.readyCount, total: 3 }) }}
+                </span>
+                <span class="sc-coord-names">
+                  {{ venueReadiness.readyCount > 0 ? venueReadiness.readyNames : t('admin.security.noReadyVenues') }}
+                </span>
+              </div>
+              <p class="sc-coord-text">
+                <template v-if="routingMode === 'balanced'">
+                  <span v-if="venueReadiness.readyCount === 1">
+                    {{ t('admin.security.balancedCoordSingle', undefined, { venue: venueReadiness.readyNames }) }}
+                  </span>
+                  <span v-else-if="venueReadiness.readyCount === 2">
+                    {{ t('admin.security.balancedCoordDouble', undefined, { venues: venueReadiness.readyNames }) }}
+                  </span>
+                  <span v-else-if="venueReadiness.readyCount === 3">
+                    {{ t('admin.security.balancedCoordTriple') }}
+                  </span>
+                  <span v-else>
+                    {{ t('admin.security.balancedCoordNone') }}
+                  </span>
+                </template>
+                <template v-else-if="routingMode === 'auto'">
+                  {{ t('admin.security.autoCoordDesc', undefined, { venues: venueReadiness.readyCount > 0 ? venueReadiness.readyNames : t('admin.security.noReadyVenues') }) }}
+                </template>
+                <template v-else>
+                  {{ t('admin.security.splitCoordDesc') }}
+                </template>
+              </p>
+            </div>
           </div>
 
           <div class="sc-group">
@@ -709,6 +847,12 @@ onMounted(() => { loadAll(); loadMx(); loadChannels() })
                   <span class="sc-radio-desc">{{ t(v.descKey) }}</span>
                 </span>
               </label>
+            </div>
+
+            <!-- 手选冲突告警 -->
+            <div v-if="preferredVenueConflict" role="alert" class="sc-conflict-warn">
+              <AlertTriangle :size="13" class="shrink-0" />
+              <span>{{ t('admin.security.preferredConflictWarn', undefined, { venue: preferredVenueConflict }) }}</span>
             </div>
           </div>
 
@@ -773,31 +917,39 @@ onMounted(() => { loadAll(); loadMx(); loadChannels() })
               <template #env>
                 <div class="field-stack">
                   <span class="form-label">{{ t('admin.security.endpointTier') }}</span>
-                  <div class="seg seg-compact" role="group" :aria-label="t('admin.security.endpointTier')">
-                    <button
-                      type="button"
-                      :aria-pressed="!okxCredViewLive"
-                      :class="{ 'seg-on': !okxCredViewLive }"
-                      @click="setOkxMode('demo')"
-                    >
-                      <span>{{ t('admin.security.okxDemoDomain') }}</span>
-                    </button>
-                    <button
-                      type="button"
-                      :aria-pressed="okxCredViewLive"
-                      :class="{ 'seg-on': okxCredViewLive }"
-                      @click="setOkxMode('live')"
-                    >
-                      <span>{{ t('admin.security.okxLiveDomain') }}</span>
-                    </button>
+                  <div class="sc-env-indicator">
+                    <span class="badge mono" :class="isUnifiedLive ? 'badge-warn' : 'badge-accent'">
+                      {{ isUnifiedLive ? t('admin.security.envLive') : t('admin.security.envDemoOkx') }}
+                    </span>
+                    <span class="sc-env-hint">{{ t('admin.security.envFollowsUnified') }}</span>
                   </div>
                 </div>
               </template>
 
               <div class="sc-creds">
-                <span class="form-label">
-                  {{ (okxCredViewLive ? t('admin.security.liveTrio') : t('admin.security.demoTrio')) }}
-                </span>
+                <div class="sc-creds-header">
+                  <span class="form-label">
+                    {{ (okxCredViewLive ? t('admin.security.liveTrio') : t('admin.security.demoTrio')) }}
+                  </span>
+                  <div class="seg seg-compact" role="group" :aria-label="t('admin.security.okxCredViewLabel')">
+                    <button
+                      type="button"
+                      :aria-pressed="!okxCredViewLive"
+                      :class="{ 'seg-on': !okxCredViewLive }"
+                      @click="okxCredViewLive = false"
+                    >
+                      <span>{{ t('admin.security.viewDemoCred') }}</span>
+                    </button>
+                    <button
+                      type="button"
+                      :aria-pressed="okxCredViewLive"
+                      :class="{ 'seg-on': okxCredViewLive }"
+                      @click="okxCredViewLive = true"
+                    >
+                      <span>{{ t('admin.security.viewLiveCred') }}</span>
+                    </button>
+                  </div>
+                </div>
 
                 <div v-show="!okxCredViewLive" class="sc-creds-group">
                   <input v-model="keys.demo_key" type="password" :placeholder="t('admin.security.apiKeyKeep')" class="field" :aria-label="t('admin.security.demoKeyAria')" />
@@ -854,23 +1006,11 @@ onMounted(() => { loadAll(); loadMx(); loadChannels() })
               <template #env>
                 <div class="field-stack">
                   <span class="form-label">{{ t('admin.security.endpointTier') }}</span>
-                  <div class="seg seg-compact" role="group" :aria-label="t('admin.security.endpointTier')">
-                    <button
-                      type="button"
-                      :aria-pressed="mxTestnet.binance"
-                      :class="{ 'seg-on': mxTestnet.binance }"
-                      @click="mxTestnet.binance = true"
-                    >
-                      <span>{{ t('admin.security.binanceDemoDomain') }}</span>
-                    </button>
-                    <button
-                      type="button"
-                      :aria-pressed="!mxTestnet.binance"
-                      :class="{ 'seg-on': !mxTestnet.binance }"
-                      @click="mxTestnet.binance = false"
-                    >
-                      <span>{{ t('admin.security.binanceLiveDomain') }}</span>
-                    </button>
+                  <div class="sc-env-indicator">
+                    <span class="badge mono" :class="!mxTestnet.binance ? 'badge-warn' : 'badge-accent'">
+                      {{ !mxTestnet.binance ? t('admin.security.envLive') : t('admin.security.binanceDemoDomain') }}
+                    </span>
+                    <span class="sc-env-hint">{{ t('admin.security.envFollowsUnified') }}</span>
                   </div>
                 </div>
               </template>
@@ -924,23 +1064,11 @@ onMounted(() => { loadAll(); loadMx(); loadChannels() })
               <template #env>
                 <div class="field-stack">
                   <span class="form-label">{{ t('admin.security.endpointTier') }}</span>
-                  <div class="seg seg-compact" role="group" :aria-label="t('admin.security.endpointTier')">
-                    <button
-                      type="button"
-                      :aria-pressed="mxTestnet.gate"
-                      :class="{ 'seg-on': mxTestnet.gate }"
-                      @click="mxTestnet.gate = true"
-                    >
-                      <span>{{ t('admin.security.gateSandboxDomain') }}</span>
-                    </button>
-                    <button
-                      type="button"
-                      :aria-pressed="!mxTestnet.gate"
-                      :class="{ 'seg-on': !mxTestnet.gate }"
-                      @click="mxTestnet.gate = false"
-                    >
-                      <span>{{ t('admin.security.gateLiveDomain') }}</span>
-                    </button>
+                  <div class="sc-env-indicator">
+                    <span class="badge mono" :class="!mxTestnet.gate ? 'badge-warn' : 'badge-accent'">
+                      {{ !mxTestnet.gate ? t('admin.security.envLive') : t('admin.security.gateSandboxDomain') }}
+                    </span>
+                    <span class="sc-env-hint">{{ t('admin.security.envFollowsUnified') }}</span>
                   </div>
                 </div>
               </template>
@@ -1415,6 +1543,64 @@ onMounted(() => { loadAll(); loadMx(); loadChannels() })
   display: flex;
   flex-direction: column;
   gap:6px;
+}
+.sc-creds-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--ds-space-2);
+}
+.sc-env-indicator {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+}
+.sc-env-hint {
+  font-size: var(--text-4xs);
+  color: var(--ds-color-text-placeholder);
+}
+.sc-coord-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  margin-top: var(--ds-space-3);
+  padding: var(--ds-space-3);
+  border-radius: var(--r-ctl);
+  border: 1px solid var(--ds-color-border-default);
+  background-color: var(--ds-color-bg-surface-inset);
+}
+.sc-coord-panel.is-danger {
+  border-color: var(--down-line);
+  background-color: var(--down-bg);
+}
+.sc-coord-header {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+}
+.sc-coord-names {
+  font-size: var(--text-3xs);
+  font-weight: 600;
+  color: var(--ds-color-text-primary);
+}
+.sc-coord-text {
+  font-size: var(--text-3xs);
+  line-height: var(--leading-body);
+  color: var(--ds-color-text-description);
+  margin: 0;
+}
+.sc-conflict-warn {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  margin-top: var(--ds-space-2);
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border-radius: var(--r-ctl);
+  background-color: var(--warn-bg);
+  border: 1px solid var(--warn-line);
+  color: var(--warn);
+  font-size: var(--text-3xs);
 }
 .sc-creds-group {
   display: flex;

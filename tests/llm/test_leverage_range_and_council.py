@@ -76,7 +76,7 @@ class RiskConfigSchemaTests(unittest.TestCase):
         # 导入即自检（越界/suite 断言）不炸说明三套件 MIN≤MAX 与边界全合法
         suites = {s["id"]: s["values"] for s in risk_mod.SUITES}
         self.assertLessEqual(suites["conservative"]["ASTRA_MIN_LEVERAGE"], suites["conservative"]["ASTRA_MAX_LEVERAGE"])
-        self.assertEqual((suites["aggressive"]["ASTRA_MIN_LEVERAGE"], suites["aggressive"]["ASTRA_MAX_LEVERAGE"]), (5.0, 7.0))
+        self.assertEqual((suites["aggressive"]["ASTRA_MIN_LEVERAGE"], suites["aggressive"]["ASTRA_MAX_LEVERAGE"]), (5.0, 8.0))
 
     def test_normalize_rejects_inverted_leverage_range(self):
         import astra_backend.risk_config as risk_mod

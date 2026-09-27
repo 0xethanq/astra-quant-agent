@@ -223,6 +223,13 @@ def dispatch_llm_and_persist_decisions(*,
 
         history_list.insert(0, history_record)
         history_list = history_list[:50] # Keep recent 50 rounds
+        # 轻量化优化：首条(当前最新轮次)完整保留全景提示词用于排错审计；
+        # 历史较旧轮次(idx >= 1)剔除重复庞大的 40KB prompt，缩减至前缀，大幅削减 90% 存储与反序列化开销
+        for idx, item in enumerate(history_list):
+            if idx > 0 and isinstance(item, dict) and "ai_last_prompt" in item:
+                p_text = str(item["ai_last_prompt"])
+                if len(p_text) > 500:
+                    item["ai_last_prompt"] = p_text[:200] + "...(历史轮次已精简收敛)"
 
         atomic_write_json(AI_DECISION_HISTORY_FILE, history_list)
 
