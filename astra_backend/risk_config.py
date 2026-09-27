@@ -188,24 +188,24 @@ SUITES: list[dict[str, Any]] = [
      "desc": "系统出厂基线：同向 3 仓防共振踩踏、单笔保证金 20% 硬顶、2% 单笔风险、R:R 底线 2.0、"
              "60分钟止损冷静期防连续磨损、8 小时时间止损释放配比、允许 1 次严格浮盈加仓。兼顾让利润奔跑与风险下限。",
      "values": {key: DEFAULTS[key] for key in DEFAULTS}},
-    {"id": "aggressive", "name": "🚀 进取猎手", "tagline": "单边趋势市 · 经验账户专用",
-     "desc": "适合明确单边主升/主跌浪与经验老手账户：提高单笔杠杆至 5x~8x，单笔保证金放宽至 35%，单标的无绝对硬上限（纯按可用余额 45% 比例动态推导），"
-             "同向放宽至 4 仓吃足趋势、置信度门禁降至 72% 抢先上车、允许 2 次金字塔加仓放大盈利单、20分钟冷静期加快日内周转。"
-             "回撤与熔断线同步放大至 10%/500U，激进追求收益，风险自负。",
+    {"id": "aggressive", "name": "🚀 进取猎手", "tagline": "高频波段 · 经验账户专用",
+     "desc": "专为高频开平仓、高资金周转与放大返佣打造：单笔杠杆提升至 6x~9.9x（主流币10x/动量币8x），单笔保证金放宽至 40%，单标的无绝对硬上限（纯按可用余额 48% 比例动态推导），"
+             "同向放宽至 5 仓多币种多点开花、置信度门禁降至 68% 抢先上车、允许 2 次金字塔加仓放大盈利单、15分钟冷静期与 1.0x ATR 极速分批止盈快速回笼资金。"
+             "日亏熔断线设为 10%/500U，激进追求波段收益，最大化名义成交额与返佣分成。",
      "values": {
          "ASTRA_PORTFOLIO_RISK_BUDGET_USDT": 0.0,
-         "ASTRA_MAX_CONCURRENT_POSITIONS": 0, "ASTRA_MAX_SAME_DIRECTION_POSITIONS": 4,
-         "ASTRA_MAX_MARGIN_EQUITY_RATIO": 0.35, "ASTRA_SINGLE_ASSET_EQUITY_RATIO": 0.45,
-         "ASTRA_MAX_SINGLE_ASSET_MARGIN_USDT": 0.0, "ASTRA_MIN_LEVERAGE": 5.0, "ASTRA_MAX_LEVERAGE": 8.0,
-         "ASTRA_RISK_PER_TRADE_RATIO": 0.03, "ASTRA_MAX_RISK_PER_TRADE_USDT": 0.0, "ASTRA_MIN_RISK_REWARD": 2.0, "ASTRA_MAX_RISK_REWARD": 5.0,
-         "ASTRA_MIN_ENTRY_CONFIDENCE": 72.0,
-         "ASTRA_STOP_LOSS_ATR_MULT": 2.2,
+         "ASTRA_MAX_CONCURRENT_POSITIONS": 0, "ASTRA_MAX_SAME_DIRECTION_POSITIONS": 5,
+         "ASTRA_MAX_MARGIN_EQUITY_RATIO": 0.40, "ASTRA_SINGLE_ASSET_EQUITY_RATIO": 0.48,
+         "ASTRA_MAX_SINGLE_ASSET_MARGIN_USDT": 0.0, "ASTRA_MIN_LEVERAGE": 6.0, "ASTRA_MAX_LEVERAGE": 9.9,
+         "ASTRA_RISK_PER_TRADE_RATIO": 0.045, "ASTRA_MAX_RISK_PER_TRADE_USDT": 0.0, "ASTRA_MIN_RISK_REWARD": 2.0, "ASTRA_MAX_RISK_REWARD": 5.0,
+         "ASTRA_MIN_ENTRY_CONFIDENCE": 68.0,
+         "ASTRA_STOP_LOSS_ATR_MULT": 2.0,
          "ASTRA_DAILY_LOSS_EQUITY_RATIO": 0.10, "ASTRA_MAX_DAILY_LOSS_USDT": 500.0,
-         "ASTRA_TIME_STOP_HOURS": 16.0, "ASTRA_TIME_STOP_ATR_BAND": 0.20, "ASTRA_STOP_COOLDOWN_MINUTES": 20,
-         "ASTRA_MAX_SCALE_IN_COUNT": 2, "ASTRA_MIN_SCALE_IN_PROFIT_RATIO": 0.006, "ASTRA_MIN_SCALE_IN_CONFIDENCE": 70.0,
-         "ASTRA_MAX_TOTAL_EXPOSURE_USDT": 5000.0,
-         "ASTRA_SCALE_OUT_ENABLED": 1, "ASTRA_SCALE_OUT_RATIO": 0.40, "ASTRA_SCALE_OUT_TRIGGER_ATR": 1.50,
-         "ASTRA_MAX_TAKE_PROFIT_ATR": 5.00,
+         "ASTRA_TIME_STOP_HOURS": 8.0, "ASTRA_TIME_STOP_ATR_BAND": 0.15, "ASTRA_STOP_COOLDOWN_MINUTES": 15,
+         "ASTRA_MAX_SCALE_IN_COUNT": 2, "ASTRA_MIN_SCALE_IN_PROFIT_RATIO": 0.006, "ASTRA_MIN_SCALE_IN_CONFIDENCE": 68.0,
+         "ASTRA_MAX_TOTAL_EXPOSURE_USDT": 50000.0,
+         "ASTRA_SCALE_OUT_ENABLED": 1, "ASTRA_SCALE_OUT_RATIO": 0.50, "ASTRA_SCALE_OUT_TRIGGER_ATR": 1.00,
+         "ASTRA_MAX_TAKE_PROFIT_ATR": 4.50,
      }},
 ]
 
