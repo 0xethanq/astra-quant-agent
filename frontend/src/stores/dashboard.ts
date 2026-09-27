@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, shallowRef, computed } from 'vue'
 import { useI18n } from '../composables/useI18n'
 import type { DashboardResponse, InstrumentFactor, PositionItem, PendingOrderItem } from '../types/dashboard'
 
@@ -7,7 +7,8 @@ export const useDashboardStore = defineStore('dashboard', () => {
   // 批 76：回落文案改走 i18n（useI18n 只读模块级 locale ref，在 store 作用域调用是安全的）
   const { t } = useI18n()
   const activeTab = ref<'trading' | 'factors' | 'news' | 'lab' | 'history'>('trading')
-  const data = ref<DashboardResponse | null>(null)
+  // 性能优化：大型 ~380KB 接口数据整包替换，改用 shallowRef 避免深层递归生成数千个 Proxy 实例，大幅削减 CPU 与 GC 压力
+  const data = shallowRef<DashboardResponse | null>(null)
   const loading = ref<boolean>(false)
   const isRefreshing = ref<boolean>(false)
   const error = ref<string | null>(null)

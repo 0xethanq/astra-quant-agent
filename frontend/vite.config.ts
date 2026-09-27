@@ -40,5 +40,22 @@ export default defineConfig({
     // images/、icons.svg、sitemap.xml、favicon.svg、robots.txt 均在 `public/` 有源），
     // 故清空重生成不会丢任何手工放置的文件。
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('klinecharts')) {
+              return 'vendor-klinecharts'
+            }
+            if (id.includes('lucide-vue-next')) {
+              return 'vendor-icons'
+            }
+            if (id.includes('vue') || id.includes('pinia')) {
+              return 'vendor-framework'
+            }
+          }
+        },
+      },
+    },
   },
 })

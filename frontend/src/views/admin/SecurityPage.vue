@@ -707,9 +707,9 @@ async function savePlazaSettings() {
       plazaSettings.value = { ...plazaSettings.value, ...res.settings }
     }
     plazaIsLive.value = Boolean(res?.is_live)
-    toast.show(t('admin.security.toastPlazaSaved'))
+    toast.ok(t('admin.security.toastPlazaSaved'))
   } catch (err: any) {
-    toast.show(t('admin.security.errSaveFailed', undefined, { msg: err.message || 'Error' }), 'error')
+    toast.err(t('admin.security.errSaveFailed', undefined, { msg: err.message || 'Error' }))
   } finally {
     savingPlaza.value = false
   }
@@ -718,7 +718,7 @@ async function savePlazaSettings() {
 function copyPlazaUrl() {
   if (navigator.clipboard) {
     navigator.clipboard.writeText(plazaPublicUrl.value)
-    toast.show(t('admin.security.toastPlazaCopied'))
+    toast.ok(t('admin.security.toastPlazaCopied'))
   }
 }
 
@@ -739,7 +739,7 @@ function copyCloneParams() {
   if (plazaPreviewData.value?.strategy_clone_payload && navigator.clipboard) {
     const jsonStr = JSON.stringify(plazaPreviewData.value.strategy_clone_payload, null, 2)
     navigator.clipboard.writeText(jsonStr)
-    toast.show(t('admin.security.plazaCloneSuccess'))
+    toast.ok(t('admin.security.plazaCloneSuccess'))
   }
 }
 

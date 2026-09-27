@@ -45,7 +45,6 @@ from astra_backend.routers import (
     llm_router,
     gateway_router,
     dashboard_router,
-    plaza_router,
 )
 from astra_backend.routers.system import (
     runtime_overview,
@@ -285,7 +284,6 @@ app.include_router(strategy_router)
 app.include_router(llm_router)
 app.include_router(gateway_router)
 app.include_router(dashboard_router)
-app.include_router(plaza_router)
 
 # 静态资源与 SPA 壳（结构优化阶段 2·B2 收尾）：原先是 "
 # from astra_backend.dashboard_cache import app as dashboard_app; app.mount("/", dashboard_app)"

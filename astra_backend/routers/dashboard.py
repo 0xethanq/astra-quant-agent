@@ -16,8 +16,10 @@ from astra_backend.dependencies import (
 )
 import astra_backend.dashboard_cache as dash_app
 from astra_backend.web_shell import serve_vue_spa, templates
+from .plaza import router as plaza_router
 
 router = APIRouter(tags=["dashboard"])
+router.include_router(plaza_router)
 
 _CANDLES_CACHE: dict[str, tuple[float, list[dict[str, Any]]]] = {}
 

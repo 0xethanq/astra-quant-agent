@@ -42,7 +42,7 @@
 
 ### L1 启动与装配
 
-`app.py`（FastAPI 装配，`include_router` 9 个路由）、`scheduler.py`、
+`app.py`（FastAPI 装配，`include_router` 8 个路由）、`scheduler.py`、
 `spawn.py`、`web_shell.py`、`config.py`、`settings_store.py`、`version.py`、
 `dependencies.py`、`routers/`。
 
@@ -51,7 +51,7 @@
 ### L2 HTTP 边界 — `routers/`
 
 `auth` / `system` / `exchanges` / `risk` / `strategy` / `llm` / `gateway` /
-`dashboard` / `plaza`。**路由层只做参数校验与调用编排，不放业务逻辑。**
+`dashboard`（含 `plaza` 实盘共享子路由）。**路由层只做参数校验与调用编排，不放业务逻辑。**
 路由瘦身的正确做法是把业务下沉到 `exchanges/`、`execution/`、
 `dashboard_payload/`，路由保留薄壳（与 `astra_backend/dashboard_cache.py` 降为纯库同一手法）。
 

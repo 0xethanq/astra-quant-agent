@@ -3,7 +3,7 @@
  * DashboardLayout.vue · DeepSeek Harness 开发者工作台骨架布局
  * 采用侧边导航工作台架构、分层工作区设计、顶部控制条与全局决策轨迹/日志面板
  */
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useRouteFocus } from '../composables/useRouteFocus';
 import { useDashboardStore } from '../stores/dashboard';
@@ -24,10 +24,12 @@ import {
 import TopBar from '../components/dashboard/TopBar.vue';
 import MobileTabBar from '../components/dashboard/MobileTabBar.vue';
 import MatrixView from '../views/dashboard/MatrixView.vue';
-import RadarView from '../views/dashboard/RadarView.vue';
-import NewsView from '../views/dashboard/NewsView.vue';
-import EvolutionView from '../views/dashboard/EvolutionView.vue';
-import LedgerView from '../views/dashboard/LedgerView.vue';
+
+// 性能优化：非首屏工作台按需异步加载（代码分割），大幅减小初始首屏 Bundle 体积
+const RadarView = defineAsyncComponent(() => import('../views/dashboard/RadarView.vue'));
+const NewsView = defineAsyncComponent(() => import('../views/dashboard/NewsView.vue'));
+const EvolutionView = defineAsyncComponent(() => import('../views/dashboard/EvolutionView.vue'));
+const LedgerView = defineAsyncComponent(() => import('../views/dashboard/LedgerView.vue'));
 import AboutModal from '../components/dashboard/AboutModal.vue';
 import SkipLink from '../components/base/SkipLink.vue';
 import TrajectoryPanel from '../components/dashboard/TrajectoryPanel.vue';

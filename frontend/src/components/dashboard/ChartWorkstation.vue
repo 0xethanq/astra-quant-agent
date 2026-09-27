@@ -907,6 +907,12 @@ function handleKeydown(e: KeyboardEvent) {
   symbolMenu.value = false
 }
 
+function handleChartVisibility() {
+  if (typeof document !== 'undefined' && !document.hidden) {
+    loadCandles(true, false)
+  }
+}
+
 onMounted(() => {
   const initSym = props.initialSymbol || props.symbol
   if (initSym) currentSymbol.value = initSym.toUpperCase()
@@ -914,8 +920,10 @@ onMounted(() => {
   document.addEventListener('keydown', handleKeydown)
   nextTick(() => {
     initChart()
-    // 3s 静默拉取最新数据，保证准确对齐与跳动
+    // 性能优化：切后台时暂停图表轮询与 Canvas 重绘，回前台立即补一次
+    document.addEventListener('visibilitychange', handleChartVisibility)
     timer = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return
       loadCandles(true, false)
     }, 3000)
     countdownTimer = setInterval(updateCountdown, 1000)
@@ -938,6 +946,7 @@ onUnmounted(() => {
   }
   document.removeEventListener('click', handleClickOutside)
   document.removeEventListener('keydown', handleKeydown)
+  document.removeEventListener('visibilitychange', handleChartVisibility)
   if (timer) clearInterval(timer)
   if (countdownTimer) clearInterval(countdownTimer)
   if (chartContainer.value) {
