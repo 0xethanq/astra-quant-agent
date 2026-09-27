@@ -36,6 +36,12 @@ from scripts.news.importance import (  # noqa: E402,F401
     _extract_coins,
     is_crypto_or_macro_relevant,
 )
+from scripts.news.selection import (  # noqa: E402,F401
+    is_crypto_news,
+    is_macro_news,
+    select_weighted_news,
+    format_news_for_prompt,
+)
 import sys
 import tempfile
 from pathlib import Path
@@ -505,8 +511,15 @@ def fetch_and_analyze_news_sentiment():
         title = item.get("title", "")
         summary = item.get("summary", "")
 
-        coins = item.get("ccyList") or item.get("coins") or _extract_coins(title, summary, TARGET_COINS)
+        is_crypto, extracted_coins = is_crypto_news(item)
+        coins = item.get("ccyList") or item.get("coins") or extracted_coins or _extract_coins(title, summary, TARGET_COINS)
         importance = item.get("importance") or _classify_importance(title, summary)
+        if is_crypto or coins:
+            category = "crypto"
+        elif is_macro_news(item)[0]:
+            category = "macro"
+        else:
+            category = "general"
 
         parsed_news.append({
             "id": item.get("id"),
@@ -516,6 +529,7 @@ def fetch_and_analyze_news_sentiment():
             "coins": coins,
             "platforms": item.get("platformList") or item.get("platforms", []),
             "importance": importance,
+            "category": category,
             "url": item.get("sourceUrl") or item.get("url", "")
         })
 

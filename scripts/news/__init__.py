@@ -9,6 +9,7 @@
 | 模块 | 职责 | 注入面 |
 |---|---|---|
 | `importance.py` | 快讯重要度分级（`_classify_importance`）+ 币种识别（`_extract_coins`） | 无（纯文本进、纯值出；不读任何模块常量） |
+| `selection.py` | 快讯智能分类与提示词加权选择（`select_weighted_news` / `format_news_for_prompt`） | 无（纯判断与格式化进出） |
 
 ## 约定
 

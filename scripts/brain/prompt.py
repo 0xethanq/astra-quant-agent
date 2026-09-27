@@ -207,8 +207,32 @@ def construct_full_market_prompt(packages: List[Dict[str, Any]], pos_summary: st
             with open(news_sentiment_file, "r", encoding="utf-8") as f:
                 ns_data = json.load(f)
                 macro_env = ns_data.get("macro_sentiment", "中性平衡")
-                for n in ns_data.get("latest_news", [])[:6]:
-                    news_briefs.append(f"- [{n.get('time', '')}] {n.get('title', '')} ({n.get('summary', '')[:80]}...)")
+                raw_latest = ns_data.get("latest_news", [])
+                if raw_latest:
+                    try:
+                        from scripts.news.selection import select_weighted_news, format_news_for_prompt
+                        # 标的池关注币种提取（优先保障当前持仓与标的池专属资讯）
+                        target_coins = {
+                            str(pkg.get("name") or "").upper()
+                            for pkg in (packages or [])
+                            if pkg.get("name")
+                        }
+                        if not target_coins and active_positions_detail:
+                            for p in active_positions_detail:
+                                inst = str(p.get("instId") or p.get("symbol") or "")
+                                if inst:
+                                    target_coins.add(inst.split("-")[0].upper())
+                        selected = select_weighted_news(
+                            raw_latest,
+                            target_coins=target_coins,
+                            total_limit=6,
+                            crypto_quota=4,
+                            macro_quota=2,
+                        )
+                        news_briefs = format_news_for_prompt(selected, target_coins=target_coins)
+                    except Exception:
+                        for n in raw_latest[:6]:
+                            news_briefs.append(f"- [{n.get('time', '')}] {n.get('title', '')} ({n.get('summary', '')[:80]}...)")
         except Exception:
             pass
 
