@@ -146,7 +146,7 @@ const mxTestnet = ref({ binance: false, gate: false })
 const preferredVenue = ref('auto')
 const routingMode = ref('auto')
 const okxCredViewLive = ref(false)
-const orderMode = ref<'limit' | 'market'>('limit')
+const orderMode = ref<'limit' | 'market'>('market')
 const savingOrderMode = ref(false)
 const venueLatencies = ref<Record<string, number>>({})
 const savingMx = ref(false)
@@ -221,7 +221,9 @@ async function loadAll() {
       okxCredViewLive.value = (cfg.editable.okx_environment === 'live')
     }
     if (cfg?.editable?.order_mode) {
-      orderMode.value = (cfg.editable.order_mode === 'market' ? 'market' : 'limit')
+      orderMode.value = (cfg.editable.order_mode === 'limit' ? 'limit' : 'market')
+    } else {
+      orderMode.value = 'market'
     }
     newCapital.value = String(cfg.editable?.initial_capital ?? '')
     manualClose.value = !!cfg.editable?.manual_close_enabled
@@ -856,141 +858,39 @@ onMounted(() => { loadAll(); loadMx(); loadChannels(); loadPlazaSettings() })
           </div>
         </SettingsSection>
 
-        <!-- 策略广场实盘共享 -->
-        <SettingsSection :title="t('admin.security.plazaShareTitle')" :description="t('admin.security.plazaShareDesc')" :icon="Share2">
+        <!-- 委托订单模式 -->
+        <SettingsSection :title="t('admin.security.orderModeTitle')" :description="t('admin.security.orderModeDesc')" :icon="Zap">
           <template #actions>
-            <span class="badge mono" :class="!isUnifiedLive ? 'badge-warn' : plazaSettings.enabled ? 'badge-accent' : ''">
-              {{ !isUnifiedLive ? t('admin.security.plazaDemoLocked') : plazaSettings.enabled ? t('admin.security.plazaActive') : t('admin.security.plazaOff') }}
-            </span>
+            <button type="button" class="btn btn-primary btn-sm" :disabled="savingOrderMode" @click="saveOrderMode">
+              <Loader2 v-if="savingOrderMode" :size="13" class="animate-spin shrink-0" />
+              <Save v-else :size="13" />
+              <span>{{ savingOrderMode ? t('admin.security.saving') : t('admin.security.saveOrderMode') }}</span>
+            </button>
           </template>
 
           <div class="sc-group">
-            <!-- 模拟盘锁定提示 -->
-            <p v-if="!isUnifiedLive" class="sc-hint flex items-center gap-1.5 text-amber-400">
-              <AlertTriangle :size="13" class="shrink-0" />
-              <span>{{ t('admin.security.plazaLiveOnlyAlert') }}</span>
+            <span class="form-label">{{ t('admin.security.orderModeTitle') }}</span>
+            <div class="seg seg-compact" role="group" :aria-label="t('admin.security.orderModeTitle')">
+              <button
+                type="button"
+                :aria-pressed="orderMode === 'limit'"
+                :class="{ 'seg-on': orderMode === 'limit' }"
+                @click="orderMode = 'limit'"
+              >
+                <span>{{ t('admin.security.optLimit') }}</span>
+              </button>
+              <button
+                type="button"
+                :aria-pressed="orderMode === 'market'"
+                :class="{ 'seg-on': orderMode === 'market' }"
+                @click="orderMode = 'market'"
+              >
+                <span>{{ t('admin.security.optMarket') }}</span>
+              </button>
+            </div>
+            <p class="sc-hint">
+              {{ orderMode === 'market' ? t('admin.security.orderModeMarketHint') : t('admin.security.orderModeLimitHint') }}
             </p>
-
-            <!-- 主开关 -->
-            <div class="flex items-center justify-between py-2 border-b border-[var(--border-subtle)]">
-              <div>
-                <span class="font-medium text-sm text-[var(--text-primary)]">{{ t('admin.security.plazaEnableLabel') }}</span>
-                <p class="text-xs text-[var(--text-muted)] mt-0.5">{{ t('admin.security.plazaShareDesc') }}</p>
-              </div>
-              <BaseSwitch
-                v-model="plazaSettings.enabled"
-                :disabled="!isUnifiedLive || savingPlaza"
-                :label="t('admin.security.plazaEnableLabel')"
-              />
-            </div>
-
-            <!-- 详细配置与链接 -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-              <div class="space-y-1">
-                <label for="plaza-nickname-input" class="form-label text-xs">{{ t('admin.security.plazaNicknameLabel') }}</label>
-                <input
-                  id="plaza-nickname-input"
-                  v-model="plazaSettings.nickname"
-                  type="text"
-                  class="field text-xs disabled:opacity-40 disabled:cursor-not-allowed"
-                  maxlength="40"
-                  :disabled="!isUnifiedLive || savingPlaza"
-                  :placeholder="t('admin.security.plazaNicknamePlaceholder')"
-                />
-              </div>
-
-              <div class="space-y-1">
-                <label for="plaza-api-url-input" class="form-label text-xs">{{ t('admin.security.plazaApiUrlLabel') }}</label>
-                <div class="flex items-center gap-2">
-                  <input
-                    id="plaza-api-url-input"
-                    type="text"
-                    readonly
-                    class="field text-xs mono text-[var(--text-muted)] select-all disabled:opacity-40 disabled:cursor-not-allowed"
-                    :value="plazaPublicUrl"
-                  />
-                  <button
-                    type="button"
-                    class="btn btn-quiet btn-sm shrink-0"
-                    :disabled="!plazaSettings.enabled || !isUnifiedLive"
-                    @click="copyPlazaUrl"
-                  >
-                    <Copy :size="12" />
-                    <span>{{ t('admin.security.plazaCopyUrl') }}</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <!-- 隐私细分选项 -->
-            <div class="space-y-2 pt-2 border-t border-[var(--border-subtle)]">
-              <span class="form-label text-xs">{{ t('admin.security.plazaPrivacyCustom') }}</span>
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                <label class="flex items-center gap-2 cursor-pointer text-[var(--text-secondary)]">
-                  <input
-                    type="checkbox"
-                    v-model="plazaSettings.show_performance"
-                    :disabled="!isUnifiedLive || savingPlaza"
-                    class="rounded border-[var(--border-base)] text-[var(--color-primary)] disabled:opacity-40 disabled:cursor-not-allowed"
-                  />
-                  <span>{{ t('admin.security.plazaShowPerf') }}</span>
-                </label>
-
-                <label class="flex items-center gap-2 cursor-pointer text-[var(--text-secondary)]">
-                  <input
-                    type="checkbox"
-                    v-model="plazaSettings.show_balance"
-                    :disabled="!isUnifiedLive || savingPlaza"
-                    class="rounded border-[var(--border-base)] text-[var(--color-primary)] disabled:opacity-40 disabled:cursor-not-allowed"
-                  />
-                  <span>{{ t('admin.security.plazaShowBalance') }}</span>
-                </label>
-
-                <label class="flex items-center gap-2 cursor-pointer text-[var(--text-secondary)]">
-                  <input
-                    type="checkbox"
-                    v-model="plazaSettings.show_model"
-                    :disabled="!isUnifiedLive || savingPlaza"
-                    class="rounded border-[var(--border-base)] text-[var(--color-primary)] disabled:opacity-40 disabled:cursor-not-allowed"
-                  />
-                  <span>{{ t('admin.security.plazaShowModel') }}</span>
-                </label>
-
-                <label class="flex items-center gap-2 cursor-pointer text-[var(--text-secondary)]">
-                  <input
-                    type="checkbox"
-                    v-model="plazaSettings.show_strategy_params"
-                    :disabled="!isUnifiedLive || savingPlaza"
-                    class="rounded border-[var(--border-base)] text-[var(--color-primary)] disabled:opacity-40 disabled:cursor-not-allowed"
-                  />
-                  <span>{{ t('admin.security.plazaShowParams') }}</span>
-                </label>
-              </div>
-            </div>
-
-            <!-- 底部操作按钮 -->
-            <div class="flex items-center justify-between pt-3 border-t border-[var(--border-subtle)]">
-              <button
-                type="button"
-                class="btn btn-ghost btn-sm"
-                :disabled="!isUnifiedLive || !plazaSettings.enabled"
-                @click="openPlazaPreview"
-              >
-                <Eye :size="13" />
-                <span>{{ t('admin.security.plazaPreviewCard') }}</span>
-              </button>
-
-              <button
-                type="button"
-                class="btn btn-primary btn-sm"
-                :disabled="!isUnifiedLive || savingPlaza"
-                @click="savePlazaSettings"
-              >
-                <Loader2 v-if="savingPlaza" :size="13" class="animate-spin shrink-0" />
-                <Save v-else :size="13" />
-                <span>{{ savingPlaza ? t('admin.security.saving') : t('admin.security.plazaSaveSettings') }}</span>
-              </button>
-            </div>
           </div>
         </SettingsSection>
 
@@ -1090,42 +990,6 @@ onMounted(() => { loadAll(); loadMx(); loadChannels(); loadPlazaSettings() })
               — {{ t('admin.security.unconfiguredNote') }}
             </span>
           </p>
-        </SettingsSection>
-
-        <!-- 委托订单模式 -->
-        <SettingsSection :title="t('admin.security.orderModeTitle')" :description="t('admin.security.orderModeDesc')" :icon="Zap">
-          <template #actions>
-            <button type="button" class="btn btn-primary btn-sm" :disabled="savingOrderMode" @click="saveOrderMode">
-              <Loader2 v-if="savingOrderMode" :size="13" class="animate-spin shrink-0" />
-              <Save v-else :size="13" />
-              <span>{{ savingOrderMode ? t('admin.security.saving') : t('admin.security.saveOrderMode') }}</span>
-            </button>
-          </template>
-
-          <div class="sc-group">
-            <span class="form-label">{{ t('admin.security.orderModeTitle') }}</span>
-            <div class="seg seg-compact" role="group" :aria-label="t('admin.security.orderModeTitle')">
-              <button
-                type="button"
-                :aria-pressed="orderMode === 'limit'"
-                :class="{ 'seg-on': orderMode === 'limit' }"
-                @click="orderMode = 'limit'"
-              >
-                <span>{{ t('admin.security.optLimit') }}</span>
-              </button>
-              <button
-                type="button"
-                :aria-pressed="orderMode === 'market'"
-                :class="{ 'seg-on': orderMode === 'market' }"
-                @click="orderMode = 'market'"
-              >
-                <span>{{ t('admin.security.optMarket') }}</span>
-              </button>
-            </div>
-            <p class="sc-hint">
-              {{ orderMode === 'market' ? t('admin.security.orderModeMarketHint') : t('admin.security.orderModeLimitHint') }}
-            </p>
-          </div>
         </SettingsSection>
 
         <!-- 三所凭证 -->
@@ -1362,6 +1226,144 @@ onMounted(() => { loadAll(); loadMx(); loadChannels(); loadPlazaSettings() })
               <span class="sc-health-stat mono num">{{ h.ok }}/{{ h.total }} {{ t('admin.security.coinsUnit') }}</span>
               <span v-if="h.avg_ms" class="sc-health-ms mono num">{{ h.avg_ms }}ms</span>
               <span v-if="h.testnet" class="badge">{{ t('admin.security.sandboxTag') }}</span>
+            </div>
+          </div>
+        </SettingsSection>
+
+        <!-- 策略广场实盘共享 -->
+        <SettingsSection :title="t('admin.security.plazaShareTitle')" :description="t('admin.security.plazaShareDesc')" :icon="Share2">
+          <template #actions>
+            <span class="badge mono" :class="!isUnifiedLive ? 'badge-warn' : plazaSettings.enabled ? 'badge-accent' : ''">
+              {{ !isUnifiedLive ? t('admin.security.plazaDemoLocked') : plazaSettings.enabled ? t('admin.security.plazaActive') : t('admin.security.plazaOff') }}
+            </span>
+          </template>
+
+          <div class="sc-group">
+            <!-- 模拟盘锁定提示 -->
+            <p v-if="!isUnifiedLive" class="sc-hint flex items-center gap-1.5 text-amber-400">
+              <AlertTriangle :size="13" class="shrink-0" />
+              <span>{{ t('admin.security.plazaLiveOnlyAlert') }}</span>
+            </p>
+
+            <!-- 主开关 -->
+            <div class="flex items-center justify-between py-2 border-b border-[var(--border-subtle)]">
+              <div>
+                <span class="font-medium text-sm text-[var(--text-primary)]">{{ t('admin.security.plazaEnableLabel') }}</span>
+                <p class="text-xs text-[var(--text-muted)] mt-0.5">{{ t('admin.security.plazaShareDesc') }}</p>
+              </div>
+              <BaseSwitch
+                v-model="plazaSettings.enabled"
+                :disabled="!isUnifiedLive || savingPlaza"
+                :label="t('admin.security.plazaEnableLabel')"
+              />
+            </div>
+
+            <!-- 详细配置与链接 -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+              <div class="space-y-1">
+                <label for="plaza-nickname-input" class="form-label text-xs">{{ t('admin.security.plazaNicknameLabel') }}</label>
+                <input
+                  id="plaza-nickname-input"
+                  v-model="plazaSettings.nickname"
+                  type="text"
+                  class="field text-xs disabled:opacity-40 disabled:cursor-not-allowed"
+                  maxlength="40"
+                  :disabled="!isUnifiedLive || savingPlaza"
+                  :placeholder="t('admin.security.plazaNicknamePlaceholder')"
+                />
+              </div>
+
+              <div class="space-y-1">
+                <label for="plaza-api-url-input" class="form-label text-xs">{{ t('admin.security.plazaApiUrlLabel') }}</label>
+                <div class="flex items-center gap-2">
+                  <input
+                    id="plaza-api-url-input"
+                    type="text"
+                    readonly
+                    class="field text-xs mono text-[var(--text-muted)] select-all disabled:opacity-40 disabled:cursor-not-allowed"
+                    :value="plazaPublicUrl"
+                  />
+                  <button
+                    type="button"
+                    class="btn btn-quiet btn-sm shrink-0"
+                    :disabled="!plazaSettings.enabled || !isUnifiedLive"
+                    @click="copyPlazaUrl"
+                  >
+                    <Copy :size="12" />
+                    <span>{{ t('admin.security.plazaCopyUrl') }}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 隐私细分选项 -->
+            <div class="space-y-2 pt-2 border-t border-[var(--border-subtle)]">
+              <span class="form-label text-xs">{{ t('admin.security.plazaPrivacyCustom') }}</span>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                <label class="flex items-center gap-2 cursor-pointer text-[var(--text-secondary)]">
+                  <input
+                    type="checkbox"
+                    v-model="plazaSettings.show_performance"
+                    :disabled="!isUnifiedLive || savingPlaza"
+                    class="rounded border-[var(--border-base)] text-[var(--color-primary)] disabled:opacity-40 disabled:cursor-not-allowed"
+                  />
+                  <span>{{ t('admin.security.plazaShowPerf') }}</span>
+                </label>
+
+                <label class="flex items-center gap-2 cursor-pointer text-[var(--text-secondary)]">
+                  <input
+                    type="checkbox"
+                    v-model="plazaSettings.show_balance"
+                    :disabled="!isUnifiedLive || savingPlaza"
+                    class="rounded border-[var(--border-base)] text-[var(--color-primary)] disabled:opacity-40 disabled:cursor-not-allowed"
+                  />
+                  <span>{{ t('admin.security.plazaShowBalance') }}</span>
+                </label>
+
+                <label class="flex items-center gap-2 cursor-pointer text-[var(--text-secondary)]">
+                  <input
+                    type="checkbox"
+                    v-model="plazaSettings.show_model"
+                    :disabled="!isUnifiedLive || savingPlaza"
+                    class="rounded border-[var(--border-base)] text-[var(--color-primary)] disabled:opacity-40 disabled:cursor-not-allowed"
+                  />
+                  <span>{{ t('admin.security.plazaShowModel') }}</span>
+                </label>
+
+                <label class="flex items-center gap-2 cursor-pointer text-[var(--text-secondary)]">
+                  <input
+                    type="checkbox"
+                    v-model="plazaSettings.show_strategy_params"
+                    :disabled="!isUnifiedLive || savingPlaza"
+                    class="rounded border-[var(--border-base)] text-[var(--color-primary)] disabled:opacity-40 disabled:cursor-not-allowed"
+                  />
+                  <span>{{ t('admin.security.plazaShowParams') }}</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- 底部操作按钮 -->
+            <div class="flex items-center justify-between pt-3 border-t border-[var(--border-subtle)]">
+              <button
+                type="button"
+                class="btn btn-ghost btn-sm"
+                :disabled="!isUnifiedLive || !plazaSettings.enabled"
+                @click="openPlazaPreview"
+              >
+                <Eye :size="13" />
+                <span>{{ t('admin.security.plazaPreviewCard') }}</span>
+              </button>
+
+              <button
+                type="button"
+                class="btn btn-primary btn-sm"
+                :disabled="!isUnifiedLive || savingPlaza"
+                @click="savePlazaSettings"
+              >
+                <Loader2 v-if="savingPlaza" :size="13" class="animate-spin shrink-0" />
+                <Save v-else :size="13" />
+                <span>{{ savingPlaza ? t('admin.security.saving') : t('admin.security.plazaSaveSettings') }}</span>
+              </button>
             </div>
           </div>
         </SettingsSection>
