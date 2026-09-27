@@ -25,8 +25,10 @@ skip 是**覆盖面静默消失**的最佳藏身处：一条用例可以永远�
 from __future__ import annotations
 
 import ast
+from functools import lru_cache
 import unittest
 from pathlib import Path
+from tests.audit import _repo_scan as scan
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -57,12 +59,17 @@ def _parents(tree):
     return pm
 
 
-def skip_sites(source: str) -> list:
-    """返回 [(行号, 名字, 有无理由, 调用点是否无条件)]。"""
-    try:
-        tree = ast.parse(source)
-    except SyntaxError:
-        return []
+def skip_sites(source: str, tree=None) -> list:
+    """返回 [(行号, 名字, 有无理由, 调用点是否无条件)]。
+
+    `tree` 允许由调用方传入**已解析**的 AST：门禁都在扫同一批源码，而解析是唯一的大头
+    （本机实测 773 个 `.py`：`ast.parse` 5.41s / 走目录 0.01s / 读文本 0.06s）。
+    """
+    if tree is None:
+        try:
+            tree = ast.parse(source)
+        except SyntaxError:
+            return []
     pm = _parents(tree)
     out = []
     for node in ast.walk(tree):
@@ -90,14 +97,24 @@ def skip_sites(source: str) -> list:
     return out
 
 
+@lru_cache(maxsize=None)
+def _sites_of(path_str: str) -> tuple:
+    """单个文件的跳过点（**结果**级缓存）。
+
+    ⚠️ 只缓存 `ast.parse` 还不够：解析缓存之后，剩下的成本变成**遍历** 525 棵 AST，
+    而本文件三个用例各自遍历一遍（实测 8.4s + 4.0s + 3.8s）。把"结果"也缓存下来，
+    三个用例共享一次遍历。
+    """
+    from tests.audit import _repo_scan as scan
+    return tuple(skip_sites(scan.text(path_str), scan.tree(path_str)))
+
+
 class SkipCensusTest(unittest.TestCase):
     def _all_sites(self):
         sites = {}
-        for path in sorted((ROOT / "tests").rglob("*.py")):
-            if "__pycache__" in path.parts:
-                continue
+        for path in scan.py_files("tests"):
             rel = str(path.relative_to(ROOT))
-            for lineno, name, has_reason, guarded in skip_sites(path.read_text(encoding="utf-8")):
+            for lineno, name, has_reason, guarded in _sites_of(str(path)):
                 sites.setdefault(rel, []).append((lineno, name, has_reason, guarded))
         return sites
 

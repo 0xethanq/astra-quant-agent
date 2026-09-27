@@ -25,9 +25,11 @@
 from __future__ import annotations
 
 import ast
+from functools import lru_cache
 import re
 import unittest
 from pathlib import Path
+from tests.audit import _repo_scan as scan
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -65,11 +67,20 @@ def _has_skip(method: ast.AST) -> bool:
                for n in ast.walk(method))
 
 
-def all_tests_skippable(source: str) -> bool:
-    try:
-        tree = ast.parse(source)
-    except SyntaxError:
-        return False
+@lru_cache(maxsize=None)
+def _skippable_of(path_str: str) -> bool:
+    """单个文件是否"整文件可跳过"（结果级缓存）。"""
+    from tests.audit import _repo_scan as scan
+    return all_tests_skippable(scan.text(path_str), scan.tree(path_str))
+
+
+def all_tests_skippable(source: str, tree=None) -> bool:
+    """`tree` 允许由调用方传入已解析 AST（见 `_repo_scan`：解析是扫描成本的全部）。"""
+    if tree is None:
+        try:
+            tree = ast.parse(source)
+        except SyntaxError:
+            return False
     methods = _test_methods(tree)
     return bool(methods) and all(_has_skip(m) for m in methods)
 
@@ -110,7 +121,7 @@ def data_guarded_silent_pass(source: str) -> list:
 
 class CoverageNeverDependsOnDataTest(unittest.TestCase):
     def _files(self):
-        for path in sorted((ROOT / "tests").rglob("*.py")):
+        for path in scan.py_files("tests"):
             if "__pycache__" not in path.parts:
                 yield path
 
@@ -120,7 +131,7 @@ class CoverageNeverDependsOnDataTest(unittest.TestCase):
             rel = str(path.relative_to(ROOT))
             if rel in ALL_FILE_SKIPPABLE:
                 continue
-            if all_tests_skippable(path.read_text(encoding="utf-8")):
+            if _skippable_of(str(path)):
                 bad.append(rel)
         self.assertEqual(bad, [], f"这些文件里每条用例都可跳过 ⇒ 干净检出下贡献 0 验证：{bad}")
 
@@ -139,8 +150,8 @@ class CoverageNeverDependsOnDataTest(unittest.TestCase):
         methods = skips = 0
         for path in files:
             try:
-                tree = ast.parse(path.read_text(encoding="utf-8"))
-            except SyntaxError:
+                tree = scan.tree(path)
+            except (SyntaxError, TypeError):
                 continue
             for method in _test_methods(tree):
                 methods += 1

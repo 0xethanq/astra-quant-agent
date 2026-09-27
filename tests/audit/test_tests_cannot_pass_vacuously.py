@@ -25,9 +25,11 @@
 from __future__ import annotations
 
 import ast
+from functools import lru_cache
 import re
 import unittest
 from pathlib import Path
+from tests.audit import _repo_scan as scan
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -82,13 +84,17 @@ def _test_methods(tree: ast.AST) -> list:
             if isinstance(n, ast.FunctionDef) and n.name.startswith("test")]
 
 
-def vacuous_shapes(source: str) -> dict:
-    """返回 {'swallow': [(用例名, 行号)], 'no_assert': [(用例名, 行号)]}。"""
+def vacuous_shapes(source: str, tree=None) -> dict:
+    """返回 {'swallow': [(用例名, 行号)], 'no_assert': [(用例名, 行号)]}。
+
+    `tree` 允许由调用方传入已解析 AST（见 `_repo_scan`：解析是扫描成本的全部）。
+    """
     out = {"swallow": [], "no_assert": []}
-    try:
-        tree = ast.parse(source)
-    except SyntaxError:
-        return out
+    if tree is None:
+        try:
+            tree = ast.parse(source)
+        except SyntaxError:
+            return out
     asserting_helpers = {n.name for n in ast.walk(tree)
                          if isinstance(n, ast.FunctionDef) and _has_assertion(n)}
     for fn in _test_methods(tree):
@@ -105,14 +111,22 @@ def vacuous_shapes(source: str) -> dict:
     return out
 
 
+@lru_cache(maxsize=None)
+def _shapes_of(path_str: str) -> tuple:
+    """单个文件的 vacuous 形态结果（结果级缓存：解析缓存之后，遍历才是成本）。"""
+    from tests.audit import _repo_scan as scan
+    s = vacuous_shapes(scan.text(path_str), scan.tree(path_str))
+    return tuple(s["swallow"]), tuple(s["no_assert"])
+
+
 class TestsCannotPassVacuouslyTest(unittest.TestCase):
     def test_no_unregistered_swallowing(self):
         bad = {}
-        for path in sorted((ROOT / "tests").rglob("*.py")):
+        for path in scan.py_files("tests"):
             if "__pycache__" in path.parts:
                 continue
             rel = str(path.relative_to(ROOT))
-            for name, lineno in vacuous_shapes(path.read_text(encoding="utf-8"))["swallow"]:
+            for name, lineno in _shapes_of(str(path))[0]:
                 if f"{rel}:{name}" in SWALLOW_ALLOWLIST:
                     continue
                 bad.setdefault(rel, []).append(f"{name} L{lineno}")
@@ -121,11 +135,11 @@ class TestsCannotPassVacuouslyTest(unittest.TestCase):
 
     def test_no_unregistered_assertion_free_tests(self):
         bad = {}
-        for path in sorted((ROOT / "tests").rglob("*.py")):
+        for path in scan.py_files("tests"):
             if "__pycache__" in path.parts:
                 continue
             rel = str(path.relative_to(ROOT))
-            for name, lineno in vacuous_shapes(path.read_text(encoding="utf-8"))["no_assert"]:
+            for name, lineno in _shapes_of(str(path))[1]:
                 if f"{rel}:{name}" in NO_ASSERT_ALLOWLIST:
                     continue
                 bad.setdefault(rel, []).append(f"{name} L{lineno}")
@@ -133,13 +147,13 @@ class TestsCannotPassVacuouslyTest(unittest.TestCase):
                                   f"{bad}")
 
     def test_scan_is_not_vacuous(self):
-        files = [p for p in (ROOT / "tests").rglob("*.py") if "__pycache__" not in p.parts]
+        files = list(scan.py_files("tests"))
         self.assertGreaterEqual(len(files), 200, f"只扫到 {len(files)} 个测试文件")
         methods = 0
         for path in files:
             try:
-                methods += len(_test_methods(ast.parse(path.read_text(encoding="utf-8"))))
-            except SyntaxError:
+                methods += len(_test_methods(scan.tree(path)))
+            except (SyntaxError, TypeError):
                 continue
         self.assertGreaterEqual(methods, 3000, f"只扫到 {methods} 条用例 ⇒ 判据失效")
 

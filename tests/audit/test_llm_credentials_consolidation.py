@@ -205,15 +205,9 @@ class PlacementTest(unittest.TestCase):
         self.assertFalse((ROOT / "astra_backend" / "llm" / "credentials.py").exists(),
                          "共享模块不得放回 astra_backend/llm/（会违反接缝铁律）")
 
-    def test_seam_gate_still_green(self):
-        """直接跑那道拒绝了我第一版落点的闸。"""
-        # 第七十八刀：以 spawn 为被测行为，离线守护下如实 skip（守卫在 spawn 前）。
-        from tests.config_sandbox import skip_if_offline_suite
-        skip_if_offline_suite(self)
-        r = subprocess.run([sys.executable, "-m", "unittest",
-                            "tests.test_llm_seam_discipline"],
-                           cwd=str(ROOT), capture_output=True, text=True)
-        self.assertEqual(r.returncode, 0, r.stdout[-1500:] + r.stderr[-1500:])
+    # 「该模块单独跑也绿」这条判据**已合并**到
+    # `tests/audit/test_standalone_modules_stay_green.py`（一次子进程跑完所有这类模块）。
+    # 原用例名：test_seam_gate_still_green。
 
     def test_shared_module_has_no_top_level_llm_manager_import(self):
         """`llm_manager` 的 import 必须在**函数内**（延迟到调用时）。
