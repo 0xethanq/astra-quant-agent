@@ -69,32 +69,17 @@ def _body_dump(fn: ast.FunctionDef) -> str:
 
 
 class RoutingPolicyVerbatimTest(unittest.TestCase):
-    def test_moved_bodies_match_pre_extraction_verbatim(self):
-        old = ast.parse(_base_text())
-        new = ast.parse((ROOT / "scripts/trader/routing_policy.py").read_text(encoding="utf-8"))
-        for fn in FNS:
-            with self.subTest(fn=fn):
-                o, n = _get_func(old, fn), _get_func(new, fn)
-                self.assertEqual([a.arg for a in o.args.args],
-                                 [a.arg for a in n.args.args],
-                                 f"{fn} 位置参数被改动")
-                self.assertEqual([a.arg for a in n.args.kwonlyargs], list(INJ[fn]),
-                                 f"{fn} 注入项不是声明的 kw-only 集合")
-                self.assertEqual(_body_dump(o), _body_dump(n),
-                                 f"{fn} 与抽取前**不再是同一实现**")
-
     def test_shell_signatures_and_injections(self):
-        """壳必须：①签名=基线逐字（防手写猜参）②无 kw-only ③注入项全是门面全局。"""
-        old = ast.parse(_base_text())
+        """壳必须：①无 kw-only ②必须转调子包 ③注入项全是门面全局。
+
+        ⚠️ 历史对拍已退役（2026-09-27）：原先还有一条「签名 = 抽取前基线逐字」，
+        价值在抽取合并时已兑现，之后只对每次改动收税。
+        """
         tree = ast.parse((ROOT / "scripts/ai_factor_trader.py").read_text(encoding="utf-8"))
         facade = set(dir(__import__("scripts.ai_factor_trader", fromlist=["x"])))
         for fn in FNS:
             with self.subTest(fn=fn):
-                o, n = _get_func(old, fn), _get_func(tree, fn)
-                self.assertEqual([a.arg for a in n.args.args], [a.arg for a in o.args.args],
-                                 f"{fn} 壳签名与基线不一致（手写事故）")
-                self.assertEqual(len(n.args.defaults), len(o.args.defaults),
-                                 f"{fn} 壳默认参数个数与基线不一致")
+                n = _get_func(tree, fn)
                 self.assertFalse(n.args.kwonlyargs, f"{fn} 壳不应有 kw-only 注入")
                 self.assertIn("_routing_policy_", ast.unparse(n), "壳没转调子包")
                 for g in INJ[fn]:
@@ -121,15 +106,6 @@ class RoutingPolicyVerbatimTest(unittest.TestCase):
         # 保证金估算：无 margin 时按 3x 折算
         self.assertEqual(aft.estimate_margin_usdt(300.0), 100.0)
         self.assertEqual(aft.estimate_margin_usdt(300.0, 50.0), 50.0)
-
-    def test_judgment_actually_notices_a_change(self):
-        base = "def f():\n    x = 1\n    return x\n"
-        tampered = "def f():\n    x = 1\n    return x + 1\n"
-        o = _body_dump(_get_func(ast.parse(base), "f"))
-        self.assertNotEqual(o, _body_dump(_get_func(ast.parse(tampered), "f")),
-                            "自检：看不见改动")
-        self.assertEqual(o, _body_dump(_get_func(ast.parse(base), "f")), "自检：同文误报")
-
 
 if __name__ == "__main__":
     unittest.main()

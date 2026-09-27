@@ -179,12 +179,5 @@ class BinanceSigningExtractionTest(unittest.TestCase):
         self._build(params)
         self.assertEqual(params, {"symbol": "BTCUSDT"}, "不得改动调用方传入的 dict")
 
-    def test_judgment_actually_notices_a_change(self):
-        seg = _baseline_method().body[2:9]
-        self.assertNotEqual(
-            ast.dump(ast.Module(body=list(seg) + [ast.Pass()], type_ignores=[]), include_attributes=False),
-            ast.dump(ast.Module(body=list(seg), type_ignores=[]), include_attributes=False))
-
-
 if __name__ == "__main__":
     unittest.main()

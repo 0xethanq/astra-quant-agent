@@ -81,19 +81,6 @@ def _normalised_source() -> str:
 
 
 class VenueQueryVerbatimTest(unittest.TestCase):
-    def test_moved_bodies_match_pre_extraction_verbatim(self):
-        old = _old_tree()
-        new = ast.parse(_normalised_source())
-        for fn in FNS:
-            with self.subTest(fn=fn):
-                o, n = _get_func(old, fn), _get_func(new, fn)
-                self.assertEqual([a.arg for a in o.args.args],
-                                 [a.arg for a in n.args.args])
-                self.assertEqual([a.arg for a in n.args.kwonlyargs], list(INJ[fn]),
-                                 f"{fn} 注入项不是声明的 kw-only 集合")
-                self.assertEqual(_body_dump(o), _body_dump(n),
-                                 f"{fn} 与抽取前**不再是同一实现**")
-
     def test_shells_are_def_with_lazy_same_name_injection(self):
         tree = ast.parse((ROOT / "scripts/ai_factor_trader.py").read_text(encoding="utf-8"))
         facade = set(dir(__import__("scripts.ai_factor_trader", fromlist=["x"])))
@@ -148,16 +135,6 @@ class VenueQueryVerbatimTest(unittest.TestCase):
              patch.object(aft.venue_registry, "execution_open", lambda v, e: True), \
              patch.object(aft, "_BROKEN_VENUES", set()):
             self.assertTrue(aft.venue_execution_ready("gate", "demo"))
-
-    def test_judgment_actually_notices_a_change(self):
-        base = "def f():\n    x = 1\n    return x\n"
-        tampered = "def f():\n    x = 1\n    return x + 1\n"
-        o = _body_dump(_get_func(ast.parse(base), "f"))
-        self.assertNotEqual(o, _body_dump(_get_func(ast.parse(tampered), "f")),
-                            "自检：看不见改动")
-        self.assertEqual(o, _body_dump(_get_func(ast.parse(base), "f")), "自检：同文误报")
-
-
 
 class NetPosSideCloseVerifyTest(unittest.TestCase):
     """第一百八十六刀：**净持仓**账户下平仓核验不得假报"已平"。

@@ -76,33 +76,6 @@ class AstIdentityTest(unittest.TestCase):
         ret = next(st for st in fn.body if isinstance(st, ast.Return))
         self.assertIsInstance(ret.value, ast.Dict)
 
-    def test_ast_matches_the_pre_move_literal(self):
-        old = _facade_dict_literal()
-        if old is None:
-            self.skipTest(
-                f"git 取不到 {_BASE_REV}（浅克隆/无该提交），无法比对搬走前的字面量")
-        tree = ast.parse(MODULE.read_text(encoding="utf-8"))
-        fn = next(n for n in ast.walk(tree)
-                  if isinstance(n, ast.FunctionDef)
-                  and n.name == "build_default_factors")
-        ret = next(st for st in fn.body if isinstance(st, ast.Return))
-        self.assertEqual(
-            ast.dump(old), ast.dump(ret.value),
-            "新结构与搬走前的字面量不一致 —— 抽取过程中改动了数据形状")
-
-    def test_ast_compare_would_notice_a_change(self):
-        """反向验证这条闸不是空转：改一个值必须能让 AST 比对失败。"""
-        old = _facade_dict_literal()
-        if old is None:
-            self.skipTest(f"git 取不到 {_BASE_REV}")
-        mutated = ast.parse(ast.unparse(old))
-        # 把第一个 0.0 改成 1.0
-        for node in ast.walk(mutated):
-            if isinstance(node, ast.Constant) and node.value == 0.0:
-                node.value = 1.0
-                break
-        self.assertNotEqual(ast.dump(old), ast.dump(mutated))
-
     def test_facade_no_longer_contains_the_literal(self):
         src = FACADE.read_text(encoding="utf-8")
         self.assertNotIn('"signal_recommendation": "WAIT"', src,

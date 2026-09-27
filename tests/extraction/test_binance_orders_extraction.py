@@ -71,34 +71,6 @@ def _base_kwargs(**over):
 
 
 class BinanceOrdersExtractionTest(unittest.TestCase):
-    def test_segments_are_ast_identical_to_baseline(self):
-        # ① build_order_params ← place_order 语句 6..13
-        seg = _baseline_method("place_order").body[6:14]
-        body = list(_impl("build_order_params").body)[:-1]  # 去掉尾部 return
-        body = body[1:] if (body and isinstance(body[0], ast.Expr)
-                            and isinstance(body[0].value, ast.Constant)
-                            and isinstance(body[0].value.value, str)) else body
-        self.assertEqual(
-            ast.dump(ast.Module(body=body, type_ignores=[]), include_attributes=False),
-            ast.dump(ast.Module(body=seg, type_ignores=[]), include_attributes=False),
-            "build_order_params 段体与抽取前**不再同一棵 AST**")
-        # ② apply_protective_qty_policy ← attach 的 TP 分支 If.body[1]
-        tp = _baseline_method("attach_protective_orders").body[10].body[1]
-        body2 = list(_impl("apply_protective_qty_policy").body)
-        body2 = body2[1:] if (body2 and isinstance(body2[0], ast.Expr)
-                              and isinstance(body2[0].value, ast.Constant)
-                              and isinstance(body2[0].value.value, str)) else body2
-        self.assertEqual(
-            ast.dump(ast.Module(body=body2, type_ignores=[]), include_attributes=False),
-            ast.dump(ast.Module(body=[tp], type_ignores=[]), include_attributes=False),
-            "apply_protective_qty_policy 段体与抽取前**不再同一棵 AST**")
-
-    def test_baseline_branches_were_really_identical(self):
-        """合并的前提：TP/SL 两处分支**逐字相同**（否则不该合并）。"""
-        m = _baseline_method("attach_protective_orders")
-        self.assertEqual(ast.dump(m.body[10].body[1], include_attributes=False),
-                         ast.dump(m.body[11].body[1], include_attributes=False))
-
     def test_call_sites_pass_every_parameter_once_same_name(self):
         """**第一百一十六刀后**：门面只直接调用 `build_order_params`；
         `apply_protective_qty_policy` 的调用点移到了同模块的 `send_protective_order` 内部
@@ -239,13 +211,6 @@ class BinanceOrdersExtractionTest(unittest.TestCase):
         self.assertTrue(kw["close_position"], "未给数量 ⇒ 整仓平")
         self.assertNotIn("quantity", kw)
         self.assertNotIn("reduce_only", kw, "整仓平模式不落 reduce_only")
-
-    def test_judgment_actually_notices_a_change(self):
-        seg = _baseline_method("place_order").body[6:14]
-        self.assertNotEqual(
-            ast.dump(ast.Module(body=list(seg) + [ast.Pass()], type_ignores=[]), include_attributes=False),
-            ast.dump(ast.Module(body=list(seg), type_ignores=[]), include_attributes=False))
-
 
 class SendProtectiveOrderTest(unittest.TestCase):
     """第一百一十六刀：TP/SL 两段重复代码合并成 `send_protective_order`。

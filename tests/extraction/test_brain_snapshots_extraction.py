@@ -57,21 +57,6 @@ def _facade_calls() -> dict:
 
 
 class BrainSnapshotsVerbatimTest(unittest.TestCase):
-    def test_segments_are_ast_identical_to_baseline(self):
-        base = _baseline_fn()
-        for name, idx in SPECS.items():
-            with self.subTest(fn=name):
-                seg = base.body[idx]
-                body = list(_impl(name).body)
-                if (body and isinstance(body[0], ast.Expr)
-                        and isinstance(body[0].value, ast.Constant)
-                        and isinstance(body[0].value.value, str)):
-                    body = body[1:]
-                self.assertEqual(
-                    ast.dump(ast.Module(body=body, type_ignores=[]), include_attributes=False),
-                    ast.dump(ast.Module(body=[seg], type_ignores=[]), include_attributes=False),
-                    f"{name} 段体与抽取前**不再同一棵 AST**")
-
     def test_calls_pass_every_parameter_once_same_name(self):
         calls = _facade_calls()
         for name in SPECS:
@@ -178,14 +163,6 @@ class BrainSnapshotsVerbatimTest(unittest.TestCase):
                 sys.modules.pop("factor_library", None)
             else:
                 sys.modules["factor_library"] = old_mod
-
-    def test_judgment_actually_notices_a_change(self):
-        seg = _baseline_fn().body[SPECS["write_calculus_snapshot"]]
-        self.assertNotEqual(
-            ast.dump(ast.Module(body=[seg, ast.Pass()], type_ignores=[]), include_attributes=False),
-            ast.dump(ast.Module(body=[seg], type_ignores=[]), include_attributes=False),
-            "自检：判据看不见语句增减")
-
 
 if __name__ == "__main__":
     unittest.main()

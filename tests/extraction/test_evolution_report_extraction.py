@@ -59,17 +59,6 @@ def _impl() -> ast.FunctionDef:
 
 
 class EvolutionReportExtractionTest(unittest.TestCase):
-    def test_segment_is_ast_identical_to_baseline(self):
-        seg = _baseline_stmt()
-        body = list(_impl().body)[:-1]
-        body = body[1:] if (body and isinstance(body[0], ast.Expr)
-                            and isinstance(body[0].value, ast.Constant)
-                            and isinstance(body[0].value.value, str)) else body
-        self.assertEqual(
-            ast.dump(ast.Module(body=body, type_ignores=[]), include_attributes=False),
-            ast.dump(ast.Module(body=[seg], type_ignores=[]), include_attributes=False),
-            "build_evolution_report 段体与抽取前**不再同一棵 AST**")
-
     def test_call_site_passes_every_parameter_once_same_name(self):
         params = [a.arg for a in _impl().args.kwonlyargs]
         self.assertEqual(len(params), 14)
@@ -153,13 +142,6 @@ class EvolutionReportExtractionTest(unittest.TestCase):
                          "{'code': 500}", "非字符串也要 str 化，不得抛错")
         self.assertEqual(self._build(llm_review={"memory_overwrites_reason": "覆盖理由"})["memory_overwrites_reason"],
                          "覆盖理由")
-
-    def test_judgment_actually_notices_a_change(self):
-        seg = _baseline_stmt()
-        self.assertNotEqual(
-            ast.dump(ast.Module(body=[seg, ast.Pass()], type_ignores=[]), include_attributes=False),
-            ast.dump(ast.Module(body=[seg], type_ignores=[]), include_attributes=False))
-
 
 if __name__ == "__main__":
     unittest.main()

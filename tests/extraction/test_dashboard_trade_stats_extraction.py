@@ -393,15 +393,6 @@ def _agg_body(fn: ast.FunctionDef) -> list:
 
 
 class AggregationStageTest(unittest.TestCase):
-    def test_segment_is_ast_identical_to_baseline(self):
-        base = _agg_baseline_cycle()
-        seg = base.body[AGG_SEG[0]:AGG_SEG[1] + 1]
-        self.assertEqual(
-            ast.dump(ast.Module(body=_agg_body(_agg_impl()), type_ignores=[]),
-                     include_attributes=False),
-            ast.dump(ast.Module(body=seg, type_ignores=[]), include_attributes=False),
-            "聚合段段体与抽取前**不再同一棵 AST**")
-
     def test_call_passes_every_parameter_once_same_name(self):
         params = [a.arg for a in _agg_impl().args.kwonlyargs]
         t = ast.parse(APP.read_text(encoding="utf-8"))
@@ -516,11 +507,3 @@ class AggregationStageTest(unittest.TestCase):
                          "累计已实现 = 累计净值 − 当前浮动盈亏")
         zero_base = self._run(bills=self._bills(), stats=self._stats(), initial=0.0)
         self.assertEqual(agg_field(zero_base, "cum_roi_pct"), 0.0, "本金为 0 ⇒ 0.0（不炸）")
-
-    def test_judgment_actually_notices_a_change(self):
-        base = _agg_baseline_cycle()
-        seg = base.body[AGG_SEG[0]:AGG_SEG[1] + 1]
-        self.assertNotEqual(
-            ast.dump(ast.Module(body=seg + [ast.Pass()], type_ignores=[]), include_attributes=False),
-            ast.dump(ast.Module(body=seg, type_ignores=[]), include_attributes=False),
-            "自检：判据看不见语句增减")

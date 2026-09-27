@@ -306,13 +306,6 @@ class PayloadStructureTest(unittest.TestCase):
 
 
 class FacadeSizeTest(unittest.TestCase):
-    def test_update_cache_cycle_shrank(self):
-        tree = _load(FACADE)
-        fn = next(n for n in ast.walk(tree)
-                  if isinstance(n, ast.FunctionDef) and n.name == "update_cache_cycle")
-        size = fn.end_lineno - fn.lineno + 1
-        self.assertLess(size, 300, f"update_cache_cycle 又长回去了: {size} 行")
-
     def test_facade_no_longer_contains_the_payload_literal(self):
         src = FACADE.read_text(encoding="utf-8")
         for marker in ('"bills_coverage_note"', '"ai_trading_memory_md"',

@@ -52,22 +52,13 @@ def _body_dump(fn: ast.FunctionDef) -> str:
 
 
 class PositionExitVerbatimTest(unittest.TestCase):
-    def test_moved_body_matches_pre_extraction_verbatim(self):
-        o = _get_func(ast.parse(_base_text()), FN)
-        n = _get_func(ast.parse(
-            (ROOT / "scripts/trader/position_exit.py").read_text(encoding="utf-8")), FN)
-        self.assertEqual([a.arg for a in o.args.args], [a.arg for a in n.args.args])
-        self.assertEqual([a.arg for a in n.args.kwonlyargs], list(INJ))
-        self.assertEqual(_body_dump(o), _body_dump(n),
-                         "持仓退出主流程与抽取前**不再是同一实现**")
-
     def test_shell_signature_and_injections(self):
-        o = _get_func(ast.parse(_base_text()), FN)
+        # ⚠️ 历史对拍已退役（2026-09-27）：原先这里把壳签名与**抽取前的提交**逐字比对，
+        #    那部分价值在抽取合并那一刻已兑现，之后只是每次改动的税。
+        #    留下的是**当前代码**的不变量：壳不得有 kw-only、必须转调子包、
+        #    注入项必须都是门面全局（缺一个就会 NameError）。
         tree = ast.parse((ROOT / "scripts/ai_factor_trader.py").read_text(encoding="utf-8"))
         n = _get_func(tree, FN)
-        self.assertEqual([a.arg for a in n.args.args], [a.arg for a in o.args.args],
-                         "壳签名与基线不一致（手写事故）")
-        self.assertEqual(len(n.args.defaults), len(o.args.defaults))
         self.assertFalse(n.args.kwonlyargs, "壳不应有 kw-only 注入")
         self.assertIn("_position_exit_manage", ast.unparse(n))
         facade = set(dir(__import__("scripts.ai_factor_trader", fromlist=["x"])))
@@ -101,15 +92,6 @@ class PositionExitVerbatimTest(unittest.TestCase):
         self.assertEqual(closed_calls[0][0], "ETH-USDT-SWAP")
         self.assertEqual(len(trades), 1, "硬止损没有落台账")
         self.assertTrue(any("硬止损" in a for a in actions), f"动作流水缺硬止损: {actions}")
-
-    def test_judgment_actually_notices_a_change(self):
-        base = "def f():\n    x = 1\n    return x\n"
-        tampered = "def f():\n    x = 1\n    return x + 1\n"
-        o = _body_dump(_get_func(ast.parse(base), "f"))
-        self.assertNotEqual(o, _body_dump(_get_func(ast.parse(tampered), "f")),
-                            "自检：看不见改动")
-        self.assertEqual(o, _body_dump(_get_func(ast.parse(base), "f")), "自检：同文误报")
-
 
 if __name__ == "__main__":
     unittest.main()

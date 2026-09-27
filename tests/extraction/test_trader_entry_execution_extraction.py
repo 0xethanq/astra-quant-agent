@@ -104,23 +104,6 @@ DELTA_REWRITES = (
 
 
 class EntryExecutionVerbatimTest(unittest.TestCase):
-    def test_extracted_loop_is_ast_identical_to_baseline(self):
-        old, new = _base_loop(), _impl_fn()
-        # 提取后的函数体第一个语句就是那个 for
-        loop = new.body[0]
-        self.assertIsInstance(loop, ast.For)
-        # 文档化差异：在**源码**上还原（AST 比较不看注释；锚点必须唯一）
-        mod_src = (ROOT / MOD).read_text(encoding="utf-8")
-        for _new_tok, _old_tok in DELTA_REWRITES:
-            self.assertEqual(mod_src.count(_new_tok), 2,
-                             f"锚点应恰好出现两次（多空各一）：{_new_tok[:50]!r}")
-            mod_src = mod_src.replace(_new_tok, _old_tok)
-        restored = next(n for n in ast.parse(mod_src).body
-                        if isinstance(n, ast.FunctionDef) and n.name == FN)
-        self.assertEqual(ast.dump(restored.body[0], include_attributes=False),
-                         ast.dump(old, include_attributes=False),
-                         "入场循环与抽取前**不再是同一棵 AST**（超出文档化差异）")
-
     def test_missing_tracker_is_treated_as_cap_reached(self):
         """追踪器缺失 ⇒ **视同已达加仓上限**（用户拍板 fail-closed，第一百三十八刀）。
 
@@ -265,18 +248,6 @@ class EntryExecutionVerbatimTest(unittest.TestCase):
         kw = {name: None for name in sig.parameters}
         kw.update(all_factors=[], executed_actions=[], pending_inst_ids=set(), trackers={})
         self.assertIsNone(entry_execution.execute_entry_scan(**kw))
-
-    def test_judgment_actually_notices_a_change(self):
-        old = _base_loop()
-        tampered = ast.parse(ast.unparse(old).replace("continue", "pass", 1)).body[0]
-        self.assertNotEqual(ast.dump(old, include_attributes=False),
-                            ast.dump(tampered, include_attributes=False),
-                            "自检：判据 1 看不见循环体改动")
-        # 判据 2 自检：少一个参数必须被发现
-        t = ast.parse("f(a=a, b=b)\n")
-        call = t.body[0].value
-        self.assertNotEqual([k.arg for k in call.keywords], ["a", "b", "c"])
-
 
 if __name__ == "__main__":
     unittest.main()

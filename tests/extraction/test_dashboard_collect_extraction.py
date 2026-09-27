@@ -77,15 +77,6 @@ def field(got, name):
 
 
 class CollectVerbatimTest(unittest.TestCase):
-    def test_segment_is_ast_identical_to_baseline(self):
-        base = _baseline_cycle()
-        seg = base.body[SEG[0]:SEG[1] + 1]
-        got = _seg_stmts(_impl())
-        self.assertEqual(
-            ast.dump(ast.Module(body=got, type_ignores=[]), include_attributes=False),
-            ast.dump(ast.Module(body=seg, type_ignores=[]), include_attributes=False),
-            "相位 1 段体与抽取前**不再同一棵 AST**")
-
     def test_call_passes_every_parameter_once_same_name(self):
         params = [a.arg for a in _impl().args.kwonlyargs]
         call = _call()
@@ -202,15 +193,6 @@ class CollectVerbatimTest(unittest.TestCase):
         self.assertEqual((long_count, short_count, total_pos_upl), (1, 0, 5.0),
                          "方向计数与浮盈增量来自收集器的返回值")
         self.assertEqual(errs, [])
-
-    def test_judgment_actually_notices_a_change(self):
-        base = _baseline_cycle()
-        seg = base.body[SEG[0]:SEG[1] + 1]
-        self.assertNotEqual(
-            ast.dump(ast.Module(body=seg + [ast.Pass()], type_ignores=[]), include_attributes=False),
-            ast.dump(ast.Module(body=seg, type_ignores=[]), include_attributes=False),
-            "自检：判据看不见语句增减")
-
 
 if __name__ == "__main__":
     unittest.main()

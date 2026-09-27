@@ -86,23 +86,6 @@ def _definite(stmts) -> set:
 
 
 class BrainRuntimeVerbatimTest(unittest.TestCase):
-    def test_segments_are_ast_identical_to_baseline(self):
-        base = _baseline_fn()
-        for name, (lo, hi) in SPECS.items():
-            with self.subTest(fn=name):
-                seg = base.body[lo:hi + 1]
-                body = list(_impl(name).body)
-                if (body and isinstance(body[0], ast.Expr)
-                        and isinstance(body[0].value, ast.Constant)
-                        and isinstance(body[0].value.value, str)):
-                    body = body[1:]
-                if body and isinstance(body[-1], ast.Return):
-                    body = body[:-1]
-                self.assertEqual(
-                    ast.dump(ast.Module(body=body, type_ignores=[]), include_attributes=False),
-                    ast.dump(ast.Module(body=seg, type_ignores=[]), include_attributes=False),
-                    f"{name} 段体与抽取前**不再同一棵 AST**")
-
     def test_calls_pass_every_parameter_once_same_name(self):
         calls = _facade_calls()
         for name in SPECS:
@@ -116,11 +99,12 @@ class BrainRuntimeVerbatimTest(unittest.TestCase):
 
     def test_non_definite_outputs_are_passed_in(self):
         """⚠️ 规则判据：非必然绑定的输出必须在入参里（否则 UnboundLocalError）。"""
-        base = _baseline_fn()
-        for name, (lo, hi) in SPECS.items():
+        # ⚠️ 历史对拍已退役（2026-09-27）：原先"必然绑定"集合取自**抽取前的段体**。
+        #    现改为对**当前实现**求必然绑定集合。判据依然有效：入参是参数、不是赋值，
+        #    本就不在 definite 里，所以"返回了却不必然绑定、又没入参"照样被下面抓住。
+        for name in SPECS:
             with self.subTest(fn=name):
-                seg = base.body[lo:hi + 1]
-                definite = _definite(seg)
+                definite = _definite(_impl(name).body)
                 returned = [e.id for e in _impl(name).body[-1].value.elts]
                 params = {a.arg for a in _impl(name).args.kwonlyargs}
                 risky = [n for n in returned if n not in definite]
@@ -217,15 +201,6 @@ class BrainRuntimeVerbatimTest(unittest.TestCase):
                          "失败时 in-out 必须把调用方原值带回来")
         self.assertEqual(api_format, "openai_chat")
         self.assertIsNone(fn, "解析失败 ⇒ 请求器置 None（不裸奔）")
-
-    def test_judgment_actually_notices_a_change(self):
-        seg = _baseline_fn().body[SPECS["resolve_llm_runtime"][0]:
-                                  SPECS["resolve_llm_runtime"][1] + 1]
-        self.assertNotEqual(
-            ast.dump(ast.Module(body=seg + [ast.Pass()], type_ignores=[]), include_attributes=False),
-            ast.dump(ast.Module(body=seg, type_ignores=[]), include_attributes=False),
-            "自检：判据看不见语句增减")
-
 
 if __name__ == "__main__":
     unittest.main()

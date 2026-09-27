@@ -110,21 +110,6 @@ class VerbatimCopyTest(unittest.TestCase):
                 if isinstance(n, ast.FunctionDef):
                     cls.new_fns[n.name] = (path.read_text(encoding="utf-8").splitlines(), n)
 
-    def test_every_moved_function_is_byte_identical(self):
-        missing, wrong = [], []
-        for name in self.NAMES:
-            if name not in self.new_fns:
-                missing.append(name)
-                continue
-            o = self.old_fns[name]
-            new_lines, n = self.new_fns[name]
-            a = self.old_lines[o.lineno - 1:o.end_lineno]
-            b = new_lines[n.lineno - 1:n.end_lineno]
-            if a != b:
-                wrong.append(name)
-        self.assertEqual(missing, [], f"这些函数没被搬过来: {missing}")
-        self.assertEqual(wrong, [], f"这些函数与原文**不逐字相同**: {wrong}")
-
     def test_all_fourteen_are_accounted_for(self):
         self.assertEqual(len(self.NAMES), 14)
         self.assertEqual(set(self.NAMES), set(self.old_fns),

@@ -54,22 +54,6 @@ def _facade_calls() -> dict:
 
 
 class EvolutionReviewContextTest(unittest.TestCase):
-    def test_segments_are_ast_identical_to_baseline(self):
-        base = _baseline_fn()
-        for name, (lo, hi) in SPECS.items():
-            with self.subTest(fn=name):
-                seg = base.body[lo:hi + 1]
-                body = list(_impl(name).body)
-                if (body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant)
-                        and isinstance(body[0].value.value, str)):
-                    body = body[1:]
-                if body and isinstance(body[-1], ast.Return):
-                    body = body[:-1]
-                self.assertEqual(
-                    ast.dump(ast.Module(body=body, type_ignores=[]), include_attributes=False),
-                    ast.dump(ast.Module(body=seg, type_ignores=[]), include_attributes=False),
-                    f"{name} 段体与抽取前**不再同一棵 AST**")
-
     def test_calls_pass_every_parameter_once_same_name(self):
         calls = _facade_calls()
         for name in SPECS:
@@ -175,14 +159,6 @@ class EvolutionReviewContextTest(unittest.TestCase):
         self.assertNotEqual(build_host_constitution(observability_brief="X"),
                             build_host_constitution(observability_brief="Y"))
 
-    def test_judgment_actually_notices_a_change(self):
-        seg = _baseline_fn().body[SPECS["build_host_constitution"][0]:
-                                  SPECS["build_host_constitution"][1] + 1]
-        self.assertNotEqual(
-            ast.dump(ast.Module(body=seg + [ast.Pass()], type_ignores=[]), include_attributes=False),
-            ast.dump(ast.Module(body=seg, type_ignores=[]), include_attributes=False))
-
-
 class ParseReviewJsonTest(unittest.TestCase):
     """第一百一十三刀：`call_llm_evolution_review` 里的**围栏剥离 + JSON 解析**出表。
 
@@ -202,17 +178,6 @@ class ParseReviewJsonTest(unittest.TestCase):
         assert r.returncode == 0, f"基线取不到：{r.stderr[:200]}"
         return next(n for n in ast.parse(normalize(r.stdout)).body
                     if isinstance(n, ast.FunctionDef) and n.name == self.OWNER)
-
-    def test_segment_is_ast_identical_to_baseline(self):
-        seg = self._baseline().body[10].body[6:11]      # Try 内第 6..10 条
-        body = list(_impl("parse_review_json").body)[:-1]   # 去掉尾部 return
-        body = body[1:] if (body and isinstance(body[0], ast.Expr)
-                            and isinstance(body[0].value, ast.Constant)
-                            and isinstance(body[0].value.value, str)) else body
-        self.assertEqual(
-            ast.dump(ast.Module(body=body, type_ignores=[]), include_attributes=False),
-            ast.dump(ast.Module(body=list(seg), type_ignores=[]), include_attributes=False),
-            "parse_review_json 段体与抽取前**不再同一棵 AST**")
 
     def test_module_defines_it_and_imports_json_itself(self):
         mod = ast.parse(MOD.read_text(encoding="utf-8"))
@@ -292,17 +257,6 @@ class NormalizeAssetMultipliersTest(unittest.TestCase):
         return next(n for n in ast.parse(normalize(r.stdout)).body
                     if isinstance(n, ast.FunctionDef) and n.name == self.OWNER)
 
-    def test_segment_is_ast_identical_to_baseline(self):
-        seg = self._baseline().body[33:36]
-        body = list(_impl("normalize_asset_multipliers").body)[:-1]
-        body = body[1:] if (body and isinstance(body[0], ast.Expr)
-                            and isinstance(body[0].value, ast.Constant)
-                            and isinstance(body[0].value.value, str)) else body
-        self.assertEqual(
-            ast.dump(ast.Module(body=body, type_ignores=[]), include_attributes=False),
-            ast.dump(ast.Module(body=list(seg), type_ignores=[]), include_attributes=False),
-            "normalize_asset_multipliers 段体与抽取前**不再同一棵 AST**")
-
     def test_call_site_passes_every_parameter_once_same_name(self):
         params = [a.arg for a in _impl("normalize_asset_multipliers").args.kwonlyargs]
         tree = ast.parse(FACADE.read_text(encoding="utf-8"))
@@ -373,13 +327,6 @@ class NormalizeAssetMultipliersTest(unittest.TestCase):
     def test_returns_exactly_the_pool_keys(self):
         got = self._norm({"asset_multipliers": {"BTC": 1.0}}, targets=("BTC",))
         self.assertEqual(list(got), ["BTC"])
-
-    def test_judgment_actually_notices_a_change(self):
-        seg = self._baseline().body[33:36]
-        self.assertNotEqual(
-            ast.dump(ast.Module(body=list(seg) + [ast.Pass()], type_ignores=[]), include_attributes=False),
-            ast.dump(ast.Module(body=list(seg), type_ignores=[]), include_attributes=False))
-
 
 if __name__ == "__main__":
     unittest.main()

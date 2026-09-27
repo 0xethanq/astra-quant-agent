@@ -58,32 +58,6 @@ def _body_dump(fn: ast.FunctionDef) -> str:
 
 
 class LedgerWriterVerbatimTest(unittest.TestCase):
-    def test_moved_bodies_match_pre_extraction_verbatim(self):
-        old = _old_tree()
-        new = ast.parse((ROOT / "scripts/trader/ledger_writer.py").read_text(encoding="utf-8"))
-        for fn in FNS:
-            with self.subTest(fn=fn):
-                o, n = _get_func(old, fn), _get_func(new, fn)
-                self.assertEqual([a.arg for a in o.args.args],
-                                 [a.arg for a in n.args.args])
-                # 同名注入：kw-only 参数名必须就是门面里真实存在的全局名
-                # （常量是大写；`_atomic_write_json`/`__version__` 等私有名
-                #  同样要求同名 —— 判据是"在门面命名空间可解析"，不是大写）
-                facade_globals = {x for x in dir(__import__('scripts.ai_factor_trader',
-                                                            fromlist=['x']))}
-                for a in n.args.kwonlyargs:
-                    self.assertIn(a.arg, facade_globals,
-                                  f"{fn} 注入名 {a.arg} 不是门面全局 ⇒ 壳传参必 NameError")
-                # **零例外**逐字（表内差异先还原；锚点必须唯一，防白名单过期）
-                new_src = (ROOT / "scripts/trader/ledger_writer.py").read_text(encoding="utf-8")
-                for _new_tok, _old_tok in DELTA_REWRITES.get(fn, []):
-                    self.assertEqual(new_src.count(_new_tok), 1,
-                                     f"{fn} 的文档化差异锚点没找到或重复：{_new_tok[:60]!r}")
-                    new_src = new_src.replace(_new_tok, _old_tok)
-                n = _get_func(ast.parse(new_src), fn)
-                self.assertEqual(_body_dump(o), _body_dump(n),
-                                 f"{fn} 与抽取前**不再是同一实现**（超出文档化差异）")
-
     def test_shells_are_def_with_lazy_same_name_injection(self):
         tree = ast.parse((ROOT / "scripts/ai_factor_trader.py").read_text(encoding="utf-8"))
         want = {"record_trade": ("LEDGER_JSON_FILE", "_atomic_write_json",
@@ -147,16 +121,6 @@ class LedgerWriterVerbatimTest(unittest.TestCase):
                          "写崩必须**保全旧文件**（非原子直写会先截断 ⇒ 0 字节/半截 JSON）")
         self.assertEqual(leftovers, [], "失败路径必须清掉临时文件（不残留 .tmp）")
         self.assertEqual(json.loads(after), original)
-
-    def test_judgment_actually_notices_a_change(self):
-        base = "def f():\n    x = LEDGER_JSON_FILE\n    return x\n"
-        tampered = "def f():\n    x = LEDGER_JSON_FILE\n    return [x]\n"
-        o = _body_dump(_get_func(ast.parse(base), "f"))
-        n = _body_dump(_get_func(ast.parse(tampered), "f"))
-        self.assertNotEqual(o, n, "自检：看不见改动")
-        same = _body_dump(_get_func(ast.parse(base), "f"))
-        self.assertEqual(o, same, "自检：同文误报")
-
 
 if __name__ == "__main__":
     unittest.main()

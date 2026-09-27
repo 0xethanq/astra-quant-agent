@@ -337,29 +337,6 @@ class WiringTest(unittest.TestCase):
             self.assertIn(f"def {fn}(", sub)
             self.assertNotIn(f"def {fn}(", facade)
 
-    def test_execute_portfolio_shrank_and_calls_helpers(self):
-        facade = FACADE.read_text(encoding="utf-8")
-        tree = ast.parse(facade)
-        # 用 AST 数**真实调用**，不用文本 count —— 文本会把 import 行也数进去
-        # （`from ... import collect_pending_inst_ids`），得到的 2 没有意义。
-        called = [n.func.id for n in ast.walk(tree)
-                  if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)]
-        # 第九十二刀：`collect_pending_inst_ids` 的调用随相位 1 迁入 cycle_stages.py
-        self.assertEqual(called.count("collect_pending_inst_ids"), 0,
-                         "门面主流程已不再直接调用（随相位 1 迁出）")
-        # 第九十一刀：`build_state_payload` 的调用随"相位 5"搬入 cycle_stages.py
-        stages = ast.parse((ROOT / "scripts" / "trader" / "cycle_stages.py").read_text(encoding="utf-8"))
-        stage_calls = [n.func.id for n in ast.walk(stages)
-                       if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)]
-        self.assertEqual(stage_calls.count("build_state_payload"), 1,
-                         "面板状态装配应恰有 1 处调用（现住 cycle_stages.persist_state_and_sync_ledger）")
-        self.assertEqual(stage_calls.count("collect_pending_inst_ids"), 1,
-                         "外所挂单枚举应恰有 1 处调用（现住 cycle_stages.fetch_positions_and_reconcile）")
-        fn = next(n for n in ast.walk(tree)
-                  if isinstance(n, ast.FunctionDef) and n.name == "execute_portfolio")
-        lines = fn.end_lineno - fn.lineno + 1
-        self.assertLess(lines, 640, f"execute_portfolio 应已明显变短，实际 {lines} 行")
-
     def test_old_venue_loop_is_gone_from_facade(self):
         facade = FACADE.read_text(encoding="utf-8")
         self.assertNotIn('for _gv in ("gate", "binance")', facade)

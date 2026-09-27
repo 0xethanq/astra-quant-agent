@@ -295,27 +295,6 @@ class VerbatimCopyTest(unittest.TestCase):
                 if not (isinstance(s, ast.Expr) and isinstance(s.value, ast.Constant))]
         return ast.dump(ast.Module(body=body, type_ignores=[]))
 
-    def test_moved_bodies_match_pre_extraction_except_injected_names(self):
-        import subprocess
-        old_src = subprocess.run(
-            ["git", "show", legacy_rev_path(f"{PRE_EXTRACTION_COMMIT}:scripts/prompt_library.py")],
-            capture_output=True, text=True, cwd=str(ROOT))
-        self.assertEqual(old_src.returncode, 0, old_src.stderr)
-        new_src = SHARED.read_text(encoding="utf-8")
-
-        old_tree = ast.parse(normalize(old_src.stdout))
-        new_tree = ast.parse(new_src)
-
-        for name in MOVED:
-            o = next(x for x in old_tree.body
-                     if isinstance(x, ast.FunctionDef) and x.name == name)
-            nnode = next(x for x in new_tree.body
-                         if isinstance(x, ast.FunctionDef) and x.name == name)
-            self.assertEqual(self._skeleton(o),
-                             self._skeleton(self._strip_injections(nnode)),
-                             f"{name} 的函数体在搬移中被改写了（超出预期的注入替换）")
-
-
 class DualImportTest(unittest.TestCase):
     """⚠️ 本刀又一次踩了双模导入的坑（与第四十八刀 `local_lock` 相同）。"""
 

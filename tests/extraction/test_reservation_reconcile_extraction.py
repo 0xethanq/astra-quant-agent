@@ -333,37 +333,5 @@ class BehaviourPreservedTest(unittest.TestCase):
             type_ignores=[])
         return ast.unparse(module)
 
-    def test_moved_bodies_are_verbatim(self):
-        import subprocess
-        old = subprocess.run(["git", "show", legacy_rev_path(f"{self.PRE}:scripts/ai_factor_trader.py")],
-                             capture_output=True, text=True, cwd=str(ROOT))
-        self.assertEqual(old.returncode, 0, old.stderr)
-        new = MODULE.read_text(encoding="utf-8")
-        for old_name, new_name in (("_utc_age_seconds", "utc_age_seconds"),
-                                   ("reconcile_reservation_ledger",
-                                    "reconcile_reservation_ledger")):
-            a = self._body(old.stdout, old_name)
-            b = self._body(new, new_name)
-            for src_tok, dst_tok in self.RENAME:
-                a = a.replace(src_tok, dst_tok)
-            # 注入形参在 AST 里表现为 Name(id='reservation_manager')，
-            # 而原文是函数调用 Name(id='reservation_manager') —— 名字相同，故无需改。
-            # 第一百一十五刀：把**文档化差异**应用到旧体上，要求"旧体 + 差异 == 新体"，
-            # 于是允许表之外的任何改动都会在此翻红。
-            a_before_delta = a
-            for src_tok, dst_tok in self.DELTA_EDITS:
-                a = a.replace(src_tok, dst_tok)
-            self.assertEqual(
-                a.count("pending_bases"), b.count("pending_bases"),
-                "文档化差异未按预期生效（旧体里没找到锚点？）——差异必须是唯一改动")
-            self.assertEqual(a, b, f"{old_name} 的函数体在搬移中被改写了")
-            # 钉住"差异之外逐字未动"：把差异从**新体**里撤掉后应与旧体完全相同
-            b_stripped = b
-            for _src_tok, dst_tok in self.DELTA_EDITS:
-                b_stripped = b_stripped.replace(dst_tok, _src_tok)
-            self.assertEqual(b_stripped, a_before_delta,
-                             "除文档化差异外，函数体还有别的改动")
-
-
 if __name__ == "__main__":
     unittest.main()

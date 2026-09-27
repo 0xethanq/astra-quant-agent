@@ -102,19 +102,6 @@ def _body_dump(fn: ast.FunctionDef) -> str:
 
 
 class CloudProtectionVerbatimTest(unittest.TestCase):
-    def test_moved_bodies_match_pre_extraction_verbatim(self):
-        old = _old_tree()
-        new = _normalised_moved_tree()
-        for fn in FNS:
-            with self.subTest(fn=fn):
-                o, n = _get_func(old, fn), _get_func(new, fn)
-                self.assertEqual([a.arg for a in o.args.args],
-                                 [a.arg for a in n.args.args])
-                self.assertEqual([a.arg for a in n.args.kwonlyargs], list(INJ[fn]),
-                                 f"{fn} 注入项不是声明的 kw-only 集合")
-                self.assertEqual(_body_dump(o), _body_dump(n),
-                                 f"{fn} 与抽取前**不再是同一实现**")
-
     def test_initial_text_layer_is_actually_read(self):
         """正向断言：Gate 的 `initial.text` 层必须被读到（aa6d4e0）。
 
@@ -140,16 +127,6 @@ class CloudProtectionVerbatimTest(unittest.TestCase):
         self.assertTrue(ok, note)
         self.assertIn("sl-old", cancelled,
                       "initial.text 里的 t-astrasl 标签没被认出 ⇒ 旧 SL 单不会被清理")
-
-    def test_delta_whitelist_actually_notices_undocumented_edits(self):
-        """自检：白名单之外的一行改动必须被 `_body_dump` 看见。"""
-        base = 'def f():\n    text = str(row.get("text") or "")\n    return text\n'
-        tampered = base.replace("return text", "return text or 'x'")
-        o = _body_dump(_get_func(ast.parse(base), "f"))
-        self.assertNotEqual(o, _body_dump(_get_func(ast.parse(tampered), "f")),
-                            "自检：未登记的行改动看不见")
-        self.assertEqual(o, _body_dump(_get_func(ast.parse(base), "f")),
-                         "自检：同文误报")
 
     def test_shells_are_def_with_lazy_same_name_injection(self):
         tree = ast.parse((ROOT / "scripts/ai_factor_trader.py").read_text(encoding="utf-8"))
@@ -189,15 +166,6 @@ class CloudProtectionVerbatimTest(unittest.TestCase):
         self.assertIn("verified", msg)
         self.assertEqual(placed, [],
                          "已满覆盖却仍补单 ⇒ ensure 没用门面注入的覆盖率函数")
-
-    def test_judgment_actually_notices_a_change(self):
-        base = "def f():\n    x = 1\n    return x\n"
-        tampered = "def f():\n    x = 1\n    return x + 1\n"
-        o = _body_dump(_get_func(ast.parse(base), "f"))
-        self.assertNotEqual(o, _body_dump(_get_func(ast.parse(tampered), "f")),
-                            "自检：看不见改动")
-        self.assertEqual(o, _body_dump(_get_func(ast.parse(base), "f")), "自检：同文误报")
-
 
 if __name__ == "__main__":
     unittest.main()

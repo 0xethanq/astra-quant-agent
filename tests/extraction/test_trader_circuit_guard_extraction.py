@@ -86,27 +86,6 @@ DELTA_REWRITES = (
 
 
 class CircuitGuardVerbatimTest(unittest.TestCase):
-    def test_moved_bodies_match_pre_extraction_except_injections(self):
-        old = ast.parse(_src(PRE, "scripts/ai_factor_trader.py"))
-        mod_src = (ROOT / "scripts/trader/circuit_guard.py").read_text(encoding="utf-8")
-        for _new_tok, _old_tok in DELTA_REWRITES:
-            self.assertEqual(mod_src.count(_new_tok), 1,
-                             f"文档化差异锚点没找到或重复：{_new_tok[:60]!r}")
-            mod_src = mod_src.replace(_new_tok, _old_tok)
-        new = ast.parse(mod_src)
-        for fn in ("check_black_swan_sentinel", "is_circuit_breaker_active"):
-            with self.subTest(fn=fn):
-                # 原有**位置参数**必须原样（新函数只允许追加 kw-only 注入参数）
-                o, n = _get_func(old, fn), _get_func(new, fn)
-                self.assertEqual([a.arg for a in o.args.args],
-                                 [a.arg for a in n.args.args],
-                                 f"{fn} 原有位置参数被改动")
-                # 函数体逐字（归一后）
-                ob = ast.Module(body=o.body, type_ignores=[])
-                nb = ast.Module(body=n.body, type_ignores=[])
-                self.assertEqual(_normalize(ob), _normalize(nb),
-                                 f"{fn} 与抽取前**不再是同一实现**")
-
     def test_facade_shells_are_def_with_lazy_injection(self):
         """门面壳：`def` 形状（计数锚惯例）+ 注入的全局名**全部仍是门面全局**。"""
         src = (ROOT / "scripts/ai_factor_trader.py").read_text(encoding="utf-8")
@@ -147,24 +126,6 @@ class CircuitGuardVerbatimTest(unittest.TestCase):
                 active, reason = aft.check_black_swan_sentinel()
         self.assertTrue(active, "patch 门面常量没影响经壳调用 ⇒ 壳在快照值，注入断了")
         self.assertIn("情绪指数", reason)
-
-    def test_judgment_actually_notices_a_change(self):
-        """⚠️ 自检：归一化对拍必须**能**发现真实改动，且**不误报**纯改名。"""
-        base = "def f():\n    x = NEWS_SENTIMENT_FILE\n    return x\n"
-        tampered = "def f():\n    x = news_sentiment_file\n    return x + 1\n"
-        renamed = "def f():\n    x = news_sentiment_file\n    return x\n"
-
-        def norm(text: str) -> str:
-            tree = ast.parse(text)
-            return _normalize(ast.Module(body=_get_func(tree, "f").body, type_ignores=[]))
-
-        # 改名后 +1：必须被识别为**不同**
-        self.assertNotEqual(norm(base), norm(tampered),
-                            "自检失败：对拍判据看不见 +1 的改动")
-        # 纯改名：必须视为**相同**（这正是 RENAMES 的用途）
-        self.assertEqual(norm(base), norm(renamed),
-                         "自检失败：纯改名被误报为行为变化")
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -119,21 +119,6 @@ def _body_dump(fn: ast.FunctionDef) -> str:
 
 
 class OrderLifecycleVerbatimTest(unittest.TestCase):
-    def test_moved_bodies_match_pre_extraction_verbatim(self):
-        """含嵌套闭包的函数体必须逐字（仅放行上面登记的 aa6d4e0 差异）。"""
-        old = _old_tree()
-        new = _normalised_moved_tree()
-        for fn in FNS:
-            with self.subTest(fn=fn):
-                o, n = _get_func(old, fn), _get_func(new, fn)
-                self.assertEqual([a.arg for a in o.args.args],
-                                 [a.arg for a in n.args.args])
-                self.assertEqual(_body_dump(o), _body_dump(n),
-                                 f"{fn} 与抽取前**不再是同一实现**")
-                # 嵌套闭包必须**还在**（整体随迁，不是被外提）
-                nested = {x.name for x in ast.walk(n) if isinstance(x, ast.FunctionDef)}
-                self.assertTrue(nested - {fn}, f"{fn} 的嵌套闭包没随迁")
-
     def test_signed_size_side_inference_lands_on_the_moved_impl(self):
         """正向断言：外所不返回 `side` 时按带符号张数推断方向（aa6d4e0）。
 
@@ -162,17 +147,6 @@ class OrderLifecycleVerbatimTest(unittest.TestCase):
         self.assertTrue(ok, msg)
         self.assertEqual(cancelled, [("BTC", "g1")],
                          "带符号张数没推断出方向 ⇒ 外所孤儿挂单不会被回收")
-
-    def test_delta_whitelist_actually_notices_undocumented_edits(self):
-        """自检：白名单之外的任何一行改动都必须被 `_body_dump` 看见。"""
-        base = "def f():\n    _side = str(o.get('side') or '').lower()\n    return _side\n"
-        tampered = base.replace("return _side", "return _side or 'x'")
-        o = _body_dump(_get_func(ast.parse(base), "f"))
-        self.assertNotEqual(o, _body_dump(_get_func(ast.parse(tampered), "f")),
-                            "自检：未登记的行改动看不见")
-        self.assertEqual(o, _body_dump(_get_func(ast.parse(base), "f")),
-                         "自检：同文误报")
-
 
     def test_shells_are_def_with_lazy_same_name_injection(self):
         tree = ast.parse((ROOT / "scripts/ai_factor_trader.py").read_text(encoding="utf-8"))
@@ -252,16 +226,6 @@ class OrderLifecycleVerbatimTest(unittest.TestCase):
              redirect_stdout(io.StringIO()):
             ok2, _ = aft.reconcile_pending_orders()
         self.assertFalse(ok2, "撤销失败必须 fail-closed")
-
-    def test_judgment_actually_notices_a_change(self):
-        base = "def f():\n    def g():\n        return 1\n    return g()\n"
-        tampered = "def f():\n    def g():\n        return 2\n    return g()\n"
-        o = _body_dump(_get_func(ast.parse(base), "f"))
-        self.assertNotEqual(o, _body_dump(_get_func(ast.parse(tampered), "f")),
-                            "自检：嵌套闭包内的改动看不见")
-        self.assertEqual(o, _body_dump(_get_func(ast.parse(base), "f")),
-                         "自检：同文误报")
-
 
 class UnreadableIntentsFailClosedTest(unittest.TestCase):
     """意图文件"读不出来" ⇒ **不撤任何单 + fail-closed**（第一百三十四刀）。

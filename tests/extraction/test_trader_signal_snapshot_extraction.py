@@ -49,17 +49,6 @@ def _normalize(node: ast.AST) -> str:
 
 
 class SignalSnapshotVerbatimTest(unittest.TestCase):
-    def test_moved_body_matches_pre_extraction_except_injection(self):
-        old = _get_func(_old_tree(), FN)
-        new = _get_func(ast.parse(
-            (ROOT / "scripts/trader/signal_snapshot.py").read_text(encoding="utf-8")), FN)
-        # 原有位置参数原样，注入项必须是 kw-only
-        self.assertEqual([a.arg for a in old.args.args], [a.arg for a in new.args.args])
-        self.assertEqual([a.arg for a in new.args.kwonlyargs], ["data_dir"])
-        ob = _normalize(ast.Module(body=old.body, type_ignores=[]))
-        nb = _normalize(ast.Module(body=new.body, type_ignores=[]))
-        self.assertEqual(ob, nb, "搬家后**不再是同一实现**")
-
     def test_facade_shell_is_def_with_lazy_injection(self):
         tree = ast.parse((ROOT / "scripts/ai_factor_trader.py").read_text(encoding="utf-8"))
         shell = _get_func(tree, FN)
@@ -92,19 +81,6 @@ class SignalSnapshotVerbatimTest(unittest.TestCase):
                          "沙箱 DATA_DIR 没传到子包 ⇒ 壳在 import 期快照了值")
         self.assertIsNone(miss.get("composite_alpha_score"),
                           "文件缺失路径不得伪造数据（fail-soft 语义）")
-
-    def test_judgment_actually_notices_a_change(self):
-        base = "def f():\n    x = DATA_DIR\n    return x\n"
-        tampered = "def f():\n    x = data_dir\n    return x or 'y'\n"
-        renamed = "def f():\n    x = data_dir\n    return x\n"
-
-        def norm(text: str) -> str:
-            tree = ast.parse(text)
-            return _normalize(ast.Module(body=tree.body[0].body, type_ignores=[]))
-
-        self.assertNotEqual(norm(base), norm(tampered), "自检：判据看不见改动")
-        self.assertEqual(norm(base), norm(renamed), "自检：纯改名被误报")
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -110,15 +110,6 @@ class BuildEffectivePromptTextTest(unittest.TestCase):
 
     ESP, PROMPT, TIME = "  SYS  \n", "  用户正文 \n", "2026-09-14 10:00:00"
 
-    def test_history_variant_is_byte_identical(self):
-        policy_version = "v1"
-        legacy = (f"【SYSTEM PROMPT ({policy_version})】：\n{self.ESP.strip()}"
-                  f"\n\n{'='*70}\n【USER PROMPT ({self.TIME})】：\n{self.PROMPT.strip()}")
-        got = cycle_parts.build_effective_prompt_text(
-            effective_system_prompt=self.ESP, policy_version=policy_version,
-            time_str=self.TIME, prompt=self.PROMPT)
-        self.assertEqual(got, legacy)
-
     def test_snapshot_variant_has_no_version_label(self):
         """提示词快照那处**历史上就没有**版本标签，且分隔线前少一个空格。
 

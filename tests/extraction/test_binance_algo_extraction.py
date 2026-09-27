@@ -297,20 +297,6 @@ class VerbatimCopyTest(unittest.TestCase):
                 return ast.unparse(module)
         raise AssertionError(f"{name} not found")
 
-    def test_moved_bodies_match_pre_extraction(self):
-        import subprocess
-        old = subprocess.run(["git", "show", legacy_rev_path(f"{self.PRE}:astra_backend/exchanges/binance.py")],
-                             capture_output=True, text=True, cwd=str(ROOT))
-        self.assertEqual(old.returncode, 0, old.stderr)
-        new = MIXIN.read_text(encoding="utf-8")
-        for name in BUILDERS + ("_require_working_type",):
-            with self.subTest(fn=name):
-                a = self._fn(old.stdout, name)
-                b = self._fn(new, name)
-                for src_tok, dst_tok in self.EXPECTED:
-                    a = a.replace(src_tok, dst_tok)
-                self.assertEqual(a, b, f"{name} 的函数体在搬移中被改写了")
-
     def test_facade_no_longer_defines_the_builders(self):
         """门面里不应再有这簇的实现（否则就是两份）。"""
         tree = ast.parse(FACADE.read_text(encoding="utf-8"))

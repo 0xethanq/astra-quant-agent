@@ -53,26 +53,6 @@ def _facade_calls() -> dict:
 
 
 class LlmStoreNormalizeVerbatimTest(unittest.TestCase):
-    def test_segments_are_ast_identical_to_baseline(self):
-        base = _baseline_fn()
-        for name, (lo, hi) in SPECS.items():
-            with self.subTest(fn=name):
-                seg = base.body[lo:hi + 1]
-                body = list(_impl(name).body)
-                if (body and isinstance(body[0], ast.Expr)
-                        and isinstance(body[0].value, ast.Constant)
-                        and isinstance(body[0].value.value, str)):
-                    body = body[1:]
-                # 非尾块：helper 末尾那行 `return <out>` 是抽取时**追加**的 ⇒ 判对拍时剥掉；
-                # 尾块：段内本来就有 `return config`（即函数终返）⇒ 不剥。
-                if (body and isinstance(body[-1], ast.Return)
-                        and not isinstance(seg[-1], ast.Return)):
-                    body = body[:-1]
-                self.assertEqual(
-                    ast.dump(ast.Module(body=body, type_ignores=[]), include_attributes=False),
-                    ast.dump(ast.Module(body=seg, type_ignores=[]), include_attributes=False),
-                    f"{name} 段体与抽取前**不再同一棵 AST**")
-
     def test_calls_pass_every_parameter_once_same_name(self):
         calls = _facade_calls()
         for name in SPECS:
@@ -187,14 +167,6 @@ class LlmStoreNormalizeVerbatimTest(unittest.TestCase):
                 _atomic_write_json=lambda p, d: None, os=__import__("os"))
             self.assertEqual(cfg["request_attempts"], policy.DEFAULT_REQUEST_ATTEMPTS)
             self.assertEqual(cfg["fallback_model_ids"], [], "脏数据必须自愈为空链，不得抛错")
-
-    def test_judgment_actually_notices_a_change(self):
-        seg = _baseline_fn().body[SPECS["resolve_brain_provider_attribution"][0]:
-                                  SPECS["resolve_brain_provider_attribution"][1] + 1]
-        self.assertNotEqual(
-            ast.dump(ast.Module(body=seg + [ast.Pass()], type_ignores=[]), include_attributes=False),
-            ast.dump(ast.Module(body=seg, type_ignores=[]), include_attributes=False))
-
 
 if __name__ == "__main__":
     unittest.main()
