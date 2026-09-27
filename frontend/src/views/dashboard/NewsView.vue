@@ -320,10 +320,10 @@ function toggleCoinFilter(sym: string) {
       <!-- 舆情快讯情报流 (News Stream) -->
       <div class="dsh-card overflow-hidden min-h-[480px] flex flex-col">
         <!-- 筛选与搜索栏 -->
-        <header class="dsh-card-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
-          <!-- 来源 Tab 组：移动端横向滑动 -->
-          <div class="overflow-x-auto -mx-1 px-1">
-            <div class="seg shrink-0 whitespace-nowrap" role="tablist" :aria-label="t('dash.news.feed.source')">
+        <header class="dsh-card-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 min-w-0">
+          <!-- 来源 Tab 组：移动端横向滑动，带防越界与平滑手势 -->
+          <div class="w-full sm:w-auto min-w-0 max-w-full overflow-x-auto scrollbar-none -mx-1 px-1 py-0.5" style="-webkit-overflow-scrolling: touch;">
+            <div class="seg inline-flex shrink-0 whitespace-nowrap" role="tablist" :aria-label="t('dash.news.feed.source')">
               <button
                 v-for="(f, fi) in sourceFilters"
                 :key="f.key"

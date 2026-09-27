@@ -3,8 +3,8 @@
  * LedgerView.vue · DeepSeek Harness 风格交易台账与订单生命周期中枢
  * 包含：汇总指标 HUD、多维实时筛选工具栏、高密度等宽订单流表格、生命周期穿透抽屉与底层巡检日志
  */
-import { computed, ref, watch } from 'vue';
-import { Download, ScrollText, History, Landmark, Zap } from 'lucide-vue-next';
+import { computed, ref, watch, onMounted } from 'vue';
+import { Download, ScrollText, History, Landmark, Zap, Database } from 'lucide-vue-next';
 import { useDashboardStore } from '../../stores/dashboard';
 import DataGate from '../../components/dashboard/DataGate.vue';
 import { useI18n } from '../../composables/useI18n';
@@ -24,7 +24,36 @@ const store = useDashboardStore();
 const { t } = useI18n();
 const toast = useToast();
 
-const all = computed<any[]>(() => (store.data as any)?.trades || []);
+const fullTrades = ref<any[]>([]);
+const loadingFull = ref<boolean>(false);
+const allTimeScope = ref<boolean>(false);
+
+async function loadFullLedger() {
+  loadingFull.value = true;
+  try {
+    const res = await fetch(`/api/v1/public/ledger?all_time=${allTimeScope.value ? 1 : 0}`);
+    if (res.ok) {
+      const json = await res.json();
+      if (Array.isArray(json?.trades) && json.trades.length > 0) {
+        fullTrades.value = json.trades;
+      }
+    }
+  } catch {
+    // 降级回退到 store.data.trades
+  } finally {
+    loadingFull.value = false;
+  }
+}
+
+onMounted(() => {
+  loadFullLedger();
+});
+
+watch(allTimeScope, () => {
+  loadFullLedger();
+});
+
+const all = computed<any[]>(() => (fullTrades.value.length ? fullTrades.value : ((store.data as any)?.trades || [])));
 const perf = computed<any>(() => (store.data as any)?.performance || {});
 
 /* —— 筛选状态 —— */
@@ -203,15 +232,27 @@ const truncation = computed<{ kept: number; total: number } | null>(() => {
         </span>
       </div>
 
-      <!-- 快速导出 CSV -->
-      <button type="button"
-        class="btn btn-ghost h-7 px-3 text-xs font-medium cursor-pointer inline-flex items-center gap-1.5 rounded-full transition-all"
-        :disabled="!filtered.length"
-        @click="exportCsv"
-      >
-        <Download class="h-3.5 w-3.5 text-[var(--accent)]" />
-        <span>{{ t('dash.ledger.exportCsv') }}</span>
-      </button>
+      <!-- 范围切换与快速导出 CSV -->
+      <div class="flex items-center gap-1.5">
+        <button
+          type="button"
+          class="btn btn-quiet h-7 px-2.5 text-xs font-medium cursor-pointer inline-flex items-center gap-1 rounded-full transition-all"
+          :title="allTimeScope ? t('dash.ledger.loadCycleHistory') : t('dash.ledger.loadAllHistory')"
+          @click="allTimeScope = !allTimeScope"
+        >
+          <Database class="h-3 w-3 text-[var(--accent)]" />
+          <span>{{ allTimeScope ? t('dash.ledger.loadCycleHistory') : t('dash.ledger.loadAllHistory') }}</span>
+        </button>
+
+        <button type="button"
+          class="btn btn-ghost h-7 px-3 text-xs font-medium cursor-pointer inline-flex items-center gap-1.5 rounded-full transition-all"
+          :disabled="!filtered.length"
+          @click="exportCsv"
+        >
+          <Download class="h-3.5 w-3.5 text-[var(--accent)]" />
+          <span>{{ t('dash.ledger.exportCsv') }}</span>
+        </button>
+      </div>
     </div>
 
     <DataGate>

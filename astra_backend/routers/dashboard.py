@@ -58,6 +58,89 @@ def cache(resource: str, x_astra_admin_token: str | None = Header(default=None),
     return JSONResponse(read_json(filename, {} if resource != "ledger" else []))
 
 
+@router.get("/api/v1/public/ledger")
+def public_ledger(all_time: bool = Query(default=False)) -> dict[str, Any]:
+    """公开全量台账接口：供台账视图与外部统计读取完整生命周期历史记录（突破常规仪表盘 60 笔切片限制）。"""
+    from astra_backend.dashboard_payload.ledger_view import (
+        load_ledger_lifecycle_trades,
+        load_signal_journal_by_inst,
+        load_position_trackers,
+        match_trade_snapshot,
+        _SNAPSHOT_KEYS,
+    )
+    from astra_backend.dashboard_payload.reset_state import read_reset_initial_state
+    from scripts.evolution.observability import classify_snapshot_observability, prune_snapshot
+
+    data_dir = ROOT / "data"
+    ledger_file = data_dir / "trading_ledger.json"
+
+    reset_time = "1970-01-01 00:00:00"
+    if not all_time:
+        try:
+            reset_time, _ = read_reset_initial_state(str(data_dir))
+        except Exception:
+            reset_time = "1970-01-01 00:00:00"
+
+    valid_trades, _ = load_ledger_lifecycle_trades(
+        str(ledger_file), str(ROOT), False, reset_time
+    )
+
+    journal_by_inst = load_signal_journal_by_inst(str(data_dir))
+    trackers = load_position_trackers(str(data_dir))
+
+    enriched = []
+    closed_count = 0
+    holding_count = 0
+
+    for t in valid_trades:
+        if isinstance(t, dict):
+            item = dict(t)
+            snap = None
+            for key in _SNAPSHOT_KEYS:
+                if isinstance(item.get(key), dict) and item[key]:
+                    snap = item[key]
+                    break
+            inst = item.get("inst") or item.get("name")
+            open_time = item.get("open_time")
+            tracker = trackers.get(str(inst)) if inst else None
+            if snap is None and journal_by_inst and inst and open_time:
+                snap = match_trade_snapshot(journal_by_inst, inst, open_time, tracker)
+
+            item["snapshot_observability"] = classify_snapshot_observability(snap)
+            if snap is not None:
+                item["entry_snapshot"] = prune_snapshot(snap)
+
+            status = str(item.get("status") or "").lower()
+            if status == "closed":
+                closed_count += 1
+            elif status == "holding":
+                holding_count += 1
+
+            enriched.append(item)
+
+    db_count = 0
+    try:
+        import sqlite3
+        from scripts.db_manager import DB_PATH
+        if os.path.exists(DB_PATH):
+            conn = sqlite3.connect(DB_PATH)
+            cur = conn.cursor()
+            cur.execute("SELECT count(*) FROM trades")
+            db_count = cur.fetchone()[0]
+            conn.close()
+    except Exception:
+        pass
+
+    return {
+        "trades": enriched,
+        "total": len(enriched),
+        "closed_count": closed_count,
+        "holding_count": holding_count,
+        "db_total": db_count,
+        "reset_time": reset_time,
+    }
+
+
 @router.get("/api/v1/market/{inst_id}")
 def market(inst_id: str) -> dict[str, Any]:
     if not inst_id.endswith("-SWAP"):
