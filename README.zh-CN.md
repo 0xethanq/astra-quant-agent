@@ -6,7 +6,7 @@
 
 ### 机构级多交易所平权量化决策与执行系统
 
-[![Release](https://img.shields.io/badge/Release-v8.3.1-blue.svg?style=flat-square)](https://github.com/555cute/astra-quant-agent/releases/tag/v8.3.1)
+[![Release](https://img.shields.io/badge/Release-v8.3.1-blue.svg?style=flat-square)](https://github.com/0xethanq/astra-quant-agent/releases/tag/v8.3.1)
 [![Website](https://img.shields.io/badge/Site-www.astraquant.tech-6E56CF.svg?style=flat-square)](https://www.astraquant.tech)
 [![License](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg?style=flat-square)](https://www.python.org/)
@@ -30,7 +30,7 @@
 ## 🚀 60 秒跑起来
 
 ```bash
-git clone https://github.com/555cute/astra-quant-agent.git && cd astra-quant-agent
+git clone https://github.com/0xethanq/astra-quant-agent.git && cd astra-quant-agent
 ./deploy/docker-start.sh          # Docker 一键起（推荐）；宿主机部署走 ./deploy/install.sh
 ```
 
@@ -215,7 +215,7 @@ node --test tests/*.test.mjs
 自动包含 Python 3.11、编译前端静态资源，并编排 Web 引擎与网关 Worker 两个服务：
 
 ```bash
-git clone https://github.com/555cute/astra-quant-agent.git
+git clone https://github.com/0xethanq/astra-quant-agent.git
 cd astra-quant-agent
 cp env.example .env && vim .env        # 填大模型 Key 与交易所 Key
 ./deploy/docker-start.sh               # 等价于 docker compose up -d --build
@@ -229,7 +229,7 @@ docker compose logs -f                 # 跟随日志
 ### 方式 B：传统本地 / 物理机部署
 
 ```bash
-git clone https://github.com/555cute/astra-quant-agent.git
+git clone https://github.com/0xethanq/astra-quant-agent.git
 cd astra-quant-agent
 sh deploy/install.sh                   # 创建 .venv 并装依赖
 vim .env

@@ -6,7 +6,7 @@
 
 ### Multi-exchange agentic quant trading terminal — decision by LLMs, risk by hard code
 
-[![Release](https://img.shields.io/badge/Release-v8.3.1-blue.svg?style=flat-square)](https://github.com/555cute/astra-quant-agent/releases/tag/v8.3.1)
+[![Release](https://img.shields.io/badge/Release-v8.3.1-blue.svg?style=flat-square)](https://github.com/0xethanq/astra-quant-agent/releases/tag/v8.3.1)
 [![Website](https://img.shields.io/badge/Site-www.astraquant.tech-6E56CF.svg?style=flat-square)](https://www.astraquant.tech)
 [![License](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg?style=flat-square)](https://www.python.org/)
@@ -30,7 +30,7 @@
 ## 🚀 Quick start
 
 ```bash
-git clone https://github.com/555cute/astra-quant-agent.git && cd astra-quant-agent
+git clone https://github.com/0xethanq/astra-quant-agent.git && cd astra-quant-agent
 ./deploy/docker-start.sh          # Docker, recommended; for a host install use ./deploy/install.sh
 ```
 
@@ -210,7 +210,7 @@ node --test tests/*.test.mjs
 Ships Python 3.11, builds the frontend bundle, and orchestrates the web engine plus the gateway worker:
 
 ```bash
-git clone https://github.com/555cute/astra-quant-agent.git
+git clone https://github.com/0xethanq/astra-quant-agent.git
 cd astra-quant-agent
 cp env.example .env && vim .env        # fill in your LLM and exchange keys
 ./deploy/docker-start.sh               # equivalent to: docker compose up -d --build
@@ -224,7 +224,7 @@ Both services declare `restart: unless-stopped` **and** carry in-container super
 ### Option B: host / bare-metal
 
 ```bash
-git clone https://github.com/555cute/astra-quant-agent.git
+git clone https://github.com/0xethanq/astra-quant-agent.git
 cd astra-quant-agent
 sh deploy/install.sh                   # creates .venv and installs dependencies
 vim .env

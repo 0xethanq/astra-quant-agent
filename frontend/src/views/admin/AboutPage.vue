@@ -236,7 +236,7 @@ const bandFacts = computed(() => {
 
             <footer class="ab-block-foot">
               <a
-                href="https://github.com/555cute/astra-quant-agent"
+                href="https://github.com/0xethanq/astra-quant-agent"
                 target="_blank"
                 rel="noopener noreferrer"
                 class="btn btn-primary btn-sm"

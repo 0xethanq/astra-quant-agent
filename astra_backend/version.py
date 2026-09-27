@@ -14,7 +14,7 @@ APP_NAME_EN = "AstraQuant"
 #: 官方站点（**带 www**，与 DNS 实际解析一致；页面内的 canonical / og:url 同源）。
 APP_SITE = "https://www.astraquant.tech"
 #: 官方仓库。
-APP_REPO = "https://github.com/555cute/astra-quant-agent"
+APP_REPO = "https://github.com/0xethanq/astra-quant-agent"
 
 
 def get_version() -> str:

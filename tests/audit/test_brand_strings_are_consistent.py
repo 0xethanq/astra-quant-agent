@@ -173,7 +173,7 @@ BANNED_ALLOWED: "dict[str, str]" = {
 
 #: 规范站点与仓库（判据三的期望值）。
 EXPECTED_SITE = "https://www.astraquant.tech"
-EXPECTED_REPO = "https://github.com/555cute/astra-quant-agent"
+EXPECTED_REPO = "https://github.com/0xethanq/astra-quant-agent"
 
 
 def _tracked_files() -> "list[str]":
