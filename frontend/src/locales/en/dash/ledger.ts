@@ -138,6 +138,10 @@ export const enLedger = {
   countRecords: '{a} / {b} records',
   loadAllHistory: 'All-Time History',
   loadCycleHistory: 'Current Reset Cycle',
+  loadedAll: 'Loaded all-time history ({n} closed trades)',
+  loadedCycle: 'Loaded current cycle ({n} closed trades)',
+  loadFailed: 'Failed to load ledger, please retry',
+  loadNetworkError: 'Network error, falling back to cached ledger',
   // ── batch 41: localize strings previously hardcoded in LedgerDrawer ──
   councilSource: 'AI council decision trace',
   execStrategy: 'Execution strategy',

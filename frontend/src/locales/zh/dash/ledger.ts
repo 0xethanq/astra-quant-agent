@@ -139,6 +139,10 @@ export const zhLedger = {
   countRecords: '{a} / {b} 笔记录',
   loadAllHistory: '全量历史',
   loadCycleHistory: '本期战绩',
+  loadedAll: '已载入全量历史台账（共 {n} 笔平仓）',
+  loadedCycle: '已载入本期有效战绩（共 {n} 笔平仓）',
+  loadFailed: '加载台账失败，请稍后重试',
+  loadNetworkError: '网络异常，已回退至缓存台账',
   // ── 批 41：本地化写死文案（LedgerDrawer 标题与行标签）──
   councilSource: 'AI 投委会决策溯源',
   execStrategy: '执行策略',

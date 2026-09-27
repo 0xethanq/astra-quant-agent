@@ -27,6 +27,7 @@ const toast = useToast();
 const fullTrades = ref<any[]>([]);
 const loadingFull = ref<boolean>(false);
 const allTimeScope = ref<boolean>(false);
+const isUserToggle = ref<boolean>(false);
 
 async function loadFullLedger() {
   loadingFull.value = true;
@@ -36,13 +37,31 @@ async function loadFullLedger() {
       const json = await res.json();
       if (Array.isArray(json?.trades) && json.trades.length > 0) {
         fullTrades.value = json.trades;
+        if (isUserToggle.value) {
+          const count = json.closed_count || fullTrades.value.length;
+          toast.ok(allTimeScope.value
+            ? t('dash.ledger.loadedAll', undefined, { n: count })
+            : t('dash.ledger.loadedCycle', undefined, { n: count }));
+          isUserToggle.value = false;
+        }
       }
+    } else if (isUserToggle.value) {
+      toast.err(t('dash.ledger.loadFailed'));
+      isUserToggle.value = false;
     }
   } catch {
-    // 降级回退到 store.data.trades
+    if (isUserToggle.value) {
+      toast.err(t('dash.ledger.loadNetworkError'));
+      isUserToggle.value = false;
+    }
   } finally {
     loadingFull.value = false;
   }
+}
+
+function toggleScope() {
+  isUserToggle.value = true;
+  allTimeScope.value = !allTimeScope.value;
 }
 
 onMounted(() => {
@@ -238,9 +257,9 @@ const truncation = computed<{ kept: number; total: number } | null>(() => {
           type="button"
           class="btn btn-quiet h-7 px-2.5 text-xs font-medium cursor-pointer inline-flex items-center gap-1 rounded-full transition-all"
           :title="allTimeScope ? t('dash.ledger.loadCycleHistory') : t('dash.ledger.loadAllHistory')"
-          @click="allTimeScope = !allTimeScope"
+          @click="toggleScope"
         >
-          <Database class="h-3 w-3 text-[var(--accent)]" />
+          <Database class="h-3 w-3 text-[var(--accent)]" :class="{ 'animate-spin': loadingFull }" />
           <span>{{ allTimeScope ? t('dash.ledger.loadCycleHistory') : t('dash.ledger.loadAllHistory') }}</span>
         </button>
 
