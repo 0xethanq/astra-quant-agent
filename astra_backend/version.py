@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-__version__ = "8.3.1"
+__version__ = "8.4.0"
 APP_VERSION = f"v{__version__}"
 APP_NAME = "AstraQuant"
 APP_NAME_EN = "AstraQuant"

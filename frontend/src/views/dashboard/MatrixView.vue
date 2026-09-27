@@ -19,7 +19,6 @@ import {
 } from 'lucide-vue-next';
 
 import KpiRibbon from '../../components/dashboard/KpiRibbon.vue';
-import VenueAccountsPanel from '../../components/dashboard/VenueAccountsPanel.vue';
 import ChartWorkstation from '../../components/dashboard/ChartWorkstation.vue';
 import PositionsOrdersPanel from '../../components/dashboard/PositionsOrdersPanel.vue';
 import FactorMatrix from '../../components/dashboard/FactorMatrix.vue';
@@ -49,7 +48,7 @@ function pick(instId: string) {
     <!-- 工位导航与控制顶栏 -->
     <div class="flex items-center justify-between gap-2 pt-0.5">
       <div class="flex items-center gap-2">
-        <h1 class="text-xs font-bold tracking-tight text-[var(--ink-strong)] flex items-center gap-1.5">
+        <h1 class="text-sm font-semibold tracking-tight text-[var(--ink-strong)] flex items-center gap-2">
           <span class="dsh-status-dot active" aria-hidden="true" />
           {{ t('dash.matrix.title') }}
         </h1>
@@ -58,9 +57,6 @@ function pick(instId: string) {
           style="background-color: var(--surface-2); border-color: var(--line-1); color: var(--ink-2)"
         >
           {{ t('dash.matrix.hudProdDynamics') }}
-        </span>
-        <span class="hidden md:inline text-3xs text-[var(--ink-3)]">
-          · {{ t('dash.matrix.desc') }}
         </span>
       </div>
 
@@ -103,22 +99,19 @@ function pick(instId: string) {
       <!-- 标准工作台布局：首屏直达主图与持仓，分层卡片排布 -->
       <template v-else>
         <!-- 主工位区：图表(8) + 持仓挂单(4) -->
-        <div class="grid grid-cols-1 gap-3 xl:grid-cols-12 items-stretch">
-          <div class="xl:col-span-8 flex flex-col">
+        <div class="grid grid-cols-1 gap-3 xl:grid-cols-12 xl:h-[600px] items-stretch">
+          <div class="xl:col-span-8 flex flex-col h-full min-h-0">
             <ChartWorkstation
               ref="chart"
               :initial-symbol="initialSymbol"
               :fill="true"
-              chart-height="520px"
+              chart-height="100%"
             />
           </div>
-          <div class="xl:col-span-4 flex flex-col gap-3">
-            <PositionsOrdersPanel class="flex-1" @pick-symbol="pick" />
+          <div class="xl:col-span-4 flex flex-col gap-3 h-full min-h-0">
+            <PositionsOrdersPanel class="flex-1 min-h-0" @pick-symbol="pick" />
           </div>
         </div>
-
-        <!-- 三所账户资产与风控占用 -->
-        <VenueAccountsPanel />
 
         <!-- 因子动能微积分动力学矩阵 -->
         <FactorMatrix @pick-symbol="pick" />

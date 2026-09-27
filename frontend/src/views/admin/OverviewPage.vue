@@ -259,7 +259,7 @@ function parseAuditContext(action: string, detail: any): { label: string; tag: s
             </h2>
             <p class="ov-ch-desc">{{ t('admin.overview.decisionsDesc') }}</p>
           </div>
-          <RouterLink to="/admin/decisions" class="ov-ch-link">
+          <RouterLink to="/admin/decisions?tab=decisions" class="ov-ch-link">
             <span>{{ t('admin.overview.viewAll') }} (92)</span>
             <ArrowRight :size="13" />
           </RouterLink>

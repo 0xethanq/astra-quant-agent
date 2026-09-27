@@ -118,6 +118,8 @@ const bandFacts = computed(() => {
   const a = about.value
   if (!a) return []
   const behind = a.update?.behind || 0
+  const dirty = Boolean(a.update?.dirty)
+  const ahead = a.update?.ahead || 0
   return [
     {
       icon: Info,
@@ -141,15 +143,19 @@ const bandFacts = computed(() => {
       tone: '',
     },
     {
-      icon: behind > 0 ? ArrowUpRight : CheckCircle2,
+      icon: dirty ? AlertTriangle : behind > 0 ? ArrowUpRight : CheckCircle2,
       label: t('admin.about.bandSyncGap'),
-      value: behind > 0
-        ? t('admin.about.behind', undefined, { n: behind })
-        : t('admin.about.upToDate'),
-      foot: a.update?.ahead
-        ? t('admin.about.ahead', undefined, { n: a.update.ahead })
-        : (a.update?.local || '--'),
-      tone: behind > 0 ? 'is-warn' : 'is-up',
+      value: dirty
+        ? t('admin.about.statusDirty')
+        : behind > 0
+          ? t('admin.about.behind', undefined, { n: behind })
+          : t('admin.about.upToDate'),
+      foot: dirty
+        ? t('admin.about.dirtyFoot', undefined, { commit: a.update?.local || '--' })
+        : ahead
+          ? t('admin.about.ahead', undefined, { n: ahead })
+          : (a.update?.local || '--'),
+      tone: dirty || behind > 0 ? 'is-warn' : 'is-up',
     },
   ]
 })
@@ -317,15 +323,34 @@ const bandFacts = computed(() => {
               <span class="label-caps">{{ t('admin.about.syncGap') }}</span>
               <span
                 class="ab-tel-v"
-                :class="(about.update?.behind || 0) > 0 ? 'is-warn' : 'is-up'"
+                :class="about.update?.dirty || (about.update?.behind || 0) > 0 ? 'is-warn' : 'is-up'"
               >
-                {{ (about.update?.behind || 0) > 0
-                  ? t('admin.about.behind', undefined, { n: about.update?.behind })
-                  : t('admin.about.upToDate') }}
-                <span v-if="about.update?.ahead" class="ab-ahead">
+                {{ about.update?.dirty
+                  ? t('admin.about.statusDirty')
+                  : (about.update?.behind || 0) > 0
+                    ? t('admin.about.behind', undefined, { n: about.update?.behind })
+                    : t('admin.about.upToDate') }}
+                <span v-if="about.update?.ahead && !about.update?.dirty" class="ab-ahead">
                   {{ t('admin.about.ahead', undefined, { n: about.update.ahead }) }}
                 </span>
+                <span v-else-if="about.update?.dirty" class="ab-ahead text-amber-400 font-normal">
+                  {{ t('admin.about.uncommittedChanges') }}
+                </span>
               </span>
+            </div>
+          </div>
+
+          <!-- 工作区未提交状态警示 -->
+          <div
+            v-if="about.update?.dirty"
+            role="status"
+            aria-live="polite"
+            class="mx-4 mb-3 p-3 rounded-lg border border-amber-500/20 bg-amber-500/5 flex items-start gap-2.5 text-xs text-amber-300/90 leading-relaxed"
+          >
+            <AlertTriangle :size="15" class="shrink-0 text-amber-400 mt-0.5" />
+            <div>
+              <p class="font-medium text-amber-200">{{ t('admin.about.dirtyAlertTitle') }}</p>
+              <p class="text-3xs text-amber-300/70 mt-0.5">{{ t('admin.about.dirtyAlertDesc') }}</p>
             </div>
           </div>
 

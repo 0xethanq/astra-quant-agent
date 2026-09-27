@@ -1,25 +1,73 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
   <defs>
-    <linearGradient id="astra-bg" x1="4" y1="4" x2="44" y2="44" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#1E293B"/>
-      <stop offset="100%" stop-color="#0B1220"/>
+    <!-- 背景渐变：黑曜石深黑 -->
+    <linearGradient id="astra-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0e1017"/>
+      <stop offset="100%" stop-color="#07080c"/>
     </linearGradient>
-    <linearGradient id="astra-line" x1="8" y1="40" x2="40" y2="10" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#C2600C"/>
-      <stop offset="100%" stop-color="#F7931A"/>
+
+    <!-- 翡翠光芒核心辐射 -->
+    <radialGradient id="emerald-glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#34d399" stop-opacity="0.9"/>
+      <stop offset="40%" stop-color="#10b981" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#059669" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- 侧翼渐变高光与阴影 -->
+    <linearGradient id="facet-bright" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#cbd5e1"/>
+    </linearGradient>
+    <linearGradient id="facet-dim" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#94a3b8"/>
+      <stop offset="100%" stop-color="#475569"/>
     </linearGradient>
   </defs>
-  <rect x="1.5" y="1.5" width="45" height="45" rx="11" fill="url(#astra-bg)" stroke="#F7931A" stroke-opacity="0.35" stroke-width="1.5"/>
-  <!-- 蜡烛：红1绿2 -->
-  <g>
-    <line x1="15" y1="13" x2="15" y2="33" stroke="#EF5350" stroke-width="2" stroke-linecap="round"/>
-    <rect x="10.5" y="18" width="9" height="11" rx="1.8" fill="#EF5350"/>
-    <line x1="26" y1="9" x2="26" y2="29" stroke="#22C55E" stroke-width="2" stroke-linecap="round"/>
-    <rect x="21.5" y="14" width="9" height="10" rx="1.8" fill="#22C55E"/>
-    <line x1="37" y1="14" x2="37" y2="36" stroke="#22C55E" stroke-width="2" stroke-linecap="round"/>
-    <rect x="32.5" y="20" width="9" height="11" rx="1.8" fill="#22C55E"/>
+
+  <!-- 黑曜石圆角卡座背景 -->
+  <rect x="1.5" y="1.5" width="45" height="45" rx="10" fill="url(#astra-bg)" stroke="rgba(255, 255, 255, 0.08)" stroke-width="1"/>
+
+  <!-- 1. 坐标轴与相空间标尺发丝线 -->
+  <g opacity="0.35">
+    <line x1="24" y1="4" x2="24" y2="44" stroke="#ffffff" stroke-width="0.75" stroke-dasharray="1 1.5"/>
+    <line x1="4" y1="24" x2="44" y2="24" stroke="#ffffff" stroke-width="0.75" stroke-dasharray="1 1.5"/>
+    <circle cx="24" cy="24" r="14.5" fill="none" stroke="#ffffff" stroke-width="0.5" stroke-dasharray="2 2" opacity="0.6"/>
   </g>
-  <!-- 上升轨迹：BTC 橙 -->
-  <polyline points="8,38 18,26 28,30 40,11" fill="none" stroke="url(#astra-line)" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="40" cy="11" r="2.6" fill="#F7931A"/>
+
+  <!-- 2. 翡翠能量光晕底衬 -->
+  <circle cx="24" cy="24" r="9" fill="url(#emerald-glow)"/>
+
+  <!-- 3. 主星体分面几何（The Astral Spark） -->
+  <g>
+    <!-- 上顶点左翼（受光） -->
+    <polygon points="24,6 24,24 20,20" fill="url(#facet-bright)"/>
+    <!-- 上顶点右翼（背光） -->
+    <polygon points="24,6 28,20 24,24" fill="url(#facet-dim)"/>
+
+    <!-- 右顶点上翼（受光） -->
+    <polygon points="41,24 24,24 28,20" fill="url(#facet-bright)"/>
+    <!-- 右顶点下翼（背光） -->
+    <polygon points="41,24 28,28 24,24" fill="url(#facet-dim)"/>
+
+    <!-- 下顶点右翼（受光） -->
+    <polygon points="24,42 24,24 28,28" fill="url(#facet-bright)"/>
+    <!-- 下顶点左翼（背光） -->
+    <polygon points="24,42 20,28 24,24" fill="url(#facet-dim)"/>
+
+    <!-- 左顶点下翼（受光） -->
+    <polygon points="7,24 24,24 20,28" fill="url(#facet-bright)"/>
+    <!-- 左顶点上翼（背光） -->
+    <polygon points="7,24 20,20 24,24" fill="url(#facet-dim)"/>
+
+    <!-- 锋利外轮廓线条加固 -->
+    <polygon points="24,6 28,20 41,24 28,28 24,42 20,28 7,24 20,20" fill="none" stroke="#ffffff" stroke-width="0.75" stroke-linejoin="round"/>
+  </g>
+
+  <!-- 4. 内部核心：翡翠绿微积分决策星芒 (The Core Spark) -->
+  <g>
+    <!-- 内部翡翠四芒星 -->
+    <polygon points="24,17 25.8,22.2 31,24 25.8,25.8 24,31 22.2,25.8 17,24 22.2,22.2" fill="#10b981"/>
+    <!-- 中心极亮焦点 -->
+    <circle cx="24" cy="24" r="1.6" fill="#ffffff"/>
+  </g>
 </svg>

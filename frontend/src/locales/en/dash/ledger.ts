@@ -91,7 +91,7 @@ export const enLedger = {
     degraded: 'Council skipped · single-model verdict',
   },
   observability: {
-    title: 'Math snapshot observability',
+    title: 'Snapshot Data Audit',
     none: 'Math snapshot not observable',
     badgeNone: 'No snapshot',
     priceOnly: 'Price/common observations only · math snapshot not observable',
@@ -99,7 +99,7 @@ export const enLedger = {
     partial: 'Math snapshot partially observable',
     badgePartial: 'Partial',
     observed: 'Math snapshot fully observable',
-    badgeObserved: 'Dynamics',
+    badgeObserved: 'Audited',
     tagHint: 'This trade recorded no entry-time dynamics snapshot, so no math-causal attribution is possible',
     missingFields: 'Not recorded: v/a/j/I · energy integral · deviation-area integral · continuation/breakdown probability · VaR/CVaR',
     noBackfill: 'Evidence discipline: absent means unobservable. Back-inference or fabricated micro-math causality is forbidden; a missing field is never itself evidence.',

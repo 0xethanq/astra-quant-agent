@@ -149,17 +149,6 @@ onMounted(async () => {
           {{ t('dash.matrix.kpi.multiEquity') }}
         </span>
         <span class="hidden md:inline font-mono font-semibold" style="color: var(--ink-1)">{{ totalAggregatedEquity }} U</span>
-        <!-- 档位徽标：这是「这几个数属于哪一档」的唯一可见出口。
-             缺了它，读者只能靠记忆分辨手上这串钱是实盘还是模拟盘。 -->
-        <span
-          class="rounded px-1.5 py-0.5 border text-3xs font-mono"
-          :style="isLiveEnv
-            ? 'background-color: var(--up-bg); border-color: var(--up-line); color: var(--up)'
-            : 'background-color: var(--warn-bg); border-color: var(--warn-line); color: var(--warn)'"
-          data-test="kpi-env-badge"
-        >
-          {{ envBadgeText }}
-        </span>
         <span
           class="rounded px-1.5 py-0.5 border text-3xs font-mono"
           style="background-color: var(--surface-2); border-color: var(--line-1); color: var(--ink-2)"
@@ -189,8 +178,8 @@ onMounted(async () => {
     </header>
 
     <!-- 6 个核心指标单元格 -->
-    <div class="grid grid-cols-2 gap-px bg-[var(--line-1)] sm:grid-cols-3 xl:grid-cols-6">
-      <div class="bg-[var(--surface-1)] hover:bg-[var(--surface-2)] transition-colors flex flex-col justify-between">
+    <div class="grid grid-cols-2 gap-2 p-2 sm:grid-cols-3 xl:grid-cols-6 bg-[var(--surface-1)]">
+      <div class="rounded-lg bg-[var(--surface-2)]/30 hover:bg-[var(--surface-2)]/70 transition-colors flex flex-col justify-between">
         <BaseStat
           :label="t('dash.matrix.kpi.comboEquity')"
           :value="totalAggregatedEquity"
@@ -217,7 +206,7 @@ onMounted(async () => {
         </BaseStat>
       </div>
 
-      <div class="bg-[var(--surface-1)] hover:bg-[var(--surface-2)] transition-colors flex flex-col justify-between">
+      <div class="rounded-lg bg-[var(--surface-2)]/30 hover:bg-[var(--surface-2)]/70 transition-colors flex flex-col justify-between">
         <BaseStat
           :label="t('dash.matrix.kpi.todayPnl')"
           :value="fmtSigned(todayNet)"
@@ -227,7 +216,7 @@ onMounted(async () => {
         />
       </div>
 
-      <div class="bg-[var(--surface-1)] hover:bg-[var(--surface-2)] transition-colors flex flex-col justify-between">
+      <div class="rounded-lg bg-[var(--surface-2)]/30 hover:bg-[var(--surface-2)]/70 transition-colors flex flex-col justify-between">
         <BaseStat
           :label="t('dash.matrix.kpi.floatPnl')"
           :value="fmtSigned(floatPnl)"
@@ -237,7 +226,7 @@ onMounted(async () => {
         />
       </div>
 
-      <div class="bg-[var(--surface-1)] hover:bg-[var(--surface-2)] transition-colors flex flex-col justify-between">
+      <div class="rounded-lg bg-[var(--surface-2)]/30 hover:bg-[var(--surface-2)]/70 transition-colors flex flex-col justify-between">
         <BaseStat
           :label="t('dash.matrix.kpi.ls')"
           :value="`${longCount} / ${shortCount}`"
@@ -245,7 +234,7 @@ onMounted(async () => {
         />
       </div>
 
-      <div class="bg-[var(--surface-1)] hover:bg-[var(--surface-2)] transition-colors flex flex-col justify-between">
+      <div class="rounded-lg bg-[var(--surface-2)]/30 hover:bg-[var(--surface-2)]/70 transition-colors flex flex-col justify-between">
         <BaseStat
           :label="t('dash.matrix.kpi.margin')"
           :value="`${fmtNum(marginUsage, 1)}%`"
@@ -255,7 +244,7 @@ onMounted(async () => {
         />
       </div>
 
-      <div class="bg-[var(--surface-1)] hover:bg-[var(--surface-2)] transition-colors flex flex-col justify-between">
+      <div class="rounded-lg bg-[var(--surface-2)]/30 hover:bg-[var(--surface-2)]/70 transition-colors flex flex-col justify-between">
         <BaseStat
           :label="t('dash.matrix.kpi.oco')"
           :value="`${ocoCoverage.pct}%`"

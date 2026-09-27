@@ -11,7 +11,6 @@ import {
   Cpu,
   FileText,
   ArrowLeft,
-  ExternalLink,
   Terminal,
   Users,
   Brain,
@@ -24,8 +23,9 @@ import {
   X,
   Server,
   BookOpen,
+  Github,
 } from 'lucide-vue-next';
-import { APP_VERSION, APP_NAME } from '../../config/version';
+import { APP_VERSION, APP_NAME, OFFICIAL_REPO } from '../../config/version';
 import { useI18n } from '../../composables/useI18n';
 
 const router = useRouter();
@@ -110,7 +110,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="min-h-screen font-sans selection:bg-[var(--accent)] selection:text-white" style="background-color: var(--surface-0); color: var(--ink-1);">
+  <div class="min-h-screen font-sans selection:bg-emerald-500 selection:text-black" style="background-color: var(--surface-0); color: var(--ink-1);">
     <!-- Top Header Navigation -->
     <header
       class="sticky top-0 z-[var(--z-header)] border-b px-3 sm:px-6 h-12 flex items-center justify-between backdrop-blur-xl"
@@ -119,7 +119,7 @@ onUnmounted(() => {
       <div class="flex items-center space-x-2 sm:space-x-3 min-w-0">
         <button type="button"
           @click="router.push('/')"
-          class="btn btn-quiet h-7 px-2.5 text-xs font-medium cursor-pointer inline-flex items-center gap-1.5 rounded-full"
+          class="btn btn-quiet h-7 px-2.5 text-xs font-medium cursor-pointer inline-flex items-center gap-1.5 rounded-lg"
           :title="t('docs.backTerminal')"
         >
           <ArrowLeft class="w-3.5 h-3.5" />
@@ -127,14 +127,14 @@ onUnmounted(() => {
         </button>
         <div class="h-4 w-px hidden sm:block shrink-0" style="background-color: var(--line-1);" />
         <div class="flex items-center space-x-2 min-w-0">
-          <BookOpen class="h-4 w-4 text-[var(--accent)] shrink-0" />
+          <BookOpen class="h-4 w-4 text-emerald-400 shrink-0" />
           <!-- 批 45：本页此前**没有 h1**（首个标题是章节 h2）。顶栏品牌名即文档主标题，
                换成 h1，类名一字未改，观感不变。 -->
-          <h1 class="font-bold text-xs sm:text-sm tracking-wide shrink-0 whitespace-nowrap text-[var(--ink-strong)]">
+          <h1 class="font-bold text-xs sm:text-sm tracking-wide shrink-0 whitespace-nowrap text-[var(--ink-strong)] font-mono">
             {{ APP_NAME }}
           </h1>
           <span
-            class="dsh-pill font-mono text-3xs"
+            class="dsh-pill font-mono text-3xs border border-white/10 bg-zinc-900/60 text-zinc-400"
           >
             {{ APP_VERSION }} 文档中心
           </span>
@@ -144,7 +144,7 @@ onUnmounted(() => {
       <div class="flex items-center space-x-2 shrink-0">
         <button type="button"
           @click="mobileMenuOpen = !mobileMenuOpen"
-          class="sm:hidden btn btn-quiet btn-icon h-7 w-7 cursor-pointer rounded-full"
+          class="sm:hidden btn btn-quiet btn-icon h-7 w-7 cursor-pointer rounded-lg"
           :title="t('docs.tocBtn')"
           :aria-label="t('docs.tocBtn')"
           :aria-expanded="mobileMenuOpen"
@@ -156,19 +156,19 @@ onUnmounted(() => {
 
         <button type="button"
           @click="router.push('/admin')"
-          class="hidden sm:inline-flex btn btn-ghost h-7 px-3 text-xs font-medium cursor-pointer items-center gap-1.5 rounded-full"
+          class="hidden sm:inline-flex btn btn-ghost h-7 px-3 text-xs font-medium cursor-pointer items-center gap-1.5 rounded-lg border-white/10 hover:border-emerald-500/30"
         >
-          <Lock class="w-3.5 h-3.5 text-[var(--accent)]" />
+          <Lock class="w-3.5 h-3.5 text-emerald-400" />
           <span>控制台</span>
         </button>
 
         <a
-          href="https://github.com/555cute/astra-quant-agent"
+          :href="OFFICIAL_REPO"
           target="_blank"
           rel="noopener noreferrer"
-          class="btn btn-primary h-7 px-3 text-xs font-medium inline-flex items-center gap-1.5 rounded-full"
+          class="btn btn-primary h-7 px-3 text-xs font-medium inline-flex items-center gap-1.5 rounded-lg"
         >
-          <ExternalLink class="w-3.5 h-3.5" aria-hidden="true" />
+          <Github class="w-3.5 h-3.5" aria-hidden="true" />
           <span class="hidden sm:inline">GitHub</span>
           <span class="sr-only">{{ t('common.opensInNewTab') }}</span>
         </a>
@@ -212,14 +212,14 @@ onUnmounted(() => {
             :aria-current="activeSection === s.id ? 'location' : undefined"
             class="w-full text-left px-3 py-2 rounded-lg text-xs font-medium transition-all flex items-center justify-between group cursor-pointer border"
             :style="activeSection === s.id
-              ? { backgroundColor: 'var(--surface-3)', color: 'var(--ink-strong)', borderColor: 'var(--line-3)', fontWeight: 'bold' }
+              ? { backgroundColor: 'var(--surface-3)', color: 'var(--ink-strong)', borderColor: 'rgba(16, 185, 129, 0.3)', fontWeight: 'bold' }
               : { backgroundColor: 'transparent', borderColor: 'transparent', color: 'var(--ink-2)' }"
           >
             <div class="flex items-center space-x-2.5 truncate" :title="s.title">
-              <component :is="s.icon" class="w-3.5 h-3.5 shrink-0" />
+              <component :is="s.icon" class="w-3.5 h-3.5 shrink-0 transition-colors" :class="activeSection === s.id ? 'text-emerald-400' : 'opacity-70 group-hover:opacity-100'" />
               <span class="truncate">{{ s.title }}</span>
             </div>
-            <ChevronRight class="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" :class="activeSection === s.id ? 'opacity-100' : ''" />
+            <ChevronRight class="w-3 h-3 transition-opacity" :class="activeSection === s.id ? 'opacity-100 text-emerald-400' : 'opacity-0 group-hover:opacity-100'" />
           </button>
         </nav>
 

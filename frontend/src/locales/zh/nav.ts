@@ -27,7 +27,7 @@ export const zhNav = {
   },
   admin: {
     overview: '运行总览',
-    decisions: '决策审计',
+    decisions: '系统日志',
     gateway: '任务网关',
     council: '模型委员会',
     prompts: '提示词工坊',

@@ -111,18 +111,12 @@ function go(path: string) {
          否则抽屉展开后会把顶栏那颗「展开/收起导航」按钮自己盖住，点不回去。 -->
     <aside
       id="dashboard-sidebar"
-      class="flex flex-col shrink-0 border-e transition-all duration-200 z-50 select-none backdrop-blur-xl fixed inset-y-0 left-0 w-[var(--w-sidebar)] md:static"
-      :class="[
-        sidebarCollapsed ? 'md:w-[var(--w-sidebar-collapsed)]' : 'md:w-[var(--w-sidebar)]',
-        mobileNavOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
-      ]"
-      style="background-color: var(--surface-sidebar); border-color: var(--line-1)"
+      class="flex flex-col shrink-0 border-e transition-transform duration-200 z-50 select-none backdrop-blur-xl fixed inset-y-0 left-0 w-[var(--w-sidebar)] md:hidden shadow-2xl"
+      :class="mobileNavOpen ? 'translate-x-0' : '-translate-x-full'"
+      style="background-color: var(--surface-sidebar); border-color: var(--line-2)"
     >
       <!-- 品牌头部 -->
-      <div
-        class="flex h-12 items-center justify-between border-b px-3.5"
-        style="border-color: var(--line-1)"
-      >
+      <div class="flex h-12 items-center justify-between px-3.5">
         <!-- 批 43：品牌区此前是 `<div @click>` —— 键盘用户回不到首页，
              屏幕阅读器也不知道它是链接。改成真 `<RouterLink>`（外观靠 a 的类保留）。
 
@@ -142,7 +136,7 @@ function go(path: string) {
           <img src="/favicon.svg" alt="" class="h-6 w-6 shrink-0 rounded" />
           <div v-if="!navCompact" class="min-w-0 truncate">
             <div class="flex items-center gap-1.5">
-              <span class="font-bold tracking-tight text-sm text-[var(--ink-strong)]">
+              <span class="font-bold tracking-tight text-sm text-[var(--ink-strong)] font-mono">
                 {{ t('brand.name') }}
               </span>
               <span class="dsh-status-dot active" :title="t('dash.shell.nav.liveDot')" />
@@ -168,13 +162,6 @@ function go(path: string) {
           {{ t('dash.shell.nav.groupCore') }}
         </div>
 
-        <!-- 批 100：这一组频道按钮**没有任何 hover 反馈**，而同一列表下面的「文档」
-             按钮有 `hover:bg-[var(--surface-2)] hover:text-[var(--ink-1)]`
-             —— 相邻两项 hover 行为不同。
-             不能直接加 `hover:` 类：原来活动/非活动态写在内联 `:style` 上，
-             **内联样式优先级高于工具类**，hover 类不会生效。故改成 `:class`，
-             并把 hover 只加在**非活动**项上 —— 与全站既有语汇
-             `.seg button:hover:not(.seg-on)` 一致（选中项不因悬停变样）。 -->
         <button
           v-for="tab in publicTabs"
           :key="tab.key"
@@ -182,30 +169,22 @@ function go(path: string) {
           class="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-medium cursor-pointer transition-all relative overflow-hidden group"
           :class="
             activeTab === tab.key
-              ? 'bg-gradient-to-r from-[var(--brand-bg)] to-transparent text-[var(--ink-strong)] font-semibold border border-[var(--line-2)] shadow-xs'
+              ? 'bg-[var(--surface-2)] text-[var(--ink-strong)] font-semibold border border-white/10 shadow-xs'
               : 'text-[var(--ink-2)] hover:bg-[var(--surface-2)] hover:text-[var(--ink-1)] border border-transparent'
           "
           :title="navCompact ? t(tab.labelKey) : undefined"
           :aria-current="activeTab === tab.key ? 'page' : undefined"
           @click="go(tab.path)"
         >
-          <span
-            v-if="activeTab === tab.key"
-            class="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r-full bg-[var(--brand)] shadow-[0_0_8px_var(--brand)]"
-          />
           <component
             :is="tab.icon"
-            class="h-4 w-4 shrink-0 transition-all duration-200"
-            :class="activeTab === tab.key ? 'text-[var(--brand)] scale-105' : 'opacity-70 group-hover:opacity-100'"
+            class="h-4 w-4 shrink-0 transition-colors"
+            :class="activeTab === tab.key ? 'text-emerald-400' : 'opacity-70 group-hover:opacity-100'"
           />
           <span v-if="!navCompact" class="truncate">{{ t(tab.labelKey) }}</span>
-          <span
-            v-if="!navCompact && activeTab === tab.key"
-            class="ms-auto h-1.5 w-1.5 rounded-full bg-[var(--brand)] shadow-[0_0_6px_var(--brand)]"
-          />
         </button>
 
-        <div class="my-3 border-t" style="border-color: var(--line-1)" />
+        <div class="my-2.5" />
 
         <div
           v-if="!navCompact"
@@ -226,10 +205,7 @@ function go(path: string) {
       </div>
 
       <!-- 侧边栏底栏：折叠控制器与关于入口 -->
-      <div
-        class="border-t p-2 flex items-center justify-between"
-        style="border-color: var(--line-1); background-color: var(--surface-sidebar)"
-      >
+      <div class="p-2 flex items-center justify-between" style="background-color: var(--surface-sidebar)">
         <button type="button"
           class="btn btn-quiet btn-icon h-7 w-7 cursor-pointer"
           :title="isNarrow ? t('dash.shell.nav.closeMobile') : (navCompact ? t('dash.shell.nav.expand') : t('dash.shell.nav.collapse'))"
@@ -255,18 +231,18 @@ function go(path: string) {
 
     <!-- 窄屏抽屉遮罩：点空白处收起（低于抽屉 z-50、低于顶栏 z-[60]） -->
     <div
-      v-if="isNarrow && mobileNavOpen"
+      v-if="mobileNavOpen"
       class="fixed inset-0 z-30 md:hidden"
       style="background-color: var(--overlay-scrim)"
       @click="mobileNavOpen = false"
     />
 
-    <!-- 右侧：主舞台区（顶部控制条 + 各视图内容画布） -->
-    <div class="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
-      <!-- 顶部工作台状态条 -->
+    <!-- 一体化全宽工作区（无左侧栏割裂，图表与矩阵完全展开） -->
+    <div class="flex-1 flex flex-col min-w-0 h-screen overflow-hidden w-full">
+      <!-- 顶栏一体化导航条 -->
       <TopBar
-        :nav-expanded="navExpanded"
-        @toggle-sidebar="toggleNav"
+        :nav-expanded="mobileNavOpen"
+        @toggle-sidebar="mobileNavOpen = !mobileNavOpen"
       />
 
       <!-- 主工作区滚动容器 -->

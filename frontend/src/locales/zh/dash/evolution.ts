@@ -1,6 +1,6 @@
 /** 自进化：复盘 HUD + 心法库 + 归因切片 */
 export const zhEvolution = {
-  title: '自进化',
+  title: '策略进化',
   desc: '每 6 小时复盘全量台账，提炼经验法则',
   hud: {
     at: '最近复盘',
@@ -22,7 +22,7 @@ export const zhEvolution = {
     desc: '本轮"改或不改"的完整推演',
   },
   insights: {
-    title: '逐单归因',
+    title: '交易复盘归因',
     desc: '对代表性平仓的痛点切片',
     empty: '暂无归因切片',
   },
@@ -31,7 +31,7 @@ export const zhEvolution = {
     empty: '本轮无新增行动',
   },
   memory: {
-    title: '黄金心法库',
+    title: '核心策略纪律',
     desc: 'AI 自维护的实战纪律，旧经验按半衰期淘汰',
     empty: '心法库为空，等待首次复盘',
     halfLife: '半衰期 {n} 天',
@@ -39,7 +39,7 @@ export const zhEvolution = {
     weight: '权重',
     bornAt: '沉淀于 {t}',
     rules: '{n} 条生效',
-    dev: '开发者模式',
+    dev: '策略原始记录 (Markdown)',
     devDesc: '直接查看心法库原始 Markdown',
     dimension: '维度',
     lesson: '心法',
@@ -57,7 +57,7 @@ export const zhEvolution = {
   // 批 38：展示用列表分隔符（全角分号 vs 半角分号+空格）
   itemSep: '；',
   // ── 批 41：本地化写死文案（EvolutionView 模板与动作文本前缀）──
-  autoIterateBadge: '每 6 小时自主覆写迭代',
-  snapshotAuditTitle: '确定性物理快照审计',
+  autoIterateBadge: '6小时迭代周期',
+  snapshotAuditTitle: '数据快照完整度',
   actText: '【{type}】{text}',
 };

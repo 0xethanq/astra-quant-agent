@@ -19,6 +19,11 @@ export const enAdminAbout = {
   behind: "{n} commits behind",
   upToDate: "Up to date",
   ahead: "(ahead {n})",
+  statusDirty: "Working Tree Modified",
+  dirtyFoot: "HEAD {commit} (Uncommitted)",
+  uncommittedChanges: "(Uncommitted changes)",
+  dirtyAlertTitle: "Local Working Tree Has Uncommitted Changes (Dirty)",
+  dirtyAlertDesc: "Detected modified files in the working directory. To protect local changes, remote auto-update is locked. Version tracking reflects the current HEAD commit; please commit your changes to advance the local version.",
   connecting: "Connecting to remote...",
   checkUpdate: "Check remote updates",
   runUpdate: "Run safe update",
@@ -42,7 +47,7 @@ export const enAdminAbout = {
   bandVersion: 'System version',
   bandControlPlane: 'Gateway control plane',
   bandRuntime: 'Runtime',
-  bandSyncGap: 'Sync gap',  // ── batch 41: localize the update-check failure message ──
+  bandSyncGap: 'Sync gap',
   updateCheckFailed: 'Update check failed: {msg} (cannot tell whether this build is behind; security patches may silently fall out of sync)',
 
   // ── exchange sign-up channels (2026-09) ──

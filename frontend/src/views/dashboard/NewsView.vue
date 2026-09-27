@@ -163,9 +163,6 @@ function toggleCoinFilter(sym: string) {
           <span class="inline-block h-1.5 w-1.5 rounded-full shrink-0" :class="macro.includes('多') ? 'bg-[var(--up)] animate-pulse' : macro.includes('空') ? 'bg-[var(--down)] animate-pulse' : 'bg-[var(--ink-3)]'" />
           <span>{{ macro }}</span>
         </span>
-        <span class="hidden lg:inline text-3xs text-[var(--ink-3)] whitespace-nowrap">
-          · {{ t('dash.news.desc') }}
-        </span>
       </div>
 
       <!-- 信源状态与新鲜度：防溢出保护 + 优雅换行 -->
@@ -443,7 +440,7 @@ function toggleCoinFilter(sym: string) {
             <h3 class="text-xs font-bold text-[var(--ink-strong)] leading-snug">
               {{ item.title }}
             </h3>
-            <p v-if="item.summary" class="text-xs text-[var(--ink-2)] leading-relaxed font-sans">
+            <p v-if="item.summary && item.summary.trim() !== item.title.trim() && !item.summary.includes(item.title)" class="text-xs text-[var(--ink-2)] leading-relaxed font-sans">
               {{ item.summary }}
             </p>
           </article>

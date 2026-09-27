@@ -28,7 +28,7 @@ export const zhRadar = {
     noIntercept: '全部动作通过物理拦截校验',
     intercepted: '被拦截',
     passed: '放行',
-    waitNote: 'AI 判断本周期不值得出手——空仓也是决策',
+    waitNote: '观望待机 · 无交易信号',
     duration: '推理耗时 {n}s',
     model: '决策模型',
   },

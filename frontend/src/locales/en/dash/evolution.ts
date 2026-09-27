@@ -1,5 +1,5 @@
 export const enEvolution = {
-  title: 'Evolution',
+  title: 'Strategy Evolution',
   desc: 'Audits the full closed-trade ledger every 6 hours',
   hud: {
     at: 'Last review',
@@ -12,10 +12,10 @@ export const enEvolution = {
     empty: 'No review record yet',
   },
   rationale: { title: 'Verdict', desc: 'Full reasoning behind "change or hold"' },
-  insights: { title: 'Trade attribution', desc: 'Pain-point slices of representative closes', empty: 'No slices yet' },
+  insights: { title: 'Trade Attribution', desc: 'Pain-point slices of representative closes', empty: 'No slices yet' },
   actions: { title: 'Action list', empty: 'No new actions this round' },
   memory: {
-    title: 'Golden rules',
+    title: 'Core Trading Rules',
     desc: 'Rules the AI maintains; old ones decay by half-life',
     empty: 'Rule library is empty until the first review',
     halfLife: 'Half-life {n}d',
@@ -23,7 +23,7 @@ export const enEvolution = {
     weight: 'Weight',
     bornAt: 'Distilled {t}',
     rules: '{n} active',
-    dev: 'Developer mode',
+    dev: 'Raw Strategy Markdown',
     devDesc: 'Raw markdown of the rule library',
     dimension: 'Dimension',
     lesson: 'Rule',
@@ -41,7 +41,7 @@ export const enEvolution = {
   // batch 38: list separator for display (fullwidth vs ASCII)
   itemSep: '; ',
   // ── batch 41: localize strings previously hardcoded in EvolutionView ──
-  autoIterateBadge: 'Self-rewriting every 6 hours',
-  snapshotAuditTitle: 'Deterministic math snapshot audit',
+  autoIterateBadge: '6h Iteration Cycle',
+  snapshotAuditTitle: 'Snapshot Data Audit',
   actText: '[{type}] {text}',
 };

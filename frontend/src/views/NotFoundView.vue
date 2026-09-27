@@ -69,7 +69,7 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   padding: var(--ds-space-4);
-  background-color: var(--ds-color-bg-canvas);
+  background-color: var(--ds-color-bg-page);
 }
 
 .nf-card {

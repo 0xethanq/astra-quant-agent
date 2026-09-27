@@ -22,7 +22,7 @@ export const enRadar = {
     noIntercept: 'All actions passed physical interceptors',
     intercepted: 'Blocked',
     passed: 'Passed',
-    waitNote: 'The AI judged this cycle not worth trading — staying flat is a decision too',
+    waitNote: 'Wait & Observe · No Signal',
     duration: 'Reasoning took {n}s',
     model: 'Decision model',
   },

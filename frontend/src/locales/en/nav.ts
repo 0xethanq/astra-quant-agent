@@ -26,7 +26,7 @@ export const enNav = {
   },
   admin: {
     overview: 'Overview',
-    decisions: 'Decision audit',
+    decisions: 'System Logs',
     gateway: 'Task gateway',
     council: 'Model council',
     prompts: 'Prompt studio',

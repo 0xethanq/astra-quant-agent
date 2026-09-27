@@ -191,8 +191,8 @@ const truncation = computed<{ kept: number; total: number } | null>(() => {
     <!-- 页头：标题与工位状态 -->
     <div class="flex items-center justify-between gap-2 pt-0.5">
       <div class="flex items-center gap-2">
-        <h1 class="text-xs font-bold tracking-tight text-[var(--ink-strong)] flex items-center gap-1.5">
-          <History class="h-3.5 w-3.5 text-[var(--accent)]" />
+        <h1 class="text-sm font-semibold tracking-tight text-[var(--ink-strong)] flex items-center gap-2">
+          <History class="h-4 w-4 text-[var(--accent)]" />
           {{ t('dash.ledger.title') }}
         </h1>
         <span
@@ -200,9 +200,6 @@ const truncation = computed<{ kept: number; total: number } | null>(() => {
           style="background-color: var(--surface-2); border-color: var(--line-1); color: var(--ink-2)"
         >
           {{ t('dash.ledger.countRecords', undefined, { a: filtered.length, b: all.length }) }}
-        </span>
-        <span class="hidden md:inline text-3xs text-[var(--ink-3)]">
-          · {{ t('dash.ledger.desc') }}
         </span>
       </div>
 
@@ -220,11 +217,11 @@ const truncation = computed<{ kept: number; total: number } | null>(() => {
     <DataGate>
       <!-- 汇总指标 HUD -->
       <div class="dsh-card">
-        <div class="grid grid-cols-2 gap-px bg-[var(--line-1)] sm:grid-cols-3 xl:grid-cols-6">
-          <div class="bg-[var(--surface-1)] hover:bg-[var(--surface-2)] transition-colors">
+        <div class="grid grid-cols-2 gap-2 p-2 sm:grid-cols-3 xl:grid-cols-6 bg-[var(--surface-1)]">
+          <div class="rounded-lg bg-[var(--surface-2)]/30 hover:bg-[var(--surface-2)]/70 transition-colors">
             <BaseStat :label="t('dash.ledger.summary.total')" :value="fmtNum(filtered.length, 0)" />
           </div>
-          <div class="bg-[var(--surface-1)] hover:bg-[var(--surface-2)] transition-colors">
+          <div class="rounded-lg bg-[var(--surface-2)]/30 hover:bg-[var(--surface-2)]/70 transition-colors">
             <BaseStat
               :label="t('dash.ledger.summary.winRate')"
               :value="winRate != null ? fmtNum(winRate, 1) + '%' : '--'"
@@ -232,13 +229,13 @@ const truncation = computed<{ kept: number; total: number } | null>(() => {
               delta-tone="muted"
             />
           </div>
-          <div class="bg-[var(--surface-1)] hover:bg-[var(--surface-2)] transition-colors">
+          <div class="rounded-lg bg-[var(--surface-2)]/30 hover:bg-[var(--surface-2)]/70 transition-colors">
             <BaseStat :label="t('dash.ledger.summary.net')" :value="fmtSigned(netSum)" />
           </div>
-          <div class="bg-[var(--surface-1)] hover:bg-[var(--surface-2)] transition-colors">
+          <div class="rounded-lg bg-[var(--surface-2)]/30 hover:bg-[var(--surface-2)]/70 transition-colors">
             <BaseStat :label="t('dash.ledger.summary.fees')" :value="feeSum ? `-${fmtNum(feeSum, 2)}` : fmtNum(0, 2)" />
           </div>
-          <div class="bg-[var(--surface-1)] hover:bg-[var(--surface-2)] transition-colors">
+          <div class="rounded-lg bg-[var(--surface-2)]/30 hover:bg-[var(--surface-2)]/70 transition-colors">
             <BaseStat
               :label="t('dash.ledger.summary.fundingNet')"
               :value="fmtSigned(fundingSum)"
@@ -247,7 +244,7 @@ const truncation = computed<{ kept: number; total: number } | null>(() => {
               :hint="t('dash.ledger.summary.fundingNetHint')"
             />
           </div>
-          <div class="bg-[var(--surface-1)] hover:bg-[var(--surface-2)] transition-colors">
+          <div class="rounded-lg bg-[var(--surface-2)]/30 hover:bg-[var(--surface-2)]/70 transition-colors">
             <BaseStat
               :label="t('dash.ledger.summary.pf')"
               :value="perf.profit_factor != null ? fmtNum(perf.profit_factor, 2) : '--'"
@@ -259,22 +256,11 @@ const truncation = computed<{ kept: number; total: number } | null>(() => {
         </div>
       </div>
 
-      <!-- 数理快照可观测性审计带（证据纪律：缺失即不可观测，绝不倒推编造） -->
+      <!-- 数理快照异常或截断提示：仅在有截断或不可观测时展示，正常时不干扰视线 -->
       <div
-        v-if="snapshotAudit.total"
-        class="dsh-card-sub flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-3xs"
-        :title="t('dash.ledger.observability.noBackfill')"
+        v-if="truncation || snapshotAudit.unobservable > 0"
+        class="dsh-card-sub flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5 text-3xs"
       >
-        <span class="font-semibold text-[var(--ink-2)]">{{ t('dash.ledger.observability.title') }}</span>
-        <span class="font-mono text-[var(--ink-3)]">
-          {{ t('dash.ledger.observability.auditLine', undefined, {
-            observed: snapshotAudit.DYNAMICS_OBSERVED,
-            partial: snapshotAudit.PARTIAL,
-            price: snapshotAudit.PRICE_ONLY,
-            none: snapshotAudit.NONE,
-            total: snapshotAudit.total,
-          }) }}
-        </span>
         <span
           v-if="truncation"
           class="rounded border px-1.5 py-0.5 font-medium"
@@ -406,12 +392,6 @@ const truncation = computed<{ kept: number; total: number } | null>(() => {
                         {{ venueLabel(x.venue) }}
                       </span>
                       <span
-                        class="rounded px-1 py-0.5 text-3xs font-mono font-medium border"
-                        :class="String(x.account_mode || x.environment || 'live').toUpperCase() === 'LIVE' ? 'text-[var(--up)] border-[var(--up-line)] bg-[var(--up-bg)]' : 'text-[var(--warn)] border-[var(--warn-line)] bg-[var(--warn-bg)]'"
-                      >
-                        {{ String(x.account_mode || x.environment || 'live').toUpperCase() }}
-                      </span>
-                      <span
                         v-if="x.council?.ran"
                         class="dsh-pill !h-5 !px-1 text-3xs"
                         :title="x.council.adopted_role ? t('dash.ledger.council.adopted', undefined, { seat: x.council.adopted_role }) : t('dash.ledger.council.ran')"
@@ -425,9 +405,10 @@ const truncation = computed<{ kept: number; total: number } | null>(() => {
                       >
                         <Zap class="w-3 h-3" />
                       </span>
-                      <!-- 数理快照可观测性：紧凑徽章 -->
+                      <!-- 数理快照异常标记：仅在快照不完整时提示，全部观测到时保持行面干净 -->
                       <span
-                        class="rounded px-1 py-0.5 text-3xs font-medium border"
+                        v-if="obsTag(x) !== 'DYNAMICS_OBSERVED'"
+                        class="rounded px-1.5 py-0.5 text-3xs font-medium border"
                         :class="obsToneCls(x)"
                         :title="`${obsLabel(x)} · ${t('dash.ledger.observability.missingFields')} ${t('dash.ledger.observability.noBackfill')}`"
                       >
@@ -436,10 +417,10 @@ const truncation = computed<{ kept: number; total: number } | null>(() => {
                       <!-- 分批止盈状态徽章 -->
                       <span
                         v-if="isScaleOutRow(x)"
-                        class="rounded px-1 py-0.5 text-3xs font-mono font-medium border text-[var(--accent)] border-[var(--accent-line)] bg-[var(--accent-bg)]"
+                        class="rounded px-1.5 py-0.5 text-3xs font-mono font-medium border text-[var(--accent)] border-[var(--accent-line)] bg-[var(--accent-bg)]"
                         :title="t('dash.ledger.scaleOutTitle')"
                       >
-                        🎯 {{ t('dash.ledger.scaleOutShort') }}
+                        {{ t('dash.ledger.scaleOutShort') }}
                       </span>
                     </div>
                   </td>

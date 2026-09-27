@@ -10,7 +10,7 @@ import {
   Dna,
   ReceiptText,
   Gauge,
-  ScrollText,
+  Terminal,
   Workflow,
   Landmark,
   Braces,
@@ -39,7 +39,7 @@ export interface NavItem {
 }
 
 export const publicTabs: NavItem[] = [
-  { key: 'trading', labelKey: 'nav.tabs.matrix', path: '/', icon: LayoutDashboard, alias: 'matrix trading 实盘' },
+  { key: 'trading', labelKey: 'nav.tabs.matrix', path: '/trading', icon: LayoutDashboard, alias: 'matrix trading 实盘' },
   { key: 'factors', labelKey: 'nav.tabs.radar', path: '/factors', icon: BrainCircuit, alias: 'radar factors ai 推演' },
   { key: 'news', labelKey: 'nav.tabs.news', path: '/news', icon: Newspaper, alias: 'news sentiment 舆情' },
   { key: 'lab', labelKey: 'nav.tabs.evolution', path: '/lab', icon: Dna, alias: 'lab evolution 进化' },
@@ -52,7 +52,7 @@ export const adminGroups: { key: string; labelKey: string; items: NavItem[] }[] 
     labelKey: 'nav.groups.observe',
     items: [
       { key: 'admin-overview', labelKey: 'nav.admin.overview', path: '/admin/overview', icon: Gauge, alias: 'overview 总览' },
-      { key: 'admin-decisions', labelKey: 'nav.admin.decisions', path: '/admin/decisions', icon: ScrollText, alias: 'decisions 决策' },
+      { key: 'admin-decisions', labelKey: 'nav.admin.decisions', path: '/admin/decisions', icon: Terminal, alias: 'logs system errors decisions 日志 报错 异常 决策' },
       { key: 'admin-gateway', labelKey: 'nav.admin.gateway', path: '/admin/gateway', icon: Workflow, alias: 'gateway scheduler 调度' },
     ],
   },

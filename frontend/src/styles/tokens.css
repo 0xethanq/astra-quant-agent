@@ -183,8 +183,8 @@
    ========================================================================= */
 :root,
 :root[data-theme='dark'] {
-  --ds-color-brand: #3b82f6;
-  --ds-color-brand-deep: #2563eb;
+  --ds-color-brand: #10b981;
+  --ds-color-brand-deep: #059669;
 
   --ds-color-text-primary: #f8fafc;
   --ds-color-text-secondary: #cbd5e1;
@@ -198,41 +198,41 @@
   --ds-color-text-placeholder: #8894a7;
   --ds-color-text-inverse: #09090b;
 
-  --ds-color-bg-page: #121214;
-  --ds-color-bg-surface-1: #18181b;
-  --ds-color-bg-surface-2: #202024;
-  --ds-color-bg-surface-3: #27272b;
-  --ds-color-bg-surface-4: #323238;
-  --ds-color-bg-surface-5: #3f3f46;
-  --ds-color-bg-overlay: #141416;
-  --ds-color-bg-surface-raised: #1c1c20;
-  --ds-color-bg-hover: rgba(255, 255, 255, 0.05);
-  --ds-color-bg-input: #141416;
-  --ds-color-bg-input-hover: #1c1c20;
-  --ds-color-bg-code: rgba(0, 0, 0, 0.4);
+  --ds-color-bg-page: #07080c;
+  --ds-color-bg-surface-1: #0d0f15;
+  --ds-color-bg-surface-2: #12151e;
+  --ds-color-bg-surface-3: #171b26;
+  --ds-color-bg-surface-4: #202636;
+  --ds-color-bg-surface-5: #2c344a;
+  --ds-color-bg-overlay: rgba(7, 8, 12, 0.85);
+  --ds-color-bg-surface-raised: #11141c;
+  --ds-color-bg-hover: rgba(255, 255, 255, 0.04);
+  --ds-color-bg-input: #090b10;
+  --ds-color-bg-input-hover: #0e1118;
+  --ds-color-bg-code: rgba(0, 0, 0, 0.5);
 
-  --ds-color-border-subtle: rgba(255, 255, 255, 0.06);
-  --ds-color-border-default: rgba(255, 255, 255, 0.09);
-  --ds-color-border-divider: rgba(255, 255, 255, 0.07);
-  --ds-color-border-hover: rgba(255, 255, 255, 0.18);
-  --ds-color-border-strong: rgba(255, 255, 255, 0.25);
-  --ds-color-border-secondary: rgba(255, 255, 255, 0.08);
-  --ds-color-border-input: rgba(255, 255, 255, 0.1);
-  --ds-color-border-input-focus: #3b82f6;
+  --ds-color-border-subtle: rgba(255, 255, 255, 0.04);
+  --ds-color-border-default: rgba(255, 255, 255, 0.06);
+  --ds-color-border-divider: rgba(255, 255, 255, 0.04);
+  --ds-color-border-hover: rgba(16, 185, 129, 0.32);
+  --ds-color-border-strong: rgba(255, 255, 255, 0.18);
+  --ds-color-border-secondary: rgba(255, 255, 255, 0.045);
+  --ds-color-border-input: rgba(255, 255, 255, 0.07);
+  --ds-color-border-input-focus: #10b981;
 
   --ds-color-scrollbar: rgba(255, 255, 255, 0.15);
 
-  /* 主按钮 = ZCode 反色高对比单色主按钮 */
-  --ds-btn-primary-bg: #ffffff;
-  --ds-btn-primary-text: #09090b;
-  --ds-btn-primary-hover-bg: #f4f4f5;
-  --ds-btn-secondary-bg: rgba(255, 255, 255, 0.05);
+  /* 主按钮 = 翡翠绿高反差单色主按钮 */
+  --ds-btn-primary-bg: #10b981;
+  --ds-btn-primary-text: #07080c;
+  --ds-btn-primary-hover-bg: #34d399;
+  --ds-btn-secondary-bg: rgba(255, 255, 255, 0.04);
   --ds-btn-secondary-text: #f8fafc;
-  --ds-btn-secondary-border: rgba(255, 255, 255, 0.1);
-  --ds-btn-secondary-hover-bg: rgba(255, 255, 255, 0.09);
-  --ds-btn-secondary-hover-border: rgba(255, 255, 255, 0.2);
-  --ds-btn-ghost-hover-bg: rgba(255, 255, 255, 0.06);
-  --ds-btn-ghost-hover-border: rgba(255, 255, 255, 0.15);
+  --ds-btn-secondary-border: rgba(255, 255, 255, 0.08);
+  --ds-btn-secondary-hover-bg: rgba(255, 255, 255, 0.08);
+  --ds-btn-secondary-hover-border: rgba(255, 255, 255, 0.16);
+  --ds-btn-ghost-hover-bg: rgba(255, 255, 255, 0.05);
+  --ds-btn-ghost-hover-border: rgba(255, 255, 255, 0.12);
 
   --ds-shadow-card: 0 1px 0 0 rgba(255, 255, 255, 0.08) inset, 0 12px 32px -4px rgba(0, 0, 0, 0.55);
   /* 浮层阴影：DSH 暗色未定义，此处为可用性必需扩展（下拉/弹窗需要脱离层叠感） */
@@ -246,54 +246,54 @@
    —— 与 DSH :root 逐条一致
    ========================================================================= */
 :root[data-theme='light'] {
-  --ds-color-brand: #2563eb;
-  --ds-color-brand-deep: #1d4ed8;
+  --ds-color-brand: #10b981;
+  --ds-color-brand-deep: #059669;
 
-  --ds-color-text-primary: #09090b;
-  --ds-color-text-secondary: #27272a;
-  --ds-color-text-description: #52525b;
-  --ds-color-text-placeholder: #71717a;
+  --ds-color-text-primary: #0f172a;
+  --ds-color-text-secondary: #334155;
+  --ds-color-text-description: #64748b;
+  --ds-color-text-placeholder: #94a3b8;
   --ds-color-text-inverse: #ffffff;
 
-  --ds-color-bg-page: #f4f4f5;
+  --ds-color-bg-page: #eaedf2;
   --ds-color-bg-surface-1: #ffffff;
-  --ds-color-bg-surface-2: #eaecef;
-  --ds-color-bg-surface-3: #dfe2e6;
+  --ds-color-bg-surface-2: #e2e6ee;
+  --ds-color-bg-surface-3: #d5dbe6;
   --ds-color-bg-surface-4: #cbd5e1;
   --ds-color-bg-surface-5: #94a3b8;
-  --ds-color-bg-overlay: rgba(255, 255, 255, 0.96);
+  --ds-color-bg-overlay: rgba(255, 255, 255, 0.98);
   --ds-color-bg-surface-raised: #ffffff;
-  --ds-color-bg-hover: rgba(0, 0, 0, 0.05);
+  --ds-color-bg-hover: rgba(15, 23, 42, 0.05);
   --ds-color-bg-input: #ffffff;
   --ds-color-bg-input-hover: #f8fafc;
-  --ds-color-bg-code: rgba(0, 0, 0, 0.05);
+  --ds-color-bg-code: rgba(15, 23, 42, 0.05);
 
-  --ds-color-border-subtle: rgba(0, 0, 0, 0.06);
-  --ds-color-border-default: rgba(0, 0, 0, 0.09);
-  --ds-color-border-divider: rgba(0, 0, 0, 0.07);
-  --ds-color-border-hover: rgba(0, 0, 0, 0.18);
-  --ds-color-border-strong: rgba(0, 0, 0, 0.25);
-  --ds-color-border-secondary: rgba(0, 0, 0, 0.08);
-  --ds-color-border-input: rgba(0, 0, 0, 0.12);
-  --ds-color-border-input-focus: #2563eb;
+  --ds-color-border-subtle: rgba(15, 23, 42, 0.05);
+  --ds-color-border-default: rgba(15, 23, 42, 0.08);
+  --ds-color-border-divider: rgba(15, 23, 42, 0.06);
+  --ds-color-border-hover: rgba(15, 23, 42, 0.16);
+  --ds-color-border-strong: rgba(15, 23, 42, 0.22);
+  --ds-color-border-secondary: rgba(15, 23, 42, 0.07);
+  --ds-color-border-input: rgba(15, 23, 42, 0.12);
+  --ds-color-border-input-focus: #10b981;
 
-  --ds-color-scrollbar: rgba(0, 0, 0, 0.15);
+  --ds-color-scrollbar: rgba(15, 23, 42, 0.15);
 
-  --ds-btn-primary-bg: #09090b;
+  --ds-btn-primary-bg: #0f172a;
   --ds-btn-primary-text: #ffffff;
-  --ds-btn-primary-hover-bg: #27272a;
+  --ds-btn-primary-hover-bg: #1e293b;
   --ds-btn-secondary-bg: #ffffff;
-  --ds-btn-secondary-text: #09090b;
-  --ds-btn-secondary-border: rgba(0, 0, 0, 0.12);
-  --ds-btn-secondary-hover-bg: #f4f4f5;
-  --ds-btn-secondary-hover-border: rgba(0, 0, 0, 0.22);
-  --ds-btn-ghost-hover-bg: rgba(0, 0, 0, 0.05);
-  --ds-btn-ghost-hover-border: rgba(0, 0, 0, 0.12);
+  --ds-btn-secondary-text: #0f172a;
+  --ds-btn-secondary-border: rgba(15, 23, 42, 0.12);
+  --ds-btn-secondary-hover-bg: #f1f5f9;
+  --ds-btn-secondary-hover-border: rgba(15, 23, 42, 0.2);
+  --ds-btn-ghost-hover-bg: rgba(15, 23, 42, 0.05);
+  --ds-btn-ghost-hover-border: rgba(15, 23, 42, 0.12);
 
-  --ds-shadow-card: 0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 12px -2px rgba(0, 0, 0, 0.04);
-  --astra-shadow-float: 0 12px 32px -6px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.06);
-  --astra-shadow-dialog: 0 20px 48px -10px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.08);
-  --astra-overlay-scrim: rgba(0, 0, 0, 0.35);
+  --ds-shadow-card: 0 1px 3px rgba(15, 23, 42, 0.03), 0 4px 12px -2px rgba(15, 23, 42, 0.04);
+  --astra-shadow-float: 0 12px 32px -6px rgba(15, 23, 42, 0.10), 0 0 0 1px rgba(15, 23, 42, 0.06);
+  --astra-shadow-dialog: 0 20px 48px -10px rgba(15, 23, 42, 0.16), 0 0 0 1px rgba(15, 23, 42, 0.08);
+  --astra-overlay-scrim: rgba(15, 23, 42, 0.35);
 }
 
 /* =========================================================================
@@ -312,8 +312,8 @@
   --astra-warn: #e0b155;
   --astra-warn-bg: rgba(224, 177, 85, 0.12);
   --astra-warn-line: rgba(224, 177, 85, 0.3);
-  --astra-brand-bg: rgba(59, 130, 246, 0.12);
-  --astra-brand-line: rgba(59, 130, 246, 0.28);
+  --astra-brand-bg: rgba(16, 185, 129, 0.12);
+  --astra-brand-line: rgba(16, 185, 129, 0.28);
 }
 :root[data-theme='light'] {
   --astra-up: #1a7f5a;
@@ -325,8 +325,8 @@
   --astra-warn: #946a16;
   --astra-warn-bg: rgba(148, 106, 22, 0.11);
   --astra-warn-line: rgba(148, 106, 22, 0.28);
-  --astra-brand-bg: rgba(77, 107, 254, 0.09);
-  --astra-brand-line: rgba(77, 107, 254, 0.26);
+  --astra-brand-bg: rgba(16, 185, 129, 0.10);
+  --astra-brand-line: rgba(16, 185, 129, 0.28);
 }
 
 /* =========================================================================
@@ -359,21 +359,21 @@
 }
 /* 浅色主题：同色相压深，保证白底上仍有足够对比度（与 --astra-up/down 的取舍一致） */
 :root[data-theme='light'] {
-  --chart-grid: rgba(0, 0, 0, 0.05);
+  --chart-grid: rgba(15, 23, 42, 0.05);
   --chart-grid-active: #cbd5e1;
-  --chart-crosshair-h: #1d4ed8;
-  --chart-crosshair-v: #64748b;
-  --chart-vwap: #0e7490;
-  --chart-ma: #b45309;
+  --chart-crosshair-h: #0284c7;
+  --chart-crosshair-v: #94a3b8;
+  --chart-vwap: #0891b2;
+  --chart-ma: #d97706;
   --chart-ema: #0284c7;
-  --chart-boll: #4f46e5;
+  --chart-boll: #6366f1;
   --chart-sar: #be185d;
-  --chart-vol: #047857;
-  --chart-macd: #1d4ed8;
-  --chart-rsi: #c2410c;
-  --chart-kdj: #7e22ce;
-  --chart-obv: #a16207;
-  --chart-wr: #4338ca;
+  --chart-vol: #059669;
+  --chart-macd: #0284c7;
+  --chart-rsi: #ea580c;
+  --chart-kdj: #9333ea;
+  --chart-obv: #ca8a04;
+  --chart-wr: #4f46e5;
 }
 
 /* —— 色盲友好模式（红绿对 → 蓝橙对，保留 DSH 品牌蓝作上行色）—— */
@@ -435,10 +435,10 @@
    ========================================================================= */
 :root,
 :root[data-theme='dark'] {
-  --ds-color-bg-surface-card: #18181b;
-  --ds-color-bg-surface-inset: #131315;
-  --grad-surface: linear-gradient(180deg, rgba(255, 255, 255, 0.028) 0%, rgba(255, 255, 255, 0) 100%);
-  --ds-shadow-card: 0 1px 0 0 rgba(255, 255, 255, 0.08) inset, 0 12px 32px -4px rgba(0, 0, 0, 0.55);
+  --ds-color-bg-surface-card: #0d0f15;
+  --ds-color-bg-surface-inset: #090b10;
+  --grad-surface: linear-gradient(180deg, rgba(255, 255, 255, 0.02) 0%, rgba(255, 255, 255, 0) 100%);
+  --ds-shadow-card: 0 1px 0 0 rgba(255, 255, 255, 0.05) inset, 0 12px 32px -4px rgba(0, 0, 0, 0.55);
 }
 :root[data-theme='light'] {
   --ds-color-bg-surface-card: #ffffff;

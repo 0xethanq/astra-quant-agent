@@ -14,6 +14,7 @@ import { symOf, instIdOf } from '../../utils/instId'
 import { useTheme } from '../../composables/useTheme'
 import { useI18n } from '../../composables/useI18n'
 import { demotePositiveTabIndex } from '../../utils/tabOrder'
+import { APP_NAME } from '../../config/version'
 import {
   init as initKLineChart,
   dispose as disposeKLineChart,
@@ -61,65 +62,85 @@ registerOverlay({
 
     const isEntry = label.includes('入场') || label.includes('Entry')
     const isTp = label.includes('TP') || label.includes('止盈')
+    const isTp2 = label.includes('TP2')
     const isSl = label.includes('SL') || label.includes('止损') || label.includes('锁利') || label.includes('保本') || label.includes('Lock') || label.includes('Breakeven')
+    const isLock = isSl && (label.includes('锁利') || label.includes('保本') || label.includes('Lock') || label.includes('Breakeven'))
 
-    // 垂直错位避让：入场与止盈胶囊贴线上方，止损/锁利胶囊贴线下方，避免相近点位相互覆盖
     let textBaseline: 'top' | 'bottom' | 'middle' = 'middle'
     let textYOffset = 0
+    const isLight = typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'light'
 
     if (isEntry) {
-      strokeColor = '#0284C7'
+      strokeColor = isLight ? '#0369a1' : '#0284C7'
       strokeStyle = 'solid'
-      badgeBg = '#0369A1'
+      badgeBg = isLight ? '#0369a1' : '#0284C7'
       displayBadge = `⚡ ${label.replace(/^[▲▼⚡🛑🔒\s]+/, '')}`
       textBaseline = 'bottom'
-      textYOffset = -2
+      textYOffset = -3
     } else if (isTp) {
-      strokeColor = '#10B981'
+      strokeColor = isLight ? '#059669' : '#10B981'
       strokeStyle = 'dashed'
-      strokeDashed = [8, 4]
-      badgeBg = '#047857'
+      strokeDashed = [6, 4]
+      badgeBg = isLight ? '#047857' : '#059669'
       displayBadge = `🎯 ${label.replace(/^[▲▼🎯\s]+/, '')}`
       textBaseline = 'bottom'
-      textYOffset = -2
+      textYOffset = -3
     } else if (isSl) {
-      const isLock = label.includes('锁利') || label.includes('保本') || label.includes('Lock') || label.includes('Breakeven')
-      strokeColor = isLock ? '#10B981' : '#F43F5E'
+      const lockColor = isLight ? '#059669' : '#10B981'
+      const lossColor = isLight ? '#be123c' : '#F43F5E'
+      strokeColor = isLock ? lockColor : lossColor
       strokeStyle = 'dashed'
-      strokeDashed = isLock ? [8, 4] : [5, 3]
-      badgeBg = isLock ? '#047857' : '#BE123C'
+      strokeDashed = isLock ? [6, 4] : [5, 3]
+      badgeBg = isLock ? (isLight ? '#047857' : '#059669') : (isLight ? '#9f1239' : '#BE123C')
       displayBadge = isLock ? `🔒 ${label.replace(/^[▲▼🛑🔒\s]+/, '')}` : `🛑 ${label.replace(/^[▲▼🛑\s]+/, '')}`
       textBaseline = 'top'
-      textYOffset = 2
+      textYOffset = 3
     }
 
-    // 视口上下边界保护：当线贴近画布顶部时（y < 24），改贴线下方；
-    // 当线贴近画布底部时（bounding.height && y > bounding.height - 24），改贴线上方
-    if (y < 24) {
+    // 视口上下边界保护：当线贴近画布顶部时（y < 22），改贴线下方；
+    // 当线贴近画布底部时（bounding.height && y > bounding.height - 22），改贴线上方
+    if (y < 22) {
       textBaseline = 'top'
       textYOffset = 3
-    } else if (bounding.height && y > bounding.height - 24) {
+    } else if (bounding.height && y > bounding.height - 22) {
       textBaseline = 'bottom'
       textYOffset = -3
     }
 
-    // 价格超出当前可视窗口时，自然不绘制（用户缩放/平移至该价位时自然展现，不强行拉扯或挤在角落）
+    // 价格超出当前可视窗口时，自然不绘制
     if (y < -20 || (bounding.height > 0 && y > bounding.height + 20)) {
       return []
     }
 
-    const startX = y < 70 ? Math.min(240, bounding.width * 0.5) : 0
+    // 严禁截断价格线！水平价格线（入场线/止损线/止盈线）必须完整贯穿整个可视区 (0 -> width)
+    // 之前因试图在左上角避让参数而设了非零起始点，导致线段左半截完全缺失（用户直观感知为"断线"缺陷）。
+    // 现在价格线恢复为 100% 连续贯穿整屏，消灭断线现象。
+    const lineCoordinates = [{ x: 0, y }, { x: bounding.width, y }]
+
+    // 胶囊标牌横向定位：
+    // 移动端窄屏 (< 560px)：所有标牌统一贴靠右侧坐标轴前沿 (width - 8px)，
+    // 依靠 textBaseline (入场/止盈贴线上方，止损贴线下方) 垂直错开，
+    // 绝不居中推挤到左侧干扰 OHLCV 与指标参数，彻底杜绝与左上角参数产生重叠混淆。
+    // PC 宽屏 (>= 560px)：入场线向左内移 (width - 150px)，形成阶梯错位。
+    let badgeX = Math.max(10, bounding.width - 8)
+    if (bounding.width >= 560) {
+      if (isEntry) {
+        badgeX = Math.max(260, bounding.width - 150)
+      } else if (isTp2) {
+        badgeX = Math.max(200, bounding.width - 105)
+      }
+    }
 
     return [
       {
         type: 'line',
         attrs: {
-          coordinates: [{ x: startX, y }, { x: bounding.width, y }],
+          coordinates: lineCoordinates,
         },
         styles: {
           style: strokeStyle,
           dashedValue: strokeDashed,
-          size: lineStyle.size || 1.2,
+          size: lineStyle.size || 1.3,
           color: strokeColor,
         },
       },
@@ -127,23 +148,23 @@ registerOverlay({
         type: 'text',
         ignoreEvent: true,
         attrs: {
-          x: Math.max(10, bounding.width - 6),
+          x: badgeX,
           y: y + textYOffset,
           text: displayBadge,
           align: 'right',
           baseline: textBaseline,
         },
         styles: {
-          size: 10,
-          family: 'JetBrains Mono, -apple-system, BlinkMacSystemFont, sans-serif',
+          size: 11,
+          family: 'JetBrains Mono, monospace',
           weight: 'bold',
           color: '#FFFFFF',
           backgroundColor: badgeBg,
-          paddingLeft: 4,
-          paddingRight: 4,
-          paddingTop: 1.5,
-          paddingBottom: 1.5,
-          borderRadius: 2,
+          paddingLeft: 6,
+          paddingRight: 6,
+          paddingTop: 2.5,
+          paddingBottom: 2.5,
+          borderRadius: 4,
         },
       },
     ]
@@ -750,14 +771,21 @@ async function loadCandles(silent = false, resetTime = false) {
         })
         klineChart.scrollToRealTime()
       } else {
-        // 定时轮询更新：直接精准喂入最新最后一根/多根未结蜡烛，驱动 K 线毫秒级实时跳动！
-        if (lastCandle) {
-          const storeImp = (klineChart as any)._chartStore
-          if (storeImp && typeof storeImp._addData === 'function') {
+        // 定时轮询更新：检查是否有跨周期新蜡烛到达（如手机后台休眠唤醒）
+        const currentDataList = klineChart.getDataList()
+        const lastExistingTs = currentDataList.length > 0 ? currentDataList[currentDataList.length - 1].timestamp : 0
+        const storeImp = (klineChart as any)._chartStore
+        if (storeImp && typeof storeImp._addData === 'function') {
+          // 查找所有时间戳 >= 上一次最后时间戳的蜡烛（若手机熄屏或后台切出一段时间，补全这期间产生的所有新K线）
+          const newOrUpdatedBars = klineList.filter((b) => b.timestamp >= lastExistingTs)
+          if (newOrUpdatedBars.length > 0) {
+            for (const bar of newOrUpdatedBars) {
+              storeImp._addData(bar, 'update')
+            }
+          } else if (lastCandle) {
             storeImp._addData(lastCandle, 'update')
-            // 确保十字星与右轴最新价标签即时重绘
-            ;(klineChart as any).updatePane?.(1)
           }
+          ;(klineChart as any).updatePane?.(1)
         }
       }
 
@@ -853,6 +881,7 @@ defineExpose({
 
 let timer: any = null
 let countdownTimer: any = null
+let resizeObserver: ResizeObserver | null = null
 
 function handleClickOutside(e: MouseEvent) {
   const target = e.target as HTMLElement
@@ -890,10 +919,23 @@ onMounted(() => {
       loadCandles(true, false)
     }, 3000)
     countdownTimer = setInterval(updateCountdown, 1000)
+
+    if (chartContainer.value && typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(() => {
+        if (klineChart) {
+          klineChart.resize()
+        }
+      })
+      resizeObserver.observe(chartContainer.value)
+    }
   })
 })
 
 onUnmounted(() => {
+  if (resizeObserver) {
+    resizeObserver.disconnect()
+    resizeObserver = null
+  }
   document.removeEventListener('click', handleClickOutside)
   document.removeEventListener('keydown', handleKeydown)
   if (timer) clearInterval(timer)
@@ -1116,9 +1158,58 @@ onUnmounted(() => {
     <div
       ref="chartContainer"
       class="relative w-full overflow-hidden"
-      :class="isFullscreen ? 'flex-1 min-h-0' : props.chartHeight === '100%' ? 'flex-1 min-h-[340px] xl:min-h-0' : 'min-h-0'"
-      :style="{ height: isFullscreen ? undefined : (props.chartHeight === '100%' ? undefined : (props.chartHeight || 'clamp(340px, 60vw, 560px)')) }"
-    ></div>
+      :class="isFullscreen ? 'flex-1 min-h-0' : (props.chartHeight === '100%' || props.fill) ? 'flex-1 min-h-[340px] xl:min-h-0' : 'min-h-0'"
+      :style="{ height: isFullscreen ? undefined : ((props.chartHeight === '100%' || props.fill) ? undefined : (props.chartHeight || 'clamp(340px, 60vw, 560px)')) }"
+    >
+      <!-- K线背景品牌水印（纯净星芒几何发丝，不带卡座底框，明暗自适应） -->
+      <div class="chart-watermark" aria-hidden="true">
+        <svg class="chart-watermark-logo" viewBox="0 0 48 48" width="156" height="156">
+          <defs>
+            <radialGradient id="wm-emerald-glow" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="#34d399" stop-opacity="0.85"/>
+              <stop offset="40%" stop-color="#10b981" stop-opacity="0.45"/>
+              <stop offset="100%" stop-color="#059669" stop-opacity="0"/>
+            </radialGradient>
+            <linearGradient id="wm-facet-bright" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="var(--wm-facet-bright-color, #ffffff)"/>
+              <stop offset="100%" stop-color="var(--wm-facet-mid-color, #cbd5e1)"/>
+            </linearGradient>
+            <linearGradient id="wm-facet-dim" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="var(--wm-facet-dim-color, #94a3b8)"/>
+              <stop offset="100%" stop-color="var(--wm-facet-dark-color, #475569)"/>
+            </linearGradient>
+          </defs>
+
+          <!-- 1. 坐标轴与相空间标尺发丝线 -->
+          <g>
+            <line x1="24" y1="4" x2="24" y2="44" stroke="currentColor" stroke-width="0.75" stroke-dasharray="1 1.5"/>
+            <line x1="4" y1="24" x2="44" y2="24" stroke="currentColor" stroke-width="0.75" stroke-dasharray="1 1.5"/>
+            <circle cx="24" cy="24" r="14.5" fill="none" stroke="currentColor" stroke-width="0.5" stroke-dasharray="2 2" opacity="0.6"/>
+          </g>
+
+          <!-- 2. 翡翠能量光晕底衬 -->
+          <circle cx="24" cy="24" r="9" fill="url(#wm-emerald-glow)"/>
+
+          <!-- 3. 主星体分面几何（The Astral Spark） -->
+          <g>
+            <polygon points="24,6 24,24 20,20" fill="url(#wm-facet-bright)"/>
+            <polygon points="24,6 28,20 24,24" fill="url(#wm-facet-dim)"/>
+            <polygon points="41,24 24,24 28,20" fill="url(#wm-facet-bright)"/>
+            <polygon points="41,24 28,28 24,24" fill="url(#wm-facet-dim)"/>
+            <polygon points="24,42 24,24 28,28" fill="url(#wm-facet-bright)"/>
+            <polygon points="24,42 20,28 24,24" fill="url(#wm-facet-dim)"/>
+            <polygon points="7,24 24,24 20,28" fill="url(#wm-facet-bright)"/>
+            <polygon points="7,24 20,20 24,24" fill="url(#wm-facet-dim)"/>
+          </g>
+
+          <!-- 4. 核心星芒激发点 -->
+          <circle cx="24" cy="24" r="1.6" fill="#10b981"/>
+        </svg>
+        <span class="chart-watermark-name">
+          {{ APP_NAME }}
+        </span>
+      </div>
+    </div>
 
     <!-- 试算控制台 -->
     <div
@@ -1193,3 +1284,67 @@ onUnmounted(() => {
     </div>
   </div>
 </template>
+
+<style scoped>
+.chart-watermark {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  user-select: none;
+  z-index: 0;
+  --wm-facet-bright-color: #ffffff;
+  --wm-facet-mid-color: #cbd5e1;
+  --wm-facet-dim-color: #94a3b8;
+  --wm-facet-dark-color: #475569;
+  color: rgba(255, 255, 255, 0.4);
+}
+.chart-watermark-logo {
+  width: 156px;
+  height: 156px;
+  opacity: 0.10;
+  filter: drop-shadow(0 8px 32px rgba(0, 0, 0, 0.6));
+}
+.chart-watermark-name {
+  margin-top: var(--sp-5);
+  font-family: var(--font-mono);
+  font-size: var(--text-xl);
+  font-weight: 800;
+  letter-spacing: 0.35em;
+  text-transform: uppercase;
+  color: var(--ink-strong);
+  opacity: 0.09;
+}
+
+/* 亮色模式精修：彻底消灭方块黑框底衬，适配高质感温润冷灰暗刻水准 */
+:root[data-theme='light'] .chart-watermark {
+  --wm-facet-bright-color: #1e293b;
+  --wm-facet-mid-color: #475569;
+  --wm-facet-dim-color: #64748b;
+  --wm-facet-dark-color: #94a3b8;
+  color: rgba(15, 23, 42, 0.28);
+}
+:root[data-theme='light'] .chart-watermark-logo {
+  opacity: 0.06;
+  filter: drop-shadow(0 4px 16px rgba(16, 185, 129, 0.12));
+}
+:root[data-theme='light'] .chart-watermark-name {
+  opacity: 0.07;
+  color: #0f172a;
+}
+
+@media (max-width: 640px) {
+  .chart-watermark-logo {
+    width: 96px;
+    height: 96px;
+  }
+  .chart-watermark-name {
+    margin-top: var(--sp-3);
+    font-size: var(--text-sm);
+    letter-spacing: 0.25em;
+  }
+}
+</style>

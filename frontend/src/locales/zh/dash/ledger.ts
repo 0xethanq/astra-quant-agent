@@ -92,7 +92,7 @@ export const zhLedger = {
     degraded: '委员会未运行 · 单模型裁决',
   },
   observability: {
-    title: '数理快照可观测性',
+    title: '快照数据校验',
     none: '数理快照不可观测',
     badgeNone: '无快照',
     priceOnly: '仅价格/普通观测 · 数理快照不可观测',
@@ -100,7 +100,7 @@ export const zhLedger = {
     partial: '数理快照部分可观测',
     badgePartial: '部分动力学',
     observed: '数理快照完全可观测',
-    badgeObserved: '微积分已记录',
+    badgeObserved: '已审计',
     tagHint: '该笔成交未记录开仓时刻的动力学链快照，无法作数理因果归因',
     missingFields: '本笔未记录：v/a/j/I · 能量积分 · 偏离面积积分 · 延续/击穿概率 · VaR/CVaR',
     noBackfill: '证据纪律：缺失即不可观测。严禁倒推或编造微观数理因果；字段缺失本身不得被解读为任何证据。',

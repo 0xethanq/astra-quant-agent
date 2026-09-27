@@ -369,7 +369,7 @@ watch(() => route.path, () => (drawerOpen.value = false));
   color: var(--ds-color-text-primary);
 }
 .wb-item.is-active {
-  background: linear-gradient(90deg, rgba(59, 130, 246, 0.12) 0%, rgba(59, 130, 246, 0.02) 100%);
+  background: linear-gradient(90deg, rgba(16, 185, 129, 0.12) 0%, rgba(16, 185, 129, 0.02) 100%);
   color: var(--ds-color-text-primary);
   font-weight: 600;
   border: 1px solid var(--accent-line);

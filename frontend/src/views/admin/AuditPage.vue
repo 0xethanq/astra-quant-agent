@@ -27,7 +27,7 @@ import PageHeader from '../../components/admin/PageHeader.vue'
 import BaseDialog from '../../components/base/BaseDialog.vue'
 import BaseEmpty from '../../components/base/BaseEmpty.vue'
 import { ScrollText, RefreshCw, Search, AlertTriangle, Loader2, CheckCircle2,
-  Ban, HelpCircle, Activity, ShieldCheck, User, FileJson } from 'lucide-vue-next'
+  Ban, HelpCircle, Activity, ShieldCheck, User, FileJson, Terminal } from 'lucide-vue-next'
 import BaseLoadingAnnounce from '../../components/base/BaseLoadingAnnounce.vue';
 
 const { api } = useApi()
@@ -146,6 +146,10 @@ onMounted(load)
   <div class="au">
     <PageHeader :title="t('nav.admin.audit')" :description="t('admin.audit.intro')">
       <template #actions>
+        <RouterLink to="/admin/decisions?tab=logs" class="btn btn-ghost btn-sm text-xs inline-flex items-center gap-1.5">
+          <Terminal :size="13" />
+          <span>{{ t('admin.decisions.hubTabLogs') }}</span>
+        </RouterLink>
         <span class="badge badge-accent mono">{{ t('admin.audit.badge') }}</span>
         <button type="button" class="btn btn-ghost btn-sm" :disabled="loading" @click="load">
           <Loader2 v-if="loading && records.length" :size="14" class="animate-spin shrink-0" />

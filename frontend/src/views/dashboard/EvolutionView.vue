@@ -112,8 +112,8 @@ const md = computed(() => (store.data as any)?.ai_trading_memory_md || '');
     <!-- 页头 -->
     <div class="flex items-center justify-between gap-2 pt-0.5">
       <div class="flex items-center gap-2">
-        <h1 class="text-xs font-bold tracking-tight text-[var(--ink-strong)] flex items-center gap-1.5">
-          <Dna class="h-3.5 w-3.5 text-[var(--accent)]" />
+        <h1 class="text-sm font-semibold tracking-tight text-[var(--ink-strong)] flex items-center gap-2">
+          <Dna class="h-4 w-4 text-[var(--accent)]" />
           {{ t('dash.evolution.title') }}
         </h1>
         <span
@@ -121,9 +121,6 @@ const md = computed(() => (store.data as any)?.ai_trading_memory_md || '');
           style="background-color: var(--surface-2); border-color: var(--line-1); color: var(--ink-2)"
         >
           {{ t('dash.evolution.autoIterateBadge') }}
-        </span>
-        <span class="hidden md:inline text-3xs text-[var(--ink-3)]">
-          · {{ t('dash.evolution.desc') }}
         </span>
       </div>
 
@@ -141,26 +138,26 @@ const md = computed(() => (store.data as any)?.ai_trading_memory_md || '');
     <DataGate>
       <!-- 复盘 HUD 5 指标卡片 -->
       <div class="dsh-card">
-        <div class="grid grid-cols-2 gap-px bg-[var(--line-1)] sm:grid-cols-3 xl:grid-cols-5">
-          <div class="bg-[var(--surface-1)] hover:bg-[var(--surface-2)] transition-colors">
+        <div class="grid grid-cols-2 gap-2 p-2 sm:grid-cols-3 xl:grid-cols-5 bg-[var(--surface-1)]">
+          <div class="rounded-lg bg-[var(--surface-2)]/30 hover:bg-[var(--surface-2)]/70 transition-colors">
             <BaseStat
               :label="t('dash.evolution.hud.at')"
               :value="review.timestamp ? fmtDateTime(review.timestamp).slice(5, 16) : '--'"
             />
           </div>
-          <div class="bg-[var(--surface-1)] hover:bg-[var(--surface-2)] transition-colors">
+          <div class="rounded-lg bg-[var(--surface-2)]/30 hover:bg-[var(--surface-2)]/70 transition-colors">
             <BaseStat
               :label="t('dash.evolution.hud.sample')"
               :value="review.total_trades != null ? `${fmtNum(review.total_trades, 0)} ${t('common.unitCount')}` : '--'"
             />
           </div>
-          <div class="bg-[var(--surface-1)] hover:bg-[var(--surface-2)] transition-colors">
+          <div class="rounded-lg bg-[var(--surface-2)]/30 hover:bg-[var(--surface-2)]/70 transition-colors">
             <BaseStat
               :label="t('dash.evolution.hud.winRate')"
               :value="review.win_rate != null ? fmtNum(review.win_rate, 1) + '%' : '--'"
             />
           </div>
-          <div class="bg-[var(--surface-1)] hover:bg-[var(--surface-2)] transition-colors">
+          <div class="rounded-lg bg-[var(--surface-2)]/30 hover:bg-[var(--surface-2)]/70 transition-colors">
             <BaseStat
               :label="t('dash.evolution.hud.pf')"
               :value="review.profit_factor != null ? fmtNum(review.profit_factor, 2) : '--'"
@@ -169,7 +166,7 @@ const md = computed(() => (store.data as any)?.ai_trading_memory_md || '');
               :hint="t('dash.ledger.summary.tipPf')"
             />
           </div>
-          <div class="bg-[var(--surface-1)] hover:bg-[var(--surface-2)] transition-colors px-3.5 py-2.5 flex flex-col justify-center">
+          <div class="rounded-lg bg-[var(--surface-2)]/30 hover:bg-[var(--surface-2)]/70 transition-colors px-3.5 py-2.5 flex flex-col justify-center">
             <span class="text-3xs text-[var(--ink-3)] font-semibold uppercase tracking-wider">{{ t('dash.evolution.hud.status') }}</span>
             <span class="text-xs font-bold mt-1" :class="statusMeta.textCls">
               {{ statusMeta.label }}

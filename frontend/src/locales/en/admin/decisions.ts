@@ -1,5 +1,5 @@
 export const enAdminDecisions = {
-  desc: 'Check the macro stance, per-symbol actions and three live logs',
+  desc: 'Unified Log Hub: Live runtime logs, system-wide error center, and AI decision deliberations',
   normalRun: 'Normal operation',
   latestFirst: 'Newest first',
   tabTrader: 'Trader patrol (Trader)',
@@ -16,4 +16,46 @@ export const enAdminDecisions = {
   entriesCount: '{n} entries',
   logSourceAria: 'Log source switcher',
   logLevelAria: 'Log level filter',
+
+  // Unified hub tabs
+  hubTabLogs: 'Runtime Stream',
+  hubTabErrors: 'Error Center',
+  hubTabDecisions: 'AI Decisions',
+  hubAria: 'Log hub category switcher',
+
+  // Error Center
+  errorsTitle: 'System Errors & Critical Exceptions',
+  errorAll: 'All Errors',
+  errorTrader: 'Trader (Trader)',
+  errorBackend: 'Backend (Backend)',
+  errorScheduler: 'Scheduler (Scheduler)',
+  errorsEmpty: 'All systems healthy. No unhandled errors or critical exceptions.',
+  errorsEmptyDesc: 'No unhandled ERROR or CRITICAL exceptions found across Trader, Backend, and Scheduler service logs.',
+  errorsCount: '{n} errors',
+  searchErrorsPlaceholder: 'Search error message, traceback or keywords...',
+  searchErrorsAria: 'Search error logs',
+  errorSourceAria: 'Error source filter',
+  errorSource: 'Source',
+  copyError: 'Copy Traceback',
+
+  // AI Decisions
+  decisionsTitle: 'Live AI Decision Deliberations',
+  decisionsEmpty: 'No AI decision records in the current cycle',
+  actionAll: 'All Actions',
+  actionBuy: 'BUY / Long',
+  actionSell: 'SELL / Short',
+  actionWait: 'WAIT / Neutral',
+  confidence: 'Confidence',
+  decisionTime: 'Deliberation Time',
+  decisionReason: 'Reasoning & Attribution',
+  cyclesCount: '{n} cycles',
+  matchCount: '{n} matched',
+  searchDecisionsPlaceholder: 'Search symbol, action, reasoning...',
+  searchDecisionsAria: 'Search decisions',
+  actionFilterAria: 'Decision action filter',
+  noDecisionsReason: 'No structured reasoning recorded',
+
+  // Jump to operation audit
+  jumpAuditTip: 'Looking for logins, config updates & security blocks?',
+  jumpAuditLink: 'Go to Operation Audit Ledger →',
 };

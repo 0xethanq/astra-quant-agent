@@ -8,7 +8,7 @@ import { allAdminItems } from '../config/nav'
  * 前台 6 条 path 全部映射 DashboardLayout，meta.tab 区分视图。
  */
 const routes: RouteRecordRaw[] = [
-  { path: '/', name: 'dashboard', component: () => import('../layouts/DashboardLayout.vue'), meta: { isPublic: true } },
+  { path: '/', name: 'landing', component: () => import('../views/landing/LandingView.vue'), meta: { isPublic: true } },
   { path: '/trading', name: 'dashboard-trading', component: () => import('../layouts/DashboardLayout.vue'), meta: { isPublic: true, tab: 'trading' } },
   { path: '/factors', name: 'dashboard-factors', component: () => import('../layouts/DashboardLayout.vue'), meta: { isPublic: true, tab: 'factors' } },
   { path: '/news', name: 'dashboard-news', component: () => import('../layouts/DashboardLayout.vue'), meta: { isPublic: true, tab: 'news' } },

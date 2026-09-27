@@ -1,6 +1,6 @@
-/** 决策审计页文案 */
+/** 系统日志与决策页文案 */
 export const zhAdminDecisions = {
-  desc: '核对宏观基调与逐币动作，查看三路实时日志',
+  desc: '统一日志中枢：聚合服务运行日志流、全系统报错大盘与 AI 决策推演',
   normalRun: '日常运行',
   latestFirst: '最新在前',
   tabTrader: '交易巡检 (Trader)',
@@ -17,4 +17,46 @@ export const zhAdminDecisions = {
   entriesCount: '{n} 条',
   logSourceAria: '日志数据源切换',
   logLevelAria: '日志级别过滤',
+
+  // 统一主维度
+  hubTabLogs: '运行日志流',
+  hubTabErrors: '系统报错汇总',
+  hubTabDecisions: 'AI 决策卷宗',
+  hubAria: '系统日志主维度切换',
+
+  // 报错大盘
+  errorsTitle: '全系统报错与异常大盘',
+  errorAll: '全部报错',
+  errorTrader: '交易进程 (Trader)',
+  errorBackend: '后端服务 (Backend)',
+  errorScheduler: '任务调度 (Scheduler)',
+  errorsEmpty: '全系统运行状态健康，暂无未结报错或致命异常',
+  errorsEmptyDesc: 'Trader、Backend 与 Scheduler 服务日志中均未发现未经处理的 ERROR 或 CRITICAL 致命异常。',
+  errorsCount: '{n} 处报错',
+  searchErrorsPlaceholder: '搜索报错信息、异常堆栈或关键字...',
+  searchErrorsAria: '搜索系统报错日志',
+  errorSourceAria: '报错数据源过滤',
+  errorSource: '来源',
+  copyError: '复制错误堆栈',
+
+  // AI 决策卷宗
+  decisionsTitle: '标的实时决策推演',
+  decisionsEmpty: '暂无当前周期的 AI 决策记录',
+  actionAll: '全部动作',
+  actionBuy: '做多 BUY',
+  actionSell: '做空 SELL',
+  actionWait: '观望 WAIT',
+  confidence: '置信度',
+  decisionTime: '推演时间',
+  decisionReason: '决策归因',
+  cyclesCount: '{n} 决策周期',
+  matchCount: '命中 {n} 项',
+  searchDecisionsPlaceholder: '搜索标的 / 动作 / 推演理由...',
+  searchDecisionsAria: '搜索决策',
+  actionFilterAria: '决策动作过滤',
+  noDecisionsReason: '无结构化理由记录',
+
+  // 与操作审计关联
+  jumpAuditTip: '查看账号登录、参数修改与安全拦截？',
+  jumpAuditLink: '前往操作审计台账 →',
 };
