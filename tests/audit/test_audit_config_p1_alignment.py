@@ -151,6 +151,11 @@ class PromptRiskBudgetAlignmentTests(_SandboxBase):
             "ASTRA_MAX_RISK_REWARD": f"上限 {self.rc.MAX_RISK_REWARD_RATIO:.1f}",
             "ASTRA_STOP_LOSS_ATR_MULT": f"基准止损 {self.rc.STOP_LOSS_ATR_MULT:g}x 1H ATR",
             "ASTRA_MAX_TAKE_PROFIT_ATR": f"最大止盈宽度 ≤ {self.rc.MAX_TAKE_PROFIT_ATR:g}x 1H ATR",
+            "ASTRA_MAX_RISK_PER_TRADE_USDT": (
+                f"{self.rc.MAX_RISK_PER_TRADE_USDT:g} 绝对封顶"
+                if (getattr(self.rc, "MAX_RISK_PER_TRADE_USDT", 0.0) or 0.0) > 0
+                else "纯按比例动态推导"
+            ),
         }
         self.assertEqual(set(required), set(self.rc.RISK_ENV_KEYS),
                          f"覆盖表必须覆盖全部 {len(self.rc.RISK_ENV_KEYS)} 个旋钮")

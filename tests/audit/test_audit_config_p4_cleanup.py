@@ -558,6 +558,7 @@ class ConfigEffectMatrixTests(_Base):
         "ASTRA_MAX_MARGIN_EQUITY_RATIO": ("astra_backend/execution_router.py", "MAX_MARGIN_EQUITY_RATIO"),
         "ASTRA_SINGLE_ASSET_EQUITY_RATIO": ("scripts/risk_constants.py", "SINGLE_ASSET_EQUITY_RATIO"),
         "ASTRA_RISK_PER_TRADE_RATIO": ("scripts/risk_constants.py", "RISK_PER_TRADE_RATIO"),
+        "ASTRA_MAX_RISK_PER_TRADE_USDT": ("scripts/risk_constants.py", "MAX_RISK_PER_TRADE_USDT"),
         "ASTRA_MIN_RISK_REWARD": ("scripts/risk_constants.py", "MIN_RISK_REWARD_RATIO"),
         "ASTRA_MIN_ENTRY_CONFIDENCE": ("scripts/risk_constants.py", "MIN_ENTRY_CONFIDENCE"),
         "ASTRA_MAX_DAILY_LOSS_USDT": ("scripts/risk_constants.py", "effective_daily_loss_limit"),

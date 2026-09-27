@@ -13,14 +13,13 @@ from scripts.risk_constants import (
 )
 
 
-def effective_risk_per_trade(pool_risk_usd: float, usdt_available: Optional[float] = None) -> float:
-    """单笔基准风险额 = min(池内配置绝对值, 可用余额 × 2%)，避免小资金账户超额承担风险。"""
-    cap = float(pool_risk_usd or 0.0)
-    if usdt_available and usdt_available > 0:
-        # 批6：比例常量在**调用时**从单一事实源读取——import 期绑定会在
-        # `importlib.reload(risk_constants)`（测试/热改 .env）之后变成过期值。
-        cap = min(cap, max(round(float(usdt_available) * rc.RISK_PER_TRADE_EQUITY_RATIO, 4), 0.05))
-    return cap
+def effective_risk_per_trade(pool_risk_usd: float = 0.0, usdt_available: Optional[float] = None) -> float:
+    """单笔基准风险额 = min(绝对封顶, 可用余额 × 比例)；0=不设绝对硬顶，纯按比例。"""
+    ratio_cap = max(round(float(usdt_available or 0.0) * rc.RISK_PER_TRADE_EQUITY_RATIO, 4), 0.05) if (usdt_available and usdt_available > 0) else 0.0
+    caps = [c for c in (float(pool_risk_usd or 0.0), float(getattr(rc, "MAX_RISK_PER_TRADE_USDT", 0.0) or 0.0)) if c > 0]
+    if ratio_cap > 0:
+        return round(min(min(caps), ratio_cap), 4) if caps else ratio_cap
+    return min(caps) if caps else 0.0
 
 
 def quantize_size(raw_sz: float, min_sz: float) -> float:

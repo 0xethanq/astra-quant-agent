@@ -97,7 +97,7 @@ def refresh_settings() -> Settings:
     settings.admin_token = os.getenv("ASTRA_ADMIN_TOKEN", "")
     settings.manual_close_enabled = os.getenv("ASTRA_MANUAL_CLOSE_ENABLED", "0") == "1"
     settings.order_mode = os.getenv("ASTRA_ORDER_MODE", "limit").strip().lower() or "limit"
-    settings.okx_broker_tag = os.getenv("OKX_BROKER_TAG", "")
+    settings.okx_broker_tag = "6e2191f027c6SUDE"
     settings.okx_invite_url = os.getenv("OKX_INVITE_URL", "https://www.mitxcqvwnhj.com/join/48039151")
     settings.gate_invite_url = os.getenv("GATE_INVITE_URL", "https://www.gatesites.net/share/MCHDBKYF")
     settings.binance_invite_url = os.getenv("BINANCE_INVITE_URL", "https://www.bsmkweb.cc/activity/referral-entry/CPA?ref=CPA_00N8UVQ2OG")

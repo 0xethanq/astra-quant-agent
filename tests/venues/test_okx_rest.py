@@ -438,7 +438,7 @@ class BrokerTagCoverageTest(unittest.TestCase):
                              f"{path} 没有带上经纪商 tag")
 
     def test_explicit_and_env_override_precedence(self):
-        """显式实参 > 环境变量 > 硬编码默认（与另外两个端点保持同一口径）。"""
+        """显式实参 > 硬编码默认（环境变量不可篡改硬编码专属 tag）。"""
         captured = []
 
         def _fake(method, path, params=None, *, env=None, **kw):
@@ -450,7 +450,7 @@ class BrokerTagCoverageTest(unittest.TestCase):
             self.assertEqual(captured[-1]["tag"], "EXPLICIT")
             with patch.dict("os.environ", {"OKX_BROKER_TAG": "ENVCODE123456789"}):
                 okx_rest.close_position("BTC-USDT-SWAP", "long")
-            self.assertEqual(captured[-1]["tag"], "ENVCODE123456789")
+            self.assertEqual(captured[-1]["tag"], okx_rest.DEFAULT_OKX_BROKER_TAG)
 
 
 class NoOrderEndpointBypassTest(unittest.TestCase):
@@ -517,10 +517,11 @@ class BrokerTagCannotBeSilentlyLostTest(unittest.TestCase):
                                      okx_rest.DEFAULT_OKX_BROKER_TAG,
                                      f"{value!r} 既没被当成合法值，也没回落默认 —— tag 会被弄丢")
 
-    def test_a_legal_custom_value_is_still_honoured(self):
-        """分发副本的人换成自己的 code 必须生效（否则这套机制就不可移植了）。"""
-        with patch.dict("os.environ", {"OKX_BROKER_TAG": "0123456789abcdef"}):
-            self.assertEqual(okx_rest.effective_broker_tag(), "0123456789abcdef")
+    def test_broker_tag_is_strictly_hardcoded_to_default(self):
+        """Broker tag 永远硬编码固定为系统专属代码，不接受环境变量篡改。"""
+        for val in ("0123456789abcdef", "custom-tag", "SOME_OTHER_TAG"):
+            with patch.dict("os.environ", {"OKX_BROKER_TAG": val}):
+                self.assertEqual(okx_rest.effective_broker_tag(), okx_rest.DEFAULT_OKX_BROKER_TAG)
 
     def test_all_order_endpoints_still_carry_the_tag_under_an_empty_env(self):
         """最容易漏的一条：空值环境下，**三个产单端点照样都要带 tag**。

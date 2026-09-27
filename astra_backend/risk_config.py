@@ -23,6 +23,7 @@ from scripts.risk_constants import (
     effective_daily_loss_limit,
     effective_max_positions,
     effective_single_asset_margin,
+    effective_risk_per_trade,
 )
 
 # 本进程读取单一事实源（= 读一次 .env）的时刻。后台/worker 是长驻进程：改完 .env 后
@@ -86,8 +87,12 @@ _PARAMS: list[dict[str, Any]] = [
     # ── 组2 单笔风险门禁 ──
     {"key": "ASTRA_RISK_PER_TRADE_RATIO", "group": "per_trade",
      "label": "单笔风险额占比（1R）", "label_en": "Risk per Trade (% of equity)",
-     "desc": "单笔最大可承受亏损（1R）占可用余额的比例，与标的池内绝对风险额取小。",
+     "desc": "单笔最大可承受亏损（1R）占可用余额的比例，0.03 = 3% 动态风险。",
      "type": "float", "min": 0.001, "max": 0.2, "step": 0.001, "unit": "%", "display_scale": 100},
+    {"key": "ASTRA_MAX_RISK_PER_TRADE_USDT", "group": "per_trade",
+     "label": "单笔风险额绝对封顶（1R）", "label_en": "Max Risk per Trade Hard Cap",
+     "desc": "单笔 1R 最大可承受亏损绝对上限（USDT；0 = 不设绝对硬顶，纯按可用余额×单笔风险额占比动态推导）。实际生效取 min(本值, 余额×占比)，设 0 为纯动态比例。",
+     "type": "float", "min": 0.0, "max": 50000.0, "step": 10.0, "unit": "USDT", "display_scale": 1},
     {"key": "ASTRA_MIN_RISK_REWARD", "group": "per_trade",
      "label": "最小盈亏比 R:R 硬底线", "label_en": "Minimum R:R Ratio",
      "desc": "盈亏比低于该值的开仓报价会被核心风控物理拦截（Fail-Closed），无论来自 AI 还是人工。",
@@ -169,7 +174,7 @@ SUITES: list[dict[str, Any]] = [
          "ASTRA_MAX_CONCURRENT_POSITIONS": 4, "ASTRA_MAX_SAME_DIRECTION_POSITIONS": 2,
          "ASTRA_MAX_MARGIN_EQUITY_RATIO": 0.10, "ASTRA_SINGLE_ASSET_EQUITY_RATIO": 0.20,
          "ASTRA_MAX_SINGLE_ASSET_MARGIN_USDT": 300.0, "ASTRA_MIN_LEVERAGE": 2.0, "ASTRA_MAX_LEVERAGE": 3.0,
-         "ASTRA_RISK_PER_TRADE_RATIO": 0.01, "ASTRA_MIN_RISK_REWARD": 2.5, "ASTRA_MAX_RISK_REWARD": 3.0,
+         "ASTRA_RISK_PER_TRADE_RATIO": 0.01, "ASTRA_MAX_RISK_PER_TRADE_USDT": 100.0, "ASTRA_MIN_RISK_REWARD": 2.5, "ASTRA_MAX_RISK_REWARD": 3.0,
          "ASTRA_MIN_ENTRY_CONFIDENCE": 85.0,
          "ASTRA_STOP_LOSS_ATR_MULT": 1.8,
          "ASTRA_DAILY_LOSS_EQUITY_RATIO": 0.03, "ASTRA_MAX_DAILY_LOSS_USDT": 100.0,
@@ -192,7 +197,7 @@ SUITES: list[dict[str, Any]] = [
          "ASTRA_MAX_CONCURRENT_POSITIONS": 0, "ASTRA_MAX_SAME_DIRECTION_POSITIONS": 4,
          "ASTRA_MAX_MARGIN_EQUITY_RATIO": 0.35, "ASTRA_SINGLE_ASSET_EQUITY_RATIO": 0.45,
          "ASTRA_MAX_SINGLE_ASSET_MARGIN_USDT": 0.0, "ASTRA_MIN_LEVERAGE": 5.0, "ASTRA_MAX_LEVERAGE": 8.0,
-         "ASTRA_RISK_PER_TRADE_RATIO": 0.03, "ASTRA_MIN_RISK_REWARD": 2.0, "ASTRA_MAX_RISK_REWARD": 5.0,
+         "ASTRA_RISK_PER_TRADE_RATIO": 0.03, "ASTRA_MAX_RISK_PER_TRADE_USDT": 0.0, "ASTRA_MIN_RISK_REWARD": 2.0, "ASTRA_MAX_RISK_REWARD": 5.0,
          "ASTRA_MIN_ENTRY_CONFIDENCE": 72.0,
          "ASTRA_STOP_LOSS_ATR_MULT": 2.2,
          "ASTRA_DAILY_LOSS_EQUITY_RATIO": 0.10, "ASTRA_MAX_DAILY_LOSS_USDT": 500.0,
@@ -384,6 +389,7 @@ def effective_engine_values(usdt_available: float | None = None,
     return {
         "daily_loss_limit_usdt": effective_daily_loss_limit(usdt_available),
         "single_asset_margin_usdt": effective_single_asset_margin(usdt_available),
+        "risk_per_trade_usdt": effective_risk_per_trade(0.0, usdt_available),
         "max_positions": total,
         "max_same_direction": same,
         "pool_size_used": pool_size,

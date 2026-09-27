@@ -658,12 +658,16 @@ def build_risk_budget_text(usdt_available: float = None) -> str:
         _m_strong_cap = _m_strong
         _strong_cap_note = f"(可用余额 {_max_ratio:.0%}={_m_strong}，纯按比例动态推导，不设绝对金额硬顶)"
         _asset_cap_note = f"可用余额 {rc.SINGLE_ASSET_EQUITY_RATIO:.0%} ({rc.MAX_SINGLE_ASSET_MARGIN:g} 绝对封顶=不设绝对硬顶，纯按比例动态推导)"
+    if getattr(rc, "MAX_RISK_PER_TRADE_USDT", 0.0) and rc.MAX_RISK_PER_TRADE_USDT > 0:
+        _risk_1r_note = f"min({rc.MAX_RISK_PER_TRADE_USDT:g} 绝对封顶, 可用余额 {rc.RISK_PER_TRADE_EQUITY_RATIO:.0%})"
+    else:
+        _risk_1r_note = f"可用余额 {rc.RISK_PER_TRADE_EQUITY_RATIO:.0%} (纯按比例动态推导，不设绝对金额硬顶)"
     text = (
         f"【本周期风险预算｜按实际可用余额 {_eq:.2f} USDT 与后台风控配置自适应推导，严禁套用任何固定绝对金额】:\n"
         f"- 常规单笔保证金: {_m_lo} ~ {_m_hi} USDT (可用余额 3%~{_regular_hi_ratio:.0%})\n"
         f"- 强信号单笔保证金上限: {round(_m_strong_cap, 2)} USDT {_strong_cap_note}\n"
         f"- 单标的累计保证金上限(含金字塔加仓): {_asset_cap} USDT ({_asset_cap_note}，执行层已按同一 min() 硬夹)\n"
-        f"- 单笔最大可承受亏损: 以 1.0R 为基准，且不超过可用余额 {rc.RISK_PER_TRADE_EQUITY_RATIO:.0%}\n"
+        f"- 单笔最大可承受亏损: 以 1.0R 为基准 ({_risk_1r_note}，执行层已按同一 min() 硬夹)\n"
         f"- 当日累计亏损熔断线: -{_daily_stop} USDT ({_daily_stop_note}，执行层已按同一 min() 硬夹)\n"
         f"- 全系统同向持仓上限: {rc.MAX_SAME_DIRECTION_POSITIONS} 笔 (多/空各自封顶，执行层硬拦截)\n"
         f"- 全系统并发持仓上限: "

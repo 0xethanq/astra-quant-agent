@@ -60,6 +60,31 @@ class AdaptiveRiskPerTradeTests(unittest.TestCase):
         self.assertEqual(aft.effective_risk_per_trade(15.0, 4000.0), 15.0)
         self.assertEqual(aft.effective_risk_per_trade(15.0, None), 15.0)
 
+    def test_pure_ratio_mode_when_pool_cap_is_zero(self):
+        """pool_risk_usd=0 时纯按比例动态推导，不设绝对硬顶。"""
+        self.assertAlmostEqual(aft.effective_risk_per_trade(0.0, 1000.0), 20.0, places=4)  # 1000U × 2%
+        self.assertAlmostEqual(aft.effective_risk_per_trade(0.0, 5000.0), 100.0, places=4) # 5000U × 2%
+
+    def test_global_max_risk_cap_env(self):
+        """ASTRA_MAX_RISK_PER_TRADE_USDT 全局硬顶生效与 0 豁免。"""
+        import astra_backend.config as backend_config
+        import risk_constants
+        os.environ["ASTRA_MAX_RISK_PER_TRADE_USDT"] = "50.0"
+        original_loader = backend_config.load_dotenv
+        backend_config.load_dotenv = lambda path: None
+        try:
+            importlib.reload(risk_constants)
+            mod = importlib.reload(aft)
+            # 5000U × 2% = 100U，但被 50U 全局封顶夹住
+            self.assertAlmostEqual(mod.effective_risk_per_trade(0.0, 5000.0), 50.0, places=4)
+            # 小资金 1000U × 2% = 20U < 50U，按比例生效
+            self.assertAlmostEqual(mod.effective_risk_per_trade(0.0, 1000.0), 20.0, places=4)
+        finally:
+            backend_config.load_dotenv = original_loader
+            del os.environ["ASTRA_MAX_RISK_PER_TRADE_USDT"]
+            importlib.reload(risk_constants)
+            importlib.reload(aft)
+
     def test_env_override(self):
         import astra_backend.config as backend_config
         import risk_constants

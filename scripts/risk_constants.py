@@ -64,6 +64,8 @@ if MIN_LEVERAGE > MAX_LEVERAGE:
 # ── 组2 · 单笔风险 ────────────────────────────────────────────────
 # 单笔 1R 风险额占可用余额比例（与池内绝对值取小）。
 RISK_PER_TRADE_EQUITY_RATIO = _env_float("ASTRA_RISK_PER_TRADE_RATIO", 0.02)
+# 单笔风险额绝对封顶（USDT；0 = 不设绝对硬顶，纯按可用余额×单笔风险额占比动态推导）。
+MAX_RISK_PER_TRADE_USDT = _env_float("ASTRA_MAX_RISK_PER_TRADE_USDT", 0.0)
 # 最小盈亏比 R:R 硬底线，低于该值的报价被 order_risk 物理拦截。
 MIN_RISK_REWARD_RATIO = _env_float("ASTRA_MIN_RISK_REWARD", 2.0)
 # 最大盈亏比 R:R 上限（防把止盈画到天际线导致无法止盈，须 >= MIN_RISK_REWARD）。
@@ -133,6 +135,7 @@ DEFAULTS = {
     "ASTRA_MIN_LEVERAGE": 2.0,
     "ASTRA_MAX_LEVERAGE": 5.0,
     "ASTRA_RISK_PER_TRADE_RATIO": 0.02,
+    "ASTRA_MAX_RISK_PER_TRADE_USDT": 0.0,
     "ASTRA_MIN_RISK_REWARD": 2.0,
     "ASTRA_MAX_RISK_REWARD": 3.5,
     "ASTRA_MIN_ENTRY_CONFIDENCE": 80.0,
@@ -183,6 +186,15 @@ def effective_single_asset_margin(usdt_available: float = None) -> float:
     if MAX_SINGLE_ASSET_MARGIN and MAX_SINGLE_ASSET_MARGIN > 0:
         return min(MAX_SINGLE_ASSET_MARGIN, ratio_cap) if ratio_cap > 0 else MAX_SINGLE_ASSET_MARGIN
     return ratio_cap
+
+
+def effective_risk_per_trade(pool_risk_usd: float = 0.0, usdt_available: float = None) -> float:
+    """单笔基准风险额 = min(绝对封顶, 可用余额 × 比例)；0=不设绝对硬顶，纯按比例。"""
+    ratio_cap = max(round(float(usdt_available or 0.0) * RISK_PER_TRADE_EQUITY_RATIO, 4), 0.05) if (usdt_available and usdt_available > 0) else 0.0
+    caps = [c for c in (float(pool_risk_usd or 0.0), float(MAX_RISK_PER_TRADE_USDT or 0.0)) if c > 0]
+    if ratio_cap > 0:
+        return round(min(min(caps), ratio_cap), 4) if caps else ratio_cap
+    return min(caps) if caps else 0.0
 
 
 # ── 单一实例（审计批6）─────────────────────────────────────────────────
