@@ -616,6 +616,12 @@ def _binance_position_lifecycle(ad, symbol: str, size_signed: float) -> tuple:
     open_ms = 0
     fee = 0.0
     funding = 0.0
+    # 本函数的前提是"该所有签名请求面"（`signed_request` 只在 binance/gate 适配器上
+    # 存在，`tests/audit/test_venue_capability_calls.py` 要求按所分流的能力调用必须有
+    # 守卫）。缺了它就如实返回"不知道"，而不是让 AttributeError 被下面的宽 except 吞掉
+    # ——吞掉之后症状是"费用恒为 0"，看起来像"真的一分钱没花"。
+    if not hasattr(ad, "signed_request"):
+        return open_ms, fee, funding
     trades: list = []
     try:
         trades = ad.signed_request(

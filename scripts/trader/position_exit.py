@@ -58,7 +58,7 @@ def manage_position_tp_and_trailing(f, curr_pos, trackers, timestamp_full, execu
     profile = ASSET_CLASS_PROFILES.get(asset_type, ASSET_CLASS_PROFILES["crypto"])
     atr = max(f["atr"], cur_px * 0.005)
     prec = f["precision"]
-    ct_val = f["ctVal"]
+    ct_val = float(curr_pos.get("ctVal") or f["ctVal"])
     
     pos_sz = float(curr_pos["pos"])
     is_long = "long" in curr_pos["side"].lower()

@@ -123,6 +123,16 @@ def fetch_single_instrument_data(item, all_positions, usdt_available, *,
                     "lever": p.get("lever", "3"),
                     "venue": str(p.get("venue") or p.get("exchange") or "okx").lower(),
                     "exchange": str(p.get("venue") or p.get("exchange") or "okx").lower(),
+                    # ⚠️ 单位覆盖（三所持仓接管）：外所在仓的 `pos` 是**该所原生单位**
+                    # （币安=币数、Gate=张），而 `f["ctVal"]`/`f["minSz"]`/`f["precision"]`
+                    # 来自 **OKX 合约池**。下游 `scale_out`/`position_exit` 用
+                    # `pos × ctVal × price` 算名义额与手续费，若沿用 OKX 的面值，
+                    # 币安仓会错 100 倍（XRP）、Gate 会错 10 倍。
+                    # 故把该所自己的值挂在持仓记录上，由下游**优先取用**；
+                    # 值为 None 时下游回落到 `f[...]`，OKX 路径逐位不变。
+                    "ctVal": (float(p["ctVal"]) if p.get("ctVal") else None),
+                    "minSz": (float(p["minSz"]) if p.get("minSz") else None),
+                    "precision": p.get("precision"),
                     "raw": p.get("raw", {}),
                 }
                 break

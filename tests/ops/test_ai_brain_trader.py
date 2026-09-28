@@ -522,8 +522,26 @@ class LatestAiDecisionTests(unittest.TestCase):
 class MainGuardTests(unittest.TestCase):
     """CLI 入口：只做"摘要打印"，但其取键逻辑本身也要钉住。"""
 
+    def _main_guard_node(self):
+        """按**语义**定位 CLI 入口，不按绝对行号。
+
+        2026-09-28 实测：这里原来钉的是 `n.lineno == 1012`，而改名那一刀
+        （`c7424081`）把本文件整体移位 13 行 ⇒ `_find_node` 抛「未找到目标 AST
+        节点」，本组用例**静默失效**至今。行号不是契约，判据本身才是。
+        """
+        def _is_main_guard(n):
+            if not isinstance(n, ast.If):
+                return False
+            t = n.test
+            return (isinstance(t, ast.Compare)
+                    and isinstance(t.left, ast.Name) and t.left.id == "__name__"
+                    and len(t.comparators) == 1
+                    and isinstance(t.comparators[0], ast.Constant)
+                    and t.comparators[0].value == "__main__")
+        return _find_node(_is_main_guard)
+
     def _run_guard(self, result):
-        node = _find_node(lambda n: isinstance(n, ast.If) and n.lineno == 1012)
+        node = self._main_guard_node()
         module = ast.Module(body=[node], type_ignores=[])
         ast.fix_missing_locations(module)
         namespace = {

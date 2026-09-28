@@ -210,7 +210,8 @@ class NotificationsTests(unittest.TestCase):
             self.assertIn("到手净利", msg)
             self.assertIn("+13.8000 USDT", msg)
             self.assertIn("交易手续费: -1.2000 U", msg)
-            self.assertIn("零风险放飞", msg)
+            # 文案 2026-09-28 精简过（去掉口号式收尾）：判据钉**语义**而非旧口号。
+            self.assertIn("锁定胜率放飞", msg)
             self.assertEqual(payload["pnl"], 13.8)
 
     def test_modern_notifier_interceptor_blocked(self):

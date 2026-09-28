@@ -353,7 +353,7 @@ class AiFactorTraderPositionProtectionTest(unittest.TestCase):
         self.assertNotIn("SOL-USDT-SWAP_long",trackers)
         self.assertTrue(any("触发硬止损" in item for item in actions))
         if notify_close is not None:
-            notify_close.assert_called_once_with(inst="SOL", pnl=-18.0, stage="硬止损平仓", exit_px=99.0)
+            notify_close.assert_called_once_with(inst="SOL", pnl=-18.0, stage="硬止损平仓", exit_px=99.0, venue="okx")
 
     def test_losing_position_above_hard_stop_remains_open(self):
         position={"pos":4.0,"side":"long","avgPx":103.55,"upl":-4.0}
@@ -409,7 +409,7 @@ class AiFactorTraderPositionProtectionTest(unittest.TestCase):
                       'autoCxl': True, 'tag': okx_rest.DEFAULT_OKX_BROKER_TAG})])
         self.assertNotIn("SOL-USDT-SWAP_long",trackers)
         if notify_close is not None:
-            notify_close.assert_called_once_with(inst="SOL", pnl=-4.0, stage="云端保护失效退出", exit_px=102.5)
+            notify_close.assert_called_once_with(inst="SOL", pnl=-4.0, stage="云端保护失效退出", exit_px=102.5, venue="okx")
 
 
 if __name__ == "__main__":

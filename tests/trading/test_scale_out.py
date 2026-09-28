@@ -382,5 +382,73 @@ class ScaleOutExecutionTests(unittest.TestCase):
         self.assertEqual(opp["take_profit_price"], 85000.0)
 
 
+class CrossVenueUnitScaleTests(unittest.TestCase):
+    """外所分批止盈必须用**该所自己的**合约面值与最小步长。
+
+    三所持仓接管时新增（用户报「币安/Gate 的仓一直挂在那、也不会被平」）：
+    `f["ctVal"]` / `f["minSz"]` 来自 **OKX 合约池**（DOGE = 1000 张面值），
+    而 Binance 的 `pos` 是**币数**、Gate 的是**自家张数**（DOGE 面值 10）。
+    沿用 OKX 口径 ⇒ 名义额与平仓手续费错 1000 倍，切片量也按错误步长对齐
+    （真下单就是按错的数量平仓）。持仓记录上的值必须优先。
+    """
+
+    def _f(self):
+        return {"instId": "DOGE-USDT-SWAP", "name": "DOGE", "price": 0.1,
+                "atr": 0.002, "precision": 4, "ctVal": 1000.0, "minSz": 0.01,
+                "market_data_valid": True}
+
+    def _run(self, pos):
+        adapter = MagicMock()
+        adapter.place_order.return_value = {"id": "x"}
+        registry = MagicMock()
+        registry.get_adapter.return_value = adapter
+        fee = MagicMock(return_value=0.0)
+        trackers = {"DOGE-USDT-SWAP_long": {"scale_out_phase": 0}}
+        ok, reason = execute_scale_out_if_eligible(
+            self._f(), pos, trackers, "2026-09-28 12:00:00", [],
+            venue_registry=registry, record_trade=MagicMock(),
+            notify_trade_close=MagicMock(), close_fee=fee,
+            close_trade_payload=MagicMock(return_value={}))
+        return ok, reason, adapter, fee
+
+    def test_gate_uses_its_own_contract_value_not_the_okx_pool_value(self):
+        pos = {"side": "long", "avgPx": 0.09615, "pos": 861.0, "venue": "gate",
+               "ctVal": 10.0, "minSz": 10.0, "precision": 0}
+        ok, reason, adapter, fee = self._run(pos)
+        self.assertTrue(ok, reason)
+        self.assertEqual(fee.call_args[0][1], 10.0,
+                         "手续费必须按 Gate 的面值(10)算，不是 OKX 池的 1000")
+        self.assertEqual(adapter.place_order.call_args[0][2], 430.0,
+                         "切片量按 Gate 的 step(10) 对齐")
+
+    def test_binance_uses_coin_units_with_a_contract_value_of_one(self):
+        pos = {"side": "long", "avgPx": 0.09615, "pos": 861.0, "venue": "binance",
+               "ctVal": 1.0, "minSz": 1.0, "precision": 0}
+        ok, reason, adapter, fee = self._run(pos)
+        self.assertTrue(ok, reason)
+        self.assertEqual(fee.call_args[0][1], 1.0,
+                         "币安 pos 已是币数 ⇒ 面值必须是 1，否则名义额错 1000 倍")
+        self.assertEqual(adapter.place_order.call_args[0][2], 430.0,
+                         "切片量按币安的 step(1) 对齐")
+
+    def test_an_okx_position_still_falls_back_to_the_pool_values(self):
+        """没有持仓级覆盖时逐位回落 OKX 口径 —— 不许改变 OKX 路径的行为。"""
+        pos = {"side": "long", "avgPx": 0.09615, "pos": 861.0, "venue": "okx"}
+        fee = MagicMock(return_value=0.0)
+        okx_rest = MagicMock()
+        okx_rest.place_order.return_value = {"ordId": "1"}
+        registry = MagicMock()
+        registry.get_adapter.return_value = MagicMock()
+        ok, reason = execute_scale_out_if_eligible(
+            self._f(), pos, {"DOGE-USDT-SWAP_long": {"scale_out_phase": 0}},
+            "2026-09-28 12:00:00", [],
+            okx_rest=okx_rest, venue_registry=registry,
+            record_trade=MagicMock(), notify_trade_close=MagicMock(),
+            close_fee=fee, close_trade_payload=MagicMock(return_value={}))
+        self.assertTrue(ok, reason)
+        self.assertEqual(fee.call_args[0][1], 1000.0,
+                         "OKX 无覆盖值 ⇒ 沿用合约池面值")
+
+
 if __name__ == "__main__":
     unittest.main()

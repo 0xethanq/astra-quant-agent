@@ -50,9 +50,11 @@ class Rig:
     def __init__(self, *, positions=None, positions_ok=True, pending=(), xv=(True, {}, ""),
                  xv_broken=(), pending_enum_errors=(), balances=None, okx=None,
                  env_mode="demo", ready=True, pending_positions_raises=None,
-                 bal_raises=None, env_raises=False, broken_raises=False):
+                 bal_raises=None, env_raises=False, broken_raises=False,
+                 venue_registry=None):
         self.printed = []
         self.reconciles: list = []
+        self.venue_registry = venue_registry if venue_registry is not None else object()
         self.positions = positions if positions is not None else [
             {"instId": "BTC-USDT-SWAP", "pos": "2", "posSide": "long"}]
         self.positions_ok = positions_ok
@@ -96,7 +98,7 @@ class Rig:
             reconcile_reservation_ledger=lambda *a, **k: self.reconciles.append((a, k)),
             venue_execution_ready=lambda v, env: self.ready,
             broken_execution_venues=_broken,
-            venue_registry=object())
+            venue_registry=self.venue_registry)
         self._pending_ids_out = None
         return out
 
@@ -268,6 +270,129 @@ class InputFailureSemanticsTest(unittest.TestCase):
         rig.pending_enum_errors = []
         rig.ready = self.ready
         return rig.run()
+
+
+class _Spec:
+    def __init__(self, ct_val=1.0, step_size=0.0, min_size=0.0):
+        self.ct_val = ct_val
+        self.step_size = step_size
+        self.min_size = min_size
+        self.tick_size = 0.0
+
+
+class _VenueAdapter:
+    def __init__(self, spec=None, exc=None):
+        self._spec = spec
+        self._exc = exc
+
+    def fetch_instrument_spec(self, base):
+        if self._exc is not None:
+            raise self._exc
+        return self._spec
+
+
+class _Registry:
+    def __init__(self, adapters):
+        self._adapters = adapters
+
+    def get_adapter(self, venue, environment=None):
+        got = self._adapters.get(venue)
+        if isinstance(got, Exception):
+            raise got
+        return got
+
+
+def _doge(size=861.0):
+    return {"inst_id": "DOGEUSDT", "base": "DOGE", "side": "long",
+            "size_signed": size, "entry_price": 0.09615, "mark_price": 0.09645,
+            "unrealized_pnl": 2.583, "leverage": 6.0}
+
+
+class CrossVenueAdoptionTest(unittest.TestCase):
+    """外所在仓必须并入持仓管理路径。
+
+    用户报（2026-09-28）：「币安 gate 的 23、26 号的订单还在，这两平台也好久没有
+    开单了」。根因：`real_pos_dict` 只由 OKX 直签链构建 ⇒ 外所在仓"只计数不处置"，
+    AI 每轮的 UPDATE_SL / CLOSE_MARKET 都被拒（日志逐条打印「不在本路径持仓字典」），
+    于是没有移动止损/分批止盈/时间止损，还长期占着配额。
+
+    这组断言守的是**行为变更本身**：改回"只计数不处置"，下面每一条都会红。
+    """
+
+    def _run(self, adapters, xv):
+        rig = Rig(xv=xv, venue_registry=_Registry(adapters))
+        return rig.run()
+
+    def _adopt(self, xv):
+        ad = _VenueAdapter(_Spec(ct_val=10.0, step_size=10.0, min_size=10.0))
+        out = self._run({BN: ad, GV: _VenueAdapter(_Spec())}, xv)
+        self.assertIsNotNone(out)
+        return out
+
+    def test_a_cross_venue_position_enters_the_managed_dictionary(self):
+        out = self._adopt((True, {BN: [_doge()]}, ""))
+        all_positions, real_pos_dict = out[2], out[6]
+        self.assertIn("DOGE-USDT-SWAP", real_pos_dict,
+                      "外所在仓必须进 real_pos_dict，否则 AI 平仓/移损指令永远执行不了")
+        self.assertEqual([p["instId"] for p in all_positions if p.get("venue") == BN],
+                         ["DOGE-USDT-SWAP"], "也要进 all_positions，管理循环才看得到它")
+        rec = real_pos_dict["DOGE-USDT-SWAP"]
+        self.assertEqual(rec["venue"], BN)
+        self.assertEqual(rec["posSide"], "long")
+        self.assertEqual(rec["pos"], 861.0, "pos 保持该所原生单位，不做换算")
+
+    def test_the_venue_contract_value_rides_along_to_fix_the_unit_scale(self):
+        """★ 单位纪律：下游用 `pos × ctVal × price` 算名义额 —— 币安是币数
+        （面值 1）、Gate 是自家张数（面值 10）。带上 OKX 的 1000 倍面值，
+        名义额与平仓手续费会错 1000 倍。"""
+        out = self._adopt((True, {BN: [_doge()]}, ""))
+        rec = out[6]["DOGE-USDT-SWAP"]
+        self.assertEqual(rec["ctVal"], 10.0, "必须带该所自己的合约面值")
+        self.assertEqual(rec["minSz"], 10.0)
+        self.assertEqual(rec["precision"], 0, "尺寸精度取自该所 step_size(10) 的小数位")
+
+    def test_no_spec_means_no_adoption_rather_than_a_wrong_size(self):
+        """读不到合约规格 ⇒ 不接管。拿错的 ctVal 去算平仓量会真的下错单。"""
+        out = self._run({BN: _VenueAdapter(None)}, (True, {BN: [_doge()]}, ""))
+        self.assertNotIn("DOGE-USDT-SWAP", out[6])
+        self.assertEqual([p for p in out[2] if p.get("venue") == BN], [])
+
+    def test_a_spec_read_failure_is_swallowed_and_skips_adoption(self):
+        out = self._run({BN: _VenueAdapter(exc=RuntimeError("no net"))},
+                        (True, {BN: [_doge()]}, ""))
+        self.assertNotIn("DOGE-USDT-SWAP", out[6])
+
+    def test_an_adapter_lookup_failure_is_swallowed_and_skips_adoption(self):
+        out = self._run({BN: RuntimeError("no adapter")}, (True, {BN: [_doge()]}, ""))
+        self.assertIsNotNone(out, "适配器取不到不该中断周期")
+        self.assertNotIn("DOGE-USDT-SWAP", out[6])
+
+    def test_an_okx_position_on_the_same_symbol_wins_the_key(self):
+        """同一 instId 只能由一条路径管理 —— 撞键时保留 OKX 并出声，绝不静默覆盖。"""
+        rig = Rig(positions=[{"instId": "DOGE-USDT-SWAP", "pos": "5", "posSide": "long"}],
+                  xv=(True, {BN: [_doge()]}, ""),
+                  venue_registry=_Registry({BN: _VenueAdapter(_Spec(10.0, 10.0, 10.0))}))
+        import io
+        from contextlib import redirect_stdout
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            out = rig.run()
+        self.assertEqual(out[6]["DOGE-USDT-SWAP"]["pos"], "5", "OKX 路径优先，保留原记录")
+        self.assertNotIn("ctVal", out[6]["DOGE-USDT-SWAP"],
+                         "撞键时不得被外所记录覆盖（那会把平仓打到错误场所）")
+        self.assertIn("跳过", buf.getvalue(), "撞键必须出声，不许静默")
+
+    def test_the_quota_still_counts_the_cross_venue_position_once(self):
+        """接管之后**不许**在配额里数两遍（原来那段"只计数"已并入接管分支）。"""
+        out = self._adopt((True, {BN: [_doge()]}, ""))
+        # 槽位 = OKX 持仓(1) + 在途挂单(1) + 外所持仓(1)
+        self.assertEqual(out[9], out[1] + 2, "外所持仓只进一次配额")
+
+    def test_a_non_list_all_positions_does_not_crash_the_adoption(self):
+        rig = Rig(positions="junk", xv=(True, {BN: [_doge()]}, ""),
+                  venue_registry=_Registry({BN: _VenueAdapter(_Spec(10.0, 10.0, 10.0))}))
+        out = rig.run()
+        self.assertIsNotNone(out, "非列表持仓响应不得让接管分支炸掉本周期")
 
 
 if __name__ == "__main__":

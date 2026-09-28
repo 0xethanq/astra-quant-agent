@@ -159,6 +159,118 @@ def preflight_reconcile_and_housekeeping(*,
     return (entries_blocked, timestamp_full)
 
 
+def venue_position_record(v_name, row, *, venue_registry, environment_adapter, mode,
+                          spec_cache=None):
+    """外所（binance/gate）在仓 → 与 OKX 同形的持仓记录，供持仓管理链路接管。
+
+    ## 为什么需要它（用户报：币安/Gate 的仓一直挂在那、也不会被平）
+
+    相位 1 的 `real_pos_dict` / `all_positions` 此前**只由 OKX 直签链构建**，
+    外所在仓仅"进配额、不处置"。后果是三重的：
+
+    1. `execute_ai_position_management` 按 instId 查不到它 ⇒ 每轮打印
+       「AI UPDATE_SL / CLOSE_MARKET 指令未执行」，AI 想平仓也平不掉；
+    2. `prune_trackers(trackers, real_pos_dict)` 会把它的追踪器当陈旧记录删掉；
+    3. 于是这些仓**永远没有移动止损、分批止盈、时间止损**，只能等交易所侧的
+       SL/TP 腿触发 —— 实测 XRP 空头已越过计划 TP1 仍未分批止盈、UNI 空头
+       +32.9% 而止损还停在亏损失价位。
+
+    ## 单位纪律（**本函数存在的全部理由**）
+
+    三所的 `pos` 单位各不相同：
+
+    | 场所 | `pos` 单位 | 合约面值 |
+    |---|---|---|
+    | OKX | 张 | 池内 `ctVal`（XRP=100、DOGE=1000） |
+    | Binance | **币数** | 1.0 |
+    | Gate | 张 | 该所 `ct_val`（XRP/DOGE=10） |
+
+    下游 `scale_out` / `position_exit` 用 `pos × ctVal × price` 算名义额与手续费，
+    而它们默认取的是 **OKX 合约池里的 `ctVal`**：币安仓会错 100 倍、Gate 会错
+    10 倍。故这里把**该所自己的** `ctVal` / `minSz` / 尺寸精度一并挂上，由下游
+    优先取用。
+
+    `pos` 本身**保持该所原生单位、不做换算** —— `ad.place_order`、保护腿、
+    `close_position_confirmed` 的回读比对都按原生单位工作，多换一次就多一处
+    可能算错的地方。
+
+    读不到该所合约规格时返回 `None`：**宁可不接管，也不能拿错的 ctVal 去算
+    平仓量**（那会真的按错的数量下平仓单）。
+    """
+    try:
+        env = environment_adapter(v_name, mode)
+        ad = venue_registry.get_adapter(v_name, environment=env)
+    except Exception as exc:
+        print(f"[三所持仓] warn {v_name} 适配器不可得（{exc}）—— 本周期不接管该所在仓")
+        return None
+    base = (str(row.get("base") or row.get("inst_id") or "")
+            .replace("USDT", "").replace("_USDT", "").upper())
+    if not base:
+        return None
+    key = f"{v_name}:{base}"
+    if spec_cache is not None and key in spec_cache:
+        spec = spec_cache[key]
+    else:
+        try:
+            spec = ad.fetch_instrument_spec(base)
+        except Exception as exc:
+            spec = None
+            print(f"[三所持仓] warn {v_name} {base} 合约规格读取失败（{exc}）")
+        if spec_cache is not None:
+            spec_cache[key] = spec
+    if spec is None:
+        print(f"[三所持仓] warn {v_name} {base} 合约规格不可得 —— 不接管该仓"
+              "（缺失的合约面值会让平仓量算错，宁可不接管）")
+        return None
+    try:
+        ct_val = float(getattr(spec, "ct_val", 0) or 0)
+        step = float(getattr(spec, "step_size", 0) or 0)
+        min_sz = float(getattr(spec, "min_size", 0) or 0) or step
+    except (TypeError, ValueError):
+        return None
+    if ct_val <= 0:
+        print(f"[三所持仓] warn {v_name} {base} 合约面值非正（{ct_val}）—— 不接管该仓")
+        return None
+    prec = 0
+    if step > 0:
+        _s = f"{step:.12f}".rstrip("0")
+        prec = len(_s.split(".")[1]) if "." in _s else 0
+    raw_sz = float(row.get("size_signed") or 0.0)
+    side = str(row.get("side") or ("long" if raw_sz > 0 else "short")).lower()
+    entry = float(row.get("entry_price") or 0.0)
+    mark = float(row.get("mark_price") or entry or 0.0)
+    upl = float(row.get("unrealized_pnl") or 0.0)
+    try:
+        _lev = float(row.get("leverage") or 0) or 0.0
+    except (TypeError, ValueError):
+        _lev = 0.0
+    _notional = abs(raw_sz) * ct_val * mark
+    _margin = (_notional / _lev) if _lev > 0 else 0.0
+    # `uplRatio` 是 OKX 侧就有的字段，下游（信号评估 / 加仓判据）会读它；
+    # 外所载荷没有 ⇒ 这里按「浮盈 ÷ 保证金」补齐，避免它静默恒为 0。
+    _upl_ratio = round(upl / _margin * 100, 4) if _margin > 0 else 0.0
+    return {
+        "instId": f"{base}-USDT-SWAP",
+        "posSide": side,
+        "side": side,
+        "pos": abs(raw_sz),
+        "avgPx": entry,
+        "markPx": mark,
+        "upl": upl,
+        "uplRatio": _upl_ratio,
+        "lever": row.get("leverage") or 3,
+        "venue": v_name,
+        "exchange": v_name,
+        "notional": _notional,
+        "margin": round(_margin, 4),
+        # ↓ 单位纪律：下游优先取这三个，避免拿 OKX 的合约面值去算外所仓
+        "ctVal": ct_val,
+        "minSz": min_sz,
+        "precision": prec,
+        "raw": row.get("raw") if isinstance(row.get("raw"), dict) else {},
+    }
+
+
 def fetch_positions_and_reconcile(*,
         entries_blocked,
         _BROKEN_VENUES,
@@ -344,15 +456,41 @@ def fetch_positions_and_reconcile(*,
         print(f"[跨所封顶] fail-closed 本周期禁止新增开仓: {xv_error or '环境轴不可得'}")
         entries_blocked = True
     else:
+        # 三所平权·第二刀：外所在仓**不再"只计数不处置"**，而是归一成与 OKX 同形
+        # 后并入 `all_positions` / `real_pos_dict`，交给同一条持仓管理链路
+        # （止损棘轮、分批止盈、时间止损、AI 平仓）。理由与单位纪律见
+        # `venue_position_record` 的 docstring。
+        from astra_backend.close_intent import adapter_environment as _adapter_env
+        _spec_cache: dict = {}
         for _v, _rows in (xv_positions_by_venue or {}).items():
             for _p in _rows:
                 print(f"[跨所封顶] {_v} {_p.get('inst_id')} {_p.get('side')} "
-                      f"size={_p.get('size_signed')} 纳入本周期仓位配额（只计数不处置）")
+                      f"size={_p.get('size_signed')} 纳入本周期仓位配额并交由持仓管理路径接管")
                 reserved_slot_count += 1
                 if str(_p.get("side", "")).lower() == "long":
                     reserved_long_count += 1
                 else:
                     reserved_short_count += 1
+                if not isinstance(all_positions, list):
+                    continue
+                _rec = venue_position_record(
+                    _v, _p, venue_registry=venue_registry,
+                    environment_adapter=_adapter_env, mode=_xv_env,
+                    spec_cache=_spec_cache)
+                if _rec is None:
+                    continue
+                if _rec["instId"] in real_pos_dict:
+                    # 同一 instId 只能由**一条**路径管理：否则止损/平仓会打到错误的
+                    # 场所（OKX 与币安同时持有同一标的时，键会撞）。保留先到的
+                    # （OKX 直签链优先），并**出声**——绝不静默丢一笔在管敞口。
+                    _held = real_pos_dict[_rec["instId"]]
+                    _held_v = str(_held.get("venue") or _held.get("exchange") or "okx").lower()
+                    print(f"[三所持仓] warn {_rec['instId']} 已由 "
+                          f"{_held_v} 路径持有 —— "
+                          f"跳过 {_v} 的同标的记录（同一 instId 只能由一条路径管理）")
+                    continue
+                all_positions.append(_rec)
+                real_pos_dict[_rec["instId"]] = _rec
 
     # 1b. US-010 预留对账：基于本周期刚核验的持仓/挂单实况回笼陈旧占用
     #     （活仓/在途挂单一律保留；无仓无挂且超 TTL 才 closed——宁慢不错杀）。

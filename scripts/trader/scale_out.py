@@ -57,9 +57,17 @@ def execute_scale_out_if_eligible(
     name = str(f.get("name", inst_id.split("-")[0]))
     cur_px = float(f.get("price", 0.0) or 0.0)
     atr = max(float(f.get("atr", 0.0) or 0.0), cur_px * 0.005)
-    prec = int(f.get("precision", 2) or 2)
-    ct_val = float(f.get("ctVal", 1.0) or 1.0)
-    min_sz = float(f.get("minSz", 0.01) or 0.01)
+    # ⚠️ 单位纪律（三所持仓接管）：`ctVal`/`minSz`/尺寸精度对**外所在仓**必须取
+    # 该所自己的值 —— `f[...]` 一律来自 OKX 合约池，而币安的 `pos` 是币数
+    # （OKX 面值 100 会算错 100 倍）、Gate 是自家张数（面值 10，错 10 倍）。
+    # 持仓记录上挂的值优先；缺失时回落 OKX 口径 ⇒ OKX 路径逐位不变。
+    # 注意 `prec` 只用于**尺寸**取整（价格精度见下方 `px_prec`，仍取 `f`）。
+    _pos_ct = curr_pos.get("ctVal")
+    _pos_min = curr_pos.get("minSz")
+    _pos_prec = curr_pos.get("precision")
+    ct_val = float(_pos_ct if _pos_ct else (f.get("ctVal", 1.0) or 1.0))
+    min_sz = float(_pos_min if _pos_min else (f.get("minSz", 0.01) or 0.01))
+    prec = int(_pos_prec if _pos_prec is not None else (f.get("precision", 2) or 2))
 
     pos_sz = abs(float(curr_pos.get("pos", 0.0) or 0.0))
     if pos_sz <= 0:
