@@ -514,6 +514,84 @@ class OtherVenueLivePositionsTests(unittest.TestCase):
         self.assertEqual(ok, {"binance", "gate"})
 
 
+# ───────────────────── 币安在仓生命周期富化 ─────────────────────
+class BinancePositionLifecycleTests(unittest.TestCase):
+    """`_binance_position_lifecycle` —— positionRisk 无费用字段，故回放 userTrades。
+
+    用户报「台账里看不见资金费/手续费」（2026-09-28）：币安 `/fapi/v2/positionRisk`
+    **不返回任何佣金或资金费字段**，且其 `updateTime` 是"最后变更"时刻而非开仓时刻，
+    于是所有币安在仓行的 fee / funding_fee 恒为 0、持仓时长也算错。
+    """
+
+    def _ad(self, trades, funding=None, *, trades_exc=None):
+        routes = {"/fapi/v1/userTrades": trades,
+                  "/fapi/v1/income": funding if funding is not None else []}
+        if trades_exc is not None:
+            routes["/fapi/v1/userTrades"] = trades_exc
+        return _FakeSigned(routes)
+
+    def test_a_single_opening_trade_supplies_its_time_and_commission(self):
+        ad = self._ad([{"id": 1, "side": "SELL", "qty": "46", "commission": "0.0934",
+                        "time": 1000}])
+        self.assertEqual(sfl._binance_position_lifecycle(ad, "UNIUSDT", -46.0),
+                         (1000, 0.0934, 0.0))
+
+    def test_a_multi_trade_build_up_walks_back_to_the_first_trade(self):
+        # 自最新向前累加：2 → 4 → 13，want=13 ⇒ 开仓笔是第一笔（time=100）
+        ad = self._ad([
+            {"side": "BUY", "qty": "2", "commission": "0.01", "time": 100},
+            {"side": "BUY", "qty": "2", "commission": "0.01", "time": 200},
+            {"side": "BUY", "qty": "9", "commission": "0.03", "time": 300},
+        ])
+        ms, fee, _ = sfl._binance_position_lifecycle(ad, "BTCUSDT", 13.0)
+        self.assertEqual(ms, 100)
+        self.assertAlmostEqual(fee, 0.05, places=6)
+
+    def test_a_short_build_up_uses_the_sell_side(self):
+        ad = self._ad([
+            {"side": "SELL", "qty": "5", "commission": "0.01", "time": 100},
+            {"side": "SELL", "qty": "5", "commission": "0.02", "time": 200},
+        ])
+        ms, fee, _ = sfl._binance_position_lifecycle(ad, "XRPUSDT", -10.0)
+        self.assertEqual(ms, 100)
+        self.assertAlmostEqual(fee, 0.03, places=6)
+
+    def test_a_mismatched_history_reports_unknown_rather_than_guessing(self):
+        # ★ 实测：币安测试网存在持仓量与成交史不一致的账户。对不上必须**如实说不知道**
+        # ——退回"最早一笔"会把同标的历史已平仓位的佣金一起算进来。
+        ad = self._ad([{"side": "BUY", "qty": "2", "commission": "9.99", "time": 100}])
+        self.assertEqual(sfl._binance_position_lifecycle(ad, "XRPUSDT", -733.4),
+                         (0, 0.0, 0.0))
+
+    def test_funding_is_queried_from_the_open_time_and_summed(self):
+        trades = [{"side": "SELL", "qty": "46", "commission": "0.09", "time": 1000}]
+        ad = self._ad(trades, [{"income": "0.5", "time": 2000},
+                               {"income": "-0.1", "time": 3000}])
+        ms, fee, funding = sfl._binance_position_lifecycle(ad, "UNIUSDT", -46.0)
+        self.assertEqual(ms, 1000)
+        self.assertAlmostEqual(funding, 0.4, places=6)
+        # 资金费必须以**开仓时刻**为窗口起点查询（否则会算进历史仓位）
+        income_calls = [c for c in ad.calls if c[1] == "/fapi/v1/income"]
+        self.assertEqual(income_calls[0][2]["startTime"], 1000)
+
+    def test_a_failing_user_trades_call_yields_unknown(self):
+        ad = self._ad([], trades_exc=RuntimeError("no net"))
+        self.assertEqual(sfl._binance_position_lifecycle(ad, "XRPUSDT", -1.0),
+                         (0, 0.0, 0.0))
+
+    def test_a_failing_funding_call_keeps_the_time_and_fee(self):
+        trades = [{"side": "SELL", "qty": "46", "commission": "0.09", "time": 1000}]
+        ad = _FakeSigned({"/fapi/v1/userTrades": trades,
+                          "/fapi/v1/income": RuntimeError("no net")})
+        self.assertEqual(sfl._binance_position_lifecycle(ad, "UNIUSDT", -46.0),
+                         (1000, 0.09, 0.0))
+
+    def test_an_empty_trade_history_yields_unknown(self):
+        ad = self._ad([])
+        self.assertEqual(sfl._binance_position_lifecycle(ad, "XRPUSDT", -1.0),
+                         (0, 0.0, 0.0))
+
+
 # ───────────────────── 台账行构造器 ─────────────────────
 class HoldingRowTests(unittest.TestCase):
     def _row(self, p, *, venue="okx", allowed=None, unmanaged=None, trackers=None):

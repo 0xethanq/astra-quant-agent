@@ -596,6 +596,84 @@ def _history_truncated_in_scope(truncated, oldest_ms, reset_time, tz_bj):
     return _t >= str(reset_time)
 
 
+def _binance_position_lifecycle(ad, symbol: str, size_signed: float) -> tuple:
+    """币安**在仓**的真实开仓时刻、已付手续费与已结算资金费。
+
+    为什么必须回放成交：`/fapi/v2/positionRisk` **不返回任何费用字段**，且它的
+    `updateTime` 是"最后变更"时刻而非开仓时刻 —— 实测 UNI 空仓真实开仓
+    2026-09-23 18:01，`updateTime` 却是 21:50（差 3.8 小时）。用它当开仓时间，
+    持仓时长与资金费窗口都是错的。
+
+    做法：自最新一笔成交向前累加**带符号**成交量（BUY 为 +、SELL 为 −），累加值
+    首次等于当前持仓量时，该笔即本仓的开仓笔 ⇒ 得真实开仓时刻；并把自该笔起的
+    全部佣金累加为已付手续费。再以开仓时刻为 `startTime` 汇总 `FUNDING_FEE`，
+    只统计**本仓生命周期内**的资金费（不带 startTime 会把同一标的历史仓位结算
+    一起算进来）。
+
+    返回 `(open_ms, fee_usdt, funding_usdt)`；任何一步失败返回已求得的部分，绝不抛
+    （台账同步不允许因某个标的的富化失败而整体失败）。
+    """
+    open_ms = 0
+    fee = 0.0
+    funding = 0.0
+    trades: list = []
+    try:
+        trades = ad.signed_request(
+            "GET", "/fapi/v1/userTrades",
+            params={"symbol": symbol, "limit": 500}) or []
+    except Exception:
+        trades = []
+    if isinstance(trades, list) and trades:
+        try:
+            want = float(size_signed or 0.0)
+            acc = 0.0
+            start_idx = None
+            for i in range(len(trades) - 1, -1, -1):
+                t = trades[i]
+                if not isinstance(t, dict):
+                    continue
+                try:
+                    q = float(t.get("qty", 0) or 0)
+                except (TypeError, ValueError):
+                    q = 0.0
+                acc += q if str(t.get("side", "")).upper() == "BUY" else -q
+                if abs(acc - want) <= 1e-9:
+                    start_idx = i
+                    break
+            if start_idx is None:
+                # ⚠️ 对不上就**如实说不知道**：绝不退回"最早一笔"充数 —— 那会把同一
+                # 标的**历史已平仓位**的佣金一起计入本仓，并给出一个远古的开仓时刻。
+                # （币安测试网实测存在持仓量与成交史不一致的账户，正是此情形。）
+                return 0, 0.0, 0.0
+            open_ms = int(trades[start_idx].get("time", 0) or 0)
+            for t in trades[start_idx:]:
+                if not isinstance(t, dict):
+                    continue
+                try:
+                    fee += abs(float(t.get("commission", 0) or 0))
+                except (TypeError, ValueError):
+                    pass
+        except Exception:
+            pass
+    if open_ms > 0:
+        try:
+            rows = ad.signed_request(
+                "GET", "/fapi/v1/income",
+                params={"incomeType": "FUNDING_FEE", "symbol": symbol,
+                        "startTime": open_ms, "limit": 1000}) or []
+            if isinstance(rows, list):
+                for fr in rows:
+                    if not isinstance(fr, dict):
+                        continue
+                    try:
+                        funding += float(fr.get("income", 0) or 0)
+                    except (TypeError, ValueError):
+                        pass
+        except Exception:
+            pass
+    return open_ms, round(fee, 4), round(funding, 4)
+
+
 def _other_venue_live_positions(env_axis):
     """binance/gate 活动持仓，归一成与 OKX 同形的字段（与仪表盘同一事实源：
     astra_backend.exchanges.get_adapter）。
@@ -636,20 +714,24 @@ def _other_venue_live_positions(env_axis):
             v_notional = abs(float(vp.get("notional") or raw_d.get("notional") or raw_d.get("value") or 0.0))
             v_margin = float(vp.get("margin") or raw_d.get("margin") or raw_d.get("initial_margin") or 0.0)
 
-            # 统一毫秒开仓时间戳
+            # 开仓时刻 / 已付手续费 / 已结算资金费
             c_time_ms = 0
+            v_fee = 0.0
+            v_funding = 0.0
             if v_name == "gate":
+                # Gate 持仓载荷自带 open_time（秒）与 pnl_fee / pnl_fund，直接取用
                 g_open = int(raw_d.get("open_time", 0) or vp.get("open_time", 0) or 0)
                 if g_open > 0:
                     c_time_ms = g_open * 1000
-            elif v_name == "binance":
-                c_time_ms = int(vp.get("open_time") or vp.get("cTime") or raw_d.get("updateTime") or 0)
+                v_fee = abs(float(raw_d.get("pnl_fee") or raw_d.get("fee") or vp.get("fee") or 0.0))
+                v_funding = float(raw_d.get("pnl_fund") or vp.get("funding_fee") or 0.0)
+            else:
+                # ⚠️ 币安 positionRisk **不含**费用字段，且 updateTime 是"最后变更"
+                # 而非开仓时刻 ⇒ 回放 userTrades 求真实开仓笔与佣金，再汇总资金费。
+                c_time_ms, v_fee, v_funding = _binance_position_lifecycle(
+                    ad, str(vp.get("inst_id") or raw_d.get("symbol") or ""), amt)
             if c_time_ms <= 0:
                 c_time_ms = int(vp.get("open_time") or vp.get("cTime") or 0)
-
-            # 资金费与手续费
-            v_fee = abs(float(raw_d.get("pnl_fee") or raw_d.get("fee") or vp.get("fee") or 0.0))
-            v_funding = float(raw_d.get("pnl_fund") or vp.get("funding_fee") or 0.0)
 
             items.append({
                 "venue": v_name,
