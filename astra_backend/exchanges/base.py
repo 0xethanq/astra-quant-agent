@@ -11,7 +11,7 @@
    币数语义截断到 step、张数语义 `floor` —— 换算出的名义**永不超出**目标。
 4. **行情与执行分离**（nautilus 模式）：本阶段 OKX 执行走自有直签链路
    （`okx_rest` / `okx_trade_service`），适配器面提供只读行情与能力声明。
-   ⚠️ 2026-10：Binance / Gate 适配器已随多所拆除**整体移除**，本层只剩 OKX。
+   本层为 OKX 专用适配器基类。
 
 符号规范：全系统内部 canonical 资产名 = 裸币种（"BTC"）；venue 原生 instId 只在
 适配器边界内存在（OKX "BTC-USDT-SWAP"）。
@@ -109,18 +109,9 @@ _QUOTE_SUFFIXES = ("USDT", "USDC", "FDUSD", "BUSD", "TUSD", "USD")
 
 
 def canonical_base(symbol: str) -> str:
-    """任意写法（BTC / btc / BTC-USDT-SWAP / BTCUSDT / BTC_USDT）→ 裸币种 "BTC"。
-
-    第一百八十五刀修好两处**违背本 docstring** 的输入（真机实测）：
-      - 合成 id：`GATE:BTC_USDT` 原样得到 `GATE:BTC`（场所前缀被当成币种）⇒ 先剥 `:` 前缀；
-      - 非 USDT 计价：`BTC_USDC` 得到 `BTCUSDC`、`BTC-USD-SWAP` 得到 `BTCUSDSWAP`
-        （计价币被并进币种）⇒ 先按分隔符取首段，再对无分隔符写法剥计价币后缀。
-
-    为什么值得修：它被面板/因子/符号归一等**多处共用**；返回 `GATE:BTC` 这种值会让
-    "按币种匹配"静默失配（本会话已多次遇到"同义异写"造成的静默）。
-    """
+    """任意写法（BTC / btc / BTC-USDT-SWAP / BTCUSDT）→ 裸币种 "BTC"。"""
     text = str(symbol or "").strip().upper()
-    if ":" in text:                                   # GATE:BTC_USDT → BTC_USDT
+    if ":" in text:                                   # PREFIX:BTC-USDT-SWAP → BTC-USDT-SWAP
         text = text.rsplit(":", 1)[1]
     for sep in ("-", "_", "/"):                       # BTC-USDT-SWAP / BTC_USDT → BTC
         if sep in text:

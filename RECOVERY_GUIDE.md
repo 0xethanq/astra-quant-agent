@@ -13,7 +13,7 @@
 - **Web 监控大屏**：`astra_backend/dashboard_cache.py` + `astra_backend/templates/index.html`（Bloomberg/Linear 级 Dark Glassmorphism 极客交易终端，支持全局 Prompt 悬浮透视抽屉）
 - **插件化灾备**：`scripts/backup_runtime.py` + 后台“灾备中心”（按任务配置本地、百度官方 OAuth/ByPy、S3 兼容、阿里云 OSS、WebDAV/OpenList、阿里云盘桥接与实验性夸克桥接；凭证独立加密，任务导出不含密钥）
 - **核心数据资产清单**：
-  - `data/trading_ledger.json` & `trading_ledger.xlsx`（全量交易流水账本与资金费记录；**其中仍含已移除交易所 `binance` / `gate` 的历史成交行** —— 属历史事实，只读保留、不重写、不删除）
+  - `data/trading_ledger.json` & `trading_ledger.xlsx`（全量交易流水账本与资金费记录，只读保留、不重写、不删除）
   - `data/AI_TRADING_MEMORY.md`（QwenPaw 原生带时间戳启发式实战心法长期记忆）
   - `data/ai_brain_history.json`（AI 大脑每 15 分钟全市场宏观推演与在途持仓审计日志）
   - `data/ai_brain_last_prompt.txt`（15,500+ 字符真实 System + User Prompt 快照）

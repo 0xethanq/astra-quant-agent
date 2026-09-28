@@ -96,8 +96,7 @@ def build_order_intent(*, is_long, inst_id, actual_sz, ct_val, min_sz, limit_px,
         "max_leverage": inst_lever_cap,
         # 审计 P1-7：per-venue min_confidence 闸门需要原始置信度（决策载荷里本没有）
         "confidence": ai_conf,
-        # 场所边界换算「保证金 → 原生数量」所需的合约规格（OKX 直签链用池子口径；
-        # 币安/Gate 在 router 里取**该所自己的** spec，不读这里）。
+        # 场所边界换算「保证金 → 原生数量」所需的合约规格（OKX 直签链用池子口径）。
         "ct_val": ct_val,
         "min_sz": min_sz,
         "intent_id": (f"{inst_id}:BUY_LONG" if is_long else f"{inst_id}:SELL_SHORT")

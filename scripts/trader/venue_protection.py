@@ -56,7 +56,7 @@ DEFAULT_RENEW_WITHIN_S = 24 * 3600
 DEFAULT_WATCHDOG_DEBOUNCE_S = 30 * 60
 #: 覆盖缺口容忍度（相对持仓量）：小于千分之一视为浮点噪音，不修
 DEFAULT_TOLERANCE_RATIO = 0.001
-#: 判定"这条腿属于本系统"的文本标记（与云端棘轮同一套：Gate `t-astrasl*`、Binance 类型名）
+#: 判定"这条腿属于本系统"的文本标记
 OUR_SL_MARKERS = ("astrasl", "stop")
 OUR_TP_MARKERS = ("astratp", "take_profit")
 
@@ -70,10 +70,7 @@ def _as_float(value: Any) -> Optional[float]:
 
 
 def _row_text(row: Dict[str, Any]) -> str:
-    """把交易所行里所有可能带标签的文本拼起来（与云端棘轮同一口径）。
-
-    Gate 把标签放在 `initial.text`（`t-astrasl…`），Binance 把类型放在 `type`/`raw.orderType`。
-    """
+    """把交易所行里所有可能带标签的文本拼起来（与云端棘轮同一口径）。"""
     order = row.get("order") if isinstance(row.get("order"), dict) else {}
     initial = row.get("initial") if isinstance(row.get("initial"), dict) else {}
     raw = row.get("raw") if isinstance(row.get("raw"), dict) else {}
@@ -81,10 +78,7 @@ def _row_text(row: Dict[str, Any]) -> str:
         order.get("text"), initial.get("text"), row.get("text"),
         row.get("type"), row.get("orderType"), raw.get("orderType"),
         raw.get("type"), row.get("algoType"),
-        # 第一百七十五刀：**客户端订单号**（Binance `clientAlgoId`/`clientOrderId` 等）——
-        # 补"标签存在但扫描器看不见"这个洞。⚠️ 如实说明：真机上 Binance 的 `clientAlgoId`
-        # 目前是交易所给的**随机串**（实测 20/20 不含 `astra`）⇒ 本行**不会**让当下的 Binance
-        # 腿变得可归因；给 Binance 腿打标签是**写入侧**的事，已登记（会改下单参数，需拍板）。
+        # 客户端订单号
         row.get("clientAlgoId"), raw.get("clientAlgoId"),
         row.get("clientOrderId"), raw.get("clientOrderId"),
     ]
@@ -100,7 +94,7 @@ def _leg_kind(row: Dict[str, Any]) -> Optional[str]:
         return "sl"
     if "astratp" in text:
         return "tp"
-    # 没有我们的标签时，只认明确的类型名（Binance STOP_MARKET / TAKE_PROFIT_MARKET）
+    # 没有我们的标签时，只认明确的类型名
     if "take_profit" in text:
         return "tp"
     if "stop" in text:
@@ -114,17 +108,10 @@ def _is_live(row: Dict[str, Any]) -> bool:
 
 
 def _leg_size(row: Dict[str, Any]) -> Optional[float]:
-    """该腿覆盖的数量；`None` = 不可判定。
-
-    ⚠️ 各所字段位置不同（**本机实跑真单核对过**）：
-    - Gate `price_orders`：`initial.size` / 顶层 `size`（`size=0 + close=true` 走整仓平分支）；
-    - Binance `algoOrder`：数量在 **`raw.quantity`**（顶层没有 `size`），`actualQty` 是
-      已成交量、**不能**当覆盖量用。
-    漏读 Binance 这一层会让每个币安仓位的覆盖都变成"不可判定"，巡检永远不敢动手。
-    """
+    """该腿覆盖的数量；`None` = 不可判定。"""
     raw = row.get("raw") if isinstance(row.get("raw"), dict) else {}
     initial = row.get("initial") if isinstance(row.get("initial"), dict) else {}
-    # 剩余量优先（Gate `left` / 部分成交后的余量），其次下单量本身
+    # 剩余量优先，其次下单量本身
     for container in (row, raw, initial):
         for key in ("left", "size_remaining", "remaining"):
             num = _as_float(container.get(key))
@@ -139,11 +126,7 @@ def _leg_size(row: Dict[str, Any]) -> Optional[float]:
 
 
 def _is_full_close(row: Dict[str, Any]) -> bool:
-    """该腿语义是"平掉全部仓位"（Gate `close=true`/`auto_size`、Binance `closePosition`）。
-
-    Gate 挂单用 `initial.size=0 + close=true` 表示"整仓平"，此时 `size` 字段
-    给不出覆盖张数 —— 但覆盖范围其实是**全部**，不能当成"不可判定"。
-    """
+    """该腿语义是"平掉全部仓位"（如 `closePosition=true`）。"""
     initial = row.get("initial") if isinstance(row.get("initial"), dict) else {}
     raw = row.get("raw") if isinstance(row.get("raw"), dict) else {}
     for container in (row, initial, raw):
@@ -171,10 +154,7 @@ def _row_close_side(row: Dict[str, Any]) -> Optional[str]:
 
 
 def _trigger_price(row: Dict[str, Any]) -> Optional[float]:
-    """该腿的触发价（续期时**复用**它，绝不重新定价）。
-
-    Gate 在 `trigger.price`，Binance 在 `trigger_price`/`triggerPrice`。
-    """
+    """该腿的触发价（复用它，绝不重新定价）。"""
     trigger = row.get("trigger") if isinstance(row.get("trigger"), dict) else {}
     for candidate in (row.get("trigger_price"), row.get("triggerPrice"),
                       trigger.get("price"), row.get("price")):
@@ -185,11 +165,7 @@ def _trigger_price(row: Dict[str, Any]) -> Optional[float]:
 
 
 def leg_base(row: Dict[str, Any]) -> str:
-    """该腿的**币种基名**（各所字段位置不同，本机真单核对）。
-
-    - Gate `price_orders`：`initial.contract` = `BTC_USDT`（顶层没有 `symbol`）；
-    - Binance `algoOrder`：`symbol` / `raw.symbol` = `BTCUSDT`。
-    """
+    """该腿的**币种基名**。"""
     initial = row.get("initial") if isinstance(row.get("initial"), dict) else {}
     raw = row.get("raw") if isinstance(row.get("raw"), dict) else {}
     for candidate in (initial.get("contract"), row.get("contract"), row.get("symbol"),
@@ -204,13 +180,7 @@ def leg_base(row: Dict[str, Any]) -> str:
 
 
 def _leg_position_side(row: Dict[str, Any]) -> Optional[str]:
-    """该腿保护的**持仓方向**（`long`/`short`）；判不出 → `None`（不猜）。
-
-    各所语义不同（本机真单核对）：
-    - Gate：`initial.auto_size = close_short` ⇒ 保护的是**空仓**；`close_long` ⇒ 多仓；
-      无 auto_size 时退回 `direction`（Gate 的 `direction` 是**平仓方向**：long=买平 ⇒ 原仓空）；
-    - Binance：腿的 `side` 是**平仓方向**（BUY 平空 ⇒ 原仓 short）。
-    """
+    """该腿保护的**持仓方向**（`long`/`short`）；判不出 → `None`（不猜）。"""
     initial = row.get("initial") if isinstance(row.get("initial"), dict) else {}
     raw = row.get("raw") if isinstance(row.get("raw"), dict) else {}
     for container in (initial, row, raw):
@@ -248,15 +218,7 @@ def _to_seconds(value: Optional[float]) -> Optional[float]:
 
 
 def _expiry(row: Dict[str, Any]) -> tuple:
-    """→ `(expires_at_s | None, state)`；state ∈ {"absolute","relative","never","unknown"}。
-
-    三种真实形态（本机实跑核对过）：
-    - **Gate**：`trigger.expiration` 是**相对创建时间**的秒数（0 = 永不过期）；
-    - **Binance**：`raw.goodTillDate` 是 GTD 绝对时间戳（0 = 无）；`timeInForce=GTC`
-      是**明确语义**"撤销前一直有效"，故它等价于永不过期 —— 不能当成"不可判定"，
-      否则每个币安仓位每周期都会被标记待复验（噪音会淹没真信号）；
-    - 两者都读不到 ⇒ unknown（不可判定，交给上层复验，绝不假设安全）。
-    """
+    """→ `(expires_at_s | None, state)`；state ∈ {"absolute","relative","never","unknown"}。"""
     trigger = row.get("trigger") if isinstance(row.get("trigger"), dict) else {}
     raw = row.get("raw") if isinstance(row.get("raw"), dict) else {}
 
@@ -295,36 +257,16 @@ _TRIGGER_TYPE_KEYS = ("tpTriggerPxType", "slTriggerPxType", "triggerPxType", "tr
 
 
 def trigger_px_type(row: Dict[str, Any]) -> Optional[str]:
-    """保护腿的**触发价类型**（各所字段不同，逐一查证后原样透传）。
-
-    | 所 | 字段 | 本函数返回 |
-    |---|---|---|
-    | OKX | `tp/slTriggerPxType` | `mark` / `last` / `index`（**交易所自己的词**）|
-    | Binance | `workingType` | `mark_price` / `contract_price`（**交易所自己的字面量**，仅小写化）|
-    | Gate | `trigger.price_type`（**数字码**）| `price_type:<码>` —— **原样透传，不解释** |
-    | 其它/读不到 | — | `None`（未上报；调用方须披露成 `unknown`）|
-
-    为什么 Gate 的数字码**不翻译**：它的官方映射（0/1/2 各是什么价）本仓**未核实**
-    （开发环境无法联网核对官方文档）⇒ 凭记忆写死映射就是把"没核实的东西"当成事实，
-    正是本会话反复修的那类谎。原样带字段名给运营看，比猜一个中文名更有用也更诚实。
-
-    Binance 的 `CONTRACT_PRICE` / `MARK_PRICE` 是**自描述字面量**（字面量本身说明了按哪种价），
-    故只做小写化、不额外推断。
-
-    读不到 ⇒ `None`（表示"未上报"），调用方必须把它**披露**成未知 ——
-    **不得**用"我们期望的类型"顶替：读不到 ≠ 按标记价触发（读不到 ≠ 没有）。
-    """
+    """保护腿的**触发价类型**（OKX 专用：tp/slTriggerPxType → mark/last/index）。"""
     raw = row.get("raw") if isinstance(row.get("raw"), dict) else {}
     for container in (row, raw):
         for key in _TRIGGER_TYPE_KEYS:
             val = container.get(key)
             if isinstance(val, str) and val.strip():
                 return val.strip().lower()
-        # Binance：自描述字面量
         wt = container.get("workingType")
         if isinstance(wt, str) and wt.strip():
             return wt.strip().lower()
-    # Gate：`trigger.price_type` 是数字码 ⇒ 原样带字段名，不做映射
     for container in (row, raw):
         trig = container.get("trigger")
         if isinstance(trig, dict) and trig.get("price_type") is not None:
@@ -364,25 +306,12 @@ def protection_trigger_type_fields(legs: Optional[Sequence[Dict[str, Any]]],
 
 
 def _norm_contract(text: Any) -> str:
-    """合约串归一：只留字母数字并大写（`BTC_USDT` / `BTCUSDT` / `BTC-USDT-SWAP` → `BTC…`）。
-
-    各所拼法不同（Gate 用 `BTC_USDT`、Binance 用 `BTCUSDT`、OKX 用 `BTC-USDT-SWAP`），
-    而跨所持仓的 `inst_id` 又是**合成 id**（`GATE:BTC_USDT`）。不归一就没法可靠比较。
-    """
+    """合约串归一：只留字母数字并大写（`BTC-USDT-SWAP` → `BTCUSDTSWAP`）。"""
     return "".join(ch for ch in str(text or "").upper() if ch.isalnum())
 
 
 def _base_of(symbol: Any) -> str:
-    """从合约/合成 id 里取**币种**（第一百八十刀引入，第一百八十五刀改为**委派**）。
-
-    为什么委派：本仓"任意写法 → 裸币种"的语义**已经有唯一实现**
-    （`astra_backend.exchanges.base.canonical_base`，面板/因子/符号归一都在用；
-    `scripts/ai_brain_trader.py` 也早就在 import 它）。本函数此前又写了一份，于是两者在
-    `GATE:BTC_USDT`（前缀）与 `BTC_USDC`（非 USDT 计价）上**给出不同答案** ——
-    同一语义写两遍必然漂移，这里改为直接调用那一处。
-
-    惰性导入：避免后端包在 import 期反向拉起本模块（本模块被面板导入）。
-    """
+    """从合约取币种（委派给 `canonical_base` 唯一实现）。"""
     from astra_backend.exchanges.base import canonical_base
     return canonical_base(str(symbol or ""))
 
@@ -452,20 +381,9 @@ def scan_protective_orders(rows: Optional[Sequence[Dict[str, Any]]], *,
             continue
         if require_symbol_match and base and not _leg_matches_base(row, base):
             continue
-        # 第一百七十九刀：方向判据**改用唯一来源** `_leg_position_side`（真单核对过 Gate
-        # `auto_size`/`direction` 与 Binance `side` 的语义），而不是本函数原来那段只看
-        # `side`/`order_side` 的比较 —— 真机实测：**Gate 的 6 条腿一条都读不出 side**，
-        # 于是"方向过滤"对 Gate **完全失效**，一条平**空**腿会被算进**多**仓的覆盖
-        # （本仓 attribution 早就读得到 Gate 方向，故它一直能报 side_mismatch；
-        # 只有覆盖这条链在瞎）。语义写两遍就会漂，这里是同一语义的第二次拼写。
         leg_pos_side = _leg_position_side(row)
         if leg_pos_side is not None and pos_side and leg_pos_side != pos_side:
             continue
-        # 方向**读不出来** ⇒ 沿用本函数一直以来的口径：**照旧计入**覆盖（`_is_close` 的
-        # 整仓平腿、无方向字段的所都依赖这条；既有 6 个用例把它钉成了有意选择）。
-        # ⚠️ 残留（已登记在手册）：不报方向的所会留着"反向腿被算成覆盖"的口子 ——
-        # 今天**不可达**（真机核对：Gate 6/6、Binance 18/18 都能读出方向）。
-        # 将来若接入不报方向的所，这里应改判 `coverage_unknown`（而不是继续默认算覆盖）。
 
         leg = {
             "id": str(row.get("id") or row.get("algo_id") or row.get("algoId")
@@ -481,11 +399,7 @@ def scan_protective_orders(rows: Optional[Sequence[Dict[str, Any]]], *,
         leg["expiry_state"] = exp_state
         ours.append(leg)
 
-        # 第一百七十八刀：**已过期 ⇒ 不是覆盖**。
-        # 真机反例（本刀实测）：Gate 一条 `expiration=3600`、`create_time` 在 2 小时前的止损腿，
-        # 仍被算成"覆盖满量 + 有活止损"⇒ `protected_now=True`、`needs_repair=False`，
-        # 审计只说 "renew" 而**不进 critical** ⇒ 一个**裸奔**的仓位被报成"已保护"。
-        # 过期腿的到期信息是**确知**的（不是"不可判定"）⇒ 必须从覆盖里剔除。
+        # 已过期 ⇒ 不是覆盖
         _leg_expired = (exp_state in ("relative", "absolute") and expires_at is not None
                         and expires_at <= float(now_s))
 
@@ -552,11 +466,6 @@ def attribute_protective_orders(positions: Optional[Sequence[Dict[str, Any]]],
                                ) -> Dict[str, Any]:
     """逐腿归属：这条保护腿是**给当前哪个仓**挂的？纯判定，无 IO。
 
-    为什么必须做（2026-09-20 实盘实测）：Binance 账户 13 张腿里只有 2 张对得上唯一活动仓
-    （UNI 82 张），另有 2 张是 UNI 的**旧量**（51/55，来自更早的仓）、3 张可归因孤儿
-    （ARB/XRP/ETH，台账有同向同量已平记录）、6 张**归属不可判定**（ETH 0.537 / SOL 10.45…）。
-    Gate 侧 3 张腿则全部带我们的 `t-astrasl/t-astratp` 标签、`auto_size=close_*`（整仓平，无张数）。
-
     危害（判据，不是"要不要撤"）：
     1. **虚假安全感**：`scan_protective_orders` 按币种+平仓方向+数量算覆盖 ⇒ 给新仓算覆盖时，
        旧仓遗留的腿会被算成"已有保护"；
@@ -567,7 +476,7 @@ def attribute_protective_orders(positions: Optional[Sequence[Dict[str, Any]]],
 
     | evidence | 含义 | 可否自动清理 |
     |---|---|---|
-    | `tag` | 带本系统标签（Gate `t-astrasl/t-astratp`）⇒ **可证明**是我们的 | ✅ |
+    | `tag` | 带本系统标签（`t-astrasl/t-astratp`）⇒ **可证明**是我们的 | ✅ |
     | `ledger` | 无标签，但台账有**同向同量**记录 ⇒ 高度可能 | ✅ |
     | `None` | 两者都没有 ⇒ **归属不可判定** | ❌ 绝不自动撤（可能是用户手单） |
 
@@ -706,7 +615,7 @@ def select_legs_to_cancel_after_close(closed_position: Optional[Dict[str, Any]],
     ## 只撤"能证明是这一笔的"，其余一律不碰
 
     - `matched`：腿保护的就是刚平掉的那个仓（张数相符，或 `auto_size` 整仓平）⇒ 撤；
-    - `orphan_attributed` 且证据 `tag`（Gate `t-astrasl/t-astratp`）⇒ **可证明是我们的** ⇒ 撤；
+    - `orphan_attributed` 且证据 `tag`（`t-astrasl/t-astratp`）⇒ **可证明是我们的** ⇒ 撤；
     - `size_mismatch` / `side_mismatch`：**同一合约上属于别的仓**的历史腿 ——
       平掉 A 仓不等于 B 仓的腿该撤，故**只报告不撤**（留给归属审计）；
     - `orphan_unattributed` / `unparsed` / `foreign`：**绝不撤**（可能是用户手单）。
@@ -790,17 +699,7 @@ def read_ledger_rows(path: Any, *, log: Any = print) -> Optional[List[Dict[str, 
 
 
 def cancel_protective_leg(ad: Any, leg_id: Any, *, symbol: Any = None) -> bool:
-    """按**能力探针**撤一条保护腿；撤不动返回 False（不抛）。
-
-    ⚠️ 为什么必须有这个探针（第一百九十一刀，真机核对）：三个适配器的撤腿能力**各不相同** ——
-    `cancel_price_order` 只有 **Gate** 有，`cancel_algo_order` 只有 **Binance** 有，
-    OKX 走 `okx_rest` 自己的路径。本模块的跨所孤儿腿清理此前直接 `ad.cancel_price_order(leg_id)`，
-    于是对 **Binance 恒失败**（`AttributeError` 被登记成 error、腿留着）——
-    而 Binance 恰恰是孤儿腿最多的那个所（真机：17 条腿）。本文件另一处早就用了
-    `hasattr` 阶梯 ⇒ 同一语义两种写法，这里统一成一个探针。
-
-    顺序与既有实现一致：`cancel_price_order` → `cancel_algo_order` → `cancel_order(symbol, id)`。
-    """
+    """按**能力探针**撤一条保护腿；撤不动返回 False（不抛）。"""
     leg_id = str(leg_id or "")
     if not leg_id:
         return False
