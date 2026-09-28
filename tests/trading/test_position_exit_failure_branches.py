@@ -37,6 +37,20 @@ def _pos(**kw):
     return base
 
 
+class _RigRegistry:
+    """最小场所注册表替身（三所持仓接管后 `position_exit` 按场所取适配器）。"""
+
+    class _Ad:
+        pass
+
+    def __init__(self):
+        self.asked: list = []
+
+    def get_adapter(self, venue, environment=None):
+        self.asked.append(venue)
+        return self._Ad()
+
+
 class _Rig:
     """把 `manage_position_tp_and_trailing` 的**全部注入项**都换成记录器。
 
@@ -52,6 +66,10 @@ class _Rig:
         self.notifies = []
         self.cooldowns = []
         self.synced = []
+        # 三所持仓接管（2026-09-28）：平仓与云 OCO 核验都必须**按场所**分流，
+        # 故要把它们的真实入参记下来逐条钉住。
+        self.close_calls = []
+        self.protect_calls = []
         self.hard_stop = hard_stop
         self.protection = protection
         self.close = close
@@ -76,6 +94,8 @@ class _Rig:
             record_signal_snapshot=lambda payload: None,
             record_trade=lambda payload: self.trades.append(payload),
             sync_cloud_algo_stop=lambda *a, **k: self.synced.append((a, k)),
+            venue_registry=_RigRegistry(),
+            amend_venue_stop_loss=lambda *a, **k: (True, "venue sl amended"),
             ASSET_CLASS_PROFILES=PROFILES,
             TAKER_FEE_RATE=0.0005,
             TIME_STOP_ATR_BAND=0.5,
@@ -88,9 +108,11 @@ class _Rig:
         )
 
     def _close(self, *a, **k):
+        self.close_calls.append((a, k))
         return self.close
 
     def _protect(self, *a, **k):
+        self.protect_calls.append((a, k))
         if self.protect_raises:
             raise RuntimeError("protect boom")
         return self.protection
@@ -331,6 +353,59 @@ class ExitFailureBranchTest(unittest.TestCase):
         self.assertGreater(t["trailingStopPx"], 0, "建 tracker 时必须带止损线")
         self.assertGreater(t["takeProfitPx"], 0, "建 tracker 时必须带止盈线")
         self.assertEqual(t["entryTime"], "2026-09-21 12:00:00")
+
+
+class CrossVenueExitRoutingTest(unittest.TestCase):
+    """三所持仓接管（2026-09-28）后，退出路径必须**按场所**分流。
+
+    `position_exit` 原本假定自己只服务 OKX 直签链：所有 `close_position_confirmed`
+    都不传 `venue`（默认 `okx`）、云 OCO 核验走 `okx_rest`。接管外所持仓后，
+    这两点都会真的出事：
+
+    - 不传 venue ⇒ fail-closed「保护失效退出」会去平**同名标的在 OKX 的仓**
+      （实测日志 `OKX 51001: Instrument ID doesn't exist` —— 它拿币安的标的问 OKX）；
+    - 云 OCO 核验对币安/Gate 必然失败 ⇒ **误触发**上面那条 fail-closed。
+    """
+
+    def _run(self, rig, f=None):
+        f = f or _f()
+        key, trackers = rig.trackers(f)
+        ok, detail = manage_position_tp_and_trailing(
+            f, rig._pos, trackers, "2026-09-21 12:00:00", rig.actions, **rig.kwargs())
+        return ok, detail, trackers, key
+
+    def test_a_binance_close_is_issued_to_binance_not_to_okx(self):
+        rig = _Rig(hard_stop=True)
+        rig._pos = _pos(venue="binance")
+        self._run(rig)
+        self.assertTrue(rig.close_calls, "硬止损必须发起平仓")
+        _a, kw = rig.close_calls[0]
+        self.assertEqual(kw.get("venue"), "binance",
+                         "平仓必须打到该仓真实所在的场所（默认 okx 会平错场所）")
+
+    def test_the_okx_only_cloud_oco_probe_is_skipped_for_a_foreign_venue(self):
+        rig = _Rig(protection=(True, "ok"))
+        rig._pos = _pos(venue="gate")
+        self._run(rig)
+        self.assertEqual(rig.protect_calls, [],
+                         "云 OCO 核验是 OKX 直签链专属：对外所用它必然失败，"
+                         "并会把 fail-closed 平仓指向错误的场所")
+
+    def test_a_foreign_venue_ratchet_uses_the_venue_stop_not_the_okx_one(self):
+        rig = _Rig(floor=72000.0, old_sl=69000.0, high_water=73000.0)
+        rig._pos = _pos(venue="binance", avgPx=70000.0)
+        self._run(rig)
+        self.assertEqual(rig.synced, [],
+                         "外所不许调用 OKX 直签链的 sync_cloud_algo_stop"
+                         "（tracker 会谎报止损已上移，而交易所上其实没动）")
+
+    def test_an_okx_position_still_uses_the_okx_paths(self):
+        """OKX 路径逐位不变 —— 分流不得把自家所也改道。"""
+        rig = _Rig(hard_stop=True)
+        rig._pos = _pos(venue="okx")
+        self._run(rig)
+        _a, kw = rig.close_calls[0]
+        self.assertEqual(kw.get("venue"), "okx")
 
 
 if __name__ == "__main__":

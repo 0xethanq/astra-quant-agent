@@ -1014,6 +1014,8 @@ def manage_position_tp_and_trailing(f, curr_pos, trackers, timestamp_full, execu
         record_signal_snapshot=record_signal_snapshot,
         record_trade=record_trade,
         sync_cloud_algo_stop=sync_cloud_algo_stop,
+        venue_registry=venue_registry,
+        amend_venue_stop_loss=amend_venue_stop_loss,
         ASSET_CLASS_PROFILES=ASSET_CLASS_PROFILES,
         TAKER_FEE_RATE=TAKER_FEE_RATE,
         TIME_STOP_ATR_BAND=TIME_STOP_ATR_BAND,
@@ -1209,6 +1211,7 @@ def execute_portfolio():
         pool_state=pool_state,
         query_positions=query_positions,
         read_cycle_health=read_cycle_health,
+        real_pos_dict=real_pos_dict,
         save_trackers=save_trackers    )
 
     if not cb_active and pool_is_trustworthy():

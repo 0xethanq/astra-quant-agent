@@ -134,6 +134,7 @@ class SpanIsActuallyWiredTest(unittest.TestCase):
             is_circuit_breaker_active=lambda u: (False, ""),
             pool_is_trustworthy=lambda: True, pool_state=lambda: {},
             query_positions=lambda: (True, [], ""), read_cycle_health=lambda: {},
+            real_pos_dict={},
             save_trackers=lambda t: None)
         self.assertIn("desc", seen, "主脑批次没被调用，用例失去意义")
         self.assertIn("okx 2 · binance 4 · gate 1", seen["desc"])

@@ -435,6 +435,7 @@ class CycleStagesVerbatimTest(unittest.TestCase):
             is_circuit_breaker_active=lambda u: (False, ""),
             pool_is_trustworthy=lambda: True, pool_state=lambda: {},
             query_positions=lambda: (True, [], ""), read_cycle_health=lambda: {},
+            real_pos_dict={},
             save_trackers=lambda t: None)
         base.update(over)
         return base

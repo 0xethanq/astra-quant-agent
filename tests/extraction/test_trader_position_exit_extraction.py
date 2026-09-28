@@ -27,7 +27,8 @@ FN = "manage_position_tp_and_trailing"
 INJ = ("_float_or_zero", "add_stop_cooldown", "build_signal_snapshot",
        "close_position_confirmed", "ensure_cloud_position_protection",
        "evaluate_asset_signal", "record_signal_snapshot", "record_trade",
-       "sync_cloud_algo_stop", "ASSET_CLASS_PROFILES", "TAKER_FEE_RATE",
+       "sync_cloud_algo_stop", "venue_registry", "amend_venue_stop_loss",
+       "ASSET_CLASS_PROFILES", "TAKER_FEE_RATE",
        "TIME_STOP_ATR_BAND", "TIME_STOP_HOURS", "_close_fee",
        "_close_trade_payload", "notify_trade_close", "protection_signals",
        "ratcheted_trailing_stop")

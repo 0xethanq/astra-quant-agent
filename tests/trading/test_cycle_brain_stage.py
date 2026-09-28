@@ -76,6 +76,7 @@ class _Rig:
             pool_state=lambda: {"status": "corrupt", "detail": "文件坏了"},
             query_positions=query,
             read_cycle_health=lambda: self.health,
+            real_pos_dict=getattr(self, "real_pos_dict", {}),
             save_trackers=lambda tr: self.saved.append(dict(tr)))
         return out
 
@@ -112,6 +113,31 @@ class ScanRiskGatesAndBrainTest(unittest.TestCase):
         rig.run()
         self.assertEqual(rig.managed, [], "拉不到真实仓位 ⇒ 不许拿旧快照执行")
         self.assertTrue(any("AI持仓管理跳过" in a for a in rig.actions), rig.actions)
+
+    def test_cross_venue_positions_are_overlaid_onto_the_refreshed_dict(self):
+        """刷新只覆盖 OKX；外所仓必须并回来，否则 AI 对其指令永远执行不了。
+
+        用户报（2026-09-28）：「币安 gate 的 23、26 号的订单还在」。根因之一就在这里：
+        `query_positions()` 只读 OKX ⇒ 刷新后的字典里没有外所仓 ⇒
+        `execute_ai_position_management` 每轮把外所的 UPDATE_SL / CLOSE_MARKET
+        判成"不在本路径持仓字典"而拒绝执行。实测 UNI 空头 +32.9% 也移不了损。
+        """
+        rig = _Rig(brain={"BTC": {}}, refresh=(True, [
+            {"instId": "BTC-USDT-SWAP", "pos": "2"}], ""))
+        rig.real_pos_dict = {
+            "BTC-USDT-SWAP": {"instId": "BTC-USDT-SWAP", "venue": "okx"},
+            "UNI-USDT-SWAP": {"instId": "UNI-USDT-SWAP", "venue": "binance",
+                              "posSide": "short", "pos": 23.0},
+            "DOGE-USDT-SWAP": {"instId": "DOGE-USDT-SWAP", "venue": "gate",
+                               "posSide": "long", "pos": 861.0},
+        }
+        rig.run()
+        managed = rig.managed[0]
+        self.assertIn("UNI-USDT-SWAP", managed, "币安仓必须进 AI 持仓管理字典")
+        self.assertIn("DOGE-USDT-SWAP", managed, "Gate 仓同上")
+        self.assertEqual(managed["BTC-USDT-SWAP"]["pos"], "2",
+                         "OKX 侧取**刷新后**的值，不被相位 1 的旧快照覆盖")
+        self.assertEqual(managed["UNI-USDT-SWAP"]["venue"], "binance")
 
     def test_refresh_keeps_only_positions_with_size(self):
         rig = _Rig(brain={"BTC": {}}, refresh=(True, [
@@ -199,6 +225,7 @@ class ScanRiskGatesAndBrainTest(unittest.TestCase):
             is_circuit_breaker_active=lambda u: (False, ""),
             pool_is_trustworthy=lambda: True, pool_state=lambda: {},
             query_positions=lambda: (True, [], ""), read_cycle_health=lambda: {},
+            real_pos_dict={},
             save_trackers=lambda t: None)
         self.assertIn("未知", captured["desc"], "跨所笔数拿不到时必须写「未知」，绝不装 0")
 

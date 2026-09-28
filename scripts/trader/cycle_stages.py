@@ -543,6 +543,7 @@ def scan_risk_gates_and_ai_brain(*,
         pool_state,
         query_positions,
         read_cycle_health,
+        real_pos_dict,
         save_trackers):
     """相位 4 前段：熔断判定 + 单标的保证金上限自适应 + 主脑批量扫描 + 池可信闸。
 
@@ -577,6 +578,19 @@ def scan_risk_gates_and_ai_brain(*,
                         p.get("instId"): p for p in refreshed_positions
                         if float(p.get("pos", 0) or 0) > 0
                     }
+                    # ⚠️ 刷新只覆盖 OKX 直签链（`query_positions` 只读 OKX）。
+                    # 不把外所仓并回来，AI 对它们的 UPDATE_SL / CLOSE_MARKET 每轮都会
+                    # 被判"不在本路径持仓字典"而**拒绝执行**（实测逐轮打印，UNI 空头
+                    # +32.9% 也移不了损）。这里复用相位 1 已归一的记录（含场所自己的
+                    # `ctVal`/`minSz`/`precision`）——与 `xv_positions_by_venue` 同属
+                    # 本周期**冻结快照**，符合"零重复出网"的既有纪律。
+                    # 残留口径：外所尺寸最多滞后一个周期。平仓侧无碍（外所
+                    # `close_position_confirmed` 平的是整仓、不按这个尺寸下单）；
+                    # 移损侧若期间发生减仓，保护腿尺寸可能偏大 —— 交易所侧
+                    # reduce-only 会按实际仓位截断，且下一周期即修正。
+                    for _rk, _rv in (real_pos_dict or {}).items():
+                        if str(_rv.get("venue") or "").lower() in ("binance", "gate"):
+                            refreshed_pos_dict.setdefault(_rk, _rv)
                     execute_ai_position_management(refreshed_pos_dict, trackers, timestamp_full, executed_actions)
                     save_trackers(trackers)
             else:

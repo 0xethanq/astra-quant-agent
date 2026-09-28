@@ -510,8 +510,27 @@ class ExecutePortfolioTests(unittest.TestCase):
 class MainGuardTests(unittest.TestCase):
     """`__main__`：未配置 API Key ⇒ 退出码 3，**不执行任何交易**。"""
 
+    @staticmethod
+    def _main_guard_node():
+        """按**语义**定位 CLI 入口，不按绝对行号。
+
+        2026-09-28：这里原来钉的是 `n.lineno == 1324`，任何在文件前段加一行的
+        改动都会让本组用例 `StopIteration` 静默失效（同批 `test_ai_brain_trader`
+        也踩过同一个坑）。行号不是契约，判据本身才是。
+        """
+        def _is_main_guard(n):
+            if not isinstance(n, ast.If):
+                return False
+            t = n.test
+            return (isinstance(t, ast.Compare)
+                    and isinstance(t.left, ast.Name) and t.left.id == "__name__"
+                    and len(t.comparators) == 1
+                    and isinstance(t.comparators[0], ast.Constant)
+                    and t.comparators[0].value == "__main__")
+        return next(n for n in _TREE.body if _is_main_guard(n))
+
     def _run_guard(self, configured):
-        node = next(n for n in _TREE.body if isinstance(n, ast.If) and n.lineno == 1324)
+        node = self._main_guard_node()
         module = ast.Module(body=[node], type_ignores=[])
         ast.fix_missing_locations(module)
         ran = []
