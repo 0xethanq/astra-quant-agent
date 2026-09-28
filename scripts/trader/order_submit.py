@@ -40,6 +40,7 @@ def submit_protected_limit_order(inst_id: str, side: str, pos_side: str, size: f
     current_environment,
     fetch_ticker,
     okx_rest,
+    quantize_size,
     venue_registry) -> Tuple[bool, str]:
     """Submit a protected limit order; acceptance is not treated as a fill.
 
@@ -308,6 +309,46 @@ def submit_protected_limit_order(inst_id: str, side: str, pos_side: str, size: f
     # `order_mode` 已在本函数前半段读过（市价重锚需要它）；此处只据它选单型与是否带价。
     ord_type = "market" if order_mode == "market" else "limit"
     entry_px = None if ord_type == "market" else effective_px
+
+    # ── OKX 发单量：从**保证金**换算（与 Binance/Gate 同一条口径）────────────────
+    # 2026-09-28（用户拍板「交易全改成保证金和杠杆」）。
+    #
+    # 此前 OKX 用的是调用方按【保证金闸门夹取**之前**】算出的张数，而闸门结果
+    # `venue_ctx` 里的 margin_usdt 此前只被多所路径消费 ⇒ **同一把闸门对 OKX 形同虚设**：
+    # AI 计划额 / 权益占比 / 单标的封顶任一小于"张数隐含额"时，币安与 Gate 按更小的
+    # 保证金下单，OKX 却仍按夹取前的大张数下单。
+    #
+    # 现在 OKX 也在场所边界从钱反推（`quote_qty_to_native` 的 OKX 等价式），
+    # 于是三所共用同一条规则：**意图是钱，原生数量只在边界出现一次**。
+    #
+    # 等价性：闸门**未**夹取时 `margin == size_implied == size×ctVal×px/lever`，
+    # 反推得到同一张数（逐位相同）；夹取时反推得到**更小**的张数 —— 那正是本修法
+    # 的目的（见 `tests/trading/test_okx_margin_derived_size.py` 的网格对拍）。
+    #
+    # `venue_ctx` 缺失（非 AI 通用通路）时保留调用方给的张数：那条路径本就没有保证金。
+    _okx_size_from_margin = None
+    if isinstance(venue_ctx, dict):
+        # 垃圾数值一律视同"没给"（与上方路由段同规则）：不抛，退回调用方给的张数。
+        def _okx_num(_key):
+            try:
+                return float(venue_ctx.get(_key) or 0.0)
+            except (TypeError, ValueError):
+                return 0.0
+
+        _okx_m = _okx_num("margin_usdt")
+        _okx_ct = _okx_num("ct_val")
+        _okx_min = _okx_num("min_sz")
+        _okx_lev = _okx_num("leverage")
+        if _okx_m > 0 and _okx_ct > 0 and _okx_lev > 0 and effective_px > 0:
+            _okx_want = (_okx_m * _okx_lev) / (_okx_ct * effective_px)
+            _okx_size_from_margin = quantize_size(_okx_want, _okx_min or 1.0)
+            if _okx_size_from_margin <= 0:
+                _min_notional = (_okx_min or 1.0) * _okx_ct * effective_px
+                release_signal_reservation(_reservation, "保证金换算张数低于最小下单量")
+                return False, (f"{inst_id} 按保证金 {_okx_m:.2f}U × {_okx_lev:g}x 换算出的张数"
+                               f"低于交易所最小下单量（最小下单名义 {_min_notional:.2f}U）"
+                               f"—— 请提高单笔保证金或改用其他标的")
+            size = _okx_size_from_margin
 
     try:
         rows = okx_rest.place_order(

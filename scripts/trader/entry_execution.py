@@ -267,6 +267,7 @@ def execute_entry_scan(*,
                     leverage=ai_lever, usdt_available=usdt_available)
                 _side, _pos_side, _venue_ctx = build_order_intent(
                     is_long=True, inst_id=inst_id, actual_sz=actual_sz, ct_val=ct_val,
+                    min_sz=step_sz,
                     limit_px=limit_px, ai_lever=ai_lever,
                     margin_usdt=_order_margin,
                     max_margin_usdt=equity_margin_cap(usdt_available),
@@ -397,6 +398,7 @@ def execute_entry_scan(*,
                     leverage=ai_lever, usdt_available=usdt_available)
                 _side, _pos_side, _venue_ctx = build_order_intent(
                     is_long=False, inst_id=inst_id, actual_sz=actual_sz, ct_val=ct_val,
+                    min_sz=step_sz,
                     limit_px=limit_px, ai_lever=ai_lever,
                     margin_usdt=_order_margin,
                     max_margin_usdt=equity_margin_cap(usdt_available),

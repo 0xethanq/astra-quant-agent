@@ -49,10 +49,17 @@ def _legacy_prices(*, is_long, ai_decision, f, prec, tp_dist, sl_dist):
     return limit_px, tp_px, sl_px
 
 
-def _legacy_intent(*, is_long, inst_id, actual_sz, ct_val, limit_px, ai_lever,
+def _legacy_intent(*, is_long, inst_id, actual_sz, ct_val, min_sz, limit_px, ai_lever,
                    margin_usdt, max_margin_usdt, inst_lever_cap, ai_conf, ai_info):
-    """搬走前 facade 的 `venue_ctx` 装配（逐字原样，含全部注释锚点）。"""
-    _notional = actual_sz * ct_val * limit_px
+    """`venue_ctx` 装配的**约定契约**（2026-09-28 口径统一后）。
+
+    ⚠️ 原基线是"搬走前逐字原样"。用户拍板「交易全改成保证金和杠杆」后：
+    - 名义额改为 **保证金 × 杠杆**（钱）—— 旧式 `actual_sz × ct_val × limit_px`
+      用的是保证金闸门**夹取之前**的张数，夹取时账实不符；
+    - 新增 `ct_val` / `min_sz`，供 OKX 直签边界做**唯一一次**「钱 → 张」换算。
+    故这里的基线即**新契约本身**。
+    """
+    _notional = round(float(margin_usdt or 0.0) * float(ai_lever or 0.0), 2)
     if is_long:
         venue_ctx = {"notional_usdt": _notional,
                      "margin_usdt": margin_usdt,
@@ -62,6 +69,8 @@ def _legacy_intent(*, is_long, inst_id, actual_sz, ct_val, limit_px, ai_lever,
                      "max_leverage": inst_lever_cap,
                      # 审计 P1-7：per-venue min_confidence 闸门需要原始置信度（决策载荷里本没有）
                      "confidence": ai_conf,
+                     "ct_val": ct_val,
+                     "min_sz": min_sz,
                      "intent_id": f"{inst_id}:BUY_LONG:{int(ai_info.get('timestamp') or __import__('time').time())}"}
         side, pos_side = "buy", "long"
     else:
@@ -71,6 +80,8 @@ def _legacy_intent(*, is_long, inst_id, actual_sz, ct_val, limit_px, ai_lever,
                      "leverage": ai_lever,
                      "max_leverage": inst_lever_cap,   # 审计 P2-5：池内单标的杠杆上限
                      "confidence": ai_conf,   # 审计 P1-7：per-venue 置信度门禁
+                     "ct_val": ct_val,
+                     "min_sz": min_sz,
                      "intent_id": f"{inst_id}:SELL_SHORT:{int(ai_info.get('timestamp') or __import__('time').time())}"}
         side, pos_side = "sell", "short"
     return side, pos_side, venue_ctx
@@ -182,6 +193,7 @@ class PricesParityTest(unittest.TestCase):
 class IntentParityTest(unittest.TestCase):
     def _mk(self, **over):
         kw = dict(is_long=True, inst_id="BTC-USDT-SWAP", actual_sz=3.0, ct_val=0.01,
+                  min_sz=0.01,
                   limit_px=79000.0, ai_lever=5.0,
                   margin_usdt=150.0, max_margin_usdt=200.0,
                   inst_lever_cap=10.0, ai_conf=88.0,
@@ -204,12 +216,17 @@ class IntentParityTest(unittest.TestCase):
         got = order_intent.build_order_intent(**self._mk(actual_sz=3.0, ct_val=0.01,
                                                          limit_px=79000.0))
         _side, _pos, ctx = got
-        self.assertEqual(ctx["notional_usdt"], 3.0 * 0.01 * 79000.0)
+        # 名义额 = **保证金 × 杠杆**（钱）。旧式 `张数 × 面值 × 价` 用的是闸门
+        # 夹取**之前**的张数 —— 夹取时被高估，而真正下的单按夹取后的保证金走。
+        self.assertEqual(ctx["notional_usdt"], round(150.0 * 5.0, 2))
         self.assertEqual(ctx["margin_usdt"], 150.0)
         self.assertEqual(ctx["max_margin_usdt"], 200.0)
         self.assertEqual(ctx["leverage"], 5.0)
         self.assertEqual(ctx["max_leverage"], 10.0)
         self.assertEqual(ctx["confidence"], 88.0)
+        # 边界换算所需的合约规格随上下文下传
+        self.assertEqual(ctx["ct_val"], 0.01)
+        self.assertEqual(ctx["min_sz"], 0.01)
 
     def test_intent_id_is_idempotent_for_same_timestamp(self):
         """同一 AI 决策重投必须得到同一个意图号（幂等，不重复占预算）。"""

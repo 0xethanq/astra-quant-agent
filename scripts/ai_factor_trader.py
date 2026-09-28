@@ -885,6 +885,7 @@ def submit_protected_limit_order(inst_id: str, side: str, pos_side: str, size: f
         current_environment=current_environment,
         fetch_ticker=fetch_ticker,
         okx_rest=okx_rest,
+        quantize_size=quantize_size,
         venue_registry=venue_registry)
 
 
