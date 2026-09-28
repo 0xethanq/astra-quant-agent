@@ -237,12 +237,16 @@ def build_pending_order_lines(pending_orders_detail: Optional[List[Dict[str, Any
 
             raw_px = str(o.get("px") or "").strip()
             px_val = raw_px if raw_px and raw_px != "0" else ("市价" if ord_type == "market" else "--")
-            raw_sz = o.get("sz")
+            # ⚠️ 2026-09-28 口径统一：提示词只说**保证金**（钱），不再说「张」。
+            # 三所数量单位不同、各币种合约面值算法也不同，模型看到"5 张"无从判断规模。
+            # 保证金由上游 `ai_brain_trader.fetch_pending_orders_list` 算好附在
+            # `margin_usdt` 上；取不到就写 `--`，**绝不回落张数**。
+            _m = o.get("margin_usdt")
             try:
-                sz_float = float(raw_sz or 0)
-                sz_val = f"{abs(sz_float):g}" if sz_float != 0 else str(raw_sz if raw_sz is not None else "--")
+                _m_f = float(_m) if _m is not None else 0.0
             except (TypeError, ValueError):
-                sz_val = str(raw_sz if raw_sz is not None else "--")
+                _m_f = 0.0
+            size_val = f"保证金 {_m_f:.2f}U" if _m_f > 0 else "保证金 --"
             ord_id = str(o.get("ordId", ""))
 
             attach_list = o.get("attachAlgoOrds", [])
@@ -254,7 +258,7 @@ def build_pending_order_lines(pending_orders_detail: Optional[List[Dict[str, Any
                 tp_sl_info = f" | 附带云端止盈: {tp_p} / 止损: {sl_p}"
 
             pending_lines.append(
-                f"- [挂单ID: {ord_id}] {inst_id} | {side_str} {sz_val}张 @ {px_val} | 挂单时间: {c_time_str}{tp_sl_info}"
+                f"- [挂单ID: {ord_id}] {inst_id} | {side_str} {size_val} @ {px_val} | 挂单时间: {c_time_str}{tp_sl_info}"
             )
     else:
         pending_lines.append("[MISSING_CONTEXT:pending_orders]" if pending_orders_detail is None else "当前无任何在途未成交限价挂单 (挂单池为空)")

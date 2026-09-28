@@ -147,8 +147,13 @@ def collect_pending_order_rows(orders_data, pending_orders_list, *, tz_beijing, 
                 "ord_type": ord_type,
                 "lever": f"{o.get('lever', '3')}x",
                 "px": px_display,
+                # `sz` 仅作**审计/对账**（各所原生数量单位互不相同），任何界面都不得
+                # 展示它；展示一律走下面的钱口径。见 `scripts/trader/notifications.py`
+                # 的 `money_size_text`（2026-09-28 用户拍板：全系统不再用「张」）。
                 "sz": str(o.get("sz", "--")),
                 "margin_usdt": _margin_usdt,
+                "notional_usdt": (round(_margin_usdt * _lev_num, 2)
+                                  if _margin_usdt else None),
                 "cTime": str(o.get("cTime", "")),
                 "time": c_time_str,
                 "state": str(o.get("state", "live")),

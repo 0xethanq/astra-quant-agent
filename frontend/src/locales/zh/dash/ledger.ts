@@ -37,7 +37,7 @@ export const zhLedger = {
     close: '平仓',
     entry: '开仓价',
     exit: '平仓价',
-    qty: '数量',
+    qty: '名义价值',
     pnl: '净盈亏',
     roi: '收益率',
     fees: '费用',

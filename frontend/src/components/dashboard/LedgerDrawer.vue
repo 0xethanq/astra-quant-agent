@@ -97,11 +97,19 @@ const cells = computed(() => [
   { label: t('dash.ledger.col.exit'), value: holding.value ? t('status.running') : fmtPrice(x.value.close_px), cls: holding.value ? 'text-[var(--ink-3)]' : 'text-[var(--ink-strong)]' },
   { label: t('dash.matrix.positions.col.margin'), value: fmtNum(x.value.margin, 2) + ' U', cls: 'text-[var(--ink-strong)]' },
   {
+    // ⚠️ 2026-09-28 用户拍板：台账也**不再显示原生数量**（`x.sz`）。
+    // 那一列把 OKX 的「张」、币安的「币数」、Gate 的「张」混在同一栏里 ——
+    // 各币种的合约面值算法又各不相同（BTC 一张 0.01 币、XRP 一张 100 币），
+    // 用户看到的数字既不能跨场所比也不能跨币种比。
+    // 改为**名义价值**（= 保证金 × 杠杆，纯钱、跨场所跨币种可比），
+    // 台账行里 `margin`/`lever` 两个字段本来就有，无需改数据结构。
     label: t('dash.ledger.col.qty'),
     value: (() => {
-      const absSz = Math.abs(Number(x.value.sz || 0));
-      if (!Number.isFinite(absSz) || absSz === 0) return '--';
-      return fmtNum(absSz, 2) === '0.00' ? fmtNum(absSz, 4) : fmtNum(absSz, 2);
+      const m = Number(x.value.margin);
+      const lv = Number(String(x.value.lever ?? '').replace('x', ''));
+      if (!Number.isFinite(m) || m <= 0) return '--';
+      if (!Number.isFinite(lv) || lv <= 0) return '--';
+      return fmtNum(m * lv, 2) + ' U';
     })(),
     cls: 'text-[var(--ink-strong)]',
   },

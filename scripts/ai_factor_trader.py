@@ -770,12 +770,16 @@ def _rejection_focus_reason(decision, candidates: List[Dict[str, Any]],
     """壳（第八十七刀搬至 `scripts/trader/routing_policy.py`，纯函数）。"""
     return _routing_policy_rejection_reason(decision, candidates, preferred)
 
-def route_and_reserve_signal(inst_id: str, side: str, size: float, price: float,
+def route_and_reserve_signal(inst_id: str, side: str, price: float,
                              notional_usdt: float = 0.0, margin_usdt: float = 0.0,
-                             intent_id: str = "") -> Dict[str, Any]:
-    """壳（第八十七刀搬至 `scripts/trader/routing_policy.py`，调用期同名注入）。"""
+                             intent_id: str = "", leverage: float = 0.0) -> Dict[str, Any]:
+    """壳（第八十七刀搬至 `scripts/trader/routing_policy.py`，调用期同名注入）。
+
+    ⚠️ 2026-09-28：**不再接收张数** —— 路由层只认钱（保证金/名义额），
+    原生数量只在场所边界出现一次。见 `scripts/trader/routing_policy.py`。
+    """
     return _routing_policy_route(
-        inst_id, side, size, price, notional_usdt, margin_usdt, intent_id,
+        inst_id, side, price, notional_usdt, margin_usdt, intent_id, leverage,
         _decision_payload=_decision_payload,
         _rejection_focus_reason=_rejection_focus_reason,
         build_venue_candidates=build_venue_candidates,

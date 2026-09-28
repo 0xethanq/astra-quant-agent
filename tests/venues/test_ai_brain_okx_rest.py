@@ -78,7 +78,12 @@ class PendingOrdersFetchTests(_EnvFreezeMixin, unittest.TestCase):
         rows = [{"ordId": "1", "instId": "BTC-USDT-SWAP", "state": "live"}]
         with patch.object(okx_rest, "urlopen", return_value=_response(data=rows)) as net:
             got = ai_brain_trader.fetch_pending_orders_list()
-        self.assertEqual(got, rows)
+        # 交换所原始字段逐字保留；额外附上**保证金**（钱口径）供提示词展示 ——
+        # 用户 2026-09-28 拍板：全系统不再用「张」（三所单位不同、各币种面值算法不同）。
+        # 缺 `sz`/`px`/`lever` ⇒ 算不出 ⇒ None（提示词层据此写 `--`，不回落张数）。
+        self.assertEqual([{k: v for k, v in r.items() if k != "margin_usdt"} for r in got],
+                         rows)
+        self.assertIsNone(got[0]["margin_usdt"])
         method, url, headers, body = _captured(net)
         self.assertEqual(method, "GET")
         self.assertIn("/api/v5/trade/orders-pending", url)

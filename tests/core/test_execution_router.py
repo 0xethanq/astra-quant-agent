@@ -623,7 +623,11 @@ class OpenSizingTests(_Base):
         adapter.rows = []
         out = self._open(adapter=adapter)
         self.assertEqual(out["stage"], "sizing")
-        self.assertIn("不足 BINANCE 最小下单量", out["detail"])
+        # 2026-09-28 口径统一：拒单文案说**钱**（最小可下单名义），不说张 ——
+        # 各币种合约面值不同，张数无法横向比较。
+        self.assertIn("不足 BINANCE 最小下单额", out["detail"])
+        self.assertIn("450.00U", out["detail"])
+        self.assertNotIn("张", out["detail"])
 
     def test_prices_are_quantized_to_the_tick(self):
         adapter = _FakeAdapter(venue="binance")

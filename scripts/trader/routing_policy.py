@@ -131,9 +131,9 @@ def portfolio_budget_guard(budget_total: float, budget_used: float, margin_est: 
 
 
 
-def route_and_reserve_signal(inst_id: str, side: str, size: float, price: float,
+def route_and_reserve_signal(inst_id: str, side: str, price: float,
                              notional_usdt: float = 0.0, margin_usdt: float = 0.0,
-                             intent_id: str = "",
+                             intent_id: str = "", leverage: float = 0.0,
                               *,
                               _decision_payload,
                               _rejection_focus_reason,
@@ -157,7 +157,20 @@ def route_and_reserve_signal(inst_id: str, side: str, size: float, price: float,
     env = current_environment()
     environment = str(env.mode)
     preferred = load_preferred_venue()
-    notional = float(notional_usdt or 0.0) or max(0.0, float(size) * float(price))
+    # 名义额（**钱**口径，与场所无关）：优先执行层算好的 `notional_usdt`；缺失时按
+    # `margin × leverage` 反推 —— 这两者都是钱，任何场所都成立。
+    #
+    # ⚠️ 2026-09-28：本函数**已不再接收张数**。旧兜底是 `max(0.0, size * price)`，
+    # 漏乘合约面值（`size` 是 OKX 张数，XRP 的 `ctVal=100` ⇒ 差 100 倍），它会流进
+    # `signal["size_usdt"]`，被 `venue_routing/selection.py` 的 `min_notional` 闸门
+    # 当成"最小名义额不足"**误杀合格单**。现在路由层只看钱：
+    # 原生数量只在场所边界（`execution_router` / `okx_rest.place_order`）出现一次。
+    notional = float(notional_usdt or 0.0)
+    if notional <= 0 and float(margin_usdt or 0.0) > 0 and float(leverage or 0.0) > 0:
+        notional = float(margin_usdt) * float(leverage)
+    if notional <= 0:
+        print(f"[选所路由] warn {inst_id} 既无 notional_usdt 也无 margin×leverage，"
+              f"名义额按不可判定处理（不再用 张数×价格 臆造）")
     margin_est = estimate_margin_usdt(notional, margin_usdt)
     signal = {
         "inst_id": inst_id,

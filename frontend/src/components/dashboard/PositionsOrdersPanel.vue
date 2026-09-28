@@ -146,31 +146,17 @@ function getTp1(p: any): string | null {
   return m ? m[1] : null;
 }
 
-function orderQtyText(o: any): string {
-  const raw = o?.sz !== undefined ? o.sz : o?.size;
-  const n = Math.abs(Number(raw || 0));
-  if (!Number.isFinite(n) || n === 0) return '--';
-  const v = getVenueOf(o);
-  if (v === 'binance') {
-    return n < 1 ? fmtNum(n, 3) : (n < 10 ? fmtNum(n, 2) : fmtNum(n, 1));
-  }
-  return fmtNum(n, 0);
-}
-
-function orderNativeUnit(o: any): string {
-  const v = getVenueOf(o);
-  return v === 'binance' ? symOf(o) : t('dash.matrix.orders.contractsUnit');
-}
-
 /**
- * 挂单保证金（USDT）——**唯一权威是后端**。
+ * 挂单规模一律用**保证金**（USDT），后端是唯一权威。
  *
- * 后端按各所合约面值（`instrument_pool.ctVal`）与杠杆算好后放进 `margin_usdt`
- * （见 `dashboard_payload/order_view.py` 与 `multi_venue.py`）。前端**绝不**自己
- * 维护面值表：那种表一旦与池子漂移，屏幕上就会显示一个凭空捏造的保证金数字，
- * 而保证金正是交易员判断仓位大小的依据 —— 宁可显示原生张数，也不给假数字。
+ * 后端按各所合约面值与杠杆算好后放进 `margin_usdt`（见
+ * `dashboard_payload/order_view.py` 与 `multi_venue.py`）。前端**绝不**自己维护
+ * 面值表：那种表一旦与池子漂移，屏幕上就会出现凭空捏造的保证金数字。
  *
- * 返回 0 表示"后端没给"（旧数据/字段缺失）→ 调用方回落到原生张数展示。
+ * 2026-09-28 用户拍板：全系统不再用「张」——三所数量单位不同（OKX 张 / 币安币数 /
+ * Gate 张），且各币种的合约面值算法都不一样（BTC 一张 0.01 币、XRP 一张 100 币），
+ * 原生数量既不能跨场所比也不能跨币种比。故**取不到就显示 `--`，不再回落原生数量**
+ * （回落会让同一个面板上不同币种显示不同量纲，正是本次要根治的混乱）。
  */
 function orderMargin(o: any): number {
   const m = Number(o?.margin_usdt);
@@ -179,17 +165,18 @@ function orderMargin(o: any): number {
 
 function orderMarginText(o: any): string {
   const m = orderMargin(o);
-  if (m > 0) {
-    return `${fmtNum(m, 2)}U`;
-  }
-  const raw = orderQtyText(o);
-  return raw !== '--' ? `${raw} ${orderNativeUnit(o)}` : '--';
+  return m > 0 ? `${fmtNum(m, 2)}U` : '--';
 }
 
 function orderTooltipText(o: any): string {
   const m = orderMargin(o);
-  const native = `${orderQtyText(o)} ${orderNativeUnit(o)}`;
-  return m > 0 ? `${t('dash.matrix.orders.col.qty')} ${fmtNum(m, 2)}U (${native})` : native;
+  if (m <= 0) return '--';
+  const n = Number(o?.notional_usdt);
+  const parts = [`${t('dash.matrix.orders.col.qty')} ${fmtNum(m, 2)}U`];
+  if (Number.isFinite(n) && n > 0) {
+    parts.push(`${t('dash.matrix.orders.col.notional')} ${fmtNum(n, 2)}U`);
+  }
+  return parts.join(' · ');
 }
 </script>
 

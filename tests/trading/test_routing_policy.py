@@ -128,9 +128,15 @@ class _Harness(unittest.TestCase):
         }
         # 位置参数与注入缝必须分开：混在一起会
         # `TypeError: got multiple values for argument 'size'`
+        # ⚠️ 2026-09-28：`notional_usdt` 由调用方（执行层）以**钱**给出。旧默认是
+        # 0.0 并靠 `size × price` 兜底 —— 那条兜底**漏乘合约面值**（XRP 差 100 倍），
+        # 已删。这里显式给 100.0（等价于旧兜底在 size=1/price=100 下的取值），
+        # 保持用例原意；新契约另有两支专项用例。
         positional = {"side": "buy", "size": 1.0, "price": 100.0,
-                      "notional_usdt": 0.0, "margin_usdt": 0.0, "intent_id": ""}
-        for field in ("side", "size", "price", "notional_usdt", "margin_usdt", "intent_id"):
+                      "notional_usdt": 100.0, "margin_usdt": 0.0, "intent_id": "",
+                      "leverage": 0.0}
+        for field in ("side", "size", "price", "notional_usdt", "margin_usdt", "intent_id",
+                      "leverage"):
             if field in over:
                 positional[field] = over.pop(field)
         # ★ router 必须**每次新建** —— `_Router` 会快照 decision，
@@ -138,11 +144,13 @@ class _Harness(unittest.TestCase):
         kw.update(over)          # 注入缝的覆盖（harness 字段已在上面摘掉）
         self.router = _Router(self.decision)
         kw["venue_router"] = self.router
+        # 2026-09-28：路由层**不再接收张数**（只认钱）—— `size` 从位置参数里退役。
         return rp.route_and_reserve_signal(
-            "BTC-USDT-SWAP", positional["side"], positional["size"], positional["price"],
+            "BTC-USDT-SWAP", positional["side"], positional["price"],
             notional_usdt=positional["notional_usdt"],
             margin_usdt=positional["margin_usdt"],
-            intent_id=positional["intent_id"], **kw)
+            intent_id=positional["intent_id"],
+            leverage=positional["leverage"], **kw)
 
 
 class PortfolioRiskBudgetTests(unittest.TestCase):
@@ -293,12 +301,27 @@ class RouteAndReserveTests(_Harness, unittest.TestCase):
         self.assertEqual(len(self.persisted), 1)
 
     def test_signal_payload_is_built_from_the_arguments(self):
-        self._run(notional_usdt=0.0, size=2.0, price=50.0)
+        # 缺名义额时按 **margin × leverage** 反推（钱口径，与场所无关）。
+        self._run(notional_usdt=0.0, size=2.0, price=50.0, margin_usdt=50.0, leverage=2.0)
         signal = self.router.calls[0]["signal"]
         self.assertEqual(signal["inst_id"], "BTC-USDT-SWAP")
         self.assertEqual(signal["symbol_canonical"], "BTC")
         self.assertEqual(signal["side"], "long")
         self.assertEqual(signal["size_usdt"], 100.0)
+
+    def test_contract_count_is_never_used_to_fabricate_money(self):
+        """★ 2026-09-28 修复：`size × price` 漏乘合约面值，绝不能再当名义额。
+
+        `size` 是 OKX 张数（1 张 XRP = 100 币）⇒ `size × price` 比真实名义额
+        小 `ctVal` 倍。它会流进 `signal["size_usdt"]`，被 `selection.py` 的
+        `min_notional` 闸门当成"最小名义额不足"**误杀合格单**。
+
+        给不出钱（既无 notional 也无 margin×leverage）时，`size_usdt` 必须是 0
+        （下游如实报"不可判定"），**绝不能**等于 `size × price`。
+        """
+        self._run(notional_usdt=0.0, size=2.0, price=50.0)   # 旧实现会给 100.0
+        self.assertEqual(self.router.calls[0]["signal"]["size_usdt"], 0.0,
+                         "张数重新被用来臆造金额 ⇒ 100 倍偏差回归")
 
     def test_sell_side_is_normalized_to_short(self):
         for side in ("sell", "SHORT", "short"):
@@ -306,8 +329,9 @@ class RouteAndReserveTests(_Harness, unittest.TestCase):
                 self._run(side=side)
                 self.assertEqual(self.router.calls[0]["signal"]["side"], "short")
 
-    def test_explicit_notional_wins_over_size_times_price(self):
-        self._run(notional_usdt=1234.0, size=2.0, price=50.0)
+    def test_explicit_notional_wins_over_margin_times_leverage(self):
+        self._run(notional_usdt=1234.0, size=2.0, price=50.0,
+                  margin_usdt=50.0, leverage=2.0)
         self.assertEqual(self.router.calls[0]["signal"]["size_usdt"], 1234.0)
 
     def test_budget_view_is_explicitly_none(self):

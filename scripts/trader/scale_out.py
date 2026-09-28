@@ -73,6 +73,21 @@ def execute_scale_out_if_eligible(
     if pos_sz <= 0:
         return False, "无持仓"
 
+    # ── 展示口径：一切对外文案只说**钱**（保证金 / 名义额），不说张 ──────────
+    # 用户 2026-09-28 拍板：三所的"张"单位不同（OKX 张 / 币安币数 / Gate 张），
+    # 且**各币种的合约面值算法都不一样** ⇒ 张数既不能跨场所比也不能跨币种比，
+    # 交易员无法从它判断"这笔占了我多少钱"。张数仍用于**切分计算**本身（必须），
+    # 但绝不进入文案。
+    _lever = float(curr_pos.get("lever", curr_pos.get("leverage", 0.0)) or 0.0) or 1.0
+
+    def _margin_of(_sz):
+        """把原生张数换成该仓的**保证金**（U）。"""
+        return round(_sz * ct_val * cur_px / _lever, 2)
+
+    def _notional_of(_sz):
+        """把原生张数换成**名义额**（U）——各币种面值不同，这里才是可比的量。"""
+        return round(_sz * ct_val * cur_px, 2)
+
     is_long = "long" in str(curr_pos.get("side", "")).lower()
     pos_side = "long" if is_long else "short"
     entry_px = float(curr_pos.get("avgPx", 0.0) or 0.0)
@@ -105,13 +120,15 @@ def execute_scale_out_if_eligible(
             t["stage_desc"] = f"持有中 (首批止盈目标 TP1: {tp1_px:g} · +{gain_pct:.1f}% · 达标平50%保本)"
         return False, "浮盈未达分批止盈门槛"
 
-    # 4. 精度与最小张数防御
-    # 若总持仓不足 2 倍 minSz，无法安全切分为两半，优雅降级
+    # 4. 精度与最小下单量防御
+    # 若总持仓不足 2 倍 minSz，无法安全切分为两半，优雅降级。
+    # 文案用**最小下单名义**表述（`minSz × 面值 × 现价`）—— 那是跨币种可比的额。
     if pos_sz < (2.0 * min_sz - 1e-12):
-        msg = f"[{name}] 持仓张数 {pos_sz:g} 低于分批切分下限 (2*minSz={2*min_sz:g})，自动降级为全仓追踪"
+        msg = (f"[{name}] 持仓名义 {_notional_of(pos_sz):.2f}U 低于分批下限"
+               f"（最小下单名义 {_notional_of(min_sz):.2f}U 的 2 倍），自动降级为全仓追踪")
         executed_actions.append(msg)
         t["scale_out_phase"] = -1  # 标记为已评估但不可切分，防止每轮重复提示
-        return False, "张数不足以切分"
+        return False, "保证金不足以切分"
 
     ratio = max(0.1, min(0.9, float(SCALE_OUT_RATIO or 0.50)))
     raw_close_sz = pos_sz * ratio
@@ -123,10 +140,12 @@ def execute_scale_out_if_eligible(
 
     remaining_sz = round(pos_sz - close_sz, prec)
     if close_sz < min_sz or remaining_sz < min_sz:
-        msg = f"[{name}] 计算平仓切片 {close_sz:g} 或剩余张数 {remaining_sz:g} 低于最小精度 {min_sz:g}，降级全仓追踪"
+        msg = (f"[{name}] 计算平仓名义 {_notional_of(close_sz):.2f}U 或剩余名义 "
+               f"{_notional_of(remaining_sz):.2f}U 低于最小下单名义 "
+               f"{_notional_of(min_sz):.2f}U，降级全仓追踪")
         executed_actions.append(msg)
         t["scale_out_phase"] = -1
-        return False, "切片张数不满足最小精度"
+        return False, "切片名义不满足最小精度"
 
     # 4. 执行定向市价平仓（带有 reduceOnly=True）
     close_side = "sell" if is_long else "buy"
@@ -257,13 +276,17 @@ def execute_scale_out_if_eligible(
     t["currentSz"] = remaining_sz
     t["trailingStopPx"] = breakeven_sl
     t["scale_count"] = 999  # 永久互斥锁定金字塔加仓
-    t["stage_desc"] = f"已分批止盈50% (余{remaining_sz:g}张 · 保本止损 {breakeven_sl})"
+    t["stage_desc"] = (f"已分批止盈50% (余仓保证金 ~{_margin_of(remaining_sz):.2f}U"
+                       f" · 保本止损 {breakeven_sl})")
 
     # 8. 记录平仓台账与通知
     realized_pnl = close_sz * ct_val * (cur_px - entry_px if is_long else entry_px - cur_px)
     fee_val = close_fee(close_sz, ct_val, cur_px, TAKER_FEE_RATE) if close_fee else (close_sz * ct_val * cur_px * TAKER_FEE_RATE)
 
-    msg_action = f"[{name}] 🎯 达到首批止盈门槛(+{trigger_threshold:.2f})，已市价平仓 {ratio*100:.0f}% ({close_sz:g}张)，锁定盈利 +{realized_pnl:.2f}U；余 {remaining_sz:g} 张推进至保本位 {breakeven_sl}"
+    msg_action = (f"[{name}] 🎯 达到首批止盈门槛(+{trigger_threshold:.2f})，已市价平仓 "
+                  f"{ratio*100:.0f}% (保证金 {_margin_of(close_sz):.2f}U)，锁定盈利 "
+                  f"+{realized_pnl:.2f}U；余仓保证金 ~{_margin_of(remaining_sz):.2f}U "
+                  f"推进至保本位 {breakeven_sl}")
     executed_actions.append(msg_action)
 
     if record_trade and close_trade_payload:

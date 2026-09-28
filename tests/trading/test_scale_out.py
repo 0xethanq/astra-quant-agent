@@ -85,7 +85,7 @@ class ScaleOutExecutionTests(unittest.TestCase):
             okx_rest=self.mock_okx,
         )
         self.assertFalse(ok)
-        self.assertEqual(reason, "张数不足以切分")
+        self.assertEqual(reason, "保证金不足以切分")
         self.assertIn("降级为全仓追踪", actions[0])
         self.mock_okx.place_order.assert_not_called()
 

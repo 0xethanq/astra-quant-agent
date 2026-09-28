@@ -108,14 +108,15 @@ def _legacy_pending(pending_orders_detail, tz_bj):
                 side_str = "限价买多" if (side_raw == "buy" and ord_type != "market") else ("市价买多" if side_raw == "buy" else ("限价卖空" if ord_type != "market" else "市价卖空"))
             raw_px = str(o.get("px") or "").strip()
             px_val = raw_px if raw_px and raw_px != "0" else ("市价" if ord_type == "market" else "--")
-            # aa6d4e0 归一（张数取绝对值 + 缺值给 `--`）：参照实现同步补齐，
-            # 否则差分在 `sz=None` / 负张数上失去意义。既有取数口径未改。
-            raw_sz = o.get("sz")
+            # 2026-09-28 口径统一后的**约定契约**：只说保证金（钱），不说张。
+            # 上游 `ai_brain_trader.fetch_pending_orders_list` 把 `margin_usdt`
+            # 算好附在挂单上；取不到写 `--`，绝不回落张数。
+            _m = o.get("margin_usdt")
             try:
-                sz_float = float(raw_sz or 0)
-                sz_val = f"{abs(sz_float):g}" if sz_float != 0 else str(raw_sz if raw_sz is not None else "--")
+                _m_f = float(_m) if _m is not None else 0.0
             except (TypeError, ValueError):
-                sz_val = str(raw_sz if raw_sz is not None else "--")
+                _m_f = 0.0
+            sz_val = f"保证金 {_m_f:.2f}U" if _m_f > 0 else "保证金 --"
             ord_id = str(o.get("ordId", ""))
             attach_list = o.get("attachAlgoOrds", [])
             tp_sl_info = ""
@@ -125,7 +126,7 @@ def _legacy_pending(pending_orders_detail, tz_bj):
                 sl_p = att.get("slTriggerPx", "--")
                 tp_sl_info = f" | 附带云端止盈: {tp_p} / 止损: {sl_p}"
             pending_lines.append(
-                f"- [挂单ID: {ord_id}] {inst_id} | {side_str} {sz_val}张 @ {px_val} | 挂单时间: {c_time_str}{tp_sl_info}"
+                f"- [挂单ID: {ord_id}] {inst_id} | {side_str} {sz_val} @ {px_val} | 挂单时间: {c_time_str}{tp_sl_info}"
             )
     else:
         pending_lines.append("[MISSING_CONTEXT:pending_orders]" if pending_orders_detail is None else "当前无任何在途未成交限价挂单 (挂单池为空)")
@@ -387,39 +388,30 @@ class PendingPriceDisplayTest(unittest.TestCase):
     def test_whitespace_px_stripped(self):
         self.assertIn("@ --", self._line(px="   "))
 
-    def test_sz_default(self):
-        """`sz` 缺失/空 → `--`。
+    def test_margin_is_rendered_in_money(self):
+        self.assertIn("保证金 54.25U", self._line(margin_usdt=54.25))
 
-        ⚠️ 这里**不能**传 `None`：`str(o.get("sz", "--"))` 对 `None` 得到字面
-        `"None"`（`dict.get` 只在**键不存在**时用默认值）。我第一版传了 None
-        于是期望落空 —— 是我对 `get` 的语义想当然了。
-        真正触发默认的是**键不存在**（用 `o.pop` 去掉）或空串。
+    def test_missing_margin_renders_dash_never_a_contract_count(self):
+        """★ 2026-09-28 口径统一：没有保证金就写 `--`，**绝不回落张数**。
+
+        旧的 `{sz}张` 形态把三所不同量纲的数字混进同一栏（OKX 张 / 币安币数 /
+        Gate 张），各币种面值算法又不同 ⇒ 主脑看到"5 张"无从判断规模。
+        这里同时钉住三态：键缺失 / `None` / 非数字，一律 `保证金 --`。
         """
-        o = {"instId": "X", "side": "buy", "px": "1"}   # 无 sz 键
+        o = {"instId": "X", "side": "buy", "px": "1"}   # 无 margin_usdt 键
         out = build_pending_order_lines([o], tz_bj=TZ_BJ, datetime=datetime)
-        self.assertIn("--张", out)
+        self.assertIn("保证金 --", out)
+        for bad in (None, 0, "abc", -5, ""):
+            line = self._line(margin_usdt=bad)
+            self.assertIn("保证金 --", line, bad)
+            self.assertNotIn("张", line, f"{bad!r} 又把张数带回提示词了")
 
-    def test_sz_none_renders_dash(self):
-        """`sz=None` 渲染成 `--`（**旧行为是字面 `None`**，见下）。
-
-        aa6d4e0（修复负数张数泄漏）把 sz 归一为：能转数 → `abs()` 后 `:g`；
-        否则 `--`。因此 `sz=None`（键存在但值为空）与「键缺失」现在**同解**，
-        而旧实现走 `str(o.get("sz", "--"))` 得到字面 `"None"` —— 那是渲染 bug，
-        会让主脑看到 "None张" 这种噪音。本用例的方向是**钉住修复后行为**。
-        """
-        self.assertIn("--张", self._line(sz=None))
-        self.assertNotIn("None张", self._line(sz=None))
-
-    def test_sz_negative_renders_absolute(self):
-        """带符号张数必须取绝对值：Gate 用「正多负空」，负号泄漏到提示词会让
-        主脑把「3 张空」读成「-3 张多」。这是 aa6d4e0 修的真雷，补钉。"""
-        self.assertIn("3张", self._line(sz="-3"))
-        self.assertIn("2.5张", self._line(sz=-2.5))
-        self.assertIn("3张", self._line(sz="3"))
-        # 非数字保持原样（不臆造 `--`，也不必抛）
-        self.assertIn("abc张", self._line(sz="abc"))
-        # 零是"确实 0 张"，不是缺值
-        self.assertIn("0张", self._line(sz="0"))
+    def test_the_line_never_contains_a_contract_unit(self):
+        """★ 回归闸：任何输入下，提示词挂单行都不得出现「张」。"""
+        for over in ({}, {"sz": 3}, {"sz": "-3"}, {"sz": None}, {"sz": "abc"},
+                     {"margin_usdt": 12.5}, {"margin_usdt": 0, "sz": 7}):
+            line = self._line(**over)
+            self.assertNotIn("张", line, over)
 
     def test_ord_id_default_empty(self):
         self.assertIn("[挂单ID: ]", self._line())

@@ -813,18 +813,58 @@ def assemble_decision_cache(
 
 
 @single_brain_cycle
+def _pending_order_margin_usdt(o: Dict[str, Any]) -> Optional[float]:
+    """挂单的**保证金**（USDT）。
+
+    用户 2026-09-28 拍板：全系统不再用「张」表达仓位 —— 三所数量单位不同，
+    且各币种的合约面值算法都不一样（BTC 一张 0.01 币、XRP 一张 100 币），
+    模型看到"5 张"根本无从判断规模。保证金是唯一跨场所、跨币种可比的量。
+
+    取不到（缺面值/缺杠杆/数值非法）返回 `None`，由文案层写 `--` ——
+    **绝不回落张数**。
+    """
+    try:
+        sz = abs(float(o.get("sz") or 0))
+        px = float(o.get("px") or 0)
+        lev = float(str(o.get("lever") or "").replace("x", "") or 0)
+    except (TypeError, ValueError):
+        return None
+    if sz <= 0 or px <= 0 or lev <= 0:
+        return None
+    inst = str(o.get("instId") or "")
+    ct = 0.0
+    for item in TARGET_INSTRUMENTS or []:
+        if item.get("instId") == inst:
+            try:
+                ct = float(item.get("ctVal") or 0.0)
+            except (TypeError, ValueError):
+                ct = 0.0
+            break
+    if ct <= 0:
+        return None
+    return round(sz * ct * px / lev, 2)
+
+
 def fetch_pending_orders_list() -> Optional[List[Dict[str, Any]]]:
     """拉取交易所当前全部 SWAP 挂单（V5 直签 REST，US-003）。
 
     行为契约（对齐历史 CLI 挂单查询）：返回列表=成功；查询失败/未配置
     凭证（OKXNotConfigured）→ 告警并返回 None。fail-closed：绝不回退命令行子进程。
+
+    每笔挂单额外附上 `margin_usdt`（保证金，钱口径）供提示词展示 ——
+    消费方（`brain/account_text.build_pending_order_lines`）不得再显示张数。
     """
     try:
         fetched = okx_rest.pending_orders()
     except Exception as e:
         print(f"[AI Brain Batch] Pending orders fetch warning: {e}")
         return None
-    return fetched if isinstance(fetched, list) else None
+    if not isinstance(fetched, list):
+        return None
+    for _o in fetched:
+        if isinstance(_o, dict):
+            _o["margin_usdt"] = _pending_order_margin_usdt(_o)
+    return fetched
 
 
 def execute_brain_pending_cancels(pending_mgmt_list: List[Any]) -> List[Dict[str, Any]]:

@@ -119,6 +119,11 @@ def _legacy(orders_data, pending_orders_list, *, tz_beijing, datetime):
                 "ord_type": ord_type, "lever": f"{o.get('lever', '3')}x",
                 "px": px_display, "sz": str(o.get("sz", "--")),
                 "margin_usdt": _margin_usdt,
+                # 2026-09-28 口径统一：前端只展示**钱**口径（保证金 / 名义敞口）；
+                # 原生数量 `sz` 仅作审计/对账（三所单位互不相同）。
+                # 见 `scripts/trader/notifications.money_size_text`。
+                "notional_usdt": (round(_margin_usdt * _lev_num, 2)
+                                  if _margin_usdt else None),
                 "cTime": str(o.get("cTime", "")), "time": c_time_str,
                 "state": str(o.get("state", "live")),
                 "tp_px": tp_px, "sl_px": sl_px,

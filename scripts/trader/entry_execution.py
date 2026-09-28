@@ -183,7 +183,11 @@ def execute_entry_scan(*,
 
         if actual_sz <= 0:
             if f.get("size_below_exchange_min") or ai_margin > 0:
-                print(f"[仓位跳过] {f['name']} 按风险预算推导的数量低于交易所最小下单量 {step_sz} 张"
+                # 用**最小下单名义**表述（`步长 × 面值 × 现价`）——各币种面值不同，
+                # 张数无法横向比较，钱可以。见 `notifications.money_size_text`。
+                _min_notional = (step_sz * ct_val * float(f.get("price", 0.0) or 0.0))
+                print(f"[仓位跳过] {f['name']} 按风险预算推导的仓位低于交易所最小下单名义 "
+                      f"{_min_notional:.2f}U"
                       f"(可用余额 {usdt_available}, 单笔风险额 {f['risk_per_trade_usd']}U)，本周期不交易该标的")
             continue
 
@@ -275,33 +279,37 @@ def execute_entry_scan(*,
                     # `submitted_bracket` 的 docstring）；限价档逐位不变。
                     limit_px, tp_px, sl_px = submitted_bracket(
                         _venue_ctx, limit_px, tp_px, sl_px)
-                    # ⚠️ 数量与保证金也必须说**该所实提交**的：三所单位不同
-                    # （OKX 张 / 币安币数 / Gate 张），`actual_sz` 是 OKX 口径。
-                    # 实测 2026-09-28 XRP：文案「26.87 张｜预估保证金 ~6.72 U」，
-                    # 交易所实况「199.9 XRP｜49.9 U」——见 venue_executed_facts。
-                    _exe_sz, _exe_margin, _exe_notional, _exe_unit = venue_executed_facts(
-                        _venue_ctx, sz=actual_sz, asset=f["name"])
+                    # ⚠️ 仓位大小一律用**钱**口径（保证金 + 杠杆），不再说张数：
+                    # 三所数量单位不同、各币种合约面值算法也不同（见
+                    # `notifications.money_size_text`）。优先用 router 回写的**实提交**
+                    # 保证金；取不到（OKX 直签链）回落保证金闸门结果 `_order_margin`。
+                    _exe_margin, _exe_notional = venue_executed_facts(_venue_ctx)
+                    _exe_margin = _exe_margin or _order_margin
+                    _exe_notional = _exe_notional or round(
+                        float(_exe_margin or 0.0) * float(ai_lever or 0.0), 2)
                     if is_scale_in:
                         tracker = trackers.get(f"{inst_id}_long", {})
                         tracker["scale_count"] = tracker.get("scale_count", 0) + 1
                         save_trackers(trackers)
                         executed_actions.append(entry_action_message(
-                            is_long=True, is_scale_in=True, name=f["name"], sz=_exe_sz,
+                            is_long=True, is_scale_in=True, name=f["name"],
+                            margin_usdt=_exe_margin, leverage=ai_lever,
                             px=limit_px, order_ref=order_ref, tp_px=tp_px, sl_px=sl_px))
                         if notify_trade_open:
                             notify_trade_open(
                                 **trade_open_kwargs(
-                                    is_long=True, is_scale_in=True, name=f["name"], sz=_exe_sz,
+                                    is_long=True, is_scale_in=True, name=f["name"],
+                                    margin_usdt=_exe_margin,
                                     px=limit_px, strat_tag=strat_tag, ai_reason=ai_reason,
                                     tp_px=tp_px, sl_px=sl_px),
                                 leverage=int(ai_lever),  # 审计D(2026-09-13)：曾恒写 3——5x 仓实开也通知「3x 杠杆」，票圈谎报
                                 venue=str((_venue_ctx or {}).get("venue") or "okx").lower(),
-                                qty_unit=_exe_unit, margin_usdt=_exe_margin,
                                 notional_usdt=_exe_notional,
                             )
                     else:
                         executed_actions.append(entry_action_message(
-                            is_long=True, is_scale_in=False, name=f["name"], sz=_exe_sz,
+                            is_long=True, is_scale_in=False, name=f["name"],
+                            margin_usdt=_exe_margin, leverage=ai_lever,
                             px=limit_px, order_ref=order_ref, tp_px=tp_px, sl_px=sl_px))
                         pending_inst_ids.add(inst_id)
                         reserved_slot_count += 1
@@ -309,12 +317,12 @@ def execute_entry_scan(*,
                         if notify_trade_open:
                             notify_trade_open(
                                 **trade_open_kwargs(
-                                    is_long=True, is_scale_in=False, name=f["name"], sz=_exe_sz,
+                                    is_long=True, is_scale_in=False, name=f["name"],
+                                    margin_usdt=_exe_margin,
                                     px=limit_px, strat_tag=strat_tag, ai_reason=ai_reason,
                                     tp_px=tp_px, sl_px=sl_px),
                                 leverage=int(ai_lever),  # 审计D(2026-09-13)：曾恒写 3——5x 仓实开也通知「3x 杠杆」，票圈谎报
                                 venue=str((_venue_ctx or {}).get("venue") or "okx").lower(),
-                                qty_unit=_exe_unit, margin_usdt=_exe_margin,
                                 notional_usdt=_exe_notional,
                             )
                 else:
@@ -401,30 +409,34 @@ def execute_entry_scan(*,
                     # `submitted_bracket` 的 docstring）；限价档逐位不变。
                     limit_px, tp_px, sl_px = submitted_bracket(
                         _venue_ctx, limit_px, tp_px, sl_px)
-                    # 同多头分支：数量/保证金必须是该所**实提交**口径。
-                    _exe_sz, _exe_margin, _exe_notional, _exe_unit = venue_executed_facts(
-                        _venue_ctx, sz=actual_sz, asset=f["name"])
+                    # 同多头分支：仓位大小一律**钱**口径（保证金 + 杠杆），不说张数。
+                    _exe_margin, _exe_notional = venue_executed_facts(_venue_ctx)
+                    _exe_margin = _exe_margin or _order_margin
+                    _exe_notional = _exe_notional or round(
+                        float(_exe_margin or 0.0) * float(ai_lever or 0.0), 2)
                     if is_scale_in:
                         tracker = trackers.get(f"{inst_id}_short", {})
                         tracker["scale_count"] = tracker.get("scale_count", 0) + 1
                         save_trackers(trackers)
                         executed_actions.append(entry_action_message(
-                            is_long=False, is_scale_in=True, name=f["name"], sz=_exe_sz,
+                            is_long=False, is_scale_in=True, name=f["name"],
+                            margin_usdt=_exe_margin, leverage=ai_lever,
                             px=limit_px, order_ref=order_ref, tp_px=tp_px, sl_px=sl_px))
                         if notify_trade_open:
                             notify_trade_open(
                                 **trade_open_kwargs(
-                                    is_long=False, is_scale_in=True, name=f["name"], sz=_exe_sz,
+                                    is_long=False, is_scale_in=True, name=f["name"],
+                                    margin_usdt=_exe_margin,
                                     px=limit_px, strat_tag=strat_tag, ai_reason=ai_reason,
                                     tp_px=tp_px, sl_px=sl_px),
                                 leverage=int(ai_lever),  # 审计D(2026-09-13)：曾恒写 3——5x 仓实开也通知「3x 杠杆」，票圈谎报
                                 venue=str((_venue_ctx or {}).get("venue") or "okx").lower(),
-                                qty_unit=_exe_unit, margin_usdt=_exe_margin,
                                 notional_usdt=_exe_notional,
                             )
                     else:
                         executed_actions.append(entry_action_message(
-                            is_long=False, is_scale_in=False, name=f["name"], sz=_exe_sz,
+                            is_long=False, is_scale_in=False, name=f["name"],
+                            margin_usdt=_exe_margin, leverage=ai_lever,
                             px=limit_px, order_ref=order_ref, tp_px=tp_px, sl_px=sl_px))
                         pending_inst_ids.add(inst_id)
                         reserved_slot_count += 1
@@ -432,12 +444,12 @@ def execute_entry_scan(*,
                         if notify_trade_open:
                             notify_trade_open(
                                 **trade_open_kwargs(
-                                    is_long=False, is_scale_in=False, name=f["name"], sz=_exe_sz,
+                                    is_long=False, is_scale_in=False, name=f["name"],
+                                    margin_usdt=_exe_margin,
                                     px=limit_px, strat_tag=strat_tag, ai_reason=ai_reason,
                                     tp_px=tp_px, sl_px=sl_px),
                                 leverage=int(ai_lever),  # 审计D(2026-09-13)：曾恒写 3——5x 仓实开也通知「3x 杠杆」，票圈谎报
                                 venue=str((_venue_ctx or {}).get("venue") or "okx").lower(),
-                                qty_unit=_exe_unit, margin_usdt=_exe_margin,
                                 notional_usdt=_exe_notional,
                             )
                 else:

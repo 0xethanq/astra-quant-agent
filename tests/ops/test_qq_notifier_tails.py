@@ -191,14 +191,20 @@ class TradeOpenTests(_NotifierSandbox, unittest.TestCase):
         self._open(margin_usdt=25.5)
         self.assertIn("保证金 25.50 U", self.call["message"])
 
-    def test_a_zero_margin_falls_back_to_the_estimate(self):
-        # `margin_usdt and margin_usdt > 0` ⇒ 0 是 falsy ⇒ 走预估分支
+    def test_a_zero_margin_never_fabricates_an_estimate(self):
+        """★ 没给保证金就**只说杠杆**，绝不用张数反推金额。
+
+        旧实现用 `sz × px ÷ leverage` 造「预估保证金」—— 三所数量单位不同、
+        各币种面值算法也不同，算出来的是假数（实测把 49.9U 说成 6.72U）。
+        """
         self._open(margin_usdt=0, sz=5, px=100.0, leverage=5)
-        self.assertIn("预估保证金", self.call["message"])
+        self.assertNotIn("预估保证金", self.call["message"])
+        self.assertNotIn("张", self.call["message"])
+        self.assertIn("5x 杠杆", self.call["message"])
 
     def test_the_notional_is_shown_when_positive(self):
         self._open(notional_usdt=1234.5)
-        self.assertIn("货值 ~1234.5 U", self.call["message"])
+        self.assertIn("名义敞口 ~1234.5 U", self.call["message"])
 
     def test_the_long_rr_is_auto_deduced(self):
         self._open(px=100.0, tp_px=110.0, sl_px=95.0)

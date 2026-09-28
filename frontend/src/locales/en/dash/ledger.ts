@@ -36,7 +36,7 @@ export const enLedger = {
     close: 'Closed',
     entry: 'Entry',
     exit: 'Exit',
-    qty: 'Size',
+    qty: 'Notional',
     pnl: 'Net PnL',
     roi: 'ROI',
     fees: 'Fees',

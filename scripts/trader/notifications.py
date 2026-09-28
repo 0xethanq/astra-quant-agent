@@ -71,61 +71,82 @@ def _order_word() -> str:
             else "限价")
 
 
-def entry_action_message(*, is_long, is_scale_in, name, sz, px, order_ref, tp_px, sl_px):
-    """开仓/加仓成功后的 `executed_actions` 文案（含方向与加仓标记）。"""
+def money_size_text(*, margin_usdt=None, leverage=None, notional_usdt=None,
+                    prefix="保证金", with_notional=False):
+    """仓位大小的**统一口径**：保证金(USDT) + 杠杆（必要时补名义额）。
+
+    ### 为什么全系统只说钱（2026-09-28 用户拍板）
+
+    三所的"数量"**不是同一个单位**：OKX 是张（1 张 XRP = 100 XRP）、币安是**币数**、
+    Gate 是自家张（1 张 XRP = 10 XRP）。更要命的是**各币种的合约面值算法都不一样**
+    （BTC 一张可能是 0.01 币，XRP 一张是 100 币），所以"张数"既不能跨场所比、
+    也不能跨币种比，用户根本无法从它判断"这笔占了我多少钱"。
+
+    保证金是唯一跨场所、跨币种可比的量，杠杆决定名义敞口。故一切展示只说这两个，
+    外加名义额（= 保证金 × 杠杆）作为敞口大小的直观值。
+
+    取不到保证金时返回 `--` —— **绝不回落张数**（那正是旧文案把 199.9 XRP 说成
+    26.87 张、把 49.9U 说成 6.72U 的原因）。
+    """
+    def _num(v):
+        try:
+            return float(v) if v is not None else 0.0
+        except (TypeError, ValueError):
+            return 0.0
+
+    parts = []
+    _m = _num(margin_usdt)
+    if _m > 0:
+        parts.append(f"{prefix} {_m:.2f}U")
+    _lv = _num(leverage)
+    if _lv > 0:
+        parts.append(f"{_lv:g}x 杠杆")
+    _n = _num(notional_usdt)
+    if with_notional and _n > 0:
+        parts.append(f"名义 {_n:.0f}U")
+    return " · ".join(parts) if parts else "--"
+
+
+def entry_action_message(*, is_long, is_scale_in, name, margin_usdt, px, order_ref,
+                         tp_px, sl_px, leverage=None):
+    """开仓/加仓成功后的 `executed_actions` 文案（含方向与加仓标记）。
+
+    ⚠️ 数量按**保证金 + 杠杆**说，不再说张数（见 `money_size_text`）。
+    """
+    _money = money_size_text(margin_usdt=margin_usdt, leverage=leverage)
     if is_scale_in:
         arrow = "🚀" if is_long else "🌪️"
         what = "加多" if is_long else "加空"
         return (f"[{name}] {arrow} AI顺势浮盈金字塔{what}挂单已提交 "
-                f"{sz}张@{px} (order={order_ref}, TP={tp_px}, SL={sl_px})")
+                f"{_money} @ {px} (order={order_ref}, TP={tp_px}, SL={sl_px})")
     what = "多" if is_long else "空"
     word = _order_word()
     # 市价单**当场成交**，写「待成交」不成立；限价单保持原文案逐字不变。
     tail = "已提交待成交" if word == "限价" else "已提交"
     return (f"[{name}] AI{word}{what}单{tail} "
-            f"{sz}张@{px} (order={order_ref}, TP={tp_px}, SL={sl_px})")
+            f"{_money} @ {px} (order={order_ref}, TP={tp_px}, SL={sl_px})")
 
 
-def venue_executed_facts(venue_ctx, *, sz, asset=""):
-    """下单**实提交**的 `(数量, 保证金U, 名义额U, 单位)`。
+def venue_executed_facts(venue_ctx):
+    """下单**实提交**的 `(保证金U, 名义额U)`；取不到返回 `(None, None)`。
 
-    ### 为什么必须单独算（2026-09-28 实测缺陷）
+    `execution_router` 把实提交结果写在 `RouteResult` 上，`order_submit` 回写到
+    `venue_ctx["venue_exec_*"]`。展示一律用这两个**钱**口径的值，不用计划值、
+    更不用张数（实测 XRP：文案 `26.87 张｜预估 ~6.72U`，交易所实况 `199.9 XRP｜49.9U`）。
 
-    三所平权后，"数量"在三所**不是同一个单位**：OKX 是张（1 张 XRP = 100 XRP），
-    币安是**币数**，Gate 是自家张（1 张 XRP = 10 XRP）。`execution_router` 按
-    「保证金 × 杠杆 ÷ 现价」反推该所原生数量，并把它写在 `RouteResult` 上；
-    `order_submit` 回写到 `venue_ctx["venue_exec_*"]`。
-
-    而通知与巡检文案此前一律用调用方手里的 **OKX 张数**（`actual_sz`）去报，
-    并用 `sz × px ÷ leverage` 反推"预估保证金" —— 实测 XRP 那一单：
-
-    | | 文案（旧） | 交易所实况 |
-    |---|---|---|
-    | 数量 | `26.87 张` | `199.9 XRP` |
-    | 保证金 | `预估 ~6.72 U` | `49.9 U` |
-
-    两个数都对不上，且把真实占用 49.9 U 说成 6.72 U（占权益约 2% vs 20%）。
-
-    取不到 `venue_exec_*`（OKX 直签链、或老调用方）时**逐位回落**原口径，
-    OKX 路径与既有门禁完全不变。
+    取不到（OKX 直签链回写路径不同、或老调用方）时返回 `(None, None)`，
+    由调用方回落计划值。
     """
-    ctx = venue_ctx if isinstance(venue_ctx, dict) else {}
-
-    def _f(key):
+    def _f(v):
         try:
-            return float(ctx.get(key) or 0.0)
+            return float(v or 0.0)
         except (TypeError, ValueError):
             return 0.0
 
-    _sz = _f("venue_exec_sz")
-    if _sz <= 0:
-        return sz, None, None, "张"
-    _venue = str(ctx.get("venue") or "okx").lower()
-    # 单位按所内**实际成交口径**：币安按基础币数成交（199.9 XRP），
-    # OKX 与 Gate 都按"张"成交（Gate XRP/DOGE 每张 10 币）。写错单位
-    # 等于把 199.9 XRP 说成 199.9 张 —— 差 100 倍。
-    _unit = str(asset or "").upper() if _venue == "binance" else "张"
-    return _sz, (_f("venue_exec_margin") or None), (_f("venue_exec_notional") or None), (_unit or "张")
+    ctx = venue_ctx if isinstance(venue_ctx, dict) else {}
+    return (_f(ctx.get("venue_exec_margin")) or None,
+            _f(ctx.get("venue_exec_notional")) or None)
+
 
 
 def entry_failure_message(*, is_long, name, order_ref):
@@ -133,18 +154,23 @@ def entry_failure_message(*, is_long, name, order_ref):
     return f"[{name}] AI{_order_word()}{'多' if is_long else '空'}单提交失败: {order_ref}"
 
 
-def trade_open_kwargs(*, is_long, is_scale_in, name, sz, px, strat_tag, ai_reason,
-                      tp_px, sl_px):
+def trade_open_kwargs(*, is_long, is_scale_in, name, margin_usdt, px, strat_tag,
+                      ai_reason, tp_px, sl_px):
     """`notify_trade_open(...)` 的按关键字实参（**不含** `leverage`）。
 
     `leverage` 由调用点以字面量传入，以保留门面的计数锚点 —— 见模块 docstring。
+    ⚠️ 2026-09-28：仓位大小按**保证金**说（不再传张数）—— 见 `money_size_text`。
+    `sz=None` 是显式的：载荷里那个字段只作审计留档，与展示契约无关。
     """
     if is_scale_in:
         arrow = "🚀" if is_long else "🌪️"
         what = "加多" if is_long else "加空"
         return dict(inst=name, side=f"{'多' if is_long else '空'} (顺势{what})",
-                    sz=sz, px=px, strategy=f"{arrow} 顺势金字塔{what}",
-                    reason=str(ai_reason), tp_px=tp_px, sl_px=sl_px)
+                    sz=None, px=px, strategy=f"{arrow} 顺势金字塔{what}",
+                    reason=str(ai_reason), tp_px=tp_px, sl_px=sl_px,
+                    margin_usdt=margin_usdt)
     return dict(inst=name, side="多" if is_long else "空",
-                sz=sz, px=px, strategy=strat_tag,
-                reason=str(ai_reason), tp_px=tp_px, sl_px=sl_px)
+                sz=None, px=px, strategy=strat_tag,
+                reason=str(ai_reason), tp_px=tp_px, sl_px=sl_px,
+                margin_usdt=margin_usdt)
+

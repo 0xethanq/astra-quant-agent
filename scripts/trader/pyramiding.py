@@ -71,7 +71,7 @@ def pyramiding_gate(*, is_long, f, pos_upl, pos_upl_ratio, pos_avg_px, curr_marg
         if is_profit_or_breakeven and scale_count < max_scale_in_count and within_margin_cap and ai_conf >= min_scale_in_confidence and calculus_accel_ok:
             allow_entry = True
             is_scale_in = True
-            print(f"[Pyramiding] {f['name']} 满足顺势浮盈加多条件: 底仓浮盈={pos_upl:+.2f}U ({pos_upl_ratio*100:+.1f}%), 已加仓{scale_count}次, 微积分加速度={c_accel:+.2f}, 延续概率={p_cont:.1f}%, 计划加仓{actual_sz}张")
+            print(f"[Pyramiding] {f['name']} 满足顺势浮盈加多条件: 底仓浮盈={pos_upl:+.2f}U ({pos_upl_ratio*100:+.1f}%), 已加仓{scale_count}次, 微积分加速度={c_accel:+.2f}, 延续概率={p_cont:.1f}%, 计划加仓保证金 {planned_margin:.2f}U")
         else:
             if not is_profit_or_breakeven:
                 print(f"[Pyramiding 拦截] {f['name']} 底仓未达浮盈保本门禁 (浮盈={pos_upl:+.2f}U ROI={pos_upl_ratio*100:+.1f}%), 严禁逆势加仓")
@@ -98,7 +98,7 @@ def pyramiding_gate(*, is_long, f, pos_upl, pos_upl_ratio, pos_avg_px, curr_marg
         if is_profit_or_breakeven and scale_count < max_scale_in_count and within_margin_cap and ai_conf >= min_scale_in_confidence and calculus_accel_ok:
             allow_entry = True
             is_scale_in = True
-            print(f"[Pyramiding] {f['name']} 满足顺势浮盈加空条件: 底仓浮盈={pos_upl:+.2f}U ({pos_upl_ratio*100:+.1f}%), 已加仓{scale_count}次, 微积分加速度={c_accel:+.2f}, 击穿概率={p_break:.1f}%, 计划加仓{actual_sz}张")
+            print(f"[Pyramiding] {f['name']} 满足顺势浮盈加空条件: 底仓浮盈={pos_upl:+.2f}U ({pos_upl_ratio*100:+.1f}%), 已加仓{scale_count}次, 微积分加速度={c_accel:+.2f}, 击穿概率={p_break:.1f}%, 计划加仓保证金 {planned_margin:.2f}U")
         else:
             if not is_profit_or_breakeven:
                 print(f"[Pyramiding 拦截] {f['name']} 底仓未达浮盈保本门禁 (浮盈={pos_upl:+.2f}U ROI={pos_upl_ratio*100:+.1f}%), 严禁逆势加仓")

@@ -387,9 +387,11 @@ def open_protected_position(decision: Dict[str, Any], *,
     notional = margin * leverage
     contracts = ad.quote_qty_to_native(notional, ref_price, spec)
     if contracts <= 0:
+        # 文案只说**钱**：合约面值各币种不同（BTC 一张 0.01 币、XRP 一张 100 币），
+        # 报"张"用户无法判断规模。最小下单额用钱表示才是跨币种可比的。
         return _fail("sizing",
-                     f"名义 {notional:.2f}U @ {ref_price:g} 不足 {venue.upper()} 最小下单量"
-                     f"（每张面值 {spec.ct_val}）", venue=venue)
+                     f"名义 {notional:.2f}U @ {ref_price:g} 不足 {venue.upper()} 最小下单额"
+                     f"（该所最小可下单名义约 {spec.ct_val * ref_price:g}U）", venue=venue)
     side = "long" if action == "BUY_LONG" else "short"
     is_base_asset = getattr(ad.capabilities, "quantity_unit", "") == "base_asset"
     signed = contracts if (side == "long") else -contracts

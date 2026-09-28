@@ -52,12 +52,22 @@ def submit_protected_limit_order(inst_id: str, side: str, pos_side: str, size: f
     _reservation = None
     target_venue = "okx"
     if isinstance(venue_ctx, dict):
+        # 垃圾数值一律视同"没给"（不许抛）—— `venue_ctx` 可能来自缓存/回填，
+        # 一个 "abc" 不该让整轮下单炸掉；缺失即由下游按 0 处理（不可判定）。
+        def _ctx_num(_key):
+            try:
+                return float(venue_ctx.get(_key) or 0.0)
+            except (TypeError, ValueError):
+                return 0.0
+
         # ---- US-003 决策面前置闸：选所路由 + 预算原子预留（失败即本轮不下单）----
+        # 路由层只认**钱**（张数在此不参与任何推导，见 routing_policy 的说明）。
         _routing = route_and_reserve_signal(
-            inst_id, side, size, price,
-            notional_usdt=float(venue_ctx.get("notional_usdt") or 0.0),
-            margin_usdt=float(venue_ctx.get("margin_usdt") or 0.0),
-            intent_id=str(venue_ctx.get("intent_id") or ""))
+            inst_id, side, price,
+            notional_usdt=_ctx_num("notional_usdt"),
+            margin_usdt=_ctx_num("margin_usdt"),
+            intent_id=str(venue_ctx.get("intent_id") or ""),
+            leverage=_ctx_num("leverage"))
         if not _routing["ok"]:
             return False, str(_routing.get("error") or "路由拒绝")
         _reservation = _routing.get("reservation")
@@ -215,8 +225,23 @@ def submit_protected_limit_order(inst_id: str, side: str, pos_side: str, size: f
             from astra_backend import execution_router
             asset_canonical = str(inst_id).split("-")[0].upper()
             default_lever = float(MIN_LEVERAGE or 3.0)
-            margin_val = float(venue_ctx.get("margin_usdt") or (size * price / default_lever)) if isinstance(venue_ctx, dict) else (size * price / default_lever)
-            lever_val = float(venue_ctx.get("leverage") or default_lever) if isinstance(venue_ctx, dict) else default_lever
+            # ⚠️ 保证金一律用**钱口径**。旧兜底是 `size * price / default_lever`：
+            # `size` 是 OKX 张数，漏乘合约面值（XRP 差 100 倍）⇒ 按错误保证金下单。
+            # 取不到 `venue_ctx` 的保证金就**拒单**（fail-closed），不再用张数猜钱。
+            if not isinstance(venue_ctx, dict):
+                release_signal_reservation(_reservation, "缺少决策面上下文")
+                return False, "多所执行缺少 venue_ctx（无法确定保证金）"
+            try:
+                margin_val = float(venue_ctx.get("margin_usdt") or 0.0)
+            except (TypeError, ValueError):
+                margin_val = 0.0
+            if margin_val <= 0:
+                release_signal_reservation(_reservation, "缺少保证金")
+                return False, "多所执行缺少保证金 margin_usdt（拒绝按张数臆造金额）"
+            try:
+                lever_val = float(venue_ctx.get("leverage") or default_lever)
+            except (TypeError, ValueError):
+                lever_val = default_lever
             lever_val = max(float(MIN_LEVERAGE or 1.0), min(float(MAX_LEVERAGE or 20.0), lever_val))
 
             res = execution_router.open_protected_position({

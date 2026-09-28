@@ -131,15 +131,15 @@ TEMPLATE_VARIABLES_METADATA = [
         "key": "account_positions",
         "label": "账户当前持仓",
         "category": "账户敞口",
-        "description": "注入系统持仓概况、在途持仓方向、均价、标记价、持仓张数、未结浮盈ROI与动态止损线",
+        "description": "注入系统持仓概况、在途持仓方向、均价、标记价、持仓保证金与杠杆、未结浮盈ROI与动态止损线",
         "sample": "【账户持仓概况】: 当前系统总持仓 1/6\n- 标的: SOL-USDT-SWAP | 方向: long 3x | 开仓均价: 103.55 | 未结浮盈: +9.00 U",
     },
     {
         "key": "pending_orders",
         "label": "在途未成交挂单",
         "category": "账户敞口",
-        "description": "注入当前在途未成交的 Maker 限价挂单、买卖方向、价格、数量及附带的云端OCO止盈止损",
-        "sample": "- [挂单ID: 38790...] LINK-USDT-SWAP | 限价买多 5张 @ 10.85 | 附带云端止盈: 12.00 / 止损: 10.30",
+        "description": "注入当前在途未成交的 Maker 限价挂单、买卖方向、价格、保证金及附带的云端OCO止盈止损",
+        "sample": "- [挂单ID: 38790...] LINK-USDT-SWAP | 限价买多 保证金 54.25U @ 10.85 | 附带云端止盈: 12.00 / 止损: 10.30",
     },
     {
         "key": "account_balance",

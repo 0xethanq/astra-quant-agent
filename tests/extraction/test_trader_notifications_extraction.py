@@ -38,15 +38,32 @@ STRAT = "AI_STRAT"
 REASON = "因为所以"
 
 
-def _legacy_action_message(*, is_long, is_scale_in, name, sz, px, order_ref, tp_px, sl_px):
-    """搬走前 facade 长/空两侧的动作文案（逐字原样，用 is_long 择一）。"""
+def _money_text(margin_usdt, leverage=None):
+    """独立重写的「钱口径」金额段 —— 对拍的一方必须自己实现，不能调被测函数。"""
+    parts = []
+    if margin_usdt is not None and float(margin_usdt) > 0:
+        parts.append(f"保证金 {float(margin_usdt):.2f}U")
+    if leverage is not None and float(leverage) > 0:
+        parts.append(f"{float(leverage):g}x 杠杆")
+    return " · ".join(parts) if parts else "--"
+
+
+def _legacy_action_message(*, is_long, is_scale_in, name, margin_usdt, px, order_ref,
+                           tp_px, sl_px, leverage=None):
+    """动作文案的**约定契约**（2026-09-28 口径统一后）。
+
+    ⚠️ 本仓原以"搬迁前逐字原样"为基线。用户 2026-09-28 拍板「全系统不再用张，
+    一律保证金 + 杠杆」后，`{sz}张@{px}` 已按决策退役，故这里的基线就是**新契约
+    本身**，对拍的是"抽取后的实现 == 约定契约"。
+    """
+    _m = _money_text(margin_usdt, leverage)
     if is_long:
         if is_scale_in:
-            return f"[{name}] 🚀 AI顺势浮盈金字塔加多挂单已提交 {sz}张@{px} (order={order_ref}, TP={tp_px}, SL={sl_px})"
-        return f"[{name}] AI限价多单已提交待成交 {sz}张@{px} (order={order_ref}, TP={tp_px}, SL={sl_px})"
+            return f"[{name}] 🚀 AI顺势浮盈金字塔加多挂单已提交 {_m} @ {px} (order={order_ref}, TP={tp_px}, SL={sl_px})"
+        return f"[{name}] AI限价多单已提交待成交 {_m} @ {px} (order={order_ref}, TP={tp_px}, SL={sl_px})"
     if is_scale_in:
-        return f"[{name}] 🌪️ AI顺势浮盈金字塔加空挂单已提交 {sz}张@{px} (order={order_ref}, TP={tp_px}, SL={sl_px})"
-    return f"[{name}] AI限价空单已提交待成交 {sz}张@{px} (order={order_ref}, TP={tp_px}, SL={sl_px})"
+        return f"[{name}] 🌪️ AI顺势浮盈金字塔加空挂单已提交 {_m} @ {px} (order={order_ref}, TP={tp_px}, SL={sl_px})"
+    return f"[{name}] AI限价空单已提交待成交 {_m} @ {px} (order={order_ref}, TP={tp_px}, SL={sl_px})"
 
 
 def _legacy_failure_message(*, is_long, name, order_ref):
@@ -55,22 +72,29 @@ def _legacy_failure_message(*, is_long, name, order_ref):
     return f"[{name}] AI限价空单提交失败: {order_ref}"
 
 
-def _legacy_trade_open_kwargs(*, is_long, is_scale_in, name, sz, px, strat_tag,
+def _legacy_trade_open_kwargs(*, is_long, is_scale_in, name, margin_usdt, px, strat_tag,
                               ai_reason, tp_px, sl_px):
-    """搬走前 facade 的两处 notify_trade_open(**) 实参（不含 leverage）。"""
+    """`notify_trade_open(**)` 实参的**约定契约**（不含 leverage）。
+
+    `sz=None` 是显式的：载荷里那个字段只作审计留档（各所原生数量单位不同），
+    与展示契约无关 —— 见 `notifications.money_size_text` 的模块说明。
+    """
     if is_long:
         if is_scale_in:
-            return dict(inst=name, side="多 (顺势加多)", sz=sz, px=px,
+            return dict(inst=name, side="多 (顺势加多)", sz=None, px=px,
                         strategy="🚀 顺势金字塔加多", reason=str(ai_reason),
-                        tp_px=tp_px, sl_px=sl_px)
-        return dict(inst=name, side="多", sz=sz, px=px, strategy=strat_tag,
-                    reason=str(ai_reason), tp_px=tp_px, sl_px=sl_px)
+                        tp_px=tp_px, sl_px=sl_px, margin_usdt=margin_usdt)
+        return dict(inst=name, side="多", sz=None, px=px, strategy=strat_tag,
+                    reason=str(ai_reason), tp_px=tp_px, sl_px=sl_px,
+                    margin_usdt=margin_usdt)
     if is_scale_in:
-        return dict(inst=name, side="空 (顺势加空)", sz=sz, px=px,
+        return dict(inst=name, side="空 (顺势加空)", sz=None, px=px,
                     strategy="🌪️ 顺势金字塔加空", reason=str(ai_reason),
-                    tp_px=tp_px, sl_px=sl_px)
-    return dict(inst=name, side="空", sz=sz, px=px, strategy=strat_tag,
-                reason=str(ai_reason), tp_px=tp_px, sl_px=sl_px)
+                    tp_px=tp_px, sl_px=sl_px, margin_usdt=margin_usdt)
+    return dict(inst=name, side="空", sz=None, px=px, strategy=strat_tag,
+                reason=str(ai_reason), tp_px=tp_px, sl_px=sl_px,
+                margin_usdt=margin_usdt)
+
 
 
 class ActionMessageParityTest(unittest.TestCase):
@@ -83,8 +107,8 @@ class ActionMessageParityTest(unittest.TestCase):
         self.addCleanup(env.stop)
 
     def _call(self, fn, **kw):
-        base = dict(name="BTC", sz=3, px=79000.0, order_ref="ORD1",
-                    tp_px=80000.0, sl_px=78000.0)
+        base = dict(name="BTC", margin_usdt=420.0, leverage=6, px=79000.0,
+                    order_ref="ORD1", tp_px=80000.0, sl_px=78000.0)
         base.update(kw)
         return fn(**base)
 
@@ -92,10 +116,10 @@ class ActionMessageParityTest(unittest.TestCase):
         for is_long in (True, False):
             for is_scale_in in (True, False):
                 got = notifications.entry_action_message(
-                    is_long=is_long, is_scale_in=is_scale_in, name="BTC", sz=3,
+                    is_long=is_long, is_scale_in=is_scale_in, name="BTC", margin_usdt=420.0, leverage=6,
                     px=79000.0, order_ref="ORD1", tp_px=80000.0, sl_px=78000.0)
                 exp = _legacy_action_message(
-                    is_long=is_long, is_scale_in=is_scale_in, name="BTC", sz=3,
+                    is_long=is_long, is_scale_in=is_scale_in, name="BTC", margin_usdt=420.0, leverage=6,
                     px=79000.0, order_ref="ORD1", tp_px=80000.0, sl_px=78000.0)
                 self.assertEqual(got, exp, f"is_long={is_long} scale_in={is_scale_in} 分叉")
 
@@ -141,7 +165,7 @@ class OrderTypeWordingTest(unittest.TestCase):
     """
 
     def _msg(self, mode, **over):
-        kw = dict(is_long=True, is_scale_in=False, name="ARB", sz=309.4,
+        kw = dict(is_long=True, is_scale_in=False, name="ARB", margin_usdt=68.95,
                   px=0.2228, order_ref="337477221", tp_px=0.2444, sl_px=0.2138)
         kw.update(over)
         with patch.dict(os.environ, {"ASTRA_ORDER_MODE": mode}):
@@ -178,13 +202,13 @@ class OrderTypeWordingTest(unittest.TestCase):
                 with patch.dict(os.environ, {"ASTRA_ORDER_MODE": garbled}):
                     self.assertIn("AI限价多单已提交待成交",
                                   notifications.entry_action_message(
-                                      is_long=True, is_scale_in=False, name="BTC", sz=1,
+                                      is_long=True, is_scale_in=False, name="BTC", margin_usdt=10.0,
                                       px=1.0, order_ref="o", tp_px=2.0, sl_px=0.5))
         with patch.dict(os.environ):
             os.environ.pop("ASTRA_ORDER_MODE", None)
             self.assertIn("AI限价多单已提交待成交",
                           notifications.entry_action_message(
-                              is_long=True, is_scale_in=False, name="BTC", sz=1,
+                              is_long=True, is_scale_in=False, name="BTC", margin_usdt=10.0,
                               px=1.0, order_ref="o", tp_px=2.0, sl_px=0.5))
 
     def test_case_and_whitespace_are_normalised_like_the_order_path(self):
@@ -193,7 +217,7 @@ class OrderTypeWordingTest(unittest.TestCase):
             with self.subTest(mode=variant):
                 with patch.dict(os.environ, {"ASTRA_ORDER_MODE": variant}):
                     self.assertIn("AI市价多单已提交", notifications.entry_action_message(
-                        is_long=True, is_scale_in=False, name="BTC", sz=1,
+                        is_long=True, is_scale_in=False, name="BTC", margin_usdt=10.0,
                         px=1.0, order_ref="o", tp_px=2.0, sl_px=0.5))
 
     def test_wording_matches_what_the_order_path_will_send(self):
@@ -218,7 +242,7 @@ class OrderTypeWordingTest(unittest.TestCase):
 
 class TradeOpenKwargsParityTest(unittest.TestCase):
     def _kw(self, **over):
-        base = dict(name="BTC", sz=3, px=79000.0, strat_tag=STRAT,
+        base = dict(name="BTC", margin_usdt=420.0, px=79000.0, strat_tag=STRAT,
                     ai_reason=REASON, tp_px=80000.0, sl_px=78000.0)
         base.update(over)
         return base
@@ -284,7 +308,10 @@ class TradeOpenKwargsParityTest(unittest.TestCase):
                     is_long=is_long, is_scale_in=is_scale_in, **self._kw())
                 notify_trade_open(**kw, leverage=int(5.0))
                 self.assertEqual(seen["leverage"], 5)
-                self.assertEqual(seen["sz"], 3)
+                # `sz` 只作载荷审计留档（各所原生数量单位不同）⇒ 显式 None，
+                # 展示一律走 `margin_usdt`。见 `money_size_text` 的模块说明。
+                self.assertIsNone(seen["sz"])
+                self.assertEqual(seen["margin_usdt"], 420.0)
                 self.assertEqual(seen["px"], 79000.0)
                 self.assertEqual(seen["tp_px"], 80000.0)
                 self.assertEqual(seen["sl_px"], 78000.0)
@@ -416,7 +443,7 @@ class WiringTest(unittest.TestCase):
 
 
 class VenueExecutedFactsTest(unittest.TestCase):
-    """三所"数量"**不是同一个单位**，通知必须说该所实提交口径。
+    """展示只用**钱**口径：`(实提交保证金, 实提交名义额)`。
 
     2026-09-28 实测缺陷：通知与巡检文案一律用调用方手里的 OKX 张数
     （`actual_sz`）去报，并用 `sz × px ÷ leverage` 反推"预估保证金"。
@@ -427,41 +454,64 @@ class VenueExecutedFactsTest(unittest.TestCase):
     | 数量 | `26.87 张` | `199.9 XRP` |
     | 保证金 | `预估 ~6.72 U` | `49.9 U` |
 
-    两个数都对不上，还把真实占用 49.9 U 说成 6.72 U。
+    两个数都对不上。用户随后拍板：**全系统不再用张** —— 三所数量单位不同、
+    各币种合约面值算法也不同，张数无法横向比较；保证金才是唯一可比的量。
+    故本函数只回传钱，原生数量连返回值都不再出现。
     """
 
-    def test_binance_reports_base_coins_and_the_real_margin(self):
+    def test_returns_the_real_margin_and_notional(self):
         ctx = {"venue": "binance", "venue_exec_sz": 199.9,
                "venue_exec_margin": 49.9, "venue_exec_notional": 299.4}
-        self.assertEqual(
-            notifications.venue_executed_facts(ctx, sz=26.87, asset="XRP"),
-            (199.9, 49.9, 299.4, "XRP"))
+        self.assertEqual(notifications.venue_executed_facts(ctx), (49.9, 299.4))
 
-    def test_gate_stays_in_contracts(self):
-        """Gate 也按"张"成交（1 张 DOGE = 10 币）⇒ 单位不得写成币名。"""
+    def test_gate_returns_money_too(self):
         ctx = {"venue": "gate", "venue_exec_sz": 861.0,
                "venue_exec_margin": 138.43, "venue_exec_notional": 818.12}
-        self.assertEqual(
-            notifications.venue_executed_facts(ctx, sz=86.1, asset="DOGE"),
-            (861.0, 138.43, 818.12, "张"))
+        self.assertEqual(notifications.venue_executed_facts(ctx), (138.43, 818.12))
 
-    def test_okx_and_missing_context_fall_back_verbatim(self):
-        """OKX 直签链没有 `venue_exec_*` ⇒ 逐位回落原口径，既有门禁不变。"""
-        self.assertEqual(
-            notifications.venue_executed_facts({"venue": "okx"}, sz=26.87, asset="XRP"),
-            (26.87, None, None, "张"))
-        self.assertEqual(
-            notifications.venue_executed_facts(None, sz=26.87), (26.87, None, None, "张"))
+    def test_missing_context_returns_none_for_the_caller_to_fall_back(self):
+        """OKX 直签链没有 `venue_exec_*` ⇒ 回 `(None, None)`，由调用方回落计划值。"""
+        for ctx in ({"venue": "okx"}, None, "not-a-dict",
+                    {"venue": "binance", "venue_exec_margin": 0},
+                    {"venue": "binance", "venue_exec_margin": "x"}):
+            self.assertEqual(notifications.venue_executed_facts(ctx), (None, None), ctx)
 
-    def test_zero_or_garbage_size_falls_back_instead_of_reporting_zero(self):
-        """读不到就回落，绝不能让文案报"0 张"（那比报旧值更误导）。"""
-        for bad in ({"venue": "binance", "venue_exec_sz": 0},
-                    {"venue": "binance", "venue_exec_sz": "x"},
-                    {"venue": "binance", "venue_exec_sz": None},
-                    "not-a-dict"):
-            got = notifications.venue_executed_facts(bad, sz=5.0, asset="XRP")
-            self.assertEqual(got[0], 5.0, f"{bad!r} 未回落")
-            self.assertIsNone(got[1])
+    def test_never_returns_a_contract_count(self):
+        """★ 回归闸：返回值里不得再出现张数（否则文案层又会捡回去）。"""
+        got = notifications.venue_executed_facts(
+            {"venue": "binance", "venue_exec_sz": 199.9,
+             "venue_exec_margin": 49.9, "venue_exec_notional": 299.4})
+        self.assertEqual(len(got), 2, "又回传了尺寸/单位，展示层会重新用张")
+        self.assertNotIn(199.9, got, "实提交的张数不该出现在展示契约里")
+
+
+class MoneySizeTextTest(unittest.TestCase):
+    """统一金额文案的单一事实源。"""
+
+    def test_margin_and_leverage(self):
+        self.assertEqual(notifications.money_size_text(margin_usdt=420.0, leverage=6),
+                         "保证金 420.00U · 6x 杠杆")
+
+    def test_notional_is_opt_in(self):
+        self.assertEqual(
+            notifications.money_size_text(margin_usdt=420.0, leverage=6,
+                                          notional_usdt=2520.0, with_notional=True),
+            "保证金 420.00U · 6x 杠杆 · 名义 2520U")
+        self.assertNotIn("名义", notifications.money_size_text(
+            margin_usdt=420.0, leverage=6, notional_usdt=2520.0))
+
+    def test_missing_margin_shows_dash_never_a_contract_count(self):
+        """★ 取不到保证金就写 `--`。**绝不**回落张数 —— 那正是本次要根治的形态。"""
+        self.assertEqual(notifications.money_size_text(), "--")
+        self.assertEqual(
+            notifications.money_size_text(margin_usdt=0, leverage=0), "--")
+        for bad in ("x", None, object()):
+            self.assertEqual(
+                notifications.money_size_text(margin_usdt=bad), "--", repr(bad))
+
+    def test_leverage_only_is_still_useful(self):
+        self.assertEqual(notifications.money_size_text(leverage=6), "6x 杠杆")
+
 
 
 if __name__ == "__main__":

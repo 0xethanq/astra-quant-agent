@@ -51,7 +51,7 @@ def send_qq_message(text: str) -> bool:
 def notify_trade_open(
     inst: str,
     side: str,
-    sz: int | float,
+    sz: int | float | None,
     px: float,
     strategy: str,
     reason: str,
@@ -69,7 +69,6 @@ def notify_trade_open(
     market_regime: str | None = None,
     council_role: str | None = None,
     policy_version: str | None = None,
-    qty_unit: str = "张",
     **kwargs: Any,
 ) -> bool:
     """Triggered when an order is placed and accepted by exchange gateway with OCO & scale-out protection."""
@@ -98,18 +97,17 @@ def notify_trade_open(
         header_lines.append(f"👥 投委会协同：{' · '.join(c_parts)}")
 
     # Position & Execution details
-    # `qty_unit`：OKX 是"张"，币安/Gate 的成交单位是该所**基础币**（币安按币数成交）。
-    # 一律写"张"会把 199.9 XRP 说成 26.87 张 —— 见 notifications.venue_executed_facts。
-    pos_details = [f"{direction_emoji}（{sz} {qty_unit} | {leverage}x 杠杆）"]
+    # ⚠️ 2026-09-28 用户拍板：全系统**不再用「张」**表达仓位。三所数量单位不同
+    # （OKX 张 / 币安币数 / Gate 张），且各币种的合约面值算法都不一样 ⇒ 张数既不能
+    # 跨场所比、也不能跨币种比。统一只说**保证金 + 杠杆**（+ 名义额）：
+    # 钱是唯一跨场所、跨币种可比的量，也正是交易员判断"这笔占了多少"的依据。
+    # 取不到保证金时**不回落张数**（旧文案把 199.9 XRP 说成 26.87 张、49.9U 说成 6.72U）。
+    pos_details = [f"{direction_emoji}（{leverage}x 杠杆）"]
     if margin_usdt and margin_usdt > 0:
         pos_details.append(f"保证金 {margin_usdt:.2f} U")
-    elif sz and px > 0:
-        # Auto estimate margin if not provided
-        est_notional = float(sz) * px
-        pos_details.append(f"预估保证金 ~{est_notional / max(1, leverage):.2f} U")
 
     if notional_usdt and notional_usdt > 0:
-        pos_details.append(f"货值 ~{notional_usdt:.1f} U")
+        pos_details.append(f"名义敞口 ~{notional_usdt:.1f} U")
 
     exec_lines = [
         f"🧭 决策方向：{' | '.join(pos_details)}",
@@ -174,6 +172,8 @@ def notify_trade_open(
             "instrument": inst,
             "venue": venue,
             "side": side,
+            # `size` 仅为**审计/对账**留档（各所原生数量，单位互不相同），
+            # 绝不参与展示 —— 展示一律用下面的保证金/名义敞口。见 `money_size_text`。
             "size": sz,
             "price": px,
             "strategy": strategy,
