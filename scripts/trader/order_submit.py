@@ -62,6 +62,8 @@ def submit_protected_limit_order(inst_id: str, side: str, pos_side: str, size: f
             return False, str(_routing.get("error") or "路由拒绝")
         _reservation = _routing.get("reservation")
         target_venue = str(_routing.get("venue") or "okx").lower()
+        venue_ctx.setdefault("target_venue", target_venue)
+        venue_ctx.setdefault("venue", target_venue)
     else:
         print(f"[US-003 决策面] warn {inst_id} 提交未携带 venue_ctx——"
               f"未经选所路由/预算预留，仅限非 AI 信号通用路径")

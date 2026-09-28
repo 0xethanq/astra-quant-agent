@@ -154,7 +154,7 @@ def execute_ai_position_management(real_pos_dict, trackers, timestamp_full, exec
                     tracker["trailingStopPx"] = new_sl
                 try:
                     from qq_notifier import notify_sl_updated
-                    notify_sl_updated(name, pos_side, old_sl, new_sl, reason)
+                    notify_sl_updated(name, pos_side, old_sl, new_sl, reason, venue=pos_venue)
                 except Exception:
                     pass
             else:

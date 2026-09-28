@@ -18,7 +18,7 @@ def notify_newly_closed_trades(*,
         from qq_notifier import notify_trade_close
         for t in (trades_lifecycle + binance_trades + gate_trades):
             if t["id"] not in existing_closed_ids and t.get("status") == "closed":
-                notify_trade_close(
+                _kw = dict(
                     inst=t.get("inst", "CRYPTO"),
                     pnl=float(t.get("pnl", 0.0) or 0.0),
                     stage=t.get("exit_reason", "平仓结清"),
@@ -26,6 +26,17 @@ def notify_newly_closed_trades(*,
                     roi_pct=float(t.get("roi_pct", 0.0) or 0.0),
                     duration_str=str(t.get("duration", "")),
                 )
+                if t.get("venue"):
+                    _kw["venue"] = str(t.get("venue")).lower()
+                if t.get("side") or t.get("action"):
+                    _kw["side"] = str(t.get("side") or t.get("action"))
+                if t.get("open_px"):
+                    _kw["entry_px"] = float(t["open_px"])
+                if t.get("fee") is not None:
+                    _kw["fee"] = float(t["fee"])
+                if t.get("net_pnl") is not None:
+                    _kw["net_pnl"] = float(t["net_pnl"])
+                notify_trade_close(**_kw)
     except Exception as e:
         print(f"[Ledger Sync Notify Warning] {e}")
 

@@ -288,6 +288,7 @@ def execute_entry_scan(*,
                                     px=limit_px, strat_tag=strat_tag, ai_reason=ai_reason,
                                     tp_px=tp_px, sl_px=sl_px),
                                 leverage=int(ai_lever),  # 审计D(2026-09-13)：曾恒写 3——5x 仓实开也通知「3x 杠杆」，票圈谎报
+                                venue=str((_venue_ctx or {}).get("venue") or "okx").lower(),
                             )
                     else:
                         executed_actions.append(entry_action_message(
@@ -303,6 +304,7 @@ def execute_entry_scan(*,
                                     px=limit_px, strat_tag=strat_tag, ai_reason=ai_reason,
                                     tp_px=tp_px, sl_px=sl_px),
                                 leverage=int(ai_lever),  # 审计D(2026-09-13)：曾恒写 3——5x 仓实开也通知「3x 杠杆」，票圈谎报
+                                venue=str((_venue_ctx or {}).get("venue") or "okx").lower(),
                             )
                 else:
                     executed_actions.append(entry_failure_message(
@@ -402,6 +404,7 @@ def execute_entry_scan(*,
                                     px=limit_px, strat_tag=strat_tag, ai_reason=ai_reason,
                                     tp_px=tp_px, sl_px=sl_px),
                                 leverage=int(ai_lever),  # 审计D(2026-09-13)：曾恒写 3——5x 仓实开也通知「3x 杠杆」，票圈谎报
+                                venue=str((_venue_ctx or {}).get("venue") or "okx").lower(),
                             )
                     else:
                         executed_actions.append(entry_action_message(
@@ -417,6 +420,7 @@ def execute_entry_scan(*,
                                     px=limit_px, strat_tag=strat_tag, ai_reason=ai_reason,
                                     tp_px=tp_px, sl_px=sl_px),
                                 leverage=int(ai_lever),  # 审计D(2026-09-13)：曾恒写 3——5x 仓实开也通知「3x 杠杆」，票圈谎报
+                                venue=str((_venue_ctx or {}).get("venue") or "okx").lower(),
                             )
                 else:
                     executed_actions.append(entry_failure_message(
