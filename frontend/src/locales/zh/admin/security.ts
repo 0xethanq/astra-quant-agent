@@ -1,6 +1,6 @@
 /** 交易场所与安全配置页文案（本系统仅对接 OKX） */
 export const zhAdminSecurity = {
-  desc: 'OKX 凭证、撮合路由与标的池配置',
+  desc: 'OKX 专向量化账户、API 凭证、委托执行模式与永续合约标的池',
   chipRouting: '路由',
   chipPreferred: '首选',
   chipEnv: '环境',
@@ -130,7 +130,7 @@ export const zhAdminSecurity = {
   envLive: 'LIVE 实盘',
   envDemoOkx: 'DEMO 模拟盘',
   envUnknown: '未知',
-  tabVenues: '交易所与路由',
+  tabVenues: '交易所与账户',
   tabPool: '交易标的池',
   tabEmergency: '应急风控与持仓',
   loadingPositions: '正在读取持仓与挂单…',

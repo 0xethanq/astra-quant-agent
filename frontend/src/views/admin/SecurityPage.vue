@@ -1,41 +1,36 @@
 <script setup lang="ts">
 /**
- * SecurityPage.vue · OKX 交易场所与安全配置工位
+ * SecurityPage.vue · OKX 专向账户与标的配置工位
  * ---------------------------------------------------------------------------
- * 骨架：
- *   共享 PageHeader（路由态移入状态带）
- *   → 接入状态带（OKX / 标的池）
- *   → 共享 `.seg` 三页签
- *   → venues：统一资金环境 + 委托订单模式 + 路由策略（**radio 组全部数据驱动**）
- *             + OKX 接入凭证 + OKX 行情健康
- *   → pool：本金基线 + 标的池行式清单
- *   → emergency：手动平仓总闸（BaseSwitch）+ 持仓行式清单 + **BaseDialog 平仓双确认**
+ * 架构：
+ *   PageHeader（环境标识与当前委托执行模式）
+ *   → 顶部指标概览带（OKX V5 接入 / 活跃标的池 / 订单模式 / 初始本金基线）
+ *   → 纯净三页签导航：
+ *     1. venues：OKX 账户与配置（统一资金环境 + API 凭证管理 + 委托订单模式 + 行情健康 + 策略广场）
+ *     2. pool：交易标的池（初始本金基线 + 在管 USDT 永续合约池与安全移出）
+ *     3. emergency：应急风控与持仓（手动平仓总闸 + 实时持仓挂单快照 + 安全平仓双确认弹窗）
  *
- * 本系统仅对接 OKX（V5 REST 直签）。非 OKX 交易所的凭证输入、探测按钮、逐所保存、
- * 状态 chip 与手选路由入口已全部移除；`venues` 页签的手选优先（执行锁）只保留
- * `auto` + `okx` 两档，就绪度汇总也只统计 OKX。
- *
- * 后端契约（逐字未改）：
+ * 后端契约：
  *   GET  /api/v1/admin/config · /api/v1/admin/okx/runtime?refresh=1 · /api/v1/admin/instruments
- *   GET  /api/v1/admin/multi-exchange · /api/v1/admin/okx/account-snapshot
+ *   GET  /api/v1/admin/multi-exchange · /api/v1/admin/okx/account-snapshot · /api/v1/referral-channels
  *   PUT  /api/v1/admin/config · /api/v1/admin/account-baseline · /api/v1/admin/multi-exchange
  *   POST /api/v1/admin/instruments · /api/v1/admin/multi-exchange/test-connection
  *        /api/v1/admin/positions/close
  *   DELETE /api/v1/admin/instruments/{instId}
  *
- * ⚠️ 高风险门禁逐字保留：切 LIVE 需逐字 `LIVE`；改本金需超管 + 逐字 `UPDATE CAPITAL`；
- *    删标的需逐字 `REMOVE <instId>`；平仓需管理员密码 + 令牌短语。
- * ⚠️ 派生逻辑来自 `./securityLogic.ts`（未触碰）。
+ * ⚠️ 高风险门禁严格保留：
+ *    - 切 LIVE 需逐字确认 `LIVE`；
+ *    - 改本金需超级管理员 + 逐字短语 `UPDATE CAPITAL`；
+ *    - 删标的需逐字短语 `REMOVE <instId>`；
+ *    - 应急平仓需管理员密码 + 90秒动态令牌确认短语 + 防重入闭锁。
  */
 import { useToast } from '../../composables/useToast'
 import { useConfirm } from '../../composables/useConfirm'
-const toast = useToast()
-const { ask } = useConfirm()
 import { ref, computed, onMounted } from 'vue'
 import PageHeader from '../../components/admin/PageHeader.vue'
 import SettingsSection from '../../components/admin/page-parts/SettingsSection.vue'
 import { useI18n } from '../../composables/useI18n'
-import { useRovingTabs } from '../../composables/useRovingTabs';
+import { useRovingTabs } from '../../composables/useRovingTabs'
 import { useApi } from '../../composables/useApi'
 import { useAuthStore } from '../../stores/auth'
 import { fmtDateTime } from '../../utils/format'
@@ -45,43 +40,45 @@ import {
 import BaseSwitch from '../../components/base/BaseSwitch.vue'
 import BaseDialog from '../../components/base/BaseDialog.vue'
 import BaseEmpty from '../../components/base/BaseEmpty.vue'
-import { Save, RefreshCw, Layers, Trash2, Zap, ShieldCheck, Route, KeyRound,
-  Wallet, Activity, AlertTriangle, Loader2, Radar, Share2, Copy, Eye } from 'lucide-vue-next'
-import BaseLoadingAnnounce from '../../components/base/BaseLoadingAnnounce.vue';
+import {
+  Save, RefreshCw, Layers, Trash2, Zap, ShieldCheck, KeyRound,
+  Wallet, Activity, AlertTriangle, Loader2, Radar, Share2, Copy, Eye,
+} from 'lucide-vue-next'
+import BaseLoadingAnnounce from '../../components/base/BaseLoadingAnnounce.vue'
 
+const toast = useToast()
+const { ask } = useConfirm()
 const { api } = useApi()
 const auth = useAuthStore()
 const { t } = useI18n()
+
 const config = ref<any>(null)
 const runtime = ref<any>(null)
-/**
- * 注册/返佣通道：**由后端出值**（`/api/v1/admin/referral-channels`，管理员版）。
- * 本页此前把经纪商 code 与两条链接**硬编码在模板里** —— 那是继 `okx_rest.py`、
- * `config.py`、`AboutModal.vue` 之后的第三份副本：分发副本的人用环境变量换掉
- * 自己的通道后，这一页照旧显示原作者的链接与 code，用户就会注册到别人名下。
- */
 const channels = ref<any[]>([])
 const channelOf = (key: string) => channels.value.find((c) => c.key === key) || null
-// 注：**不**显示经纪商 code（2026-09 仓库所有者拍板）—— 它是随订单发出去的归属标识，
-// 摆到界面上等于邀请别人照着改。本页只用通道链接（公开接口，无需管理员权限）。
+
 async function loadChannels() {
   try {
     const res = await api<any>('/api/v1/referral-channels')
     channels.value = Array.isArray(res?.channels) ? res.channels : []
   } catch {
-    // 取不到就整块不渲染注册入口（**不回落到写死的旧链接** —— 那正是本次要消灭的东西）
     channels.value = []
   }
 }
+
 const loading = ref(true)
-/** 批 24：首屏加载失败的原因（留在页面上，配重试按钮；不再只靠一闪而过的 toast） */
 const loadError = ref('')
 
 type TabKey = 'venues' | 'pool' | 'emergency'
 const activeTab = ref<TabKey>('venues')
 const positionsLoadedOnce = ref(false)
 
-/* 批 66：页签栏的漫游 tabindex 与方向键导航。 */
+const TABS = computed<Array<{ key: TabKey; label: string; icon: any }>>(() => [
+  { key: 'venues', label: t('admin.security.tabVenues'), icon: KeyRound },
+  { key: 'pool', label: t('admin.security.tabPool'), icon: Layers },
+  { key: 'emergency', label: t('admin.security.tabEmergency'), icon: Zap },
+])
+
 const { setRef: setSecTabRef, onKeydown: onSecTabKey, roving: secTabRoving } = useRovingTabs(
   () => TABS.value.length,
   (i) => { switchTab(TABS.value[i].key) },
@@ -120,9 +117,6 @@ const newInstId = ref('')
 // ---- positions & close ----
 const snapshot = ref<any>(null)
 const snapshotState = ref('')
-/** 批 70：区分「正在加载」与「加载失败」—— 此前两者共用一个字符串，
- *  模板无条件渲染旋转图标，失败时用户看到的是「转圈 + 报错」，
- *  视觉上像是在继续加载（而不是已经失败），读屏器也收不到任何通报。 */
 const snapshotError = ref(false)
 const manualClose = ref(false)
 const closePassword = ref('')
@@ -138,15 +132,12 @@ const closeReady = computed(() => {
   return !!closePassword.value && closePhraseOk.value
 })
 
-// ---- 路由与健康读数（本系统仅 OKX；`mx` 仍承载路由与健康字段） ----
+// ---- 交易环境与健康状态 ----
 const mx = ref<any>(null)
-const preferredVenue = ref('auto')
-const routingMode = ref('auto')
 const okxCredViewLive = ref(false)
 const orderMode = ref<'limit' | 'market'>('market')
 const savingOrderMode = ref(false)
 const venueLatencies = ref<Record<string, number>>({})
-const savingMx = ref(false)
 const savingOkx = ref(false)
 const probingVenue = ref<'' | 'okx'>('')
 const savingUnifiedEnv = ref(false)
@@ -222,7 +213,6 @@ async function loadAll() {
     instruments.value = inst.instruments || []
     instLimits.value = inst.limits || instLimits.value
   } catch (e: any) {
-    // 批 24：除了 toast，还要把错误留在页面上（toast 3 秒即消失，用户回来只看到空白页）
     loadError.value = String(e?.message || e)
     toast.err(t('admin.security.errLoadFailed', undefined, { msg: e.message }))
   } finally {
@@ -233,9 +223,6 @@ async function loadAll() {
 function applyRuntime(rt: any) {
   runtime.value = rt
 }
-
-// 批2(2026-09-13)：原 rediagnose() 与 loadAll() 重复（后者已带 refresh=1 拉取运行态），
-// 且从未被模板调用（TS6133）→ 已删除，避免两套刷新口径。
 
 async function saveEnvironment() {
   const environment = config.value.editable.okx_environment
@@ -262,8 +249,6 @@ async function saveEnvironment() {
 async function saveManualClose() {
   try {
     const d = await api('/api/v1/admin/config', { method: 'PUT', body: JSON.stringify({ manual_close_enabled: manualClose.value }) })
-    // 审计①#4(2026-09-13)：PUT 复用 admin_config()，manual_close_enabled 嵌在
-    // editable 之下——旧读顶层恒 undefined → 保存后开关弹回 OFF + toast 谎报。
     manualClose.value = !!(d?.editable?.manual_close_enabled ?? d?.manual_close_enabled)
     if (manualClose.value) toast.warn(t('admin.security.toastManualCloseOn')); else toast.ok(t('admin.security.toastManualCloseOff'))
   } catch (e: any) {
@@ -321,17 +306,11 @@ async function addInstrument() {
 
 async function removeInstrument(item: any) {
   if (item.protected) { toast.warn(t('admin.security.warnProtectedInst')); return }
-  // 审计 P1-5：后端已按实时持仓/追踪记录硬拒（删除会让该标的失去移动止损/时间止损/AI 平仓接管），
-  // 前端不再承诺"既有持仓不受影响"，而是在入口就把真实原因说清楚。
   if (item.held_live || item.has_tracker) {
     toast.warn(t('admin.security.warnHeldInst', undefined, { venues: (item.held_venues || []).join('/') || t('admin.security.trackedRecord') }))
     return
   }
   if (item.holdings_unknown) { toast.warn(t('admin.security.warnHoldingsUnknown')); return }
-  // 批C(2026-09-13)·危险操作确认收口：后端本就要求逐字短语 `REMOVE <instId>`，
-  // 但前端把短语写死在请求体、只用原生 confirm() 小条挡一下——移动端随手一按就
-  // 能把实盘标的移出交易池（同页平仓却要密码+短语双确认，强度不一致）。现将同一
-  // 短语要求显式抬到 UI：必须逐字输入才可确认，前后端确认语义就此一致。
   const _ok = await ask({
     title: t('admin.security.confirmRemoveInstTitle'),
     desc: t('admin.security.confirmRemoveInstDesc', undefined, { inst: item.instId }),
@@ -394,7 +373,6 @@ async function confirmClose() {
     await loadPositions()
   } catch (e: any) {
     toast.err(t('admin.security.errCloseFailed', undefined, { msg: e.message }))
-    // 一次性令牌可能已被消费/过期：自动刷新快照，并把弹窗指向新令牌的同仓位行，允许直接重试
     await loadPositions()
     const fresh = (snapshot.value?.positions || []).find((x: any) => x.instId === pos.instId && (x.posSide || 'net') === (pos.posSide || 'net') && (x.venue || 'okx') === (pos.venue || 'okx'))
     if (fresh) closeModal.value = { show: true, pos: fresh }
@@ -414,16 +392,11 @@ async function loadMx() {
         }
       }
     }
-    if (mx.value?.preferred_venue) {
-      preferredVenue.value = mx.value.preferred_venue
-    }
-    if (mx.value?.routing_mode) {
-      routingMode.value = mx.value.routing_mode
-    }
-  } catch { mx.value = null }
+  } catch {
+    mx.value = null
+  }
 }
 
-/** OKX 凭证连接诊断：支持未保存凭证的预检与公共连通性探测。 */
 async function probeVenue(venue: 'okx') {
   probingVenue.value = venue
   try {
@@ -467,80 +440,23 @@ async function probeVenue(venue: 'okx') {
   }
 }
 
-/** 保存撮合路由首选与模式（只写路由两键，不牵连任何凭证字段）。 */
-async function saveRouting() {
-  savingMx.value = true
-  try {
-    await api('/api/v1/admin/multi-exchange', {
-      method: 'PUT',
-      body: JSON.stringify({ preferred_venue: preferredVenue.value, routing_mode: routingMode.value }),
-    })
-    toast.ok(t('admin.security.toastRoutingSaved', undefined, { venue: preferredVenue.value.toUpperCase(), mode: routingMode.value.toUpperCase() }))
-    await loadMx()
-  } catch (e: any) {
-    toast.err(t('admin.security.errSaveFailed', undefined, { msg: e.message }))
-  } finally {
-    savingMx.value = false
-  }
-}
-
-// ---- 总览派生（纯计算，零请求） ----
-// 显示派生逻辑已抽至 ./securityLogic.ts（阶段 4·B3 第三十四刀）——
-// 纯函数、可脱离组件单测；此处只保留响应式包装。
+// ---- 总览派生（单测契约：必须调用并依赖 securityLogic.ts） ----
 const okxLinked = computed(() => deriveOkxLinked(runtime.value))
 const mxHealthChips = computed(() => deriveMxHealthChips(mx.value))
-
 const okxEnvText = computed(() => okxEnvTextOf(config.value?.editable?.okx_environment, t))
 
-/** 就绪度汇总：本系统仅 OKX 一所。 */
-const venueReadiness = computed(() => {
-  const list: Array<{ id: string; name: string; ready: boolean }> = [
-    { id: 'okx', name: t('admin.security.okxNameShort'), ready: okxLinked.value },
-  ]
-  const readyList = list.filter((v) => v.ready)
-  return {
-    all: list,
-    ready: readyList,
-    readyCount: readyList.length,
-    readyNames: readyList.map((v) => v.name).join('、'),
-  }
+const healthAllOk = computed(() => {
+  const chips = mxHealthChips.value || []
+  return chips.length > 0 && chips.every((h: any) => h.ok === h.total)
 })
 
-const preferredVenueConflict = computed(() => {
-  if (preferredVenue.value === 'auto') return null
-  const target = venueReadiness.value.all.find((v) => v.id === preferredVenue.value)
-  if (!target || !target.ready) {
-    return target?.name || preferredVenue.value.toUpperCase()
-  }
-  return null
-})
-
-const TABS = computed<Array<{ key: TabKey; label: string; icon: any }>>(() => [
-  { key: 'venues', label: t('admin.security.tabVenues'), icon: Route },
-  { key: 'pool', label: t('admin.security.tabPool'), icon: Layers },
-  { key: 'emergency', label: t('admin.security.tabEmergency'), icon: Zap },
-])
-
-/** 路由模式三档（旧版 3 段手写 radio 卡） */
-const ROUTING_MODES = [
-  { value: 'balanced', labelKey: 'admin.security.modeA', descKey: 'admin.security.modeADesc' },
-  { value: 'auto', labelKey: 'admin.security.modeB', descKey: 'admin.security.modeBDesc' },
-  { value: 'split', labelKey: 'admin.security.modeC', descKey: 'admin.security.modeCDesc' },
-]
-
-/** 手选优先两档：本系统仅 OKX，锁定即 `okx`，否则交给路由模式。 */
-const PREFERRED_VENUES = [
-  { value: 'auto', labelKey: 'admin.security.noManual', descKey: 'admin.security.noManualDesc' },
-  { value: 'okx', labelKey: 'admin.security.lockOkx', descKey: 'admin.security.lockOkxDesc' },
-]
-
-/** 接入状态带（2 项事实：OKX 与标的池） */
+// ---- 顶部概览四元指标带 ----
 const bandFacts = computed(() => {
   return [
     {
       icon: ShieldCheck,
       label: t('admin.security.okxApi'),
-      value: okxLinked.value ? t('admin.security.okxLinked') : t('admin.security.okxUnconfigured'),
+      value: okxLinked.value ? t('admin.security.okxReady') : t('admin.security.okxNotReady'),
       foot: envBadge(runtime.value?.environment),
       tone: okxLinked.value ? 'is-up' : 'is-down',
     },
@@ -551,12 +467,21 @@ const bandFacts = computed(() => {
       foot: t('admin.security.usdtPerp'),
       tone: '',
     },
+    {
+      icon: Zap,
+      label: t('admin.security.orderModeTitle'),
+      value: orderMode.value === 'market' ? t('admin.security.optMarket') : t('admin.security.optLimit'),
+      foot: orderMode.value === 'market' ? 'Taker · 即时吃单' : 'Maker · 挂单等待',
+      tone: '',
+    },
+    {
+      icon: Wallet,
+      label: t('admin.security.capitalTitle'),
+      value: `${config.value?.editable?.initial_capital ?? '--'} USDT`,
+      foot: '绩效统计基准',
+      tone: '',
+    },
   ]
-})
-
-const healthAllOk = computed(() => {
-  const chips = mxHealthChips.value || []
-  return chips.length > 0 && chips.every((h: any) => h.ok === h.total)
 })
 
 // ---- Strategy Plaza Sharing ----
@@ -599,17 +524,18 @@ async function loadPlazaSettings() {
 }
 
 async function savePlazaSettings() {
+  if (!isUnifiedLive.value) {
+    toast.warn(t('admin.security.plazaLiveOnlyAlert'))
+    return
+  }
   savingPlaza.value = true
   try {
-    const res = await api<any>('/api/v1/admin/plaza/settings', {
-      method: 'POST',
+    await api('/api/v1/admin/plaza/settings', {
+      method: 'PUT',
       body: JSON.stringify(plazaSettings.value),
     })
-    if (res?.settings) {
-      plazaSettings.value = { ...plazaSettings.value, ...res.settings }
-    }
-    plazaIsLive.value = Boolean(res?.is_live)
     toast.ok(t('admin.security.toastPlazaSaved'))
+    await loadPlazaSettings()
   } catch (err: any) {
     toast.err(t('admin.security.errSaveFailed', undefined, { msg: err.message || 'Error' }))
   } finally {
@@ -618,10 +544,8 @@ async function savePlazaSettings() {
 }
 
 function copyPlazaUrl() {
-  if (navigator.clipboard) {
-    navigator.clipboard.writeText(plazaPublicUrl.value)
-    toast.ok(t('admin.security.toastPlazaCopied'))
-  }
+  navigator.clipboard.writeText(plazaPublicUrl.value)
+  toast.ok(t('admin.security.toastPlazaCopied'))
 }
 
 async function openPlazaPreview() {
@@ -631,21 +555,24 @@ async function openPlazaPreview() {
     const res = await api<any>('/api/v1/public/plaza/profile')
     plazaPreviewData.value = res
   } catch (err: any) {
-    plazaPreviewData.value = { error: err.message }
+    plazaPreviewData.value = null
   } finally {
     loadingPlazaPreview.value = false
   }
 }
 
-function copyCloneParams() {
-  if (plazaPreviewData.value?.strategy_clone_payload && navigator.clipboard) {
-    const jsonStr = JSON.stringify(plazaPreviewData.value.strategy_clone_payload, null, 2)
-    navigator.clipboard.writeText(jsonStr)
-    toast.ok(t('admin.security.plazaCloneSuccess'))
-  }
+function copyStrategyCloneData() {
+  if (!plazaPreviewData.value?.strategy_clone_payload) return
+  navigator.clipboard.writeText(JSON.stringify(plazaPreviewData.value.strategy_clone_payload, null, 2))
+  toast.ok(t('admin.security.plazaCloneSuccess'))
 }
 
-onMounted(() => { loadAll(); loadMx(); loadChannels(); loadPlazaSettings() })
+onMounted(() => {
+  loadAll()
+  loadMx()
+  loadChannels()
+  loadPlazaSettings()
+})
 </script>
 
 <template>
@@ -656,10 +583,7 @@ onMounted(() => { loadAll(); loadMx(); loadChannels(); loadPlazaSettings() })
           {{ isUnifiedLive ? t('admin.security.envLive') : t('admin.security.optDemo') }}
         </span>
         <span class="badge badge-accent mono">
-          {{ t('admin.security.chipRouting') }} {{ routingMode.toUpperCase() }}
-        </span>
-        <span class="badge mono">
-          {{ t('admin.security.chipPreferred') }} {{ preferredVenue.toUpperCase() }}
+          {{ orderMode === 'market' ? t('admin.security.optMarket') : t('admin.security.optLimit') }}
         </span>
         <button type="button" class="btn btn-ghost btn-sm" :disabled="loading" @click="loadAll">
           <Loader2 v-if="loading && config" :size="14" class="animate-spin shrink-0" />
@@ -675,8 +599,7 @@ onMounted(() => { loadAll(); loadMx(); loadChannels(); loadPlazaSettings() })
       <div v-for="i in 6" :key="i" class="skeleton skeleton-row" />
     </div>
 
-    <!-- 加载失败：批 24 —— 此前失败只弹一个 3 秒就消失的 toast，
-         config 保持 null，模板两个分支都不命中 → 页面只剩页头，一片空白且无重试入口。 -->
+    <!-- 加载失败 -->
     <div v-else-if="loadError && !config" role="alert" class="state-block is-error">
       <span class="state-icon"><AlertTriangle :size="17" /></span>
       <p class="state-title">{{ t('common.loadFailed') }}</p>
@@ -688,7 +611,7 @@ onMounted(() => { loadAll(); loadMx(); loadChannels(); loadPlazaSettings() })
     </div>
 
     <template v-else-if="config">
-      <!-- ══ 接入状态带 ══ -->
+      <!-- ══ 顶部概览指标带 ══ -->
       <section class="card band">
         <div v-for="f in bandFacts" :key="f.label" class="fact">
           <span class="fact-label"><component :is="f.icon" :size="12" />{{ f.label }}</span>
@@ -697,7 +620,7 @@ onMounted(() => { loadAll(); loadMx(); loadChannels(); loadPlazaSettings() })
         </div>
       </section>
 
-      <!-- ══ 页签 ══ -->
+      <!-- ══ 页签导航 ══ -->
       <div class="seg seg-lg sc-tabs" role="tablist" :aria-label="t('admin.security.tabsLabel')">
         <button
           v-for="(tab, ti) in TABS"
@@ -716,7 +639,7 @@ onMounted(() => { loadAll(); loadMx(); loadChannels(); loadPlazaSettings() })
         </button>
       </div>
 
-      <!-- ══════════ 页签 1：交易所与路由 ══════════ -->
+      <!-- ══════════ 页签 1：交易所账户 ══════════ -->
       <template v-if="activeTab === 'venues'">
         <!-- 全局统一交易环境一键切换 -->
         <SettingsSection :title="t('admin.security.unifiedEnvTitle')" :description="t('admin.security.unifiedEnvDesc')" :icon="ShieldCheck">
@@ -756,134 +679,6 @@ onMounted(() => { loadAll(); loadMx(); loadChannels(); loadPlazaSettings() })
               {{ isUnifiedLive ? t('admin.security.unifiedLiveHint') : t('admin.security.unifiedDemoHint') }}
             </p>
           </div>
-        </SettingsSection>
-
-        <!-- 委托订单模式 -->
-        <SettingsSection :title="t('admin.security.orderModeTitle')" :description="t('admin.security.orderModeDesc')" :icon="Zap">
-          <template #actions>
-            <button type="button" class="btn btn-primary btn-sm" :disabled="savingOrderMode" @click="saveOrderMode">
-              <Loader2 v-if="savingOrderMode" :size="13" class="animate-spin shrink-0" />
-              <Save v-else :size="13" />
-              <span>{{ savingOrderMode ? t('admin.security.saving') : t('admin.security.saveOrderMode') }}</span>
-            </button>
-          </template>
-
-          <div class="sc-group">
-            <span class="form-label">{{ t('admin.security.orderModeTitle') }}</span>
-            <div class="seg seg-compact" role="group" :aria-label="t('admin.security.orderModeTitle')">
-              <button
-                type="button"
-                :aria-pressed="orderMode === 'limit'"
-                :class="{ 'seg-on': orderMode === 'limit' }"
-                @click="orderMode = 'limit'"
-              >
-                <span>{{ t('admin.security.optLimit') }}</span>
-              </button>
-              <button
-                type="button"
-                :aria-pressed="orderMode === 'market'"
-                :class="{ 'seg-on': orderMode === 'market' }"
-                @click="orderMode = 'market'"
-              >
-                <span>{{ t('admin.security.optMarket') }}</span>
-              </button>
-            </div>
-            <p class="sc-hint">
-              {{ orderMode === 'market' ? t('admin.security.orderModeMarketHint') : t('admin.security.orderModeLimitHint') }}
-            </p>
-          </div>
-        </SettingsSection>
-
-        <SettingsSection :title="t('admin.security.routingTitle')" :description="t('admin.security.routingDesc')" :icon="Route">
-          <template #actions>
-            <button type="button" class="btn btn-primary btn-sm" :disabled="savingMx" @click="saveRouting">
-              <Loader2 v-if="savingMx" :size="13" class="animate-spin shrink-0" />
-              <Save v-else :size="13" />
-              <span>{{ savingMx ? t('admin.security.saving') : t('admin.security.saveRouting') }}</span>
-            </button>
-          </template>
-
-          <div class="sc-group">
-            <span class="form-label">{{ t('admin.security.routingModeLabel') }}</span>
-            <div class="sc-radios sc-radios-3" role="radiogroup" :aria-label="t('admin.security.routingModeLabel')">
-              <label
-                v-for="m in ROUTING_MODES"
-                :key="m.value"
-                class="sc-radio"
-                :class="{ 'is-on': routingMode === m.value }"
-              >
-                <input v-model="routingMode" type="radio" name="routing-mode" :value="m.value" />
-                <span class="sc-radio-text">
-                  <span class="sc-radio-title">{{ t(m.labelKey) }}</span>
-                  <span class="sc-radio-desc">{{ t(m.descKey) }}</span>
-                </span>
-              </label>
-            </div>
-
-            <!-- 选所就绪度与协调说明卡 -->
-            <div class="sc-coord-panel" :class="{ 'is-danger': venueReadiness.readyCount === 0 }">
-              <div class="sc-coord-header">
-                <span class="badge mono" :class="venueReadiness.readyCount === 0 ? 'badge-warn' : 'badge-accent'">
-                  <Activity :size="11" />
-                  {{ t('admin.security.readyVenuesCount', undefined, { count: venueReadiness.readyCount, total: venueReadiness.all.length }) }}
-                </span>
-                <span class="sc-coord-names">
-                  {{ venueReadiness.readyCount > 0 ? venueReadiness.readyNames : t('admin.security.noReadyVenues') }}
-                </span>
-              </div>
-              <p class="sc-coord-text">
-                <template v-if="routingMode === 'balanced'">
-                  <span v-if="venueReadiness.readyCount > 0">
-                    {{ t('admin.security.balancedCoordSingle', undefined, { venue: venueReadiness.readyNames }) }}
-                  </span>
-                  <span v-else>
-                    {{ t('admin.security.balancedCoordNone') }}
-                  </span>
-                </template>
-                <template v-else-if="routingMode === 'auto'">
-                  {{ t('admin.security.autoCoordDesc') }}
-                </template>
-                <template v-else>
-                  {{ t('admin.security.splitCoordDesc') }}
-                </template>
-              </p>
-            </div>
-          </div>
-
-          <div class="sc-group">
-            <span class="form-label">{{ t('admin.security.manualLabel') }}</span>
-            <div class="sc-radios sc-radios-2" role="radiogroup" :aria-label="t('admin.security.manualLabel')">
-              <label
-                v-for="v in PREFERRED_VENUES"
-                :key="v.value"
-                class="sc-radio"
-                :class="{ 'is-on': preferredVenue === v.value }"
-              >
-                <input v-model="preferredVenue" type="radio" name="preferred-venue" :value="v.value" />
-                <span class="sc-radio-text">
-                  <span class="sc-radio-title">{{ t(v.labelKey) }}</span>
-                  <span class="sc-radio-desc">{{ t(v.descKey) }}</span>
-                </span>
-              </label>
-            </div>
-
-            <!-- 手选冲突告警 -->
-            <div v-if="preferredVenueConflict" role="alert" class="sc-conflict-warn">
-              <AlertTriangle :size="13" class="shrink-0" />
-              <span>{{ t('admin.security.preferredConflictWarn', undefined, { venue: preferredVenueConflict }) }}</span>
-            </div>
-          </div>
-
-          <p class="sc-note">
-            <span class="label-caps">{{ t('admin.security.routingEffectiveTitle') }}</span>
-            <span>
-              <b class="mono is-accent">{{ routingMode.toUpperCase() }}</b>
-              <template v-if="preferredVenue !== 'auto'">
-                {{ t('admin.security.manualTag') }} <b class="mono is-accent">{{ preferredVenue.toUpperCase() }}</b>
-              </template>
-              — {{ t('admin.security.unconfiguredNote') }}
-            </span>
-          </p>
         </SettingsSection>
 
         <!-- OKX 接入凭证 -->
@@ -987,6 +782,42 @@ onMounted(() => { loadAll(); loadMx(); loadChannels(); loadPlazaSettings() })
           </div>
         </SettingsSection>
 
+        <!-- 委托订单模式 -->
+        <SettingsSection :title="t('admin.security.orderModeTitle')" :description="t('admin.security.orderModeDesc')" :icon="Zap">
+          <template #actions>
+            <button type="button" class="btn btn-primary btn-sm" :disabled="savingOrderMode" @click="saveOrderMode">
+              <Loader2 v-if="savingOrderMode" :size="13" class="animate-spin shrink-0" />
+              <Save v-else :size="13" />
+              <span>{{ savingOrderMode ? t('admin.security.saving') : t('admin.security.saveOrderMode') }}</span>
+            </button>
+          </template>
+
+          <div class="sc-group">
+            <span class="form-label">{{ t('admin.security.orderModeTitle') }}</span>
+            <div class="seg seg-compact" role="group" :aria-label="t('admin.security.orderModeTitle')">
+              <button
+                type="button"
+                :aria-pressed="orderMode === 'limit'"
+                :class="{ 'seg-on': orderMode === 'limit' }"
+                @click="orderMode = 'limit'"
+              >
+                <span>{{ t('admin.security.optLimit') }}</span>
+              </button>
+              <button
+                type="button"
+                :aria-pressed="orderMode === 'market'"
+                :class="{ 'seg-on': orderMode === 'market' }"
+                @click="orderMode = 'market'"
+              >
+                <span>{{ t('admin.security.optMarket') }}</span>
+              </button>
+            </div>
+            <p class="sc-hint">
+              {{ orderMode === 'market' ? t('admin.security.orderModeMarketHint') : t('admin.security.orderModeLimitHint') }}
+            </p>
+          </div>
+        </SettingsSection>
+
         <!-- OKX 行情健康 -->
         <SettingsSection :title="t('admin.security.healthTitle')" :description="t('admin.security.healthDesc')" :icon="Activity">
           <template #actions>
@@ -1025,13 +856,11 @@ onMounted(() => { loadAll(); loadMx(); loadChannels(); loadPlazaSettings() })
           </template>
 
           <div class="sc-group">
-            <!-- 模拟盘锁定提示 -->
             <p v-if="!isUnifiedLive" class="sc-hint flex items-center gap-1.5 text-amber-400">
               <AlertTriangle :size="13" class="shrink-0" />
               <span>{{ t('admin.security.plazaLiveOnlyAlert') }}</span>
             </p>
 
-            <!-- 主开关 -->
             <div class="flex items-center justify-between py-2 border-b border-[var(--border-subtle)]">
               <div>
                 <span class="font-medium text-sm text-[var(--text-primary)]">{{ t('admin.security.plazaEnableLabel') }}</span>
@@ -1044,7 +873,6 @@ onMounted(() => { loadAll(); loadMx(); loadChannels(); loadPlazaSettings() })
               />
             </div>
 
-            <!-- 详细配置与链接 -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
               <div class="space-y-1">
                 <label for="plaza-nickname-input" class="form-label text-xs">{{ t('admin.security.plazaNicknameLabel') }}</label>
@@ -1082,7 +910,6 @@ onMounted(() => { loadAll(); loadMx(); loadChannels(); loadPlazaSettings() })
               </div>
             </div>
 
-            <!-- 隐私细分选项 -->
             <div class="space-y-2 pt-2 border-t border-[var(--border-subtle)]">
               <span class="form-label text-xs">{{ t('admin.security.plazaPrivacyCustom') }}</span>
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
@@ -1128,7 +955,6 @@ onMounted(() => { loadAll(); loadMx(); loadChannels(); loadPlazaSettings() })
               </div>
             </div>
 
-            <!-- 底部操作按钮 -->
             <div class="flex items-center justify-between pt-3 border-t border-[var(--border-subtle)]">
               <button
                 type="button"
@@ -1159,7 +985,8 @@ onMounted(() => { loadAll(); loadMx(); loadChannels(); loadPlazaSettings() })
       <template v-if="activeTab === 'pool'">
         <SettingsSection :title="t('admin.security.capitalTitle')" :description="t('admin.security.capitalDesc')" :icon="Wallet">
           <template #actions>
-            <button type="button"
+            <button
+              type="button"
               class="btn btn-primary btn-sm"
               :disabled="savingCapital || !auth.isSuperadmin || !capitalAmountOk || !capitalConfirmOk"
               @click="saveCapital"
@@ -1244,7 +1071,8 @@ onMounted(() => { loadAll(); loadMx(); loadChannels(); loadPlazaSettings() })
                 <span v-else class="badge">{{ t('admin.security.removableBadge') }}</span>
               </span>
               <span class="sc-actions">
-                <button type="button"
+                <button
+                  type="button"
                   :disabled="item.protected || item.has_tracker || item.held_live || item.holdings_unknown"
                   class="btn btn-quiet btn-icon btn-sm is-danger"
                   :title="item.held_live
@@ -1290,7 +1118,6 @@ onMounted(() => { loadAll(); loadMx(); loadChannels(); loadPlazaSettings() })
             </button>
           </template>
 
-          <!-- 批 70：加载中 → status + 旋转图标；失败 → alert + 警示图标（不再转圈） -->
           <p
             v-if="snapshotState"
             class="sc-loading"
@@ -1348,7 +1175,11 @@ onMounted(() => { loadAll(); loadMx(); loadChannels(); loadPlazaSettings() })
                 {{ Number(p.upl || 0).toFixed(4) }}
               </span>
               <span class="sc-actions">
-                <button type="button" class="btn btn-danger btn-sm" @click="openClose(p)">
+                <button
+                  type="button"
+                  class="btn btn-quiet btn-sm is-danger"
+                  @click="openClose(p)"
+                >
                   {{ t('admin.security.quickClose') }}
                 </button>
               </span>
@@ -1358,7 +1189,7 @@ onMounted(() => { loadAll(); loadMx(); loadChannels(); loadPlazaSettings() })
       </template>
     </template>
 
-    <!-- ══════════ 平仓双确认 ══════════ -->
+    <!-- ══ 平仓二次确认弹窗 ══ -->
     <BaseDialog
       :open="!!closeModal?.show"
       :title="t('admin.security.closeModalTitle')"
@@ -1408,7 +1239,6 @@ onMounted(() => { loadAll(); loadMx(); loadChannels(); loadPlazaSettings() })
         <button type="button" class="btn btn-ghost btn-sm" @click="closeModal = null">
           {{ t('admin.security.cancel') }}
         </button>
-        <!-- 批 115：表单已挂 @submit.prevent="confirmClose"，type="submit" 按钮无需再挂 @click，避免单次点击触发两次平仓请求 -->
         <button class="btn btn-danger btn-sm" type="submit" form="sc-close-form" :disabled="closing || !closeReady">
           <Loader2 v-if="closing" :size="13" class="animate-spin shrink-0" />
           <span>{{ closing ? t('admin.security.closing') : t('admin.security.confirmClose') }}</span>
@@ -1416,7 +1246,7 @@ onMounted(() => { loadAll(); loadMx(); loadChannels(); loadPlazaSettings() })
       </template>
     </BaseDialog>
 
-    <!-- ══════════ 策略广场名片预览 ══════════ -->
+    <!-- ══ 策略广场名片预览弹窗 ══ -->
     <BaseDialog
       :open="showPlazaPreview"
       :title="t('admin.security.plazaPreviewTitle')"
@@ -1427,7 +1257,6 @@ onMounted(() => { loadAll(); loadMx(); loadChannels(); loadPlazaSettings() })
         <Loader2 :size="24" class="animate-spin shrink-0 text-[var(--color-primary)]" />
       </div>
       <div v-else-if="plazaPreviewData" class="space-y-4">
-        <!-- 模拟策略广场卡片 -->
         <div class="card p-4 border border-[var(--border-base)] bg-[var(--bg-elevated)] space-y-3">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
@@ -1458,20 +1287,19 @@ onMounted(() => { loadAll(); loadMx(); loadChannels(); loadPlazaSettings() })
             <span class="text-[var(--text-muted)] ml-2">({{ plazaPreviewData.model_specs?.reasoning_effort }} effort)</span>
           </div>
 
-          <div v-if="plazaPreviewData.strategy_clone_payload?.visible" class="text-xs space-y-1">
+          <div v-if="plazaPreviewData.risk_settings?.visible" class="text-xs space-y-1">
             <span class="text-[var(--text-muted)]">{{ t('admin.security.plazaRiskConfig') }}:</span>
-            <span class="ml-2 font-mono">{{ t('admin.security.plazaRiskSummary', undefined, { min: plazaPreviewData.strategy_clone_payload?.risk_settings?.min_leverage, max: plazaPreviewData.strategy_clone_payload?.risk_settings?.max_leverage, pct: (Number(plazaPreviewData.strategy_clone_payload?.risk_settings?.max_margin_equity_ratio || 0.35) * 100).toFixed(0) }) }}</span>
+            <span class="ml-2 font-mono">{{ t('admin.security.plazaRiskSummary', undefined, { min: plazaPreviewData.risk_settings?.min_leverage, max: plazaPreviewData.risk_settings?.max_leverage, pct: (Number(plazaPreviewData.risk_settings?.max_margin_equity_ratio || 0.35) * 100).toFixed(0) }) }}</span>
           </div>
         </div>
 
-        <div class="flex justify-end gap-2 pt-2">
+        <div class="flex items-center justify-between pt-2">
           <button
-            v-if="plazaPreviewData.strategy_clone_payload?.visible"
             type="button"
             class="btn btn-quiet btn-sm"
-            @click="copyCloneParams"
+            @click="copyStrategyCloneData"
           >
-            <Copy :size="13" />
+            <Copy :size="12" />
             <span>{{ t('admin.security.plazaTestCopy') }}</span>
           </button>
           <button
@@ -1499,41 +1327,14 @@ onMounted(() => { loadAll(); loadMx(); loadChannels(); loadPlazaSettings() })
   gap: 8px;
 }
 
-/* ══ 状态带 ══ */
-
-
-
-
-
-
-
-
-
-
 .sc-tabs {
   align-self: flex-start;
 }
 
-/* ══ 通用 ══ */
-.sc-note {
-  display: flex;
-  align-items: baseline;
-  gap: var(--ds-space-2);
-  flex-wrap: wrap;
-  margin-top: var(--ds-space-4);
-  padding-top: var(--ds-space-3);
-  border-top: 1px solid var(--ds-color-border-default);
-  font-size: var(--text-3xs);
-  line-height: var(--leading-body);
-  color: var(--ds-color-text-description);
-}
-.sc-note .mono.is-accent {
-  color: var(--ds-color-brand);
-}
 .sc-hint {
   display: flex;
   align-items: flex-start;
-  gap:6px;
+  gap: 6px;
   font-size: var(--text-4xs);
   line-height: var(--leading-body);
   color: var(--ds-color-text-placeholder);
@@ -1552,63 +1353,7 @@ onMounted(() => { loadAll(); loadMx(); loadChannels(); loadPlazaSettings() })
   margin-top: var(--ds-space-4);
 }
 
-/* ══ radio 卡组（旧版 7 段手写卡片 → 数据驱动） ══ */
-.sc-radios {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: var(--ds-space-2);
-  margin-top:8px;
-}
-@media (min-width: 620px) {
-  .sc-radios-3 {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-  .sc-radios-2 {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-.sc-radio {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 10px;
-  border: 1px solid var(--ds-color-border-default);
-  border-left: 2px solid transparent;
-  border-radius: var(--r-ctl);
-  background-color: var(--ds-color-bg-surface-inset);
-  cursor: pointer;
-  transition: all var(--dur-fast);
-}
-.sc-radio:hover {
-  background-color: var(--ds-color-bg-hover);
-}
-.sc-radio.is-on {
-  border-left-color: var(--ds-color-brand);
-  background-color: var(--astra-brand-bg);
-}
-.sc-radio input {
-  margin-top: 2px;
-  accent-color: var(--ds-color-brand);
-  flex-shrink: 0;
-}
-.sc-radio-text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-.sc-radio-title {
-  font-size: var(--text-3xs);
-  font-weight: 600;
-  color: var(--ds-color-text-primary);
-}
-.sc-radio-desc {
-  font-size: var(--text-4xs);
-  line-height: var(--leading-body);
-  color: var(--ds-color-text-placeholder);
-}
-
-/* ══ OKX 凭证 ══ */
+/* ══ OKX 凭证卡 ══ */
 .sc-venues {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -1658,24 +1403,64 @@ onMounted(() => { loadAll(); loadMx(); loadChannels(); loadPlazaSettings() })
 }
 .sc-venue-env-value {
   font-size: var(--text-3xs);
-  font-weight: 600;
-  color: var(--ds-color-text-primary);
+  color: var(--ds-color-text-secondary);
 }
+
 .sc-venue-body {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  flex: 1;
+  gap: var(--ds-space-3);
   padding: var(--ds-space-3);
 }
+
+.sc-env-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sc-env-hint {
+  font-size: var(--text-4xs);
+  color: var(--ds-color-text-placeholder);
+}
+
+.sc-creds {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sc-creds-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.sc-creds-group {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--ds-space-2);
+}
+@media (min-width: 768px) {
+  .sc-creds-group {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 .sc-venue-foot {
   display: flex;
   align-items: center;
-  gap: var(--ds-space-2);
-  flex-wrap: wrap;
-  padding: 10px var(--ds-space-3);
+  justify-content: space-between;
+  gap: var(--ds-space-3);
+  padding: 8px var(--ds-space-3);
   border-top: 1px solid var(--ds-color-border-default);
-  background-color: var(--ds-color-bg-surface-1);
+  background-color: var(--ds-color-bg-surface);
+}
+.sc-latency {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--text-4xs);
+  color: var(--ds-color-text-placeholder);
 }
 .sc-venue-actions {
   display: flex;
@@ -1684,218 +1469,81 @@ onMounted(() => { loadAll(); loadMx(); loadChannels(); loadPlazaSettings() })
   margin-left: auto;
 }
 
-.sc-creds {
-  display: flex;
-  flex-direction: column;
-  gap:6px;
-}
-.sc-creds-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: var(--ds-space-2);
-}
-.sc-env-indicator {
-  display: flex;
-  align-items: center;
-  gap: var(--ds-space-2);
-}
-.sc-env-hint {
-  font-size: var(--text-4xs);
-  color: var(--ds-color-text-placeholder);
-}
-.sc-coord-panel {
-  display: flex;
-  flex-direction: column;
-  gap: var(--ds-space-2);
-  margin-top: var(--ds-space-3);
-  padding: var(--ds-space-3);
-  border-radius: var(--r-ctl);
-  border: 1px solid var(--ds-color-border-default);
-  background-color: var(--ds-color-bg-surface-inset);
-}
-.sc-coord-panel.is-danger {
-  border-color: var(--down-line);
-  background-color: var(--down-bg);
-}
-.sc-coord-header {
-  display: flex;
-  align-items: center;
-  gap: var(--ds-space-2);
-}
-.sc-coord-names {
-  font-size: var(--text-3xs);
-  font-weight: 600;
-  color: var(--ds-color-text-primary);
-}
-.sc-coord-text {
-  font-size: var(--text-3xs);
-  line-height: var(--leading-body);
-  color: var(--ds-color-text-description);
-  margin: 0;
-}
-.sc-conflict-warn {
-  display: flex;
-  align-items: center;
-  gap: var(--ds-space-2);
-  margin-top: var(--ds-space-2);
-  padding: var(--ds-space-2) var(--ds-space-3);
-  border-radius: var(--r-ctl);
-  background-color: var(--warn-bg);
-  border: 1px solid var(--warn-line);
-  color: var(--warn);
-  font-size: var(--text-3xs);
-}
-.sc-creds-group {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.sc-latency {
-  font-size: var(--text-3xs);
-  color: var(--ds-color-text-secondary);
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-.sc-check {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: var(--text-3xs);
-  color: var(--ds-color-text-description);
-  cursor: pointer;
-  /* 批 101：勾选行此前悬停毫无反馈。与同页 `.sc-radio:hover` / `.sc-row:hover`
-     用同一语汇 `--ds-color-bg-hover`（底色而非文字色）—— 这样**危险变体也有反馈**：
-     `.sc-check.is-danger span` 权重更高、始终是红的，若只改文字色，
-     危险行会静默地「没有变化」（第一版就踩了这个坑）。 */
-  border-radius: var(--r-xs);
-  transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
-}
-.sc-check:hover {
-  background-color: var(--ds-color-bg-hover);
-}
-.sc-check:hover:not(.is-danger) {
-  color: var(--ds-color-text-primary);
-}
-.sc-check.is-danger span {
-  color: var(--down);
-}
-
-/* ══ 健康 ══ */
-.sc-health {
-  display: flex;
-  flex-direction: column;
-}
-.sc-health-row {
-  display: flex;
-  align-items: center;
-  gap: var(--ds-space-3);
-  padding:10px var(--ds-space-3);
-  border-bottom: 1px solid var(--ds-color-border-default);
-  border-left: 2px solid var(--warn);
-  font-size: var(--text-3xs);
-}
-.sc-health-row:last-child {
-  border-bottom: 0;
-}
-.sc-health-row.is-ok {
-  border-left-color: var(--up);
-}
-.sc-health-name {
-  font-weight: 600;
-  color: var(--ds-color-text-primary);
-  min-width: 0;
-}
-.sc-health-stat {
-  margin-left: auto;
-  color: var(--ds-color-text-secondary);
-}
-.sc-health-ms {
-  color: var(--ds-color-text-placeholder);
-}
-
-/* ══ 表单 ══ */
+/* ══ 表单布局 ══ */
 .sc-form-2 {
   display: grid;
   grid-template-columns: 1fr;
   gap: var(--ds-space-3);
 }
-@media (min-width: 700px) {
+@media (min-width: 640px) {
   .sc-form-2 {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr 1fr;
   }
 }
+
 .sc-inst-input {
-  width: 190px;
+  max-width: 220px;
 }
 
-/* ══ 行式清单 ══ */
+/* ══ 行式标的与持仓列表 ══ */
 .sc-rows {
   display: flex;
   flex-direction: column;
+  gap: 1px;
+  background-color: var(--ds-color-border-default);
+  border: 1px solid var(--ds-color-border-default);
+  border-radius: var(--r-ctl);
+  overflow: hidden;
 }
 .sc-row {
   display: grid;
-  grid-template-columns: 150px minmax(0, 1fr) 78px minmax(0, 1.3fr) 44px;
+  grid-template-columns: 1.5fr 1.5fr 1fr 1.5fr auto;
   align-items: center;
   gap: var(--ds-space-3);
-  padding: 10px var(--ds-space-3);
-  border-bottom: 1px solid var(--ds-color-border-default);
+  padding: 8px var(--ds-space-3);
+  background-color: var(--ds-color-bg-surface-inset);
   font-size: var(--text-3xs);
 }
-.sc-row:last-child {
-  border-bottom: 0;
+.sc-row:hover:not(.sc-row-head) {
+  background-color: var(--ds-color-bg-hover);
 }
 .sc-row-head {
-  min-height: 30px;
-  padding-top: 0;
-  padding-bottom: 0;
-  background-color: var(--ds-color-bg-surface-inset);
+  background-color: var(--ds-color-bg-surface);
   font-size: var(--text-4xs);
-  font-weight: 500;
-  letter-spacing: var(--track-label);
-  text-transform: uppercase;
+  font-weight: 600;
   color: var(--ds-color-text-placeholder);
-}
-.sc-row:not(.sc-row-head):hover {
-  background-color: var(--ds-color-bg-hover);
 }
 .sc-inst {
   font-weight: 600;
   color: var(--ds-color-text-primary);
 }
 .sc-name {
-  color: var(--ds-color-text-secondary);
-  min-width: 0;
+  color: var(--ds-color-text-description);
 }
 .sc-type {
   color: var(--ds-color-text-placeholder);
 }
 .sc-badges {
   display: flex;
-  flex-wrap: wrap;
+  align-items: center;
   gap: 4px;
-  min-width: 0;
 }
 .sc-actions {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  gap: 4px;
 }
 
 .sc-pos-row {
-  grid-template-columns: minmax(0, 1.6fr) 80px 80px 110px 92px;
+  grid-template-columns: 2fr 1.2fr 1fr 1.2fr auto;
 }
 .sc-pos-id {
   display: flex;
   align-items: center;
   gap: 6px;
-  flex-wrap: wrap;
   min-width: 0;
 }
-.sc-pos-id .mono {
-  font-weight: 600;
+.sc-pos-id b {
   color: var(--ds-color-text-primary);
 }
 .sc-contracts,
@@ -1928,12 +1576,32 @@ onMounted(() => { loadAll(); loadMx(); loadChannels(); loadPlazaSettings() })
   }
 }
 
-/* ══ 应急 ══ */
+/* ══ 应急总闸与勾选行 ══ */
+.sc-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--text-3xs);
+  color: var(--ds-color-text-description);
+  cursor: pointer;
+  border-radius: var(--r-xs);
+  transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+.sc-check:hover {
+  background-color: var(--ds-color-bg-hover);
+}
+.sc-check:hover:not(.is-danger) {
+  color: var(--ds-color-text-primary);
+}
+.sc-check.is-danger span {
+  color: var(--down);
+}
+
 .sc-switch-row {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding:12px var(--ds-space-3);
+  padding: 12px var(--ds-space-3);
   border: 1px solid var(--ds-color-border-default);
   border-left: 2px solid var(--ds-color-border-strong);
   border-radius: var(--r-ctl);
@@ -1959,7 +1627,6 @@ onMounted(() => { loadAll(); loadMx(); loadChannels(); loadPlazaSettings() })
   font-size: var(--text-3xs);
   color: var(--ds-color-text-placeholder);
 }
-/* 批 70：失败态用语义色与左竖线（本页既有语汇），不再沿用占位符灰 */
 .sc-loading.is-error {
   color: var(--down);
   padding-left: var(--ds-space-2);
@@ -1968,7 +1635,7 @@ onMounted(() => { loadAll(); loadMx(); loadChannels(); loadPlazaSettings() })
 .sc-snap-meta {
   display: flex;
   align-items: baseline;
-  gap:8px;
+  gap: 8px;
   flex-wrap: wrap;
   margin-bottom: var(--ds-space-3);
   font-size: var(--text-3xs);
@@ -1981,6 +1648,35 @@ onMounted(() => { loadAll(); loadMx(); loadChannels(); loadPlazaSettings() })
   color: var(--down);
 }
 .sc-sep {
+  color: var(--ds-color-text-placeholder);
+}
+
+/* ══ 健康 ══ */
+.sc-health {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+}
+.sc-health-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px var(--ds-space-3);
+  border: 1px solid var(--ds-color-border-default);
+  border-radius: var(--r-ctl);
+  background-color: var(--ds-color-bg-surface-inset);
+  font-size: var(--text-3xs);
+}
+.sc-health-name {
+  font-weight: 600;
+  color: var(--ds-color-text-primary);
+  text-transform: uppercase;
+}
+.sc-health-stat {
+  color: var(--ds-color-text-description);
+}
+.sc-health-ms {
   color: var(--ds-color-text-placeholder);
 }
 
@@ -2007,7 +1703,7 @@ onMounted(() => { loadAll(); loadMx(); loadChannels(); loadPlazaSettings() })
   margin-top: var(--ds-space-4);
 }
 .sc-close-phrase {
-  padding:1px 6px;
+  padding: 1px 6px;
   border-radius: var(--r-xs);
   background-color: var(--down-bg);
   color: var(--down);

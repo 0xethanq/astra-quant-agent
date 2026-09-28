@@ -1,5 +1,5 @@
 export const enAdminSecurity = {
-  desc: 'OKX credentials, execution routing and symbol pool configuration',
+  desc: 'OKX quant account, API credentials, order execution mode and symbol pool',
   chipRouting: 'Routing',
   chipPreferred: 'Preferred',
   chipEnv: 'Environment',
@@ -129,7 +129,7 @@ export const enAdminSecurity = {
   envLive: 'LIVE',
   envDemoOkx: 'DEMO',
   envUnknown: 'Unknown',
-  tabVenues: 'Venues and routing',
+  tabVenues: 'Exchange & Account',
   tabPool: 'Symbol pool',
   tabEmergency: 'Emergency risk and positions',
   loadingPositions: 'Reading positions and orders…',
