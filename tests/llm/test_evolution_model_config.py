@@ -76,7 +76,7 @@ class EvolutionModelConfigTest(unittest.TestCase):
         }
         with patch("astra_backend.llm_manager.get_active_llm_runtime", return_value={
             "model": "gemini-3.8-flash",
-            "base_url": "https://cpa.r20.cn/v1",
+            "base_url": "https://api.astra.example.com/v1",
             "api_key": "key",
             "api_format": "openai_chat",
         }):
