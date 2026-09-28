@@ -278,6 +278,11 @@ def load_closed_trades(start_time_override: str | None = None):
                 for t in t_list:
                     if t.get("status") == "holding":
                         continue
+
+                    # OKX专用化：严格过滤非OKX（如历史残留的 Binance / Gate）订单
+                    venue = str(t.get("venue") or t.get("exchange") or "okx").lower()
+                    if venue != "okx":
+                        continue
                     
                     c_time = str(t.get("close_time") or t.get("time") or "")
                     o_time = str(t.get("open_time") or "")
@@ -597,54 +602,38 @@ def call_llm_evolution_review(closed_trades: List[Dict[str, Any]], existing_memo
     model_name = os.environ.get("LLM_MODEL") or ""
     effort = os.environ.get("LLM_REASONING_EFFORT") or "high"
     api_format = "openai_chat"
-    thinking_timeout = 300.0
+    thinking_timeout = max(90.0, float(os.environ.get("LLM_THINKING_TIMEOUT", os.environ.get("LLM_TIMEOUT_SECONDS", 120.0))))
+    execute_llm_request = None
 
-    evo_runtime: Dict[str, Any] = {}
     try:
         from astra_backend.evolution_config import load_evolution_config, resolve_evolution_llm_runtime
+        from astra_backend.llm_manager import execute_llm_request as _exec
         evo_cfg = load_evolution_config()
         evo_runtime = resolve_evolution_llm_runtime(evo_cfg)
-    except Exception:
-        evo_cfg = {}
-        evo_runtime = {}
-
-    if evo_runtime:
-        model_name = evo_runtime.get("model") or model_name
-        base_url = evo_runtime.get("base_url") or base_url
-        api_key = evo_runtime.get("api_key") or api_key
-        api_format = evo_runtime.get("api_format") or "openai_chat"
-        effort = evo_runtime.get("reasoning_effort") or effort
-        thinking_timeout = float(evo_runtime.get("thinking_timeout") or 300.0)
-    else:
-        try:
-            from astra_backend.llm_manager import get_active_llm_runtime
-            active_llm = get_active_llm_runtime()
-            model_name = os.environ.get("LLM_MODEL") or active_llm.get("model") or model_name
-            effort = os.environ.get("LLM_REASONING_EFFORT") or active_llm.get("reasoning_effort") or effort
-            api_format = active_llm.get("api_format", "openai_chat")
-            base_url = active_llm.get("base_url") or base_url
-            api_key = active_llm.get("api_key") or api_key
-            thinking_timeout = max(90.0, float(active_llm.get("thinking_timeout") or os.environ.get("LLM_THINKING_TIMEOUT", 120.0)))
-        except Exception:
-            thinking_timeout = max(90.0, float(os.environ.get("LLM_THINKING_TIMEOUT", os.environ.get("LLM_TIMEOUT_SECONDS", 120.0))))
-
-    try:
-        from astra_backend.llm_manager import execute_llm_request
+        if evo_runtime:
+            model_name = evo_runtime.get("model") or model_name
+            base_url = evo_runtime.get("base_url") or base_url
+            api_key = evo_runtime.get("api_key") or api_key
+            api_format = evo_runtime.get("api_format") or "openai_chat"
+            effort = os.environ.get("LLM_REASONING_EFFORT") or evo_runtime.get("reasoning_effort") or effort
+            thinking_timeout = float(evo_runtime.get("thinking_timeout") or thinking_timeout)
+        execute_llm_request = _exec
     except Exception:
         execute_llm_request = None
 
     if model_override:
         # 复盘专属回退/指定模型
         model_name = str(model_override)
-        try:
-            from astra_backend.llm_manager import resolve_model_runtime
-            resolved_override = resolve_model_runtime(model_name)
-            if resolved_override and resolved_override.get("model"):
-                base_url = resolved_override.get("base_url") or base_url
-                api_key = resolved_override.get("api_key") or api_key
-                api_format = resolved_override.get("api_format") or api_format
-        except Exception:
-            pass
+        if execute_llm_request is not None:
+            try:
+                from astra_backend.llm_manager import resolve_model_runtime
+                resolved_override = resolve_model_runtime(model_name)
+                if resolved_override and resolved_override.get("model"):
+                    base_url = resolved_override.get("base_url") or base_url
+                    api_key = resolved_override.get("api_key") or api_key
+                    api_format = resolved_override.get("api_format") or api_format
+            except Exception:
+                pass
 
     telemetry = ModelCallTelemetry(
         "self_improvement", model_name, str(effort), effective_evolution_system, effective_evolution_user
