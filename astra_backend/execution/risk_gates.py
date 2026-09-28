@@ -166,9 +166,12 @@ def check_total_exposure(
         # `SELL_SHORT` 记 sell）。**不改 `action` 本身** —— 它下游还要与
         # `"BUY_LONG"` 比较来决定 `side`（见 `open_protected_position`）。
         #
-        # 实盘影响：生产 `ASTRA_MAX_TOTAL_EXPOSURE_USDT` 未配置 → `TOTAL_EXPOSURE_CAP=0.0`
-        # → 本闸门**仍然停用**，故修复不改变当前实盘行为；只有管理员显式配置了
-        # 该上限时才会真正开始拦截（这正是该配置当初被加入的**本意**）。
+        # ⚠️ 上面那条"实盘影响：生产未配置 ⇒ 闸门仍然停用"的注释**已于 2026-09-28 作废**：
+        # `.env` 里 `ASTRA_MAX_TOTAL_EXPOSURE_USDT` 现在是 **50000.0（真的配了）**，
+        # 即本闸门**是活的**。更要紧的是同一审计发现它当时**只挂在 gate/binance 上**
+        # —— OKX 直签路径不经过 `execution_router` 就完全不查，而 OKX 的仓又**被算进**
+        # 这个上限（见 `_exposure_venues`）。现已收进 `execution/venue_gate.py`，
+        # 两条执行路径共用（`tests/audit/test_three_venue_gate_parity.py` 钉住）。
         _a = str(action or "").lower()
         _want = "buy" if _a in ("buy_long", "buy", "long") else "sell" if _a in ("sell_short", "sell", "short") else ""
         if not _want or row_action != _want:

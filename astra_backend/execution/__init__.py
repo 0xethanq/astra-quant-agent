@@ -10,6 +10,15 @@
 | `risk_gates.py` | **发送前三道风控闸门**：杠杆区间夹取 / 单笔保证金夹取 / 跨所同向敞口拒开 | 无（纯计算；常量与 `_fail` 由调用方注入） |
 | `own_records.py` | **己仓对账**：交易所实况 × 本方台账 holding 行 → 逐仓归属判定（`own` / `stale_closed` 账实不符 / `mismatch` / `untracked` / `ledger_unavailable`）。**`untracked` 与 `ledger_unavailable` 是『不可判定』，绝不是『外部仓』** | 无（台账路径可注入；纯计算） |
 | `cooldowns.py` | **止损冷却单一事实源**：读冷却状态（损坏≠缺失）/ 是否仍在冷却 / 只读展示面 | 无（路径与时长由调用方传入） |
+| `venue_gate.py` | **三所共用的入场闸门**：跨所同向敞口拒开 / 池门禁（`dry_run`·准入币种·`min_confidence`·`max_open`）/ 持仓模式只读体检 | 无（纯计算；池、持仓、模式探针由调用方注入，探针可为惰性可调用） |
+
+> `venue_gate.py`（2026-09-28 三所平权）解决的是**同一套闸门被实现两遍、只有一遍接了 OKX**：
+> 池门禁与跨所敞口原本内联在 `execution_router.open_protected_position` 里，
+> 而 OKX 直签路径（`okx_rest.place_order`）**一个都没有** ——
+> 而敞口统计却又**明确把 OKX 的仓算进去**（`_exposure_venues`），
+> 于是最坏的一种不对称出现了：**OKX 的仓占着上限，OKX 的下单却不查上限**。
+> 提示词对主脑写「跨所同向敞口上限 … 超出执行层拒开」，走到 OKX 时是**空头支票**。
+> 现在两条执行路径共用本模块的同一个函数，新增闸门自动覆盖三所。
 
 > `cooldowns.py`（结构优化阶段 4·B3 第五十刀）原为
 > `scripts/ai_factor_trader.py` 与 `astra_backend/execution/circuit_breaker.py`
@@ -61,6 +70,12 @@ from .risk_gates import (
     clamp_margin,
     check_total_exposure,
 )
+# 2026-09-28 三所平权：入场闸门（跨所敞口 / 池 / 持仓模式）的**单一策略源**。
+# 此前这些判据只长在 `execution_router` 里 ⇒ OKX 直签路径一个都没有，
+# 而敞口统计却又把 OKX 的仓算进去（"OKX 占着上限、却不查上限"）。
+from .venue_gate import (
+    venue_entry_gate,
+)
 # 结构优化阶段 4·B3 第五十刀：止损冷却的**单一事实源**。
 # `circuit_breaker` 与 `scripts/ai_factor_trader` 的同名函数现在都是转调这里的薄壳。
 from .cooldowns import (
@@ -97,4 +112,5 @@ __all__ = [
     "clamp_leverage",
     "clamp_margin",
     "check_total_exposure",
+    "venue_entry_gate",
 ]

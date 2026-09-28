@@ -85,6 +85,13 @@ class _WiringSandbox(unittest.TestCase):
                     if k.startswith("ASTRA_") and ("EXECUTION" in k or "TESTNET" in k)]:
             os.environ.pop(key, None)
         os.environ.pop(trader.PORTFOLIO_RISK_BUDGET_ENV, None)
+        # 2026-09-28 三所平权：`submit` 分发前会对直签所跑共用入场闸门
+        # （池 / 跨所敞口 / 持仓模式）。闸门取适配器算 `max_open` 与体检模式，
+        # 而真 OKX 适配器会触网 ⇒ 换零网络替身，免得用例被真实网络带跑。
+        from tests.venue_gate_stub import direct_venue_gate_adapter
+        _gate = direct_venue_gate_adapter()
+        _gate.__enter__()
+        self.addCleanup(lambda: _gate.__exit__(None, None, None))
 
     def tearDown(self):
         self._envp.stop()

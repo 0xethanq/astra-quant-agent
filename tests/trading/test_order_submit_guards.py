@@ -20,6 +20,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from scripts.trader.order_submit import submit_protected_limit_order
+from tests.venue_gate_stub import direct_venue_gate_adapter as _direct_venue_gate_adapter
 
 INST = "BTC-USDT-SWAP"
 
@@ -97,7 +98,8 @@ class Rig:
         with _listing, \
              patch("scripts.order_risk.validate_quote_geometry_and_rr",
                    side_effect=lambda *a, **k: (self.geometry_calls.append(a),
-                                                self.geometry)[1]):
+                                                self.geometry)[1]), \
+             _direct_venue_gate_adapter():
             return submit_protected_limit_order(
                 INST, "buy" if pos_side == "long" else "sell", pos_side, 3.0,
                 self.price, self.tp, self.sl, venue_ctx=venue_ctx, **params)

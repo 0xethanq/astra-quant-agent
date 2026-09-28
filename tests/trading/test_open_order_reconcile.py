@@ -223,6 +223,12 @@ class SubmitListingGateTests(_EnvFreezeMixin, unittest.TestCase):
         super().setUp()
         from astra_backend.exchanges import listing
         listing._CACHE.clear()  # 隔离 TTL 缓存：每组用例独立的目录态
+        # 2026-09-28 三所平权：`submit` 分发前会对直签所跑共用入场闸门（池/敞口/模式）。
+        # 闸门取适配器算 max_open 与模式 ⇒ 换零网络替身，免得用例被真实触网带跑。
+        from tests.venue_gate_stub import direct_venue_gate_adapter
+        _gate = direct_venue_gate_adapter()
+        _gate.__enter__()
+        self.addCleanup(lambda: _gate.__exit__(None, None, None))
 
     def _okx_router(self, ok_order=True):
         handlers = {

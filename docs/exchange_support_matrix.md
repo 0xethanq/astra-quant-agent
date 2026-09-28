@@ -30,6 +30,40 @@
 缺口撤单回滚）。沙盒 `fx-api-testnet` 连续实测 502，暂以实盘最小单验证。
 「Binance ⏸」：无附属 TP/SL 需双轨 OCO + 触发价默认 MARK_PRICE 反转，独立工程另做。
 
+## 三所入场闸门平权（2026-09-28）
+
+审计发现入场闸门被**实现了两遍**、而只有一遍接了 OKX：池门禁、跨所同向敞口、
+持仓模式体检原本内联在 `astra_backend/execution_router.py` 里，
+而 OKX 直签路径（`okx_rest.place_order`，不经 router）**一个都没有**。
+最要命的是敞口：`check_total_exposure` 的统计口径**明确把 OKX 的仓算进去**，
+于是出现「**OKX 的仓占着上限、OKX 的下单却不查上限**」，
+而提示词还告诉主脑「超出执行层拒开」——走到 OKX 时是空头支票。
+
+现已把三类判据收进 **`astra_backend/execution/venue_gate.py::venue_entry_gate`**
+（纯函数，IO 全注入），两条执行路径共用同一个函数：
+
+| 路径 | 覆盖场所 | 调用点 |
+|---|---|---|
+| `execution_router.open_protected_position` | gate / binance | 原内联块已删除，改为委托 |
+| `scripts/trader/order_submit.py` | **其余所（今天 = OKX 直签）** | 多所分发**之前**补跑（`_ROUTER_DISPATCHED_VENUES` 之外） |
+
+`tests/audit/test_three_venue_gate_parity.py` 钉住「策略只实现一次、两条路径都调用」，
+并对三所逐个断言每个阶段的判定一致；其中一条就是 OKX 直签单真的会被敞口闸门拦下。
+
+### 各所池配置（`data/venue_routing.json`）
+
+| 键 | 含义 |
+|---|---|
+| `assets` | **未配置（键缺失）= 不设限**；**显式空数组 = 该所停发**。两种形态此前混用同一个值，导致"空池"在执行层是"停发"、在选所层是"不设限" |
+| `dry_run` | `true` = 本地演算不发单（三所均可用来临时停发） |
+| `max_open` | 该所并发持仓笔数上限 |
+| `min_confidence` | 该所入场置信度门禁（与全局 `ASTRA_MIN_ENTRY_CONFIDENCE` 取严） |
+| `margin_per_trade_usdt` | 该所每笔保证金上限（`0` = 不设） |
+
+> ⚠️ `data/venue_routing.json` **不入库**（`.gitignore`）。文件缺失时各所走代码内默认值
+> （`global_risk_defaults()`，`assets` = "未配置 ⇒ 不设限"）。想停发某所：
+> 显式写 `"dry_run": true`，或把 `assets` 写成**空数组**。
+
 ## 关键差异（照搬会踩的坑）
 
 | 维度 | OKX | Binance | Gate |

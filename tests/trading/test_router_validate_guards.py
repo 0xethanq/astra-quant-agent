@@ -40,7 +40,7 @@ class OpenPositionValidateGuardTest(unittest.TestCase):
     def _decide(self, **kw):
         base = {"asset": "BTC", "action": "BUY_LONG", "venue": "gate",
                 "margin_usdt": 100, "leverage": 5, "entry_price": 70000,
-                "take_profit_price": 72000, "stop_loss_price": 68000}
+                "take_profit_price": 75000, "stop_loss_price": 68000}
         base.update(kw)
         return base
 
@@ -107,7 +107,7 @@ class CrossVenueExposureFailClosedTest(unittest.TestCase):
             r = router.open_protected_position(
                 {"asset": "BTC", "action": "BUY_LONG", "venue": "gate", "environment": "demo",
                  "margin_usdt": 100, "leverage": 5, "entry_price": 70000,
-                 "take_profit_price": 72000, "stop_loss_price": 68000})
+                 "take_profit_price": 75000, "stop_loss_price": 68000})
         self.assertFalse(r["ok"], "读不到别的场所持仓 ⇒ 必须拒开（宁可不开，不可超敞口）")
         self.assertEqual(r["stage"], "exposure")
         self.assertIn("跨所敞口不可核算", r["detail"], f"要指名是哪一所读不到：{dict(r)}")
@@ -129,7 +129,7 @@ class CrossVenueExposureFailClosedTest(unittest.TestCase):
             r = router.open_protected_position(
                 {"asset": "BTC", "action": "BUY_LONG", "venue": "gate", "environment": "demo",
                  "margin_usdt": 100, "leverage": 5, "entry_price": 70000,
-                 "take_profit_price": 72000, "stop_loss_price": 68000})
+                 "take_profit_price": 75000, "stop_loss_price": 68000})
         self.assertFalse(r["ok"])
         self.assertEqual(r["stage"], "exposure")
         self.assertIn("gate", r.get("counted_venues") or [], f"数成的场所必须报出：{dict(r)}")

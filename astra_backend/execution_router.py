@@ -27,6 +27,10 @@ from .execution.risk_gates import (
     clamp_leverage as _clamp_leverage,
     clamp_margin as _clamp_margin,
 )
+# 2026-09-28 三所平权：入场闸门（跨所敞口 / 池 / 持仓模式）的**单一策略源**。
+# 本函数此前把这三段判据内联在这里，而 OKX 直签路径一个都没有 ⇒
+# 「OKX 的仓占着敞口上限、OKX 的下单却不查上限」。现在两条路径共用同一函数。
+from .execution.venue_gate import venue_entry_gate as _venue_entry_gate
 from .exchanges import (ExchangeCapabilityError, canonical_base, execution_open,
                         get_adapter, is_sandbox_environment, require_execution)
 
@@ -102,6 +106,37 @@ def _exposure_venues(venue: str, environment: Optional[str]):
     except Exception:
         pass                      # 枚举失败：退回"只算本次场所"，并由 skipped 显式留痕
     return counted, skipped
+
+
+def collect_cross_venue_positions(venue: str, environment: Optional[str] = None,
+                                  adapter: Any = None
+                                  ) -> Tuple[List[Dict[str, Any]], List[str], List[str]]:
+    """跨所持仓集合 → `(rows, counted, skipped)`；每行都打了 `venue` 标签。
+
+    `check_total_exposure` 靠行上的 `venue` 做**逐腿归因**（"同向来自 binance/gate"）。
+
+    统计口径 = `_exposure_venues`（**凭证齐备**的已登记场所，含 OKX —— 见那里的长注释）。
+    `venue` 那一所复用调用方已建好的 `adapter`，不重复实例化。
+    任一所读失败 ⇒ **抛 `RuntimeError`（fail-closed）**：绝不把"读不到"渲染成"没有敞口"。
+
+    ⚠️ 公开出去是 2026-09-28 三所平权的一部分：**OKX 直签路径**此前没有敞口闸门，
+    而敞口统计却把 OKX 的仓算进去。让两条路径共用这一份统计，才不会再造一次
+    "名字比实现大"（同一个闸门被实现两遍、口径各说各话）。
+    """
+    rows: List[Dict[str, Any]] = []
+    _counted_candidates, _skipped = _exposure_venues(venue, environment)
+    _counted: List[str] = []
+    for _v in _counted_candidates:
+        try:
+            _ad_v = adapter if (_v == venue and adapter is not None) else get_adapter(_v, environment=environment)
+            for _p in (_ad_v.positions() or []):
+                rows.append(dict(_p, venue=_v))
+            _counted.append(_v)
+        except Exception as exc:
+            raise RuntimeError(
+                f"跨所敞口不可核算：{_v} 持仓读取失败（{type(exc).__name__}: "
+                f"{str(exc)[:80]}）——按 fail-closed 拒开") from exc
+    return rows, _counted, _skipped
 
 
 class RouteResult(Dict[str, Any]):
@@ -255,10 +290,15 @@ def open_protected_position(decision: Dict[str, Any], *,
 
         ⚠️ 2026-09-20 实测：本闸门名叫「跨所同向敞口」、文档写「跨所同向名义额合计」，
         但 `positions_reader` 一直是 `ad.positions()` —— **只读被下单的那一个场所**。
-        而 `.env` 里 `ASTRA_MAX_TOTAL_EXPOSURE_USDT=3000.0` 是**真的配了的**
-        （`scripts/risk_constants.py` 在 cron/手动路径下显式加载 `.env`；本机实测
-        `TOTAL_EXPOSURE_CAP == 3000.0`），三所平权后上限最多可被突破到 3 倍
+        而 `.env` 里 `ASTRA_MAX_TOTAL_EXPOSURE_USDT` 是**真的配了的**
+        （`scripts/risk_constants.py` 在 cron/手动路径下显式加载 `.env`；现值 **50000.0**，
+        见 2026-09-28 核对），三所平权后上限最多可被突破到 3 倍
         （每所各算自己那份）——**是活着的闸门在少数**，不是死代码。
+
+        ⚠️ 2026-09-28 三所平权补记：上面那句"每所各算自己那份"当时**只说对了一半** ——
+        统计确实已是跨所（本函数），但闸门**只挂在 gate/binance 上**，
+        OKX 直签路径不经过本函数 ⇒ **OKX 的仓算进上限、OKX 的下单却不查上限**。
+        现已把池/敞口/模式三类判据收进 `execution/venue_gate.py`，两条路径共用。
 
         统计口径（显式写清，避免再次"名字比实现大"）：
         - 计入 = 本次下单场所 + 其它 `execution_open` 为真的**已开闸场所**；
@@ -270,19 +310,8 @@ def open_protected_position(decision: Dict[str, Any], *,
           其保护单健康由 venue-protection 巡检覆盖）；这条写在注释里而不是假装没有。
         """
         if not _pos_cache:
-            rows: list = []
-            _counted: list = []
-            _counted_candidates, _skipped_venues = _exposure_venues(venue, env_name)
-            for _v in _counted_candidates:
-                try:
-                    _ad_v = ad if _v == venue else get_adapter(_v, environment=env_name)
-                    for _p in (_ad_v.positions() or []):
-                        rows.append(dict(_p, venue=_v))
-                    _counted.append(_v)
-                except Exception as exc:
-                    raise RuntimeError(
-                        f"跨所敞口不可核算：{_v} 持仓读取失败（{type(exc).__name__}: "
-                        f"{str(exc)[:80]}）——按 fail-closed 拒开") from exc
+            rows, _counted, _skipped_venues = collect_cross_venue_positions(
+                venue, env_name, adapter=ad)
             _pos_cache["rows"] = rows
             _pos_cache["venues"] = tuple(_counted)
             _pos_cache["skipped"] = tuple(_skipped_venues)
@@ -307,7 +336,7 @@ def open_protected_position(decision: Dict[str, Any], *,
             _exposure_fail["skipped_venues"] = list(_not_counted)
         except Exception:
             pass
-        return _exposure_fail
+
 
     # 止盈宽度平滑收窄：防止 AI 规划过远天际线挂单无法落袋（受最大 R:R 与 ATR 跨度上限约束）
     try:
@@ -331,27 +360,8 @@ def open_protected_position(decision: Dict[str, Any], *,
         return _fail("risk_gate", f"物理风控拒绝: {reason}", venue=venue, rr=rr)
 
     # 执行开闸（默认关；env 显式打开且凭证就绪前一切免谈）——保持既有契约：
-    # 未开闸一律抛 ExchangeCapabilityError；下面才是「已开闸但该所池子仍不许发」的判定。
+    # 未开闸一律抛 ExchangeCapabilityError。
     require_execution(venue, environment=str(getattr(ad, "environment", "live") or "live"))
-
-    if pool:
-        if pool.get("dry_run"):
-            return _fail("venue_dry_run",
-                         f"{venue.upper()} 池配置 dry_run=true（本地演算不发单）；"
-                         f"如需真实发送请改 data/venue_routing.json 并确认执行开关", venue=venue)
-        pool_assets = [str(a).upper() for a in (pool.get("assets") or [])]
-        if not pool_assets:
-            return _fail("venue_pool", f"{venue.upper()} 准入币种清单为空（空池=不发单）", venue=venue)
-        if asset.upper() not in pool_assets:
-            return _fail("venue_pool", f"{asset} 不在 {venue.upper()} 准入币种清单（{', '.join(pool_assets)}）", venue=venue)
-        pool_conf = float(pool.get("min_confidence") or 0.0)
-        try:
-            decision_conf = float(decision.get("confidence") or 0.0)
-        except (TypeError, ValueError):
-            decision_conf = 0.0
-        if math.isfinite(pool_conf) and pool_conf > 0 and 0 < decision_conf < pool_conf:
-            return _fail("venue_pool",
-                         f"决策置信度 {decision_conf:g} 低于 {venue.upper()} 门禁 {pool_conf:g}", venue=venue)
 
     # 环境维合约存在性对账（US-007 扩展）：下单前核对**本环境**合约
     # 目录——已下架/未上市在发送前拦截（fail-closed 拒开）；目录拉不到 →
@@ -365,6 +375,76 @@ def open_protected_position(decision: Dict[str, Any], *,
             return _fail("listing", f"合约对账拒绝: {_check.reason}", venue=venue)
     except Exception:  # 对账自身异常一律 fail-open（含目录缓存污染等未知面）
         pass
+
+    # ⚠️ 位置说明：本闸门**放在 listing 对账之后** —— 下架/未上市合约
+    # 必须在**任何**持仓探针之前就被拦掉（`test_listing_gate_refuses_delisted_contract`
+    # 断言 `ad.calls == []`：下架合约绝不许走到任何 IO）。
+    # ── 入场闸门（池 / 敞口 / 持仓模式）─────────────────────────────────────
+    # 判据住在 `astra_backend/execution/venue_gate.py`，与 OKX 直签路径**共用同一份**。
+    # 本函数不再内联这些判据 —— 那正是「闸门实现两遍、只有一遍接了 OKX」的成因。
+    #
+    # ⚠️ 持仓/模式探针一律**惰性**（传零参可调用给闸门）：纯静态的拒单
+    # （`dry_run` / 准入币种 / 置信度 / 敞口）**不得产生任何网络调用** ——
+    # 这是既有契约，`test_dry_run_blocks_the_send` 断言 `ad.calls == []`。
+    _open_count: Optional[int] = None
+    _all_positions = None
+    _declared_modes = tuple(getattr(getattr(ad, "capabilities", None), "position_modes", ()) or ())
+    _mode_probe = getattr(ad, "detect_position_mode", None)
+    _mode_checked = bool(_declared_modes and callable(_mode_probe))
+    _ready_modes: tuple = ()
+    _probe_cache: dict = {}
+
+    def _own_positions():
+        """本所持仓探针（**只取一次**）：闸门算 `max_open` 与下方"外部持仓前置体检"共用。
+        原实现此处与下方各取一次，函数注释里已自认"后面还会再调一次"。"""
+        nonlocal _all_positions
+        if _all_positions is None:
+            _all_positions = ad.positions()
+        return _all_positions
+
+    def _own_open_count() -> int:
+        if "open_count" not in _probe_cache:
+            _probe_cache["open_count"] = len(
+                [p for p in (_own_positions() or [])
+                 if isinstance(p, dict) and abs(float(p.get("size_signed") or 0)) > 1e-9])
+        return _probe_cache["open_count"]
+
+    def _own_position_mode() -> str:
+        if "mode" not in _probe_cache:
+            _probe_cache["mode"] = str(_mode_probe() or "unknown").strip().lower()
+        return _probe_cache["mode"]
+
+    if _mode_checked:
+        _ready_modes = tuple(getattr(getattr(ad, "capabilities", None),
+                                     "entry_ready_position_modes", ()) or ())
+    try:
+        _venue_gate_fail = _venue_entry_gate(
+            venue=venue, asset=asset, confidence=decision.get("confidence"),
+            pool=pool, exposure_cap=TOTAL_EXPOSURE_CAP, exposure_fail=_exposure_fail,
+            open_count=_own_open_count,
+            position_mode=_own_position_mode,
+            declared_modes=_declared_modes, entry_ready_modes=_ready_modes,
+            mode_checked=_mode_checked, mode_hazards=MODE_HAZARDS)
+    except ExchangeCapabilityError:
+        raise
+    except Exception as exc:
+        # 闸门自身是纯函数；能抛的只有注入的持仓探针。
+        return _fail("precheck",
+                     f"{asset} 既有持仓探针失败，无法排除外部仓，拒开: {exc}", venue=venue)
+    if _venue_gate_fail is not None:
+        # 闸门返回的是**策略载荷**（`{"stage","detail",...}`），本函数对外是 `RouteResult`
+        # （`{"ok": False, ...}`）。敞口闸门自己就是用 `_fail` 造的、已经是完整形状
+        # ⇒ 原样透传（保住 `projected_exposure` / `contributing_venues` 等证据字段）；
+        # 其余阶段（池 / 模式）在这里补齐外壳。
+        if not isinstance(_venue_gate_fail, dict):
+            return _venue_gate_fail          # 非 dict：自定义 fail_factory 形状，原样透传
+        if "ok" in _venue_gate_fail:
+            return _venue_gate_fail
+        _extra = {k: v for k, v in _venue_gate_fail.items()
+                  if k not in ("stage", "detail", "venue")}
+        return _fail(str(_venue_gate_fail.get("stage") or "venue_pool"),
+                     str(_venue_gate_fail.get("detail") or ""),
+                     venue=str(_venue_gate_fail.get("venue") or venue), **_extra)
 
     spec = ad.fetch_instrument_spec(asset)
     if spec is None:
@@ -400,8 +480,10 @@ def open_protected_position(decision: Dict[str, Any], *,
         contracts = int(contracts)
 
     # —— 外部持仓前置体检（US-009）：同合约存在来源不明/尺寸不符既有仓 = 连坐风险 ——
+    # `_own_positions()` 已缓存（闸门算 max_open 时可能已探过），此处不会重复触网。
+    # ⚠️ 该所池上限 `max_open` **已上移到共用闸门**（与 OKX 直签路径共用同一份判据）。
     try:
-        _all_positions = ad.positions()
+        _all_positions = _own_positions()
     except ExchangeCapabilityError:
         raise
     except Exception as exc:
@@ -409,15 +491,6 @@ def open_protected_position(decision: Dict[str, Any], *,
     existing = [p for p in _all_positions
                 if str(p.get("base") or "").upper() == asset
                 and abs(float(p.get("size_signed") or 0)) > 1e-9]
-    # 该所池上限（审计 P1-7）：复用上面这一次探针结果，不额外触网
-    if pool:
-        pool_max_open = int(pool.get("max_open") or 0)
-        if pool_max_open > 0:
-            _open_count = len([p for p in _all_positions
-                               if isinstance(p, dict) and abs(float(p.get("size_signed") or 0)) > 1e-9])
-            if _open_count >= pool_max_open:
-                return _fail("venue_pool",
-                             f"{venue.upper()} 当前持仓 {_open_count} 笔已达池上限 max_open={pool_max_open}", venue=venue)
     # 己仓归属对账：`own_position` 未传入时**不再默认宣称"外部仓"**（2026-09-20 实盘
     # 证据：UNI/binance 是台账 holding 行里的**本方**仓、ARB/binance 是**账实不符**
     # （交易所仍持有而台账该行已 closed），旧文案一律报成"外部仓连坐拒开"=说谎的诊断，
@@ -474,32 +547,14 @@ def open_protected_position(decision: Dict[str, Any], *,
     # 本系统**永不自动切换**用户账户的持仓模式；"测不出来"与"dual_plus 拆仓"
     # 一律**禁止新开仓并显示原因**（fail-closed）。dual 走 auto_size 载荷、
     # single 走 close=true 载荷，二者都是本仓已实现的形态，故受支持、放行。
-    declared_modes = tuple(getattr(getattr(ad, "capabilities", None), "position_modes", ()) or ())
-    probe = getattr(ad, "detect_position_mode", None)
-    position_mode: Optional[str] = None
+    #
+    # ⚠️ 2026-09-28 三所平权：**判据已上移到共用闸门** `_venue_entry_gate`（本函数上方），
+    # 与 OKX 直签路径共用同一份 —— 此前只有 binance/Gate 有体检，OKX 完全没有。
+    # 这里只保留 `position_mode` 的取值（下方载荷构造要用）。
     # ⚠️ 只在**该适配器真的实现了只读探测**时才体检。实测（DEMO）：Binance 声明的是
     # `('net','long_short')` 这套**不同词汇**、且没有探测方法 —— 若按"声明了就体检、
     # 探测不到就拒"处理，会**直接把币安新开仓全部停掉**（本刀实测拦下的自伤）。
     # 币安侧的持仓模式探测（dualSidePosition）是独立的一刀；在它有探测之前维持原行为。
-    if declared_modes and callable(probe):
-        position_mode = str(probe() or "unknown").strip().lower()
-        if position_mode not in declared_modes:
-            return _fail("position_mode",
-                         f"{asset} 无法只读确认持仓模式（探测={position_mode}，该所声明支持="
-                         f"{'/'.join(declared_modes)}）——禁新开仓；本系统不自动切换账户模式",
-                         venue=venue, position_mode=position_mode)
-        # "检测得到" ≠ "敢在这些模式下开仓"：`entry_ready_position_modes` 是该所
-        # **载荷已在真实账户核验过**的子集。Gate 的 dual_plus（拆仓不可折叠）、
-        # Binance 的 long_short（hedge 载荷未核验）都在此被拦下并说明原因。
-        ready_modes = tuple(getattr(getattr(ad, "capabilities", None),
-                                    "entry_ready_position_modes", ()) or ())
-        if ready_modes and position_mode not in ready_modes:
-            hazard = MODE_HAZARDS.get(position_mode, "该模式下单/保护腿载荷未核验")
-            return _fail("position_mode",
-                         f"{asset} 账户持仓模式={position_mode}（{hazard}）——本系统仅在 "
-                         f"{'/'.join(ready_modes)} 下核验过下单与保护腿载荷，禁新开仓；"
-                         "请在交易所侧改回受支持模式或人工处理",
-                         venue=venue, position_mode=position_mode)
 
     # 杠杆档位（失败即止，未下单无风险）；margin_mode 由账户实况推导，缺省 cross
     try:
@@ -526,7 +581,8 @@ def open_protected_position(decision: Dict[str, Any], *,
         try:
             # 只有**真的探测到模式**时才多传这个 kwarg：sandbox 等适配器没有
             # `**kwargs`，无条件传会 TypeError（本刀实测拦下的一处潜在炸点）。
-            _mode_kwargs = {"position_mode": position_mode} if position_mode else {}
+            _mode_kwargs = ({"position_mode": _own_position_mode()}
+                            if _mode_checked else {})
             legs = ad.attach_protective_orders(asset, side, tp_px=tp, sl_px=sl,
                                                expiration=trigger_expiration,
                                                contracts=contracts, **_mode_kwargs)

@@ -80,7 +80,10 @@ def _venue_pool_assets(venue: str) -> Optional[List[str]]:
         )
         return None
     assets = pool.get("assets") if isinstance(pool, dict) else None
-    if not assets:
+    # ⚠️ 2026-09-28 三所平权：`None`（**未配置** ⇒ 不设限）与 `[]`（**显式空池** ⇒ 停发）
+    # **必须区分**。此前两者都走 `if not assets: return None`，于是「显式空池」在选所层
+    # 被当成"不设限"淘汰不掉、到执行层才被拒 —— 同一个值两层语义相反。
+    if assets is None:
         return None
     return [str(a).strip().upper() for a in assets if str(a).strip()]
 
@@ -153,11 +156,16 @@ def _hard_filters(signal: Dict[str, Any], cand: Dict[str, Any],
     # 清单非空且标的不在其中的所，路由阶段就淘汰 —— 否则会选出一个**注定被
     # 执行层拒单**的所，而 route_signal 选中即不回退 ⇒ 主脑发单全灭。
     pool_assets = _venue_pool_assets(venue)
-    if pool_assets:
-        pool_asset = _canonical_base(raw_sym)
-        if pool_asset and pool_asset not in pool_assets:
-            fails.append(
-                f"不在 {venue.upper()} 准入币种清单（{', '.join(pool_assets)}）")
+    if pool_assets is not None:
+        # `None` = 未配置（不设限）；`[]` = 显式空池（该所停发）⇒ 先在选所层淘汰，
+        # 与执行层 `venue_entry_gate` 同判据，不让"注定被拒的候选"占住中选名额。
+        if not pool_assets:
+            fails.append(f"{venue.upper()} 准入币种清单为空（空池=不发单）")
+        else:
+            pool_asset = _canonical_base(raw_sym)
+            if pool_asset and pool_asset not in pool_assets:
+                fails.append(
+                    f"不在 {venue.upper()} 准入币种清单（{', '.join(pool_assets)}）")
 
     size_usdt = float(signal.get("size_usdt") or 0.0)
     min_notional = float(cand.get("min_notional") or 0.0)

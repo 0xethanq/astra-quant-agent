@@ -41,11 +41,22 @@ class VenueRoutingPolicyTailsTests(unittest.TestCase):
     # -------------------------------------------------------------------------
     # 1. 资产规范化 (_normalize_assets)
     # -------------------------------------------------------------------------
-    def test_normalize_assets_empty_or_none_returns_empty_list(self):
-        for empty_val in (None, ""):
-            with self.subTest(empty_val=empty_val):
-                res = _normalize_assets(empty_val, "gate")
-                self.assertEqual(res, [])
+    def test_normalize_assets_distinguishes_unconfigured_from_explicitly_empty(self):
+        """★ 2026-09-28 三所平权：`None` 与 `""`/`[]` **不再同解**。
+
+        此前两者都归一成 `[]`，而 `[]` 在**执行层**是「该所停发」的开关、
+        在**选所层**是「不设限」的代名词 —— 同一个值两层语义相反，正是审计里
+        「OKX 无法用池开关停发、却又能被空池误停」的根因。
+
+        现在：`None` = 未配置 ⇒ 不设限（返回 `None`）；显式空 ⇒ 停发（返回 `[]`）。
+        """
+        with self.subTest(unconfigured=None):
+            self.assertIsNone(_normalize_assets(None, "gate"),
+                              "未配置必须与显式空池区分开（None=不设限）")
+        for empty_val in ("", [], (), set()):
+            with self.subTest(explicitly_empty=empty_val):
+                self.assertEqual(_normalize_assets(empty_val, "gate"), [],
+                                 "显式空池 = 该所停发")
 
     # -------------------------------------------------------------------------
     # 2. 交易所资产池加载容错 (load_venue_pool & shortcuts)
@@ -56,7 +67,9 @@ class VenueRoutingPolicyTailsTests(unittest.TestCase):
         pool = load_venue_pool("gate")
         self.assertIn("assets", pool)
         self.assertIn("margin_per_trade_usdt", pool)
-        self.assertEqual(pool["assets"], [])
+        # 坏 JSON ⇒ 读不到任何覆盖项 ⇒ 该所**未配置**准入清单 ⇒ 不设限（None）。
+        # （显式 `[]` 才代表"停发"，见 `_normalize_assets` 的说明。）
+        self.assertIsNone(pool["assets"])
 
     def test_load_venue_pool_non_numeric_risk_fields_handled(self):
         # 覆盖配置中数值字段为非数值类型时安全捕获并保留 (line 143)

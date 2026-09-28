@@ -80,7 +80,11 @@ def global_risk_defaults() -> Dict[str, Any]:
 
 
 DEFAULT_GATE_POOL: Dict[str, Any] = {
-    "assets": [],
+    # ⚠️ 2026-09-28：`assets` 用 `None`（**未配置** ⇒ 不设限），不再是 `[]`。
+    # 新语义下 `[]` 专指"**显式**空池 ⇒ 该所停发"，而这里描述的是"没有任何配置"
+    # 的形态 —— 两者此前混用同一个值，正是审计里"同一个值两层语义相反"的根因。
+    # 本常量的实际作用只是**文档 + 逐位对拍锚点**（`test_account_key_identity.py`）。
+    "assets": None,
     **{k: global_risk_defaults()[k]
        for k in ("margin_per_trade_usdt", "max_open", "min_confidence")},
     "dry_run": True,
@@ -91,8 +95,19 @@ _ASSET_TOKEN_RE = re.compile(r"^[A-Z0-9]{2,15}$")
 
 
 def _normalize_assets(raw_assets: Any, venue: str) -> List[str]:
-    """准入币种规范化：单字符串视作一个币种；非法项丢弃并吼出来（绝不静默拆字符）。"""
-    if raw_assets in (None, ""):
+    """准入币种规范化：单字符串视作一个币种；非法项丢弃并吼出来（绝不静默拆字符）。
+
+    ⚠️ 2026-09-28 三所平权：**「未配置」与「显式配成空」必须区分开** ——
+    此前两者都归一成 `[]`，而 `[]` 在**执行层**是「该所停发」的开关、
+    在**选所层**是「不设限」的代名词（`selection._venue_pool_assets` 的注释里
+    明确把这处双关写成了既成事实）。同一个值两种含义，正是审计里
+    「OKX 无法用池开关停发、却又能被空池误停」的根因。
+
+    现在：`None` = **未配置 ⇒ 不设限**（返回 `None`）；`[]` = **显式空池 ⇒ 停发**。
+    """
+    if raw_assets is None:
+        return None
+    if raw_assets == "":
         return []
     items = [raw_assets] if isinstance(raw_assets, str) else list(raw_assets) if isinstance(raw_assets, (list, tuple, set)) else None
     if items is None:
@@ -113,11 +128,18 @@ def _normalize_assets(raw_assets: Any, venue: str) -> List[str]:
 
 
 def load_venue_pool(venue: str) -> Dict[str, Any]:
-    """统一多所池配置加载：优先读取各所覆盖项，缺省自动继承全局风控单一事实源。"""
+    """统一多所池配置加载：优先读取各所覆盖项，缺省自动继承全局风控单一事实源。
+
+    ⚠️ `assets` 有两态，**必须区分**（2026-09-28 三所平权，见 `_normalize_assets`）：
+    - `None` = 该所**未配置**准入清单 ⇒ 不设限（OKX 今天的形态：它此前根本没有池段）；
+    - `[]` = **显式**配成空 ⇒ 该所停发。
+    此前两者都归一成 `[]`，而 `[]` 在执行层是"停发"、在选所层是"不设限"。
+    """
     vkey = str(venue or "").strip().lower()
     defaults = global_risk_defaults()
     base_pool: Dict[str, Any] = {
-        "assets": [],
+        # 默认**不设限**（None），不是空池 —— 空池在执行层意味着"该所停发"。
+        "assets": None,
         "margin_per_trade_usdt": defaults["margin_per_trade_usdt"],
         "max_open": defaults["max_open"],
         "min_confidence": defaults["min_confidence"],
@@ -140,8 +162,10 @@ def load_venue_pool(venue: str) -> Dict[str, Any]:
                         base_pool[k] = v_cfg[k]
     except Exception:
         pass
-    assets = [str(a).upper() for a in (base_pool.get("assets") or []) if str(a).strip()]
-    base_pool["assets"] = sorted(set(assets))
+    _assets = base_pool.get("assets")
+    if _assets is not None:                     # None = 未配置（不设限），保持 None
+        _assets = [str(a).upper() for a in _assets if str(a).strip()]
+        base_pool["assets"] = sorted(set(_assets))
     try:
         base_pool["margin_per_trade_usdt"] = max(0.0, float(base_pool.get("margin_per_trade_usdt") or defaults["margin_per_trade_usdt"]))
         base_pool["max_open"] = max(1, int(base_pool.get("max_open") or defaults["max_open"]))

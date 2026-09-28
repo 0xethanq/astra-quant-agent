@@ -30,6 +30,13 @@ class SubmitProtectedLimitOrderTests(unittest.TestCase):
                 ok=True, reason=None, checked_at="", source="cache"))
         patcher.start()
         self.addCleanup(patcher.stop)
+        # 2026-09-28 三所平权：`submit` 现在会在分发前对直签所跑共用入场闸门，
+        # 闸门会取适配器算 max_open / 体检持仓模式。真实 OKX 适配器会触网
+        # ⇒ 必须换成零网络替身，否则用例测的就不再是它本来要测的东西。
+        from tests.venue_gate_stub import direct_venue_gate_adapter
+        _gate = direct_venue_gate_adapter()
+        _gate.__enter__()
+        self.addCleanup(lambda: _gate.__exit__(None, None, None))
         tmp = tempfile.NamedTemporaryFile(suffix=".json", delete=False)
         tmp.close()
         ip = patch.object(aft, "OPEN_INTENT_FILE", tmp.name)
