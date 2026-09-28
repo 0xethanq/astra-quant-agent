@@ -24,10 +24,11 @@ services:
     volumes:
       # 挂载私密配置（读写挂载：支持管理后台直接修改并持久化配置变更）
       - ./.env:/app/.env
-      # 挂载持久化运行态数据
+      # 挂载持久化运行态数据与插件
       - ./data:/app/data
       - ./logs:/app/logs
       - ./backups:/app/backups
+      - ./plugins:/app/plugins
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://127.0.0.1:8080/api/v1/health || exit 1"]
       interval: 30s
@@ -39,6 +40,9 @@ services:
   # 2. 量化网关与调度核心：15分钟波段扫描、因子刷新、AI 投委会与硬风控执行
   # ----------------------------------------------------------------------------
   gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
     image: astraquant:latest
     container_name: astraquant-gateway
     restart: unless-stopped
@@ -52,6 +56,7 @@ services:
       - ./data:/app/data
       - ./logs:/app/logs
       - ./backups:/app/backups
+      - ./plugins:/app/plugins
     # 2026-09 新增：网关此前**没有任何健康探测**，而它恰恰是最危险的单点 ——
     # 后端容器照常绿着（看板能开、数据能看），调度 worker 却可能已经死了，
     # 表现是"看板一切正常，就是不下单"，用户根本不会发现。

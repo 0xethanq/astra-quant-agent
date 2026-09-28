@@ -11,7 +11,7 @@ cd "$ROOT_DIR"
 echo "🐳 [ASTRA Docker Launcher] Pre-flight checks..."
 
 # 1. 确保运行时挂载目录存在
-mkdir -p "$ROOT_DIR/data" "$ROOT_DIR/logs" "$ROOT_DIR/backups"
+mkdir -p "$ROOT_DIR/data" "$ROOT_DIR/logs" "$ROOT_DIR/backups" "$ROOT_DIR/plugins/interceptors"
 
 # 2. 检查 .env 配置文件（防范 docker mount 把 .env 误当作目录创建）
 if [ -d "$ROOT_DIR/.env" ]; then

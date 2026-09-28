@@ -20,6 +20,8 @@ frontend/dist
 ..env.lock
 .env.lock
 data/
+!data/prompt_library.json
+!data/.gitkeep
 logs/
 backups/
 *.log

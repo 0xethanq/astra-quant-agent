@@ -49,16 +49,18 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # 从 Stage 1 复制已编译好的静态资源（FastAPI 会自动在 frontend/dist 挂载）
 COPY --from=frontend-builder /build/dist /app/frontend/dist
 
-# 复制应用代码
+# 复制应用代码与核心拦截插件
 COPY astra_backend/ /app/astra_backend/
 COPY astra_gateway/ /app/astra_gateway/
 COPY scripts/ /app/scripts/
+COPY plugins/ /app/plugins/
 COPY deploy/ /app/deploy/
 COPY docs/ /app/docs/
 COPY env.example /app/env.example
+COPY data/prompt_library.json /app/data/prompt_library.json
 
 # 预先创建持久化数据目录
-RUN mkdir -p /app/data /app/logs /app/backups
+RUN mkdir -p /app/data /app/logs /app/backups /app/plugins/interceptors
 
 # 入口脚本赋予可执行权限
 RUN chmod +x /app/deploy/docker-entrypoint.sh

@@ -9,7 +9,7 @@ ROOT_DIR="/app"
 cd "$ROOT_DIR"
 
 # 1. 确保必要运行时目录存在
-mkdir -p "$ROOT_DIR/data" "$ROOT_DIR/logs" "$ROOT_DIR/backups"
+mkdir -p "$ROOT_DIR/data" "$ROOT_DIR/logs" "$ROOT_DIR/backups" "$ROOT_DIR/plugins/interceptors"
 
 # 2. 如果缺少 .env，从 env.example 自动生成一份最小兜底（提醒用户尽快配置）
 #
