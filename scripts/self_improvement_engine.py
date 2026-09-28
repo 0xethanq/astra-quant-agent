@@ -339,15 +339,26 @@ def load_closed_trades(start_time_override: str | None = None):
 
     return closed_trades
 
-EVOLUTION_SYSTEM_PROMPT = """你是 AstraQuant 的首席投资官，负责基于真实已平仓交易证据进行认知复盘。模型只输出严格 JSON；宿主程序负责北京时间戳与 Markdown 渲染。
+EVOLUTION_SYSTEM_PROMPT = """你是 AstraQuant 的首席投资官，负责基于真实已平仓交易证据进行认知复盘与四维实战量化策略演进。模型只输出严格 JSON；宿主程序负责北京时间戳与 Markdown 渲染。
 
-【证据纪律】
-1. 只允许根据输入台账中真实可见的字段归因；不得把盈亏结果倒推成未提供的微积分、定积分、概率、新闻或聪明钱事实。
+【证据纪律与宿主宪章（硬约束）】
+1. 只允许根据输入台账与统计透视矩阵中真实可见的数据归因；不得把盈亏结果倒推成未提供的微积分、定积分、概率、新闻或聪明钱事实。
 2. 宿主已逐单标注 snapshot_observability 并前置注入确定性可观测性审计（非模型推断）：仅 DYNAMICS_OBSERVED 可对该单全链路数理归因，PARTIAL 只允许引用其 entry_snapshot 中实际非空的字段；PRICE_ONLY / NONE 一律按「数理快照不可观测」处理，严禁对 v/a/j/I、energy_integral、deviation_area_integral、延续/击穿概率、VaR/CVaR 作任何因果陈述或假设性归因，不得编造；缺失本身不得被解读成「动力学异常」等证据。
-3. 单笔交易或小样本通常不足以证伪长期规律。证据不足时允许 NO_CHANGE，禁止为了每日报告强行制造新心法。
+3. 证据不足时允许 NO_CHANGE，禁止为了每日报告强行制造新心法；但当存在统计显著的系统性偏离或明确交易教训时，应积极提出建设性量化改进。
 4. 长期记忆只是软启发式，永远不得弱化数据有效性、4H 方向否决、R:R、ATR、杠杆、保证金、OCO、禁止逆势补仓或 JSON 契约等硬风控。
 5. 同时审查盈利与亏损、手续费、仓位规模、退出原因和反例；区分已验证事实、待验证假设与随机波动。
 6. 基准心法（is_baseline）属宪法级记忆：你的输出只能新增或限定，不能物理删除；宿主会把清单中被省略的基准心法原样补回并留痕。若你依据充分反例认定某条基准已失效，写入 diagnosis_insights 交人工复核，而不是从 ai_long_term_memory 中静默删掉它。
+
+【四维深度复盘任务】
+请基于多维战绩矩阵与逐笔交易完成以下四维评估并输出严格 JSON：
+1. 盈亏归因与模式诊断（diagnosis_insights）：
+   每条洞见以语义标签开头，如【战绩归因】、【风控审查】、【时段特征】、【动能分析】，深挖核心盈利驱动力与亏损场景（如假突破追单、震荡市毛刺插针、多空胜率失衡等）。
+2. 执行门禁与参数敏感度（evolution_actions）：
+   每条建议以【参数校准】或【执行优化】开头，对入场偏离度、ATR止损倍数、ADX趋势门槛、杠杆档位提出精准微调建议。
+3. 标的偏好与资产乘数进化（asset_multipliers）：
+   在 0.5~1.5 范围内针对聚焦标的池给出自适应乘数（高胜率盈亏比标的适当加权 1.1x~1.4x，频繁磨损标的适当降权 0.6x~0.8x）。
+4. 战术心法演进（ai_long_term_memory）：
+   输出生效后完整心法清单（原样保留基准心法）。新增或修订心法须采用“【情境/特征】+【量化逻辑】->【明确操作边界】”格式，杜绝模糊哲学口号。
 
 【记忆更新规则】
 - ADD：多个独立样本支持新的可复用经验。
@@ -399,8 +410,82 @@ def merge_memory_with_constitution(change_status: str, proposed_texts: List[str]
     return final + readded, readded
 
 
+def _compute_multi_dimensional_breakdown(closed_trades: List[Dict[str, Any]]) -> str:
+    """计算多维战绩归因矩阵（标的、多空方向、出场形态、持仓时长与手续费磨损）。"""
+    if not closed_trades:
+        return "暂无平仓样本"
+
+    sym_stats: Dict[str, Dict[str, Any]] = {}
+    dir_stats = {"long": {"count": 0, "wins": 0, "pnl": 0.0}, "short": {"count": 0, "wins": 0, "pnl": 0.0}}
+    exit_reasons: Dict[str, int] = {}
+    gross_win = 0.0
+    total_fee = 0.0
+
+    for t in closed_trades:
+        sym = str(t.get("symbol") or t.get("instId") or "UNKNOWN")
+        side = str(t.get("side") or "").lower()
+        d_key = "short" if ("short" in side or "空" in side) else "long"
+        pnl = float(t.get("net_pnl") or 0.0)
+        fee = float(t.get("fee") or 0.0)
+        total_fee += fee
+        if pnl > 0:
+            gross_win += pnl
+
+        if sym not in sym_stats:
+            sym_stats[sym] = {"count": 0, "wins": 0, "pnl": 0.0}
+        sym_stats[sym]["count"] += 1
+        sym_stats[sym]["pnl"] += pnl
+        if pnl > 0:
+            sym_stats[sym]["wins"] += 1
+
+        dir_stats[d_key]["count"] += 1
+        dir_stats[d_key]["pnl"] += pnl
+        if pnl > 0:
+            dir_stats[d_key]["wins"] += 1
+
+        reason = str(t.get("exit_reason") or t.get("reason") or "常规平仓")
+        r_type = "止盈达成" if any(k in reason for k in ("止盈", "TP", "tp", "take_profit")) else (
+            "止损触发" if any(k in reason for k in ("止损", "SL", "sl", "stop_loss")) else (
+                "移动棘轮锁利" if any(k in reason for k in ("棘轮", "保本", "ratchet")) else "其他/主动结清"
+            )
+        )
+        exit_reasons[r_type] = exit_reasons.get(r_type, 0) + 1
+
+    lines = ["【多维量化战绩透视矩阵】:"]
+    lines.append("- 标的胜负与净盈亏分布:")
+    for sym, st in sorted(sym_stats.items(), key=lambda x: x[1]["pnl"], reverse=True):
+        cnt = st["count"]
+        w = st["wins"]
+        wr = round(w / cnt * 100, 1) if cnt > 0 else 0.0
+        lines.append(f"  • {sym}: {cnt}笔 (胜{w}/负{cnt-w} | 胜率 {wr}% | 净利 {st['pnl']:+.2f} USDT)")
+
+    l_cnt, s_cnt = dir_stats["long"]["count"], dir_stats["short"]["count"]
+    l_wr = round(dir_stats["long"]["wins"] / l_cnt * 100, 1) if l_cnt > 0 else 0.0
+    s_wr = round(dir_stats["short"]["wins"] / s_cnt * 100, 1) if s_cnt > 0 else 0.0
+    lines.append(f"- 多空方向偏向: 多头 {l_cnt}笔 (胜率 {l_wr}% | 净利 {dir_stats['long']['pnl']:+.2f} U) | 空头 {s_cnt}笔 (胜率 {s_wr}% | 净利 {dir_stats['short']['pnl']:+.2f} U)")
+
+    r_parts = [f"{k}: {v}笔" for k, v in sorted(exit_reasons.items(), key=lambda x: x[1], reverse=True)]
+    lines.append(f"- 出场形态分布: {', '.join(r_parts)}")
+
+    fee_pct = round(total_fee / gross_win * 100, 1) if gross_win > 0 else 0.0
+    lines.append(f"- 交易摩擦成本: 累计手续费 {total_fee:.2f} U (占毛利 {fee_pct}%)")
+
+    try:
+        mults_path = os.path.join(DATA_DIR, "asset_multipliers.json")
+        if os.path.exists(mults_path):
+            with open(mults_path, "r", encoding="utf-8") as f:
+                cur_m = json.load(f).get("multipliers", {})
+                if cur_m:
+                    m_str = ", ".join(f"{k}: {v:.2f}x" for k, v in cur_m.items())
+                    lines.append(f"- 当前标的自适应权重: {m_str}")
+    except Exception:
+        pass
+
+    return "\n".join(lines)
+
+
 def compose_evolution_prompts(closed_trades: List[Dict[str, Any]], existing_memory_md: str = "", timestamp_str: str = "") -> Tuple[str, str, str, Dict[str, int]]:
-    """组装自进化 System/User 提示词，并前置注入宿主确定性数理快照可观测性审计。
+    """组装自进化 System/User 提示词，并前置注入宿主确定性数理快照可观测性审计与多维战绩矩阵。
 
     返回 (system, user, now_bj_str, snapshot_audit)。审计由宿主统计而非模型自数
     null，从结构上杜绝「表面有快照、实际全空值」诱发的倒推伪造。
@@ -423,6 +508,8 @@ def compose_evolution_prompts(closed_trades: List[Dict[str, Any]], existing_memo
 {existing_memory_md.strip()}
 """ if existing_memory_md.strip() else "当前长期记忆库为空 (系统初始冷启动状态)"
 
+    breakdown_text = _compute_multi_dimensional_breakdown(closed_trades)
+
     prompt = f"""======================= 【当前认知复盘基准时间】 =======================
 【复盘基准时间】: {now_bj_str}
 
@@ -435,19 +522,25 @@ def compose_evolution_prompts(closed_trades: List[Dict[str, Any]], existing_memo
 - 累计净盈亏: {total_net:+.2f} USDT | 累计手续费消耗: {total_fees:.2f} USDT
 - 当前聚焦标的池: {TARGET_INSTRUMENTS}
 
+{breakdown_text}
+
 【逐笔历史交易明细 (按时间排序)】:
 {json.dumps(closed_trades, indent=2, ensure_ascii=False)}
 
 【复盘与长期记忆进化任务】:
-请严格基于可观测台账证据复盘。以宿主注入的「数理快照可观测性审计」为准：对 PRICE_ONLY / NONE 的交易不得输出任何数理因果，只能标注“数理快照不可观测”。证据不足时使用 NO_CHANGE，不得强行生成新规律。输出标准 JSON：
+请严格基于可观测台账证据与透视矩阵复盘。以宿主注入的「数理快照可观测性审计」为准：对 PRICE_ONLY / NONE 的交易不得输出任何数理因果，只能标注“数理快照不可观测”。证据不足时使用 NO_CHANGE，不得强行生成新规律。输出标准 JSON：
 {{
   "change_status": "NO_CHANGE" | "ADD" | "REVISE" | "INVALIDATE",
   "diagnosis_insights": [
-    "0~4 条有台账字段支持的诊断；区分已验证事实与待验证假设"
+    "0~4 条有台账字段支持的诊断；每条以【战绩归因】/【风控审查】/【时段特征】等标签开头；区分已验证事实与待验证假设"
   ],
   "evolution_actions": [
-    "0~4 条可执行改进；证据不足时只提出数据采集或观察建议"
+    "0~4 条可执行改进；每条以【参数校准】/【执行优化】开头；证据不足时只提出数据采集或观察建议"
   ],
+  "asset_multipliers": {{
+    "BTC": 1.0,
+    "ETH": 1.0
+  }},
   "ai_long_term_memory": [
     "生效后的完整心法清单：必须原样包含现有全部基准心法（宿主会把省略的基准补回并留痕），新增条目须有多个独立样本支持；不得覆盖任何硬风控"
   ],
@@ -504,28 +597,61 @@ def call_llm_evolution_review(closed_trades: List[Dict[str, Any]], existing_memo
     model_name = os.environ.get("LLM_MODEL") or ""
     effort = os.environ.get("LLM_REASONING_EFFORT") or "high"
     api_format = "openai_chat"
+    thinking_timeout = 300.0
+
+    evo_runtime: Dict[str, Any] = {}
     try:
-        from astra_backend.llm_manager import get_active_llm_runtime, execute_llm_request
-        active_llm = get_active_llm_runtime()
-        model_name = os.environ.get("LLM_MODEL") or active_llm.get("model") or model_name
-        effort = os.environ.get("LLM_REASONING_EFFORT") or active_llm.get("reasoning_effort") or effort
-        api_format = active_llm.get("api_format", "openai_chat")
-        base_url = active_llm.get("base_url") or base_url
-        api_key = active_llm.get("api_key") or api_key
-        thinking_timeout = max(90.0, float(active_llm.get("thinking_timeout") or os.environ.get("LLM_THINKING_TIMEOUT", 120.0)))
+        from astra_backend.evolution_config import load_evolution_config, resolve_evolution_llm_runtime
+        evo_cfg = load_evolution_config()
+        evo_runtime = resolve_evolution_llm_runtime(evo_cfg)
+    except Exception:
+        evo_cfg = {}
+        evo_runtime = {}
+
+    if evo_runtime:
+        model_name = evo_runtime.get("model") or model_name
+        base_url = evo_runtime.get("base_url") or base_url
+        api_key = evo_runtime.get("api_key") or api_key
+        api_format = evo_runtime.get("api_format") or "openai_chat"
+        effort = evo_runtime.get("reasoning_effort") or effort
+        thinking_timeout = float(evo_runtime.get("thinking_timeout") or 300.0)
+    else:
+        try:
+            from astra_backend.llm_manager import get_active_llm_runtime
+            active_llm = get_active_llm_runtime()
+            model_name = os.environ.get("LLM_MODEL") or active_llm.get("model") or model_name
+            effort = os.environ.get("LLM_REASONING_EFFORT") or active_llm.get("reasoning_effort") or effort
+            api_format = active_llm.get("api_format", "openai_chat")
+            base_url = active_llm.get("base_url") or base_url
+            api_key = active_llm.get("api_key") or api_key
+            thinking_timeout = max(90.0, float(active_llm.get("thinking_timeout") or os.environ.get("LLM_THINKING_TIMEOUT", 120.0)))
+        except Exception:
+            thinking_timeout = max(90.0, float(os.environ.get("LLM_THINKING_TIMEOUT", os.environ.get("LLM_TIMEOUT_SECONDS", 120.0))))
+
+    try:
+        from astra_backend.llm_manager import execute_llm_request
     except Exception:
         execute_llm_request = None
-        thinking_timeout = max(90.0, float(os.environ.get("LLM_THINKING_TIMEOUT", os.environ.get("LLM_TIMEOUT_SECONDS", 120.0))))
+
     if model_override:
-        # 复盘专属回退模型：优先于 env 与主脑激活位（见 evolution_fallback_model）
+        # 复盘专属回退/指定模型
         model_name = str(model_override)
+        try:
+            from astra_backend.llm_manager import resolve_model_runtime
+            resolved_override = resolve_model_runtime(model_name)
+            if resolved_override and resolved_override.get("model"):
+                base_url = resolved_override.get("base_url") or base_url
+                api_key = resolved_override.get("api_key") or api_key
+                api_format = resolved_override.get("api_format") or api_format
+        except Exception:
+            pass
 
     telemetry = ModelCallTelemetry(
         "self_improvement", model_name, str(effort), effective_evolution_system, effective_evolution_user
     )
     try:
         t0 = time.time()
-        log_msg(f"🚀 正在调用 {model_name} ({api_format} / 思考上限 {thinking_timeout:.0f}s) 进行 AI 大脑深度认知复盘与策略参数优化...")
+        log_msg(f"🚀 正在调用自进化专属引擎 {model_name} ({api_format} / 思考上限 {thinking_timeout:.0f}s / 推理强度 {effort}) 进行多维实战复盘与策略进化...")
         raw_res = None
         content = ""
         if execute_llm_request:

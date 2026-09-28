@@ -330,7 +330,17 @@ def update_prompt_override(
 
 
 class EvolutionConfigUpdate(BaseModel):
-    start_time: str = Field(default="2026-09-01 00:00:00", min_length=10, max_length=30)
+    start_time: str | None = Field(default=None, max_length=30)
+    model_id: str | None = Field(default=None, max_length=100)
+    reasoning_effort: str | None = Field(default=None, max_length=20)
+    thinking_timeout: float | None = Field(default=None, ge=60.0, le=600.0)
+    analysis_depth: str | None = Field(default=None, max_length=20)
+
+
+class EvolutionTestModelRequest(BaseModel):
+    model_id: str = Field(min_length=1, max_length=100)
+    reasoning_effort: str | None = Field(default="high", max_length=20)
+    thinking_timeout: float | None = Field(default=60.0, ge=10.0, le=120.0)
 
 
 @router.get("/api/v1/admin/evolution/config")
@@ -340,14 +350,39 @@ def get_evolution_config(
 ) -> dict[str, Any]:
     refresh_settings()
     require_admin_header(x_astra_admin_token, x_astra_session)
-    from astra_backend.account_baseline import load_account_baseline
+    from astra_backend.evolution_config import load_evolution_config
+    from astra_backend.llm_manager import init_llm_config
     from scripts.self_improvement_engine import load_closed_trades
-    base = load_account_baseline()
-    evo_start = base.get("evolution_start_time", "2026-09-01 00:00:00")
+
+    evo_cfg = load_evolution_config()
+    evo_start = evo_cfg.get("start_time", "2026-09-01 00:00:00")
     trades = load_closed_trades(evo_start)
+
+    llm_cfg = init_llm_config()
+    raw_models = llm_cfg.get("models") or []
+    available = [
+        {
+            "id": m.get("id"),
+            "name": m.get("name") or m.get("id"),
+            "provider_name": m.get("provider_name") or m.get("provider_id") or "custom",
+            "capabilities": m.get("capabilities") or ["chat"],
+            "reasoning_effort": m.get("reasoning_effort") or "high",
+            "has_key": bool(m.get("api_key")),
+        }
+        for m in raw_models if isinstance(m, dict) and m.get("id")
+    ]
+
     return {
+        "ok": True,
         "evolution_start_time": evo_start,
         "active_trades_count": len(trades),
+        "model_id": evo_cfg.get("model_id", "auto"),
+        "effective_model_id": evo_cfg.get("effective_model_id", "auto"),
+        "reasoning_effort": evo_cfg.get("reasoning_effort", "high"),
+        "thinking_timeout": evo_cfg.get("thinking_timeout", 300.0),
+        "analysis_depth": evo_cfg.get("analysis_depth", "deep"),
+        "available_models": available,
+        "updated_at": evo_cfg.get("updated_at", ""),
         "note": "早于此时间的历史人工合约订单将被自动过滤，仅复盘此时间之后的量化实盘单。"
     }
 
@@ -360,19 +395,88 @@ def update_evolution_config(
 ) -> dict[str, Any]:
     refresh_settings()
     actor = require_superadmin(x_astra_session)
-    from astra_backend.account_baseline import update_evolution_start_time
+    from astra_backend.evolution_config import save_evolution_config
     from scripts.self_improvement_engine import load_closed_trades
-    res = update_evolution_start_time(payload.start_time)
-    evo_start = res.get("evolution_start_time", "2026-09-01 00:00:00")
+
+    raw_dict = payload.model_dump(exclude_none=True)
+    res = save_evolution_config(raw_dict)
+    evo_start = res.get("start_time", "2026-09-01 00:00:00")
     trades = load_closed_trades(evo_start)
+
     audit_record("evolution.config.update", "success", {
         "actor": actor.get("username", "admin"),
         "evolution_start_time": evo_start,
-        "active_trades_count": len(trades)
+        "active_trades_count": len(trades),
+        "model_id": res.get("model_id"),
+        "reasoning_effort": res.get("reasoning_effort"),
+        "thinking_timeout": res.get("thinking_timeout"),
     })
+
     return {
         "ok": True,
         "evolution_start_time": evo_start,
         "active_trades_count": len(trades),
-        "effect": f"自进化复盘起始时间已更新为 {evo_start}，下次复盘将只纳入此时间之后的实盘交易。"
+        "model_id": res.get("model_id"),
+        "effective_model_id": res.get("effective_model_id"),
+        "reasoning_effort": res.get("reasoning_effort"),
+        "thinking_timeout": res.get("thinking_timeout"),
+        "analysis_depth": res.get("analysis_depth"),
+        "updated_at": res.get("updated_at"),
+        "effect": f"自进化配置已成功更新，下次复盘将使用模型 {res.get('effective_model_id')}（思考上限 {res.get('thinking_timeout')}s）进行深度复盘。"
     }
+
+
+@router.post("/api/v1/admin/evolution/test-model")
+def test_evolution_model(
+    payload: EvolutionTestModelRequest,
+    x_astra_session: str | None = Header(default=None, alias="X-Astra-Session"),
+    x_astra_admin_token: str | None = Header(default=None)
+) -> dict[str, Any]:
+    refresh_settings()
+    require_admin_header(x_astra_admin_token, x_astra_session)
+    from astra_backend.llm_manager import resolve_model_runtime, get_active_llm_runtime, execute_llm_request
+    import time
+
+    target_id = payload.model_id.strip()
+    runtime = {}
+    if target_id and target_id != "auto":
+        runtime = resolve_model_runtime(target_id) or {}
+    if not runtime:
+        runtime = get_active_llm_runtime() or {}
+
+    if not runtime or not runtime.get("model"):
+        raise HTTPException(status_code=400, detail=f"无法解析模型 {target_id} 的凭证与接入端点")
+
+    t0 = time.time()
+    try:
+        content, _, usage, _ = execute_llm_request(
+            messages=[
+                {"role": "system", "content": "You are a quantitative trading system engine probe. Respond strictly with: {\"status\": \"ok\"}"},
+                {"role": "user", "content": "Ping: Verify reasoning and connection."}
+            ],
+            model=runtime.get("model"),
+            base_url=runtime.get("base_url"),
+            api_key=runtime.get("api_key"),
+            api_format=runtime.get("api_format", "openai_chat"),
+            reasoning_effort=payload.reasoning_effort or "medium",
+            temperature=0.1,
+            response_format={"type": "json_object"},
+            timeout=float(payload.thinking_timeout or 60.0),
+        )
+        latency_ms = int((time.time() - t0) * 1000)
+        return {
+            "ok": True,
+            "latency_ms": latency_ms,
+            "model": runtime.get("model"),
+            "provider": runtime.get("provider_name") or runtime.get("provider_id"),
+            "message": f"模型 {runtime.get('model')} 连通探测成功（耗时 {latency_ms}ms）",
+            "reply_sample": (content or "").strip()[:80],
+        }
+    except Exception as exc:
+        latency_ms = int((time.time() - t0) * 1000)
+        return {
+            "ok": False,
+            "latency_ms": latency_ms,
+            "model": runtime.get("model"),
+            "message": f"模型连通失败: {exc}",
+        }
