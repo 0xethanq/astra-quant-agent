@@ -43,9 +43,16 @@ class LLMCapabilitiesTailsTests(unittest.TestCase):
         self.assertEqual(_detect_reasoning_type("openai/o3-mini"), "standard_effort")
         self.assertEqual(_detect_reasoning_type("gemini-2.0-flash-thinking"), "standard_effort")
         self.assertEqual(_detect_reasoning_type("claude-3-7-sonnet"), "standard_effort")
+        self.assertEqual(_detect_reasoning_type("claude-4-sonnet"), "standard_effort")
         self.assertEqual(_detect_reasoning_type("qwq-32b-preview"), "standard_effort")
         self.assertEqual(_detect_reasoning_type("qwen3-72b"), "standard_effort")
         self.assertEqual(_detect_reasoning_type("qwen-3-vl"), "standard_effort")
+        self.assertEqual(_detect_reasoning_type("chatgpt-6"), "standard_effort")
+        self.assertEqual(_detect_reasoning_type("gpt-6-pro"), "standard_effort")
+        self.assertEqual(_detect_reasoning_type("deepseek-v4-flash"), "standard_effort")
+        self.assertEqual(_detect_reasoning_type("deepseek-v4.1"), "standard_effort")
+        self.assertEqual(_detect_reasoning_type("kimi-k3"), "standard_effort")
+        self.assertEqual(_detect_reasoning_type("glm-5.3-flash"), "standard_effort")
 
     def test_detect_reasoning_type_none(self):
         # 覆盖 line 30

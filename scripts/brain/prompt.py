@@ -238,29 +238,7 @@ def construct_full_market_prompt(packages: List[Dict[str, Any]], pos_summary: st
 
     risk_budget_text = build_risk_budget_text(usdt_available)
 
-    prompt = f"""======================= 【当前决策时间戳与市场时效】 =======================
-【推演基准时间】: {now_bj_str}
-【当前账户可用资金】: {avail_balance_str}
-{risk_budget_text}
-
-======================= 【全网实时重大快讯与宏观情报】 =======================
-【宏观环境基调】: {macro_env}
-【最新核心资讯要闻】:
-{news_text}
-
-======================= 【账户当前持仓与风险敞口全景】 =======================
-【账户持仓概况】: {pos_summary}
-【当前活动在途持仓明细】:
-{active_pos_text}
-
-======================= 【在途未成交限价挂单 (Pending Maker Orders)】 =======================
-【当前在途挂单列表】:
-{pending_orders_text}
-
-{memory_lessons}
-
-======================= 【全标的池原生行情、技术指标与筹码矩阵】 =======================
-{all_market_str}
+    prompt = f"""{memory_lessons}
 
 ================================================================================
 【推演与决策任务】:
@@ -315,6 +293,28 @@ def construct_full_market_prompt(packages: List[Dict[str, Any]], pos_summary: st
     ... (依次包含全部标的)
   }}
 }}
+
+======================= 【全网实时重大快讯与宏观情报】 =======================
+【宏观环境基调】: {macro_env}
+【最新核心资讯要闻】:
+{news_text}
+
+======================= 【账户当前持仓与风险敞口全景】 =======================
+【账户持仓概况】: {pos_summary}
+【当前活动在途持仓明细】:
+{active_pos_text}
+
+======================= 【在途未成交限价挂单 (Pending Maker Orders)】 =======================
+【当前在途挂单列表】:
+{pending_orders_text}
+
+======================= 【全标的池原生行情、技术指标与筹码矩阵】 =======================
+{all_market_str}
+
+======================= 【当前决策时间戳与市场时效】 =======================
+【推演基准时间】: {now_bj_str}
+【当前账户可用资金】: {avail_balance_str}
+{risk_budget_text}
 """
     regime_text = ""
     regime_data = None

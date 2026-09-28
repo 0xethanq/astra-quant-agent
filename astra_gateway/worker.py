@@ -159,6 +159,11 @@ def run() -> None:
         launched = scheduler.tick()
         for job_name in launched:
             log(f"scheduled job={job_name}")
+        try:
+            from astra_gateway.cache_warmer import check_and_warmup_cache
+            check_and_warmup_cache()
+        except Exception:
+            pass
         if time.time() >= _next_prune_at:           # 之后每 6 小时一次
             _next_prune_at = time.time() + PRUNE_INTERVAL_SECONDS
             _prune_job_history(store)

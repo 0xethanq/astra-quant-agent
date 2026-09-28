@@ -24,6 +24,13 @@ class ModelCallTelemetry:
 
     def finish(self, status: str, response: dict[str, Any] | None = None, output_chars: int = 0, error: Exception | None = None) -> None:
         usage = (response or {}).get("usage", {}) if isinstance(response, dict) else {}
+        input_tokens = usage.get("prompt_tokens") or usage.get("input_tokens") or 0
+        output_tokens = usage.get("completion_tokens") or usage.get("output_tokens") or 0
+        total_tokens = usage.get("total_tokens") or (input_tokens + output_tokens)
+        cached_tokens = usage.get("cached_tokens") or 0
+        if not cached_tokens and isinstance(usage.get("prompt_tokens_details"), dict):
+            cached_tokens = usage.get("prompt_tokens_details", {}).get("cached_tokens", 0)
+
         record = {
             "caller": self.caller,
             "model": self.model,
@@ -35,11 +42,26 @@ class ModelCallTelemetry:
             "output_chars": output_chars,
             "prompt_fingerprint": self.prompt_fingerprint,
             "prompt_transport": "python-direct",
-            "input_tokens": usage.get("prompt_tokens") or usage.get("input_tokens"),
-            "output_tokens": usage.get("completion_tokens") or usage.get("output_tokens"),
-            "total_tokens": usage.get("total_tokens"),
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "total_tokens": total_tokens,
             "error_type": type(error).__name__ if error else "",
         }
+
+        # 实时打印缓存命中与遥测日志
+        if cached_tokens and input_tokens:
+            cache_rate = round(cached_tokens / input_tokens * 100, 1)
+            print(f"[LLM Telemetry] 🎯 命中前缀缓存: {cached_tokens} tokens ({cache_rate}% | {self.caller} | {self.model})")
+        elif input_tokens:
+            print(f"[LLM Telemetry] ℹ️ 调用完成 | 输入: {input_tokens} tokens (缓存: 0) | 输出: {output_tokens} tokens | 耗时: {record['duration_ms']}ms | {self.model}")
+
+        # 刷新缓存保活计时器，避免真实调用后产生冗余探针
+        try:
+            from astra_gateway import cache_warmer
+            cache_warmer._last_warmup_time = time.time()
+        except Exception:
+            pass
+
         try:
             GatewayStore(DB_PATH).record_model_call(record)
         except Exception:

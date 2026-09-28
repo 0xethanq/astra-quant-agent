@@ -279,24 +279,24 @@ PRESETS: dict[str, dict[str, Any]] = {
                  "content": "【交易风格：高胜率波段强化（大势顺应·价值回踩·多维共振·三阶利润棘轮）】\n所有 P0 硬约束保持不变，以提高实战胜率与盈亏比为最高导向，不得把“稳健”解释为长期空仓：\n1. 大势顺应与多空非对称防护：遵循 4H 宏观与 1H 均线排列。多头主浪（4H_MACRO_BULL）专注寻找回调企稳的打折买点顺势做多，严禁盲目逆势摸顶开空；做空只在 4H 宏观承压或 1H 结构明确破位遇阻时右侧高抛，不打无把握之仗；\n2. 价值回踩低吸（杜绝贴脸追单）：限价挂单严格锚定在支撑/阻力回踩区（紧贴 15M/1H EMA21 均线、前低支撑或 VWAP），等待盘面健康回踩打折接单，拉开天然安全垫，实现回踩低吸；\n3. 多维指标弹性权衡（Holistic Confluence）：不苛求各项微观指标机械完美，允许优势互补。延续/击穿概率明显占优且与量价形态共振时果断发车，注意参考主力资金流向防范顶底背离；\n4. 三阶利润棘轮与主动止盈：持仓浮盈 < 1.2R 给足 1.8x~2.2x ATR 宽止损呼吸空间，浮盈稳固达 ≥ 1.5R 坚决移损保本，≥ 2.2R 锁定 +1.0R 波段核心利润；遇到峰值回撤超 45% 或 1H 动能耗散失速时，果断输出 CLOSE_MARKET 提前锁定利润；\n5. 置信度自主标定：形态达标且空间充足果断给出 80%~90%，确保穿透执行层门禁；全部候选无优势或无序横盘时果断全体 WAIT。"},
             ],
             "trading_user": [
-                {"id": "base-ts-time", "title": "当前决策时间戳与市场时效", "locked": True, "enabled": True, "source": "base",
-                 # 审计 P1-1(2026-09-13)：代码预设此前漏了 {{risk_budget}}（线上库里有），
-                 # 一旦 load_library 回退到预设，模型就完全收不到【本周期风险预算】小节，
-                 # 而 SYSTEM PROMPT 却要求"一切金额类参数以该小节为准"——金额口径直接失锚。
-                 "content": "======================= 【当前决策时间戳与市场时效】 =======================\n{{decision_timestamp}}\n{{account_balance}}\n{{risk_budget}}"},
+                {"id": "base-ts-memory", "title": "AstraQuant 启发式实战认知与长期记忆", "locked": True, "enabled": True, "source": "base",
+                 "content": "======================= 【AstraQuant 启发式实战认知与长期记忆】 =======================\n{{trading_memory}}"},
+                {"id": "base-ts-task", "title": "推演与决策任务", "locked": False, "enabled": True, "source": "base", "content": ""},
+                {"id": "custom-tu-style", "title": "高胜率波段强化裁决偏好", "locked": False, "enabled": True, "source": "custom",
+                 "content": "【高胜率波段裁决偏好（宏观顺势·价值回踩·弹性共振·高胜率体系）】\n1. 宏观顺势导向：4H 多头通道（4H_MACRO_BULL）或 1H 均线多头排列下专注顺势做多，普通回抽优先作为限价入场定位，绝对禁止逆势摸顶挂空；做空只在 4H 空头通道或 1H 明确破位受阻时右侧开仓；\n2. 科学限价挂单：入场限价单自主锚定在支撑/阻力结构位（挂在 EMA21 均线、前低支撑或 VWAP 附近），等待回调打折成交，杜绝高位贴盘追单导致开仓即浮亏；\n3. 多维共振与弹性权衡：主导侧概率明显占优即方向定论，结合主力资金流向核验量价健康度；不追求机械全同，具备大局优势果断参与；\n4. 震荡与垃圾时间克制：极端窄幅无序横盘或箱体半山腰严禁追涨杀跌，仅在箱体边界极值低吸高抛或果断 WAIT 避开磨损；\n5. 三阶棘轮收割：浮盈 < 1.2R 坚持 1.8x~2.2x ATR 宽止损呼吸；浮盈 ≥ 1.5R 坚决移保本，≥ 2.2R 锁定 +1.0R，峰值回撤超 45% 且 1H 失速时主动止盈；\n6. 置信度标定：形态达标且空间充足果断给出 80%~90%，穿透执行层门禁；全部候选无优势时果断全体 WAIT。"},
                 {"id": "base-ts-news", "title": "全网实时重大快讯与宏观情报", "locked": True, "enabled": True, "source": "base",
                  "content": "======================= 【全网实时重大快讯与宏观情报】 =======================\n{{news_intelligence}}"},
                 {"id": "base-ts-pos", "title": "账户当前持仓与风险敞口全景", "locked": True, "enabled": True, "source": "base",
                  "content": "======================= 【账户当前持仓与风险敞口全景】 =======================\n{{account_positions}}"},
                 {"id": "base-ts-pending", "title": "在途未成交限价挂单 (Pending Maker Orders)", "locked": True, "enabled": True, "source": "base",
                  "content": "======================= 【在途未成交限价挂单 (Pending Maker Orders)】 =======================\n{{pending_orders}}"},
-                {"id": "base-ts-memory", "title": "AstraQuant 启发式实战认知与长期记忆", "locked": True, "enabled": True, "source": "base",
-                 "content": "======================= 【AstraQuant 启发式实战认知与长期记忆】 =======================\n{{trading_memory}}"},
                 {"id": "base-ts-matrix", "title": "全标的池原生行情、技术指标与筹码矩阵", "locked": True, "enabled": True, "source": "base",
                  "content": "======================= 【全标的池原生行情、技术指标与筹码矩阵】 =======================\n{{market_matrix}}"},
-                {"id": "base-ts-task", "title": "推演与决策任务", "locked": False, "enabled": True, "source": "base", "content": ""},
-                {"id": "custom-tu-style", "title": "高胜率波段强化裁决偏好", "locked": False, "enabled": True, "source": "custom",
-                 "content": "【高胜率波段裁决偏好（宏观顺势·价值回踩·弹性共振·高胜率体系）】\n1. 宏观顺势导向：4H 多头通道（4H_MACRO_BULL）或 1H 均线多头排列下专注顺势做多，普通回抽优先作为限价入场定位，绝对禁止逆势摸顶挂空；做空只在 4H 空头通道或 1H 明确破位受阻时右侧开仓；\n2. 科学限价挂单：入场限价单自主锚定在支撑/阻力结构位（挂在 EMA21 均线、前低支撑或 VWAP 附近），等待回调打折成交，杜绝高位贴盘追单导致开仓即浮亏；\n3. 多维共振与弹性权衡：主导侧概率明显占优即方向定论，结合主力资金流向核验量价健康度；不追求机械全同，具备大局优势果断参与；\n4. 震荡与垃圾时间克制：极端窄幅无序横盘或箱体半山腰严禁追涨杀跌，仅在箱体边界极值低吸高抛或果断 WAIT 避开磨损；\n5. 三阶棘轮收割：浮盈 < 1.2R 坚持 1.8x~2.2x ATR 宽止损呼吸；浮盈 ≥ 1.5R 坚决移保本，≥ 2.2R 锁定 +1.0R，峰值回撤超 45% 且 1H 失速时主动止盈；\n6. 置信度标定：形态达标且空间充足果断给出 80%~90%，穿透执行层门禁；全部候选无优势时果断全体 WAIT。"},
+                {"id": "base-ts-time", "title": "当前决策时间戳与市场时效", "locked": True, "enabled": True, "source": "base",
+                 # 审计 P1-1(2026-09-13)：代码预设此前漏了 {{risk_budget}}（线上库里有），
+                 # 一旦 load_library 回退到预设，模型就完全收不到【本周期风险预算】小节，
+                 # 而 SYSTEM PROMPT 却要求"一切金额类参数以该小节为准"——金额口径直接失锚。
+                 "content": "======================= 【当前决策时间戳与市场时效】 =======================\n{{decision_timestamp}}\n{{account_balance}}\n{{risk_budget}}"},
             ],
             "evolution_system": [
                 {"id": "custom-es-style", "title": "全维度波段复盘风格", "locked": False, "enabled": True, "source": "custom",
