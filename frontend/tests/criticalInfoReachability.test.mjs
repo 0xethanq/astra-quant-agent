@@ -17,8 +17,7 @@
  *
  * 本闸钉住三类：
  *   A. `DataStatus` 的熔断原因 —— 全站唯一呈现熔断的地方，必须可达且可见；
- *   B. `VenueAccountCard` 的场所不可用原因 —— 必须直接显示出来；
- *   C. `ProviderListView` 失败链的第 2..n 条错误 —— 必须进 DOM（由 CSS 截断）。
+ *   B. `ProviderListView` 失败链的第 2..n 条错误 —— 必须进 DOM（由 CSS 截断）。
  *
  * 运行：`node --test tests/*.test.mjs`
  */
@@ -60,19 +59,6 @@ test('熔断原因必须可达且可见（全站唯一呈现熔断的位置）',
     /v-if="breaker\.active && breaker\.reason"[\s\S]{0,200}\{\{ breaker\.reason \}\}/,
     '熔断原因没有直接渲染到页面上',
   );
-});
-
-test('场所不可用的原因必须直接显示，而不是只挂在 :title 上', () => {
-  const text = readFileSync(path.join(SRC, 'components/dashboard/VenueAccountCard.vue'), 'utf8');
-
-  assert.match(
-    text,
-    /data-test="venue-reason"[\s\S]{0,120}\{\{ account\.reason \}\}/,
-    '场所原因没有可见的渲染出口',
-  );
-  // 且必须只对非就绪态显示（就绪时原因是"直签只读"之类的说明，不必占版面）
-  const block = text.slice(text.indexOf('data-test="venue-reason"') - 400, text.indexOf('data-test="venue-reason"'));
-  assert.match(block, /account\.status !== 'ready'/, '场所原因未按状态过滤');
 });
 
 test('失败链的全部错误必须进入 DOM，而不是只留第一条可见', () => {

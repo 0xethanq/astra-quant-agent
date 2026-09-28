@@ -523,10 +523,10 @@ class PackageIdentityTests(unittest.TestCase):
         base.update(overrides)
         return base
 
-    def test_projection_has_exactly_the_six_units(self):
+    def test_projection_has_exactly_the_five_units(self):
         self.assertEqual(sorted(canonical_package_projection(self._payload())),
                          ["council_config", "evolution_memory", "interceptor_config",
-                          "prompt_config", "risk_config", "venue_routing"])
+                          "prompt_config", "risk_config"])
 
     def test_non_mapping_payload_yields_empty_projection(self):
         projection = canonical_package_projection("junk")
@@ -547,12 +547,10 @@ class PackageIdentityTests(unittest.TestCase):
                           notes="hello", package_hash="deadbeef")
         self.assertEqual(package_identity(a), package_identity(b))
 
-    def test_risk_and_routing_do_change_identity(self):
+    def test_risk_does_change_identity(self):
         base = self._payload()
         self.assertNotEqual(package_identity(base),
                             package_identity(self._payload(risk_config={"max_leverage": 6})))
-        self.assertNotEqual(package_identity(base),
-                            package_identity(self._payload(venue_routing={"okx": 2})))
 
     def test_projection_accepts_any_mapping(self):
         import collections
@@ -603,7 +601,7 @@ class PackageRestoreDiffTests(unittest.TestCase):
         # 用规范化投影本身把上一条的机理钉死：哪几个单元"写空也非空"
         non_falsy = []
         for unit in ("prompt_config", "evolution_memory", "interceptor_config",
-                     "council_config", "risk_config", "venue_routing"):
+                     "council_config", "risk_config"):
             empty = [] if unit == "evolution_memory" else {}
             if canonical_package_projection(self._payload(**{unit: empty}))[unit]:
                 non_falsy.append(unit)
@@ -638,31 +636,6 @@ class PackageRestoreDiffTests(unittest.TestCase):
         archived = self._payload(risk_config={"max_leverage": 5})
         diff = package_restore_diff(archived, self._payload(risk_config={}))
         self.assertEqual(diff, ["risk_config.max_leverage"])
-
-    def test_venue_routing_keys_are_checked_too(self):
-        archived = self._payload(venue_routing={"okx": 1})
-        self.assertEqual(package_restore_diff(archived, self._payload(venue_routing={})),
-                         ["venue_routing.okx"])
-
-    def test_non_mapping_dict_unit_is_compared_wholesale(self):
-        # venue_routing 原样透传 ⇒ 列表也能进来；类型不是 Mapping 时整块比较
-        archived = self._payload(venue_routing=["okx"])
-        current = self._payload(venue_routing={"okx": 1})
-        self.assertEqual(package_restore_diff(archived, current), ["venue_routing"])
-
-    def test_non_mapping_current_is_compared_wholesale(self):
-        archived = self._payload(venue_routing={"okx": 1})
-        current = self._payload(venue_routing=["okx"])
-        self.assertEqual(package_restore_diff(archived, current), ["venue_routing"])
-
-    def test_equal_non_mapping_units_pass(self):
-        archived = self._payload(venue_routing=["okx"])
-        current = self._payload(venue_routing=["okx"])
-        self.assertEqual(package_restore_diff(archived, current), [])
-
-    def test_empty_archived_dict_unit_is_skipped(self):
-        archived = self._payload(venue_routing={}, risk_config={})
-        self.assertEqual(package_restore_diff(archived, self._payload()), [])
 
     def test_diff_is_a_list_of_unit_names(self):
         # 归档声称有心法，当前却是空的 ⇒ 必须报出来（这正是恢复校验的意义）

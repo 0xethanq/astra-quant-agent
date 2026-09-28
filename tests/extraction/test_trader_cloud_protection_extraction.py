@@ -24,10 +24,9 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 PRE = "447ad19"  # 本刀动工前最后提交（第八十四刀收口）
-FNS = ("amend_venue_stop_loss", "_live_oco_coverage",
+FNS = ("_live_oco_coverage",
        "ensure_cloud_position_protection", "sync_cloud_algo_stop")
-INJ = {"amend_venue_stop_loss": (),
-       "_live_oco_coverage": ("_float_or_zero",),
+INJ = {"_live_oco_coverage": ("_float_or_zero",),
        "ensure_cloud_position_protection": ("okx_rest", "_live_oco_coverage"),
        "sync_cloud_algo_stop": ("okx_rest",)}
 MOVED = ROOT / "scripts" / "trader" / "cloud_protection.py"
@@ -102,44 +101,6 @@ def _body_dump(fn: ast.FunctionDef) -> str:
 
 
 class CloudProtectionVerbatimTest(unittest.TestCase):
-    def test_initial_text_layer_is_actually_read(self):
-        """正向断言：Gate 的 `initial.text` 层必须被读到（aa6d4e0）。
-
-        这一层是「`t-astrasl*` 标签能不能被扫到」的唯一通路；一旦被删掉，
-        旧 SL 单不被识别 ⇒ 棘轮既不 amend 也不撤 ⇒ 云端止损单逐轮堆积。
-        """
-        moved = MOVED.read_text(encoding="utf-8")
-        # ⚠️ 2026-09-28 实盘事故后改为**传递式**断言：本模块不再自己拼字段清单，
-        # 而是复用 `venue_protection._row_text`（全部腿归属判定唯一的文本来源）。
-        #
-        # 病因正是"自己拼一份"：旧清单只有 `order.text`/`initial.text`/`row.text`/
-        # `row.type`，而 Binance 的 `row.type` 是算法单**类别** `CONDITIONAL`，
-        # 真正的 `STOP_MARKET` 在 `raw.orderType` ⇒ `"STOP" in "CONDITIONAL"` 恒假
-        # ⇒ 旧 SL 一条都枚举不到 ⇒ 棘轮只挂新不撤旧（实测 UNI 一仓挂 9 条止损）。
-        self.assertIn("_row_text", moved,
-                      "棘轮没有复用统一的腿文本提取器 ⇒ 又会漏字段")
-        # 契约仍是原来的契约，只是现在由 `_row_text` 保证：Gate 的 `initial.text`
-        # 必须被读到，否则 `t-astrasl*` 标签扫不到、旧 SL 不被识别。
-        vp = (ROOT / "scripts/trader/venue_protection.py").read_text(encoding="utf-8")
-        self.assertIn('initial.get("text")', vp,
-                      "Gate initial 层读取丢失 ⇒ 白名单块在掩盖删除")
-        self.assertIn('row.get("orderType")', vp,
-                      "Binance 的 orderType 层丢了 ⇒ STOP_MARKET 会被当成 CONDITIONAL 漏掉")
-
-        import scripts.trader.cloud_protection as cp
-        listed = []
-        cancelled = []
-        ad = types.SimpleNamespace(
-            # Gate 形状：标签只在 initial.text 里，order/text/type 都为空
-            list_protective_orders=lambda sym: [
-                {"id": "sl-old", "initial": {"text": "t-astrasl-btc"}}],
-            cancel_price_order=lambda oid: cancelled.append(oid),
-            attach_protective_orders=lambda *a, **k: {"sl": "sl-new"})
-        ok, note = cp.amend_venue_stop_loss(ad, "BTC_USDT", "long", 78000.0, 3.0)
-        self.assertTrue(ok, note)
-        self.assertIn("sl-old", cancelled,
-                      "initial.text 里的 t-astrasl 标签没被认出 ⇒ 旧 SL 单不会被清理")
-
     def test_shells_are_def_with_lazy_same_name_injection(self):
         tree = ast.parse((ROOT / "scripts/ai_factor_trader.py").read_text(encoding="utf-8"))
         facade = set(dir(__import__("scripts.ai_factor_trader", fromlist=["x"])))

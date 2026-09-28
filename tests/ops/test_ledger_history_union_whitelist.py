@@ -125,17 +125,13 @@ class ClosedTradeSizeTests(unittest.TestCase):
         self.addCleanup(okx_runtime.unfreeze_environment)
         with tempfile.TemporaryDirectory() as tmp:
             ledger_path = os.path.join(tmp, "trading_ledger.json")
-            # 封闭三律·律①：多所台账源走真实适配器签名请求，凭证随环境漂移——
-            # 钉扎本 builder 的 OKX 行为必须把 Binance/Gate 两路显式置空，
-            # 否则持有真实密钥的机器上 closed 计数会被外部场所真实成交污染。
+            # OKX-only 迁移后构建器不再有 Binance/Gate 两路（外所 fetcher 已删除），
+            # 无需再显式置空；本 builder 只读 OKX 历史。
             with patch.object(okx_rest, "urlopen", fake_open), \
                  patch.object(sfl, "DATA_DIR", tmp), \
                  patch.object(sfl, "LEDGER_JSON_FILE", ledger_path), \
                  patch.object(sfl, "POSITION_TRACKER_FILE", os.path.join(tmp, "trackers.json")), \
                  patch.object(sfl, "INITIAL_STATE_FILE", os.path.join(tmp, "no_such_state.json")), \
-                 patch.object(sfl, "fetch_binance_closed_trades", return_value=[]), \
-                 patch.object(sfl, "fetch_gate_closed_trades", return_value=[]), \
-                 patch.object(sfl, "_other_venue_live_positions", lambda axis: ([], set())), \
                  patch.dict("sys.modules", {"qq_notifier": MagicMock()}):
                 trades = sfl.build_lifecycle_ledger()
             with open(ledger_path, encoding="utf-8") as f:

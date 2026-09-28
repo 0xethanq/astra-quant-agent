@@ -3,7 +3,7 @@
 本模块 190 行，是策略快照生成与整包归档捕获核心：
 - 提示词库捕获容错：`load_library` 缺失属性时回退 `load_prompt_config`、两阶段异常安全自愈返回 `{}`；
 - 心法记忆捕获容错：文件不存在与快照异常安全回退 `{"version": "missing", "lessons": []}`；
-- 拦截器、投委会、风控参数、多所路由单项捕获故障隔离与回退空字典；
+- 拦截器、投委会、风控参数单项捕获故障隔离与回退空字典（OKX-only 迁移后多所路由捕获已删除）；
 - 环境路径复原异常防御：`sys.path.remove` 遇 `ValueError` 安全 pass。
 """
 from __future__ import annotations
@@ -41,22 +41,22 @@ class PolicyCaptureTailsTests(unittest.TestCase):
     # 2. 各组件捕获异常隔离自愈
     # -------------------------------------------------------------------------
     def test_capture_components_exceptions_isolated_fallbacks(self):
-        # 当提示词、心法、拦截器、委员会、风控、路由捕获均抛异常时，安全返回对齐默认空值 (lines 124, 136, 143, 150, 157, 164)
+        # 当提示词、心法、拦截器、委员会、风控捕获均抛异常时，安全返回对齐默认空值 (lines 124, 136, 143, 150, 157)。
+        # OKX-only 迁移后 venue_routing 捕获（及其 routing_policy pool/raw 读取）已删除，故不再覆盖。
         with patch("prompt_library.load_library", side_effect=RuntimeError("prompt error")):
             with patch("evolution_shield.STRUCTURED_MEMORY_FILE", self.tmp_path / "missing_mem.json"):
                 with patch("evolution_shield.read_memory_snapshot", side_effect=RuntimeError("memory error")):
                     with patch("astra_backend.interceptor_manager.load_config", side_effect=RuntimeError("int error")):
                         with patch("astra_backend.council_manager.load_council_config", side_effect=RuntimeError("ccl error")):
                             with patch("astra_backend.risk_config.current_values", side_effect=RuntimeError("risk error")):
-                                with patch("astra_backend.exchanges.routing_policy._read_raw_routing", side_effect=RuntimeError("rout error")):
-                                    pkg = capture_full_strategy_package(self.tmp_path, root_dir=self.tmp_path)
-                                    p = pkg["package"]
-                                    self.assertEqual(p["prompt_config"], {})
-                                    self.assertEqual(p["evolution_memory"], {"version": "missing", "lessons": []})
-                                    self.assertEqual(p["interceptor_config"], {})
-                                    self.assertEqual(p["council_config"], {})
-                                    self.assertEqual(p["risk_config"], {})
-                                    self.assertEqual(p["venue_routing"], {})
+                                pkg = capture_full_strategy_package(self.tmp_path, root_dir=self.tmp_path)
+                                p = pkg["package"]
+                                self.assertEqual(p["prompt_config"], {})
+                                self.assertEqual(p["evolution_memory"], {"version": "missing", "lessons": []})
+                                self.assertEqual(p["interceptor_config"], {})
+                                self.assertEqual(p["council_config"], {})
+                                self.assertEqual(p["risk_config"], {})
+                                self.assertNotIn("venue_routing", p)
 
     # -------------------------------------------------------------------------
     # 3. 环境路径复原异常处理

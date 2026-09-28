@@ -4,7 +4,7 @@
 
 # AstraQuant
 
-### Autonomous Multi-Exchange Quant Trading Terminal & Multi-Agent Operating System
+### Autonomous OKX-Native Quant Trading Terminal & Multi-Agent Operating System
 
 [![Release](https://img.shields.io/badge/Release-v8.4.0-00E599.svg?style=flat-square)](https://github.com/0xethanq/astra-quant-agent/releases/tag/v8.4.0)
 [![Website](https://img.shields.io/badge/Site-www.astraquant.tech-6E56CF.svg?style=flat-square)](https://www.astraquant.tech)
@@ -15,7 +15,7 @@
 [![Tests](https://img.shields.io/badge/Tests-10k%2B%20Passing-brightgreen.svg?style=flat-square)](tests/)
 [![Community](https://img.shields.io/badge/Community-LINUX%20DO-F97316.svg?style=flat-square&logo=linux&logoColor=white)](https://linux.do/)
 
-**Named AI seats debate → CIO arbitrates the final call → Physical Python risk pipeline vetoes → OKX / Binance / Gate receive live maker limit orders with atomic conditional protection.**
+**Named AI seats debate → CIO arbitrates the final call → Physical Python risk pipeline vetoes → OKX receives live maker limit orders with atomic conditional protection.**
 
 *Cognition belongs to the models; physical risk control belongs to the base layer. Zero black-box magic.*
 
@@ -42,19 +42,19 @@ git clone https://github.com/0xethanq/astra-quant-agent.git && cd astra-quant-ag
 | **Admin Control Plane** | `http://localhost:8080/admin/login` | User: `admin` |
 | **System Docs & API Specs** | `http://localhost:8080/docs` | Public |
 
-> 🛡️ **Safety first**: AstraQuant boots in **paper / demo simulation mode** by default. It will never touch live exchange funds until you explicitly configure both your **LLM provider keys** and **Exchange API keys**, then switch the environment toggle on `/admin/security`.
+> 🛡️ **Safety first**: AstraQuant boots in **paper / demo simulation mode** by default. It will never touch live exchange funds until you explicitly configure both your **LLM provider keys** and **OKX API keys**, then switch the environment toggle on `/admin/security`.
 
 ---
 
 ## 🧭 What it is
 
-AstraQuant is an **institutional-grade, multi-exchange autonomous quant decision and execution operating system** engineered for professional trading desks, prop firms, and systematic crypto traders.
+AstraQuant is an **institutional-grade, OKX-native autonomous quant decision and execution operating system** engineered for professional trading desks, prop firms, and systematic crypto traders.
 
 Every **15 minutes**, the autonomous trading brain initiates an execution cycle:
-1. **Dynamic Market Regime Detection**: Analyzes cross-venue order books and kinematic calculus derivatives (velocity $v$, acceleration $a$, integral energy $E$, and volatility distributions) to identify macro regimes (e.g. Bull Trend, Wide Chop, Liquidity Flush).
+1. **Dynamic Market Regime Detection**: Analyzes OKX order books and kinematic calculus derivatives (velocity $v$, acceleration $a$, integral energy $E$, and volatility distributions) to identify macro regimes (e.g. Bull Trend, Wide Chop, Liquidity Flush).
 2. **Multi-Model Investment Committee**: Specialized AI seats (Trend, Momentum, Quantitative Math, Macro/News) debate in cross-examination rounds. A Chief Investment Officer (**CIO**) seat synthesizes proposals into an actionable order intent.
 3. **Fail-Closed Physical Risk Interception**: Before reaching any exchange gateway, every proposed order must penetrate a non-bypassable, physical Python risk pipeline (order geometry check, minimum risk/reward ratio, 4H counter-trend veto, same-direction exposure quotas).
-4. **Three-Venue Parity Execution**: Orders are submitted to **OKX, Binance, and Gate.io** as maker limit orders (or smart market orders), accompanied by atomic native conditional Stop-Loss and Take-Profit brackets (TP1/TP2 + trailing profit ratchets).
+4. **OKX-Native Execution**: Orders are submitted to **OKX** as maker limit orders (or smart market orders), accompanied by atomic attached conditional Stop-Loss and Take-Profit brackets (TP1/TP2 + trailing profit ratchets).
 
 ```
    ┌──────────────────────────────────────────────────────────────┐
@@ -74,14 +74,14 @@ Every **15 minutes**, the autonomous trading brain initiates an execution cycle:
                                   ▼
    ┌──────────────────────────────────────────────────────────────┐
    │           Fail-Closed Physical Python Risk Pipeline          │
-   │   Geometry Check · 2.0R Floor · 4H Trend Veto · Exposure    │
+   │   Geometry Check · 2.0R Floor · 4H Trend Veto · Exposure     │
    │           (Any error / timeout = Hard Reject)                │
    └──────────────────────────────┬───────────────────────────────┘
                                   ▼
    ┌──────────────────────────────────────────────────────────────┐
-   │               Three-Venue Parity Execution                   │
-   │         OKX  ◄──────────►  Binance  ◄──────────►  Gate       │
-   │   Maker Limit / BBO · Atomic Native TP1/TP2 · Cloud SL Legs  │
+   │                    OKX-Native Execution                      │
+   │                            OKX V5                            │
+   │   Maker Limit / BBO · Attached TP1/TP2 · Cloud SL Legs       │
    └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -95,18 +95,18 @@ Every **15 minutes**, the autonomous trading brain initiates an execution cycle:
 2. **Market-regime auto-detection (No curve fitting).**  
    Trend-following strategies bleed out in chops; mean-reversion grids blow up in single-direction breakouts. AstraQuant continuously derives regime state from calculus velocity $v$, acceleration $a$, integral energy $E$, and multi-timeframe volatility distributions, automatically adapting prompt strategies and leverage bands.
 
-3. **Three-venue equal parity.**  
-   OKX, Binance, and Gate.io are treated as equal first-class venues. The platform delivers a unified multi-exchange asset view, transparently reconciles one-way and hedge-mode positions, and attaches native conditional protection orders on each venue.
+3. **OKX-native by design.**  
+   AstraQuant connects to **OKX only**: one venue, one credential set, one signing path, one order contract to reason about. The former venue-abstraction layer has been removed, so there are no divergent exchange code paths, no parity claims, and no inter-venue arbitrage matrix — every entry carries native attached conditional protection from the same single path.
 
 4. **Full white-box explainability & closed-loop self-evolution.**  
-   Every single decision records its complete Chain-of-Thought (CoT), seat debate transcripts, calculus features, and venue routing evidence. Every 6 hours, the self-evolution engine mines the real closed-trade ledger, distilling empirical lessons into long-term heuristic memory with anti-bias guardrails and a 7–14 day sharpness half-life.
+   Every single decision records its complete Chain-of-Thought (CoT), seat debate transcripts, calculus features, and execution evidence. Every 6 hours, the self-evolution engine mines the real closed-trade ledger, distilling empirical lessons into long-term heuristic memory with anti-bias guardrails and a 7–14 day sharpness half-life.
 
 ---
 
 ## 📸 Visual showcase
 
 ### 1. 🖥️ Live trading workstation & depth chart
-Modern obsidian-emerald terminal (`#00E599` emerald accent on deep obsidian slate). Integrates portfolio equity across 3 venues, active position tickets with 100% stop-loss protection coverage, and native KLineChart v10 with real-time multi-target TP1/TP2 and trailing stop lines:
+Modern obsidian-emerald terminal (`#00E599` emerald accent on deep obsidian slate). Integrates portfolio equity from OKX, active position tickets with 100% stop-loss protection coverage, and native KLineChart v10 with real-time multi-target TP1/TP2 and trailing stop lines:
 
 ![Trading workstation](docs/images/v840_live_dashboard.png)
 
@@ -119,15 +119,15 @@ Press `⌘J` or click **决策轨迹** to inspect the live multi-seat deliberati
 
 ---
 
-### 3. 🌐 Cross-venue causal calculus dynamics matrix
+### 3. 🌐 Causal calculus dynamics matrix
 Live mathematical monitoring across the entire instrument universe: real-time prices, 24h price action, 1H velocity $v$, acceleration $a$, ADX trend strength, long/short ratios, and AI consensus recommendations:
 
-![Cross-venue causal calculus matrix](docs/images/v840_calculus_factors.png)
+![Causal calculus matrix](docs/images/v840_calculus_factors.png)
 
 ---
 
 ### 4. ⚙️ Enterprise admin control plane & telemetry
-Real-time operational dashboard monitoring FastAPI engine PID, LLM reasoning latency, 3-venue connection heartbeats, memory usage, and the fail-closed physical risk gate status:
+Real-time operational dashboard monitoring FastAPI engine PID, LLM reasoning latency, the OKX connection heartbeat, memory usage, and the fail-closed physical risk checkpoint status:
 
 ![Admin control plane](docs/images/v840_admin_overview.png)
 
@@ -182,10 +182,10 @@ Every 6 hours, the engine mines the real closed-trade ledger, calculating profit
 
 ---
 
-### 12. 🔐 Security, venue routing & Strategy Plaza sharing
-Manage OKX, Binance, and Gate credentials, toggle between Demo and Live environments with preflight safety checks, and configure privacy-safe Strategy Plaza sharing:
+### 12. 🔐 Security & Strategy Plaza sharing
+Manage OKX credentials, toggle between Demo and Live environments with preflight safety checks, and configure privacy-safe Strategy Plaza sharing:
 
-![Security and venue routing](docs/images/v840_security_plaza.png)
+![Security and Strategy Plaza sharing](docs/images/v840_security_plaza.png)
 
 ---
 
@@ -211,7 +211,7 @@ AstraQuant decouples strategy into nine visual control centers accessible direct
 | 5 | 📦 **Policy Snapshots** | Hashes prompts + interceptors + committee seats + instrument parameters into SHA-256 fingerprints; 0.5s atomic rollbacks; audits `policy_hash` per trade |
 | 6 | 🎛️ **Risk Control Center** | All 26 physical execution knobs configurable via UI; Conservative / Balanced / Aggressive presets; destructive actions require typed confirmation |
 | 7 | 🤖 **LLM Gateway** | Multi-provider direct connections; thinking budget from 10s to 1800s for reasoning models; sub-second failover on rate-limits (HTTP 429) or outages |
-| 8 | 🌐 **Three-Venue Topology** | Native connectivity to OKX, Binance, and Gate with independent credentials; cross-venue spread, funding fee, and momentum arbitrage matrix |
+| 8 | 🌐 **OKX Connectivity** | Native OKX V5 connectivity with separate Demo/Live credential profiles; funding fee, open interest, and momentum analytics |
 | 9 | 🧪 **Backtest & Sandboxing** | Multi-instrument portfolio backtesting and sandbox replays executing the exact same Python risk and sizing code paths as live trading |
 
 ---
@@ -234,7 +234,7 @@ Every risk parameter scales **dynamically with account equity** — eliminating 
 
 | Logger | Log File Path | Generating Process | Scope & Coverage |
 | :--- | :--- | :--- | :--- |
-| `trader` | `logs/ai_factor_trader.log` | Brain cycle daemon | Quotes, committee debate, confidence grading, venue routing, bracket orders, and trailing stop ratchets |
+| `trader` | `logs/ai_factor_trader.log` | Brain cycle daemon | Quotes, committee debate, confidence grading, order placement, bracket orders, and trailing stop ratchets |
 | `backend` | `logs/uvicorn.log` | FastAPI / Uvicorn | REST request/response lifecycles, authentication, CORS, exception traces, and telemetry feeds |
 | `scheduler` | `logs/astra_gateway.log` | Scheduler daemon | Distributed lock leases, cron dispatch, heartbeat checks, and log fragment cleanup |
 | `audit` | `logs/astra_admin_audit.jsonl` | Security audit subsystem | Append-only JSONL: timestamp, IP, actor, action (logins, password updates, risk tuning, emergency closes) |
@@ -248,7 +248,7 @@ Every risk parameter scales **dynamically with account equity** — eliminating 
 Every metric and path documented in this repository is enforced by automated test suites. We treat passing gates as an essential deliverable:
 
 ```bash
-# 1) Backend: Audit, LLM, UI, and Multi-Venue Contract Gate
+# 1) Backend: Audit, LLM, UI, and OKX venue contract checks
 .venv/bin/pytest tests/audit tests/llm tests/ui tests/venues -q
 
 # 2) Backend: Full Offline Regression Suite
@@ -298,7 +298,7 @@ Packages Python 3.11, compiles the Vue 3 frontend bundle, and orchestrates the w
 ```bash
 git clone https://github.com/0xethanq/astra-quant-agent.git
 cd astra-quant-agent
-cp env.example .env && vim .env        # Configure LLM and exchange credentials
+cp env.example .env && vim .env        # Configure LLM and OKX credentials
 ./deploy/docker-start.sh               # Equivalent to: docker compose up -d --build
 
 docker compose ps                      # View container status

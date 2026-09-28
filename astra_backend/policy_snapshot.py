@@ -116,10 +116,10 @@ logger = logging.getLogger(__name__)
 # =========================================================================
 # 归档包标识（审计 P0-3，2026-09-13）
 # =========================================================================
-# 病灶：policy_hash 只覆盖 4 个单元（提示词/心法/拦截器/委员会），而归档包实际装 6 个
-# （另含 risk_config 与 venue_routing），归档文件名却只用 policy_hash 命名 →
-# **仅风控/路由不同的两个版本被判为同一版本**，第二次归档静默覆盖第一次；
-# 回滚后的哈希校验也因此对风控/路由的恢复失败完全失明。
+# 病灶：policy_hash 只覆盖 4 个单元（提示词/心法/拦截器/委员会），而归档包实际装 5 个
+# （另含 risk_config），归档文件名却只用 policy_hash 命名 →
+# **仅风控不同的两个版本被判为同一版本**，第二次归档静默覆盖第一次；
+# 回滚后的哈希校验也因此对风控的恢复失败完全失明。
 # 修复：另算一个「整包标识」用于文件命名与恢复后校验，并对易变字段做规范化
 # （时间戳/评分/revision 每次写都会变，绝不能进标识，否则校验必然误报）。
 
@@ -187,7 +187,7 @@ def archive_current_policy(
         package = capture_full_strategy_package(root_dir=root_dir)
         policy_hash = package["policy_hash"]
         policy_version = package["policy_version"]
-        # 审计 P0-3：文件标识改用「整包标识」——policy_hash 看不到 risk_config/venue_routing，
+        # 审计 P0-3：文件标识改用「整包标识」——policy_hash 看不到 risk_config，
         # 只差风控的两个版本会同名互相覆盖。
         package_hash = package_identity(package.get("package") or {})
 

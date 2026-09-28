@@ -42,7 +42,6 @@
 | `scripts/ai_brain_trader.py` | 748 | 953 | 期间含功能新增 |
 | `scripts/sync_full_ledger.py` | 715 | 690 | |
 | `scripts/self_improvement_engine.py` | 752 | 738 | |
-| `astra_backend/exchanges/binance.py` | 638 | 604 | |
 | `frontend/src/views/admin/LlmPage.vue` | 1762 | **39** | 拆为组件 + `useLlmConfig` 等 composable |
 | `frontend/src/components/dashboard/ChartWorkstation.vue` | 1285 | 902 | 叠加层计算拆到 `chartLiveLevels.ts` |
 | `frontend/src/locales/legacy/` | 648（100% 死键） | **已删除** | |
@@ -81,11 +80,11 @@
 | `astra_backend/council/` | 6 | 委员会配置 + 辩论引擎 | 同上 |
 | `astra_backend/policy/` | 8 | 策略快照生成/归档/恢复 | 同上 |
 | `astra_backend/llm/` | 12 | LLM 配置存储 / 能力探测 / 传输派发 | 同上 |
-| `astra_backend/exchanges/` | 14 | 三所适配器 + 订单/签名/诊断 | 同上 |
+| `astra_backend/exchanges/` | — | OKX 适配器 + 订单/签名/诊断 | 同上 |
 | `astra_backend/execution/` | 6 | 执行闸门与路由 | 同上 |
 | `frontend/src/components/dashboard/` | — | 图表与叠加层（计算逻辑出表为 `.ts`） | `frontend/README.md`、`components/admin/README.md` |
 
-> `docs/BEIJING_TIME_CONTRACT.md`、`docs/exchange_support_matrix.md` 为既有契约文档，未改动。
+> `docs/BEIJING_TIME_CONTRACT.md`、`docs/exchange_support_matrix.md` 为既有契约文档（后者已随 OKX 专用化重写为单所接入说明）。
 
 ## 6. 维护须知（本阶段沉淀的硬约束）
 
@@ -116,8 +115,6 @@
 - `scripts/sync_full_ledger.py` 690（`build_lifecycle_ledger` 191）：剩余段落多为 IO 编排，
   或受设计边界 pin 约束（`_pos_id_seen` 跨行状态、官方平仓行构建）。
 - `scripts/self_improvement_engine.py` 738（`run_self_evolution` 149）：剩余为 LLM 调用与落盘编排。
-- `astra_backend/exchanges/binance.py` 604（`positions`/`fetch_ticker` 各 28、`place_order` 51）：
-  属响应字段映射，抽取收益已不明显。
 - 前端 F2 剩余样板、F7 收尾。
 
 ## 8. 未决事项（需人工拍板）

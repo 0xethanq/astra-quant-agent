@@ -6,7 +6,6 @@ import { zhNews } from './news';
 import { zhEvolution } from './evolution';
 import { zhLedger } from './ledger';
 import { zhAbout } from './about';
-import { zhVenueAccounts } from './venueAccounts';
 
 export const zhDash = {
   shell: zhShell,
@@ -17,5 +16,4 @@ export const zhDash = {
   ledger: zhLedger,
   firstRun: zhDashFirstRun,
   about: zhAbout,
-  venueAccounts: zhVenueAccounts,
 };

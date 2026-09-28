@@ -155,12 +155,14 @@ class LedgerLifecycleStepsTest(unittest.TestCase):
         sys.modules["qq_notifier"] = fake
         try:
             notify_newly_closed_trades(
-                binance_trades=[{"id": "old-1", "status": "closed"}],
                 existing_closed_ids={"old-1"},
-                gate_trades=[{"id": "new-2", "status": "closed", "inst": "ETH", "pnl": 3.5,
-                              "exit_reason": "止盈", "close_px": 2500.0, "roi_pct": 1.25,
-                              "duration": "42分钟"}],
-                trades_lifecycle=[{"id": "still-open", "status": "holding"}])
+                trades_lifecycle=[
+                    {"id": "old-1", "status": "closed"},
+                    {"id": "new-2", "status": "closed", "inst": "ETH", "pnl": 3.5,
+                     "exit_reason": "止盈", "close_px": 2500.0, "roi_pct": 1.25,
+                     "duration": "42分钟"},
+                    {"id": "still-open", "status": "holding"},
+                ])
         finally:
             if old is None:
                 sys.modules.pop("qq_notifier", None)
@@ -180,9 +182,8 @@ class LedgerLifecycleStepsTest(unittest.TestCase):
         old = sys.modules.get("qq_notifier")
         sys.modules["qq_notifier"] = fake
         try:
-            notify_newly_closed_trades(binance_trades=[], existing_closed_ids=set(),
-                                       gate_trades=[{"id": "g1", "status": "closed"}],
-                                       trades_lifecycle=[])
+            notify_newly_closed_trades(existing_closed_ids=set(),
+                                       trades_lifecycle=[{"id": "g1", "status": "closed"}])
         finally:
             if old is None:
                 sys.modules.pop("qq_notifier", None)
@@ -198,9 +199,8 @@ class LedgerLifecycleStepsTest(unittest.TestCase):
         old = sys.modules.get("qq_notifier")
         sys.modules["qq_notifier"] = types.SimpleNamespace(notify_trade_close=boom)
         try:
-            notify_newly_closed_trades(binance_trades=[], existing_closed_ids=set(),
-                                       gate_trades=[{"id": "g1", "status": "closed"}],
-                                       trades_lifecycle=[])   # 不得抛错
+            notify_newly_closed_trades(existing_closed_ids=set(),
+                                       trades_lifecycle=[{"id": "g1", "status": "closed"}])   # 不得抛错
         finally:
             if old is None:
                 sys.modules.pop("qq_notifier", None)

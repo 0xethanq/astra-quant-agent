@@ -117,12 +117,10 @@ class LedgerExtractionTest(unittest.TestCase):
     def test_merge_overlays_new_rows_over_old_same_id(self):
         from scripts.ledger.merge import merge_lifecycle_trades
         got = merge_lifecycle_trades(
-            binance_trades=[{"id": "b1", "venue": "binance"}],
-            gate_trades=[{"id": "g1", "venue": "gate"}],
-            old_trades=[{"id": "old1", "venue": "okx"}, {"id": "b1", "venue": "stale"}],
-            trades_lifecycle=[{"id": "new1", "venue": "okx"}])
-        self.assertEqual(sorted(got), ["b1", "g1", "new1", "old1"])
-        self.assertEqual(got["b1"]["venue"], "binance", "同 id 必须由新行覆盖旧行")
+            old_trades=[{"id": "old1", "venue": "okx"}, {"id": "n1", "venue": "stale"}],
+            trades_lifecycle=[{"id": "n1", "venue": "fresh"}, {"id": "new1", "venue": "okx"}])
+        self.assertEqual(sorted(got), ["n1", "new1", "old1"])
+        self.assertEqual(got["n1"]["venue"], "fresh", "同 id 必须由新行覆盖旧行")
 
     def test_d8_migration_drops_colliding_legacy_row_but_keeps_untouched_ones(self):
         """D8：撞键的旧键行让位；**窗口外无法再生的旧行一律不动**（防迁移误删）。"""
@@ -132,8 +130,7 @@ class LedgerExtractionTest(unittest.TestCase):
         untouched = {"id": "pos_hist_P9_ETH", "venue": "okx", "inst": "ETH-USDT-SWAP",
                      "open_time": "1", "close_time": "2"}
         regenerated = dict(colliding, id="pos_hist_P1_BTC_100")
-        got = merge_lifecycle_trades(binance_trades=[], gate_trades=[],
-                                     old_trades=[colliding, untouched],
+        got = merge_lifecycle_trades(old_trades=[colliding, untouched],
                                      trades_lifecycle=[regenerated])
         self.assertNotIn("pos_hist_P1_BTC", got, "撞键的旧键行必须让位（否则双计）")
         self.assertIn("pos_hist_P9_ETH", got, "窗口外旧行**不得**被删（安全边界）")
@@ -144,8 +141,7 @@ class LedgerExtractionTest(unittest.TestCase):
         old_other = {"id": "pos_legacy_1", "venue": "okx", "inst": "X",
                      "open_time": "5", "close_time": "6"}
         new = {"id": "n1", "venue": "okx", "inst": "X", "open_time": "5", "close_time": "6"}
-        got = merge_lifecycle_trades(binance_trades=[], gate_trades=[],
-                                     old_trades=[old_other], trades_lifecycle=[new])
+        got = merge_lifecycle_trades(old_trades=[old_other], trades_lifecycle=[new])
         self.assertIn("pos_legacy_1", got, "非 pos_hist_ 前缀的旧行不受 D8 清理影响")
 
 if __name__ == "__main__":

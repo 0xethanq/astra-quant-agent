@@ -80,9 +80,7 @@ class FetchDirectoryTest(unittest.TestCase):
 
     def test_each_venue_uses_its_own_public_path(self):
         for venue, path, payload in (
-                ("okx", "/api/v5/public/instruments?instType=SWAP", {"data": []}),
-                ("binance", "/fapi/v1/exchangeInfo", {"symbols": []}),
-                ("gate", "/api/v4/futures/usdt/contracts", [])):
+                ("okx", "/api/v5/public/instruments?instType=SWAP", {"data": []}),):
             with self.subTest(venue=venue):
                 _out, req = self._run(venue, payload=payload)
                 self.assertTrue(req["url"].endswith(path), f"{venue} 的公共目录路径")
@@ -100,14 +98,6 @@ class FetchDirectoryTest(unittest.TestCase):
         out, _ = self._run("okx", payload={"data": [{"instId": "btc-usdt-swap",
                                                       "state": "live"}]})
         self.assertEqual(out, {"BTC-USDT-SWAP": {"state": "live"}})
-        out2, _ = self._run("binance", payload={"symbols": [{"symbol": "ethusdt",
-                                                              "status": "TRADING"}]})
-        self.assertEqual(out2, {"ETHUSDT": {"status": "TRADING"}})
-        out3, _ = self._run("gate", payload=[{"name": "btc_usdt", "in_delisting": True},
-                                             {"name": "eth_usdt"}])
-        self.assertEqual(out3, {"BTC_USDT": {"in_delisting": "true"},
-                                "ETH_USDT": {"in_delisting": "false"}},
-                         "gate 的退市标记统一成小写字符串（缺失视为 false）")
 
     def test_unsupported_venue_is_refused_explicitly(self):
         with self.assertRaises(ExchangeCapabilityError) as ctx:
@@ -150,7 +140,7 @@ class FetchDirectoryTest(unittest.TestCase):
         p3.start()
         self.addCleanup(p3.stop)
         with self.assertRaises(json.JSONDecodeError):
-            L._fetch_directory("binance", "live")
+            L._fetch_directory("okx", "live")
 
 
 if __name__ == "__main__":

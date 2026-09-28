@@ -2,12 +2,11 @@
 
 Public market data harvesting (tickers, orderbooks, indicators, candles) runs on
 persistent connection-pooled HTTP Keep-Alive sessions with pure-Python fallbacks.
-Failover chain: www.okx.com -> aws.okx.com -> alt-venue adapters -> local math.
+Failover chain: www.okx.com -> aws.okx.com -> local math.
 Zero process-spawning layers; public endpoints need no credentials.
 """
 from __future__ import annotations
 
-import json
 import logging
 import math
 import threading
@@ -182,168 +181,15 @@ def _public_post(path: str, payload: Dict[str, Any], timeout: float = 4.0) -> Op
 
 
 # ---------------------------------------------------------------------------
-# 0b. 多场所只读备源（Phase 2 · 2026-09-09）
-#     仅当 OKX 双域直连（www→aws）全断时兜底，保「价格连续性」优先。
-#     量/张数单位随场所原生语义（币安=币量、Gate=张数），与 OKX 口径不同，
-#     消费方仅得相对量级用于放量检测；大陆受限 IP 上自然失败落空，无副作用。
-# ---------------------------------------------------------------------------
-
-ALT_VENUES = ("binance", "gate")
-
-# 健康文件与 ai_brain_trader 的 VENUE_HEALTH_FILE 同源目录（scripts/../data/）
-import pathlib as _pathlib  # noqa: E402  （0b 段局部引入，避免动头部 import 块）
-VENUE_HEALTH_FILE = str(_pathlib.Path(__file__).resolve().parents[1] / "data" / "venue_health.json")
-
-_ALT_ORDER_CACHE = {"ts": 0.0, "order": None}
-_ALT_ORDER_LOCK = threading.Lock()
-
-
-def _alt_venue_order() -> tuple:
-    """健康感知备源顺序（US-004）：本轮 failed 数升序 → 延迟后置（差 >5x 才翻转）→ 静态原序。
-
-    与 AC「近3条记录内 failed 多的场所后置」的语义对应：
-    ai_brain_trader._xv_flush_health 每周期整文件覆盖写，文件内容即「最近记录」
-    级别的本轮快照（failed 为 name->reason dict，无逐次历史）——故以本轮 failed
-    数为主排序键，不另造历史文件。avg_ms 仅当与全场最快所差距 >5 倍时才参与
-    翻转（防毫秒级抖动让备源序反复横跳）；avg_ms 缺失/为 0（该所本周期无延迟
-    样本）视为中性，不降权。
-
-    缓存理由：备源路径在 OKX 全断时会爆发几十次请求（因子轮询/brain/回测），
-    而健康文件每 15 分钟周期至多更新一次——60s TTL 读内存吸收 IO，防放大。
-    任何缺失/损坏/结构异常一律回退静态 ALT_VENUES，绝不抛（热文件纪律：本模块
-    被生产 trader 子进程直接加载；OKX 正常时本函数根本不被调用，主路径零感知）。
-    """
-    try:
-        now = time.time()
-        with _ALT_ORDER_LOCK:
-            cached = _ALT_ORDER_CACHE["order"]
-            if cached is not None and now - _ALT_ORDER_CACHE["ts"] < 60.0:
-                return cached
-        order = None
-        try:
-            p = _pathlib.Path(VENUE_HEALTH_FILE)
-            if p.exists():
-                raw = json.loads(p.read_text(encoding="utf-8"))
-                venues = raw.get("venues") if isinstance(raw, dict) else None
-                if isinstance(venues, dict):
-                    base_idx = {v: i for i, v in enumerate(ALT_VENUES)}
-                    stats: Dict[str, Any] = {}
-                    for v in ALT_VENUES:
-                        rec = venues.get(v)
-                        rec = rec if isinstance(rec, dict) else {}
-                        failed = rec.get("failed")
-                        nf = len(failed) if isinstance(failed, (dict, list)) else 0
-                        try:
-                            avg = float(rec.get("avg_ms"))
-                        except (TypeError, ValueError):
-                            avg = 0.0
-                        stats[v] = (nf, avg if avg > 0 else 0.0)
-                    samples = [a for _, a in stats.values() if a > 0]
-                    min_lat = min(samples) if samples else 0.0
-
-                    def _key(v):
-                        nf, avg = stats[v]
-                        slow = 1 if (avg > 0 and min_lat > 0 and avg > 5.0 * min_lat) else 0
-                        return (nf, slow, base_idx.get(v, 99))
-
-                    order = tuple(sorted(ALT_VENUES, key=_key))
-        except Exception:
-            order = None
-        if order is None:
-            order = ALT_VENUES
-        with _ALT_ORDER_LOCK:
-            _ALT_ORDER_CACHE["ts"] = time.time()
-            _ALT_ORDER_CACHE["order"] = order
-        return order
-    except Exception:
-        return ALT_VENUES
-
-
-def _alt_venue_allowed() -> bool:
-    """离线/测试熔断开关：ASTRA_ALT_VENUE_FALLBACK=0 时备源路径完全不发网络请求。"""
-    import os
-    return str(os.environ.get("ASTRA_ALT_VENUE_FALLBACK", "1")).strip().lower() not in ("0", "off", "false")
-
-
-def _get_venue_adapter(venue: str):
-    """懒导入 astra_backend.exchanges（scripts 入口的 sys.path 引导）。"""
-    import sys
-    from pathlib import Path
-    root = str(Path(__file__).resolve().parents[1])
-    if root not in sys.path:
-        sys.path.insert(0, root)
-    from astra_backend.exchanges import get_adapter
-    return get_adapter(venue)
-
-
-def _alt_venue_ticker(inst_id: str) -> Optional[Dict[str, Any]]:
-    if not _alt_venue_allowed():
-        return None
-    for venue in _alt_venue_order():
-        try:
-            ad = _get_venue_adapter(venue)
-            t = ad.fetch_ticker(ad.canonical(inst_id))
-        except Exception:
-            t = None
-        if t and t.get("last"):
-            logger.warning("Multi-venue fallback: ticker %s served by %s", inst_id, venue)
-            return {
-                "instId": inst_id, "venue": venue,
-                "last": str(t["last"]),
-                "bidPx": str(t.get("bid") or ""),
-                "askPx": str(t.get("ask") or ""),
-                "open24h": str(t.get("open_24h") or ""),
-                "high24h": str(t.get("high_24h") or ""),
-                "low24h": str(t.get("low_24h") or ""),
-                "vol24h": str(t.get("vol_24h_base") or ""),
-                "volCcy24h": str(t.get("vol_24h_base") or ""),
-                "ts": str(t.get("ts_ms") or ""),
-            }
-    return None
-
-
-def _alt_venue_candles(inst_id: str, bar: str, limit: int) -> List[List[str]]:
-    if not _alt_venue_allowed():
-        return []
-    for venue in _alt_venue_order():
-        try:
-            ad = _get_venue_adapter(venue)
-            kl = ad.fetch_candles(ad.canonical(inst_id), bar, limit)
-        except Exception:
-            kl = None
-        if kl:
-            kl = kl[-limit:]
-            kl.reverse()  # 适配器升序 → OKX 契约「最新在前」
-            logger.warning("Multi-venue fallback: candles %s %s served by %s (%d rows)",
-                           inst_id, bar, venue, len(kl))
-            return kl
-    return []
-
-
-def _alt_funding_rate(inst_id: str) -> Optional[float]:
-    if not _alt_venue_allowed():
-        return None
-    for venue in _alt_venue_order():
-        try:
-            ad = _get_venue_adapter(venue)
-            r = ad.fetch_funding_rate(ad.canonical(inst_id))
-        except Exception:
-            r = None
-        if r is not None:
-            return round(float(r) * 100, 4)  # 对齐 OKX 路径的百分数口径
-    return None
-
-
-# ---------------------------------------------------------------------------
 # 1. Ticker & Bulk Tickers
 # ---------------------------------------------------------------------------
 
 def fetch_ticker(inst_id: str, timeout: float = 3.5) -> Optional[Dict[str, Any]]:
-    """Fetch one instrument ticker: www→aws 双域 REST 直连，失败落异所备源。"""
+    """Fetch one instrument ticker: www→aws 双域 REST 直连，失败返回 None。"""
     data = _public_get("/api/v5/market/ticker", params={"instId": inst_id}, timeout=timeout)
     if data and data.get("data"):
         return data["data"][0]
-    return _alt_venue_ticker(inst_id)
+    return None
 
 
 def fetch_tickers_bulk(inst_type: str = "SWAP", timeout: float = 4.0) -> Dict[str, Dict[str, Any]]:
@@ -393,7 +239,7 @@ def _local_math_indicators(
     bar: str = "1H",
 ) -> Dict[str, Dict[str, str]]:
     """末级兜底：当 OKX MCP 指标接口与 REST 均不可用时（部署环境常见），
-    用本地蜡烛（自带 www→aws→异所多级容灾）纯 Python 计算 ADX/KDJ/BBWIDTH/CMF。
+    用本地蜡烛（自带 www→aws 双域容灾）纯 Python 计算 ADX/KDJ/BBWIDTH/CMF。
     输出与 OKX 官方口径对齐的字符串数值；样本不足时返回空 dict 让上层维持缺省。"""
     rows = fetch_candles(inst_id, bar=bar, limit=120)
     if not rows:
@@ -569,7 +415,7 @@ def fetch_candles(
     )
     if data and data.get("data"):
         return data["data"]
-    return _alt_venue_candles(inst_id, bar, limit)
+    return []
 
 
 # ---------------------------------------------------------------------------
@@ -584,7 +430,7 @@ def fetch_funding_rate(inst_id: str, timeout: float = 3.5) -> Optional[float]:
             return round(float(data["data"][0].get("fundingRate", 0.0)) * 100, 4)
         except (ValueError, TypeError):
             pass
-    return _alt_funding_rate(inst_id)
+    return None
 
 
 def fetch_open_interest(inst_id: str, timeout: float = 3.5) -> Optional[Dict[str, Any]]:

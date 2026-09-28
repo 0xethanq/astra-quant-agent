@@ -120,7 +120,7 @@ test('BaseTabs 的 aria-controls 必须与消费端 tabpanel id 双向配对', (
   // 消费端确实传了 baseId
   assert.match(drawer, /base-id="radar-detail"/, 'RadarDrawer 未给 BaseTabs 传 base-id');
 
-  const keys = ['macro', 'quotes', 'council', 'xvenue', 'raw'];
+  const keys = ['macro', 'quotes', 'council', 'raw'];
   for (const key of keys) {
     assert.ok(drawer.includes(`id="radar-detail-panel-${key}"`), `面板 ${key} 缺少 id，aria-controls 会指向空节点`);
     assert.ok(drawer.includes(`aria-labelledby="radar-detail-tab-${key}"`), `面板 ${key} 缺少 aria-labelledby 回指页签`);
@@ -130,9 +130,9 @@ test('BaseTabs 的 aria-controls 必须与消费端 tabpanel id 双向配对', (
   const ids = [...new Set([...drawer.matchAll(/id="radar-detail-panel-([a-z]+)"/g)].map((m) => m[1]))].sort();
   assert.deepEqual(ids, [...keys].sort(), '面板 id 集合与页签 key 集合不一致');
 
-  // 五个面板都必须是 role="tabpanel" 且可聚焦
+  // 四个面板都必须是 role="tabpanel" 且可聚焦
   const panels = [...drawer.matchAll(/<div\s[^>]*id="radar-detail-panel-[a-z]+"[^>]*>/g)].map((m) => m[0]);
-  assert.equal(panels.length, 5, '未找到 5 个面板根节点');
+  assert.equal(panels.length, 4, '未找到 4 个面板根节点');
   for (const tag of panels) {
     assert.match(tag, /role="tabpanel"/, '面板缺少 role="tabpanel"');
     assert.match(tag, /tabindex="0"/, '面板缺少 tabindex="0"（内容区不可键盘聚焦）');

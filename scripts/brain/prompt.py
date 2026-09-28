@@ -30,7 +30,7 @@
 
 ### 门面内部函数（保持单一实现）
 
-`sl_atr_mult_for` / `xvenue_prompt_line` / `build_risk_budget_text` /
+`sl_atr_mult_for` / `build_risk_budget_text` /
 `active_profile` / `apply_module_layout` / `system_version`。
 
 > `build_risk_budget_text` **留在门面不搬**：它读 22 个 `risk_constants` 常量，
@@ -44,7 +44,7 @@ from typing import Any, Dict, List
 
 
 def construct_full_market_prompt(packages: List[Dict[str, Any]], pos_summary: str = "[MISSING_CONTEXT:account_positions]", active_positions_detail: List[Dict[str, Any]] = None, pending_orders_detail: List[Dict[str, Any]] = None, current_time_str: str = "", usdt_available: float = None, runtime_context_out: Dict[str, Any] = None, policy_snapshot: Dict[str, Any] = None, *,
-                             safe_float=None, sl_atr_mult_for=None, xvenue_prompt_line=None,
+                             safe_float=None, sl_atr_mult_for=None,
                              build_risk_budget_text=None, active_profile=None,
                              apply_module_layout=None, system_version=None,
                              ai_memory_md_file=None, ai_memory_file=None,
@@ -80,8 +80,6 @@ def construct_full_market_prompt(packages: List[Dict[str, Any]], pos_summary: st
         safe_float = _resolve("safe_float", lambda: safe_float)
     if sl_atr_mult_for is None:
         sl_atr_mult_for = _resolve("_sl_atr_mult_for", lambda: _sl_atr_mult_for)
-    if xvenue_prompt_line is None:
-        xvenue_prompt_line = _resolve("_xvenue_prompt_line", lambda: _xvenue_prompt_line)
     if build_risk_budget_text is None:
         build_risk_budget_text = _resolve("build_risk_budget_text", lambda: build_risk_budget_text)
     if active_profile is None:
@@ -164,8 +162,6 @@ def construct_full_market_prompt(packages: List[Dict[str, Any]], pos_summary: st
             f"{tf}:v={v.get('velocity', '--')},a={v.get('acceleration', '--')},I={v.get('impulse', '--')},态={v.get('regime', '--')}"
             for tf, v in calc_tfs.items() if isinstance(v, dict)
         )
-        _xv_line = xvenue_prompt_line(p)
-        xv_suffix = ("\n" + _xv_line) if _xv_line else ""
         info = f"""---------------------------------------------------------
 【{p['name']} ({p['instId']})】| 数据质量: {quality} | 现价: {p['price']} | 24H涨跌: {p['chg24h']}% | 盘口买/卖: {p['bidPx']}/{p['askPx']}
 - 🏛️ 三重滤网宏观结构: 4H宏观大势={p.get('macro_4h', '4H_MACRO_RANGE')} | 1H波段结构={p.get('structure_1h', '1H_SWING_CHOP')}
@@ -177,7 +173,7 @@ def construct_full_market_prompt(packages: List[Dict[str, Any]], pos_summary: st
 - ∫ 定积分能量学: {integral_line}
 - ⚅ 概率论与统计风险: {prob_line}
 - ∂ 分周期速度/加速度/冲量: {calc_tf_line or 'UNKNOWN'}
-- 衍生品博弈: 资金费率: {p['fundingRate']}% | OI未平仓: {p['oiUsd']} | 多空比: {p['lsRatio']} | 5M主动吃单净差: {p['takerNetUsd']}{xv_suffix}
+- 衍生品博弈: 资金费率: {p['fundingRate']}% | OI未平仓: {p['oiUsd']} | 多空比: {p['lsRatio']} | 5M主动吃单净差: {p['takerNetUsd']}
 - 15M K线(倒序12根 [O,H,L,C,V]): {k15}
 - 1H K线(倒序12根 [O,H,L,C,V]): {k1h}
 - 4H K线(倒序8根 [O,H,L,C,V]): {k4h}"""

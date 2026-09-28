@@ -2,15 +2,16 @@
 
 ## 为什么需要它（真实证据，2026-09-20 实盘日志 + 台账，两条都已复现）
 
-1. **UNI/binance**：交易所 `size_signed=-82(short)`，台账有 `holding` 行
-   （`UNI/binance/空/82.0`）——**是我方持仓**，但开仓预检把它报成
+1. **某外所空仓**：交易所 `size_signed=-82(short)`，台账有 `holding` 行
+   （venue 字段为当时仍在册的外所）——**是我方持仓**，但开仓预检把它报成
    「交易所存在非本系统在管既有仓……**外部仓**连坐拒开」（日志 08:00–10:45 反复出现）。
-   根因：`open_protected_position(own_position=…)` 的 `own_position` **从未被任何
-   生产调用方传入**（全仓唯一生产调用点 `scripts/trader/order_submit.py` 不传），
-   于是 `own_match` 恒 False。
-2. **ARB/binance**：交易所持有 `-2416.7(short)`，而台账里**同尺寸同方向的该行
-   `status=closed`**（`open_time 2026-09-20 11:33:29`）——**台账说已平、交易所仍持有**
-   ⇒ 账实不符；系统对一笔在持敞口既是"盲"的（不会走持仓管理），又永久拒开（被当外部仓）。
+   根因：多所执行入口 `open_protected_position(own_position=…)` 的 `own_position`
+   **从未被任何生产调用方传入**（唯一生产调用点 `scripts/trader/order_submit.py` 不传），
+   于是 `own_match` 恒 False。（该入口已随外所下架移除，判据保留供 OKX 直签路径复用。）
+2. **账实不符（同尺寸同方向的 closed 行）**：交易所持有 `-2416.7(short)`，
+   而台账里**同尺寸同方向的该行 `status=closed`**（`open_time 2026-09-20 11:33:29`）
+   ——**台账说已平、交易所仍持有** ⇒ 账实不符；系统对一笔在持敞口既是"盲"的
+   （不会走持仓管理），又永久拒开（被当外部仓）。
 
 ## 四态判定（互斥，`verdict`）
 
@@ -72,8 +73,8 @@ def canonical_inst(raw: Any) -> str:
     s = str(raw or "").strip().upper()
     if not s:
         return ""
-    if ":" in s:                      # 第一百八十九刀：剥场所前缀（GATE:BTC_USDT → BTC_USDT）
-        s = s.rsplit(":", 1)[1]       # 否则合成 id 会得到 "GATE:BTC"（与 canonical_base 不一致）
+    if ":" in s:                      # 第一百八十九刀：剥场所前缀（历史台账里的 `VENUE:BTC_USDT` → BTC_USDT）
+        s = s.rsplit(":", 1)[1]       # 否则合成 id 会得到 "VENUE:BTC"（与 canonical_base 不一致）
     for sep in ("-", "/", "_"):
         if sep in s:
             s = s.split(sep)[0]

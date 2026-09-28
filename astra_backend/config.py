@@ -60,11 +60,9 @@ class Settings:
     # 抄了一份字面量，是同一对值的又一副本 —— 值抄错/改了一处不生效，正是漂移温床。
     # 全仓已确认**无任何代码读本字段**（仅定义），故保持为空即不会误导。
     okx_broker_tag: str = ""
-    #: 下面三条是注册/返佣通道的**展示**用地址（后台「关于」页渲染成可复制入口）。
-    #: 均可用同名环境变量覆盖，便于分发副本时替换成自己的通道。
+    #: 注册/返佣通道的**展示**用地址（后台「关于」页渲染成可复制入口）。
+    #: 可用同名环境变量覆盖，便于分发副本时替换成自己的通道。
     okx_invite_url: str = "https://www.mitxcqvwnhj.com/join/48039151"
-    gate_invite_url: str = "https://www.gatesites.net/share/MCHDBKYF"
-    binance_invite_url: str = "https://www.bsmkweb.cc/activity/referral-entry/CPA?ref=CPA_00N8UVQ2OG"
 
 
 def refresh_settings() -> Settings:
@@ -99,8 +97,6 @@ def refresh_settings() -> Settings:
     settings.order_mode = os.getenv("ASTRA_ORDER_MODE", "market").strip().lower() or "market"
     settings.okx_broker_tag = "6e2191f027c6SUDE"
     settings.okx_invite_url = os.getenv("OKX_INVITE_URL", "https://www.mitxcqvwnhj.com/join/48039151")
-    settings.gate_invite_url = os.getenv("GATE_INVITE_URL", "https://www.gatesites.net/share/MCHDBKYF")
-    settings.binance_invite_url = os.getenv("BINANCE_INVITE_URL", "https://www.bsmkweb.cc/activity/referral-entry/CPA?ref=CPA_00N8UVQ2OG")
     return settings
 
 

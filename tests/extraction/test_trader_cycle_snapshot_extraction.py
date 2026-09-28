@@ -2,26 +2,26 @@
 
 ## 这个测试在守什么
 
-两段从 `execute_portfolio`（原本 652 行）里搬出的长块：
+`cycle_snapshot.py` 现存两段**纯装配**：
 
-1. `collect_pending_inst_ids` —— 外所挂单枚举与去重计数（35 行裸循环）。
-   含一个**易漏的过滤不变量**：只有 `side` 属于 `buy`/`sell` 且 `reduce_only`
-   不为真时才计入。减仓/保护单若被计入，会让 `reserved_slot_count` 虚高，
-   **该开的仓开不出来** —— 这是"少赚/不赚"级的静默故障。
-2. `build_state_payload` —— 面板/巡检读取的 17 字段快照。
+1. `build_state_payload` —— 面板/巡检读取的 17 字段快照。
    字段名或四舍五入精度错一个，面板就显示错。
+2. `venue_position_span` —— 巡检通知与 AI 提示词共用的「持仓构成」一行。
+   OKX 专用化后系统只有一个场所，故只报 OKX —— 但那是**真实全量**，
+   不再是旧实现的"跨所拉不到 ⇒ 漏报另两所"。
 
-## 为什么给 `collect_pending_inst_ids` 写这么多用例
+## 已随多所执行面拆除（本文件不再覆盖）
 
-原块是裸循环 + 两处 `continue` + 一层 try/except，分支组合多。而"挂单枚举"
-是**跨所去重**的关键：漏算 → 重复开仓（超仓）；多算 → 该开不开。
-两种都不会抛异常，只会让行为悄悄偏。故每种过滤各测一条。
+- `collect_pending_inst_ids`（外所挂单枚举与去重计数）—— 外所挂单不存在了，
+  枚举归零；
+- `broken_execution_venues`（执行闸开着却不可就绪的外所）—— 同一原因。
+
+历史外所行只做**只读容错**：这些行不会进配额与敞口，相关判据不在本模块。
 """
 
 from __future__ import annotations
 
 import ast
-import types
 import unittest
 from pathlib import Path
 
@@ -30,213 +30,6 @@ from scripts.trader import cycle_snapshot
 ROOT = Path(__file__).resolve().parents[2]
 FACADE = ROOT / "scripts" / "ai_factor_trader.py"
 SUBMODULE = ROOT / "scripts" / "trader" / "cycle_snapshot.py"
-
-AUTH = ("401", "unauthorized", "invalid api", "signature")
-
-
-class _FakeRegistry:
-    def __init__(self, open_venues=("gate", "binance"), adapter=None):
-        self._open = set(open_venues)
-        self._adapter = adapter
-        self.calls = []
-
-    def execution_open(self, venue, mode):
-        self.calls.append(("execution_open", venue))
-        return venue in self._open
-
-    def get_adapter(self, venue, environment=None):
-        self.calls.append(("get_adapter", venue))
-        return self._adapter
-
-
-class _FakeAdapter:
-    def __init__(self, per_base=None, open_orders=None):
-        self._per_base = per_base or {}
-        self._open_orders = open_orders if open_orders is not None else []
-        self.listed = []
-
-    def open_orders(self):
-        return self._open_orders
-
-    def list_open_orders(self, base):
-        self.listed.append(base)
-        return self._per_base.get(base, [])
-
-
-def _run(adapter, *, venues=("gate", "binance"), mode="live", broken=(),
-         instruments=(), warn=None, registry=None):
-    reg = registry if registry is not None else _FakeRegistry(adapter=adapter)
-    return cycle_snapshot.collect_pending_inst_ids(
-        venues=venues, venue_mode=mode, broken_venues=set(broken),
-        venue_registry=reg, load_instruments=lambda: list(instruments),
-        auth_markers=AUTH, warn=warn)
-
-
-class CollectPendingTest(unittest.TestCase):
-    def test_open_orders_are_converted_to_swap_symbols(self):
-        ad = _FakeAdapter(open_orders=[
-            {"side": "buy", "inst_id": "BTC-USDT-SWAP"},
-            {"side": "sell", "contract": "ETH_USDT", "raw": {"symbol": "SOLUSDT"}},
-        ])
-        ids, longs, shorts = _run(ad)
-        self.assertEqual(ids, {"BTC-USDT-SWAP", "ETH-USDT-SWAP"})
-        self.assertEqual((longs, shorts), (1, 1))
-
-    def test_reduce_only_orders_are_excluded(self):
-        """减仓/保护单不属入场生命周期管辖 —— 计入会让预占槽位虚高。"""
-        ad = _FakeAdapter(open_orders=[
-            {"side": "buy", "inst_id": "BTC-USDT-SWAP", "reduce_only": True},
-            {"side": "buy", "inst_id": "ETH-USDT-SWAP", "reduce_only": "true"},
-            {"side": "sell", "inst_id": "SOL-USDT-SWAP", "reduce_only": "1"},
-            {"side": "buy", "inst_id": "XRP-USDT-SWAP", "reduce_only": False},
-            {"side": "buy", "inst_id": "ADA-USDT-SWAP", "reduce_only": None},
-        ])
-        ids, longs, shorts = _run(ad)
-        self.assertEqual(ids, {"XRP-USDT-SWAP", "ADA-USDT-SWAP"})
-        self.assertEqual((longs, shorts), (2, 0))
-
-    def test_reduce_only_from_raw_is_honoured(self):
-        ad = _FakeAdapter(open_orders=[
-            {"side": "buy", "inst_id": "BTC-USDT-SWAP", "raw": {"reduce_only": True}},
-            {"side": "buy", "inst_id": "ETH-USDT-SWAP", "raw": {"reduce_only": False}},
-        ])
-        ids, _, _ = _run(ad)
-        self.assertEqual(ids, {"ETH-USDT-SWAP"})
-
-    def test_side_must_be_buy_or_sell(self):
-        ad = _FakeAdapter(open_orders=[
-            {"side": "BUY", "inst_id": "BTC-USDT-SWAP"},
-            {"side": None, "inst_id": "ETH-USDT-SWAP"},
-            {"side": "", "inst_id": "SOL-USDT-SWAP"},
-            {"inst_id": "XRP-USDT-SWAP"},
-        ])
-        ids, longs, shorts = _run(ad)
-        self.assertEqual(ids, {"BTC-USDT-SWAP"}, "只有明确的 buy/sell 才算")
-        self.assertEqual((longs, shorts), (1, 0))
-
-    def test_side_falls_back_to_raw(self):
-        ad = _FakeAdapter(open_orders=[
-            {"raw": {"side": "sell", "contract": "BTC_USDT"}},
-        ])
-        ids, longs, shorts = _run(ad)
-        self.assertEqual(ids, {"BTC-USDT-SWAP"})
-        self.assertEqual((longs, shorts), (0, 1))
-
-    def test_non_dict_entries_are_skipped(self):
-        ad = _FakeAdapter(open_orders=[
-            "not-a-dict", 123, None,
-            {"side": "buy", "inst_id": "BTC-USDT-SWAP"},
-        ])
-        ids, _, _ = _run(ad)
-        self.assertEqual(ids, {"BTC-USDT-SWAP"})
-
-    def test_base_without_resolvable_symbol_is_skipped(self):
-        ad = _FakeAdapter(open_orders=[
-            {"side": "buy", "inst_id": "", "raw": {}},
-            {"side": "buy", "inst_id": "_USDT"},
-        ])
-        ids, _, _ = _run(ad)
-        self.assertEqual(ids, set(), "推不出基础币种时不得生成半个 symbol")
-
-    def test_explicit_base_field_wins_and_is_uppercased(self):
-        ad = _FakeAdapter(open_orders=[
-            {"side": "buy", "base": "btc", "inst_id": "IGNORED-USDT-SWAP"},
-        ])
-        ids, _, _ = _run(ad)
-        self.assertEqual(ids, {"BTC-USDT-SWAP"})
-
-    def test_gate_path_enumerates_every_instrument(self):
-        """gate 无全量挂单接口，必须逐标的查询（原实现的 list_open_orders 路径）。"""
-        ad = _FakeAdapter(per_base={"BTC": [{"side": "buy", "inst_id": "BTC-USDT-SWAP"}],
-                                    "ETH": [{"side": "sell", "inst_id": "ETH-USDT-SWAP",
-                                             "reduce_only": True}]})
-        insts = [{"instId": "BTC-USDT-SWAP"}, {"instId": "ETH-USDT-SWAP"}]
-        ids, longs, shorts = _run(ad, venues=("gate",), instruments=insts,
-                                  registry=_FakeRegistry(adapter=ad,
-                                                         open_venues=("gate",)))
-        self.assertEqual(ad.listed, ["BTC", "ETH"])
-        self.assertEqual(ids, {"BTC-USDT-SWAP"})
-        self.assertEqual((longs, shorts), (1, 0))
-
-    def test_binance_path_uses_bulk_open_orders(self):
-        ad = _FakeAdapter(open_orders=[{"side": "buy", "inst_id": "BTC-USDT-SWAP"}])
-        ids, _, _ = _run(ad, venues=("binance",), registry=_FakeRegistry(
-            adapter=ad, open_venues=("binance",)))
-        self.assertEqual(ad.listed, [], "binance 走批量接口，不逐标的查")
-        self.assertEqual(ids, {"BTC-USDT-SWAP"})
-
-    def test_broken_venue_is_skipped_entirely(self):
-        ad = _FakeAdapter(open_orders=[{"side": "buy", "inst_id": "BTC-USDT-SWAP"}])
-        reg = _FakeRegistry(adapter=ad)
-        ids, _, _ = _run(ad, venues=("binance",), broken=("binance",), registry=reg)
-        self.assertEqual(ids, set())
-        self.assertEqual(reg.calls, [], "已判死的所不得再探")
-
-    def test_venue_not_execution_open_is_skipped(self):
-        ad = _FakeAdapter(open_orders=[{"side": "buy", "inst_id": "BTC-USDT-SWAP"}])
-        reg = _FakeRegistry(adapter=ad, open_venues=())
-        ids, _, _ = _run(ad, venues=("binance",), registry=reg)
-        self.assertEqual(ids, set())
-        self.assertNotIn(("get_adapter", "binance"), reg.calls)
-
-    def test_no_venue_mode_skips_everything(self):
-        ad = _FakeAdapter(open_orders=[{"side": "buy", "inst_id": "BTC-USDT-SWAP"}])
-        reg = _FakeRegistry(adapter=ad)
-        ids, _, _ = _run(ad, venues=("binance",), mode=None, registry=reg)
-        self.assertEqual(ids, set())
-        self.assertEqual(reg.calls, [])
-
-    def test_duplicate_symbols_count_once_but_tally_twice(self):
-        """去重集合与方向计数是两个口径：同标的两单要计两次方向数。"""
-        ad = _FakeAdapter(open_orders=[
-            {"side": "buy", "inst_id": "BTC-USDT-SWAP"},
-            {"side": "buy", "inst_id": "BTC-USDT-SWAP"},
-        ])
-        ids, longs, shorts = _run(ad)
-        self.assertEqual(ids, {"BTC-USDT-SWAP"})
-        self.assertEqual((longs, shorts), (2, 0))
-
-    def test_venue_exception_is_swallowed_and_warned(self):
-        class _Boom:
-            def open_orders(self):
-                raise RuntimeError("upstream 500")
-
-        warned = []
-        ids, longs, shorts = _run(_Boom(), venues=("binance",), warn=warned.append)
-        self.assertEqual((ids, longs, shorts), (set(), 0, 0))
-        self.assertEqual(len(warned), 1)
-        self.assertIn("挂单枚举失败", warned[0])
-
-    def test_auth_failure_is_swallowed_silently(self):
-        """认证类失败不刷屏 —— 回收侧已另行把关（原实现语义）。"""
-        class _Boom:
-            def open_orders(self):
-                raise RuntimeError("401 unauthorized")
-
-        warned = []
-        ids, _, _ = _run(_Boom(), venues=("binance",), warn=warned.append)
-        self.assertEqual(ids, set())
-        self.assertEqual(warned, [], "认证失败应静默")
-
-    def test_warn_none_is_silent(self):
-        class _Boom:
-            def open_orders(self):
-                raise RuntimeError("boom")
-
-        ids, _, _ = _run(_Boom(), venues=("binance",), warn=None)
-        self.assertEqual(ids, set())
-
-    def test_one_venue_failure_does_not_lose_the_other(self):
-        class _Mixed(_FakeAdapter):
-            def open_orders(self):
-                raise RuntimeError("binance down")
-
-        ad = _Mixed(per_base={"BTC": [{"side": "buy", "inst_id": "BTC-USDT-SWAP"}]})
-        ids, longs, _ = _run(ad, venues=("gate", "binance"),
-                             instruments=[{"instId": "BTC-USDT-SWAP"}],
-                             warn=lambda *_: None)
-        self.assertEqual(ids, {"BTC-USDT-SWAP"}, "一所挂掉不得丢掉另一所的计数")
-        self.assertEqual(longs, 1)
 
 
 class BuildStatePayloadTest(unittest.TestCase):
@@ -329,11 +122,37 @@ class BuildStatePayloadTest(unittest.TestCase):
         self.assertNotIn("reasons", p["instruments"][0])
 
 
+class VenuePositionSpanTest(unittest.TestCase):
+    """「持仓构成」一行（OKX 专用）—— 巡检通知与 AI 提示词共用同一口径。
+
+    口径错一个数字，通知与喂给主脑的持仓全景就会说谎；而这两处此前各自
+    写死过场所，正是"同一语义两处写"的成因。故逐字钉住渲染结果。
+    """
+
+    def test_span_reports_okx_only(self):
+        self.assertEqual(
+            cycle_snapshot.venue_position_span(
+                okx_count=7, okx_long=4, okx_short=3, max_positions=9),
+            "持仓 7/9 (多4/空3)｜okx 7")
+
+    def test_span_on_empty_book(self):
+        self.assertEqual(
+            cycle_snapshot.venue_position_span(
+                okx_count=0, okx_long=0, okx_short=0, max_positions=8),
+            "持仓 0/8 (多0/空0)｜okx 0")
+
+    def test_span_casts_counts_to_int(self):
+        self.assertEqual(
+            cycle_snapshot.venue_position_span(
+                okx_count="3", okx_long=1.9, okx_short=0, max_positions=6),
+            "持仓 3/6 (多1/空0)｜okx 3")
+
+
 class WiringTest(unittest.TestCase):
     def test_impl_lives_in_submodule_not_facade(self):
         facade = FACADE.read_text(encoding="utf-8")
         sub = SUBMODULE.read_text(encoding="utf-8")
-        for fn in ("collect_pending_inst_ids", "build_state_payload"):
+        for fn in ("build_state_payload", "venue_position_span"):
             self.assertIn(f"def {fn}(", sub)
             self.assertNotIn(f"def {fn}(", facade)
 
@@ -369,33 +188,37 @@ class WiringTest(unittest.TestCase):
                       stages)
         self.assertNotIn("_atomic_write_json", SUBMODULE.read_text(encoding="utf-8"))
 
-    def test_both_call_sites_define_every_name_they_pass(self):
-        """路径感知判据：只沿到达该调用的唯一路径收集定义。"""
+    def test_every_call_site_defines_every_name_it_passes(self):
+        """路径感知判据：只沿到达该调用的唯一路径收集定义。
+
+        OKX 专用化后两处调用**同在** `cycle_stages.py`：
+        `build_state_payload` 与 `venue_position_span` 在
+        `persist_state_and_sync_ledger`，`venue_position_span` 另在
+        `scan_risk_gates_and_ai_brain`。判据分别在其**所属**函数内跑
+        （路径感知：只看到达该调用的那条路径）。
+        """
         from tests.source_scan import names_defined_at_call
 
-        # 第九十二刀：两处调用现**同在** `cycle_stages.py` ——
-        # `collect_pending_inst_ids` 随相位 1 入 `fetch_positions_and_reconcile`，
-        # `build_state_payload` 随相位 5 入 `persist_state_and_sync_ledger`。
-        # 判据分别在其**所属**函数内跑（路径感知：只看到达该调用的那条路径）。
-        stages_tree = ast.parse((ROOT / "scripts" / "trader" / "cycle_stages.py").read_text(encoding="utf-8"))
+        targets = ("build_state_payload", "venue_position_span")
+        stages_tree = ast.parse(
+            (ROOT / "scripts" / "trader" / "cycle_stages.py").read_text(encoding="utf-8"))
         plans = [(stages_tree, next(n for n in ast.walk(stages_tree)
                                     if isinstance(n, ast.FunctionDef)
-                                    and n.name == "fetch_positions_and_reconcile")),
+                                    and n.name == "persist_state_and_sync_ledger")),
                  (stages_tree, next(n for n in ast.walk(stages_tree)
                                     if isinstance(n, ast.FunctionDef)
-                                    and n.name == "persist_state_and_sync_ledger"))]
+                                    and n.name == "scan_risk_gates_and_ai_brain"))]
 
         checked = 0
         work = []
         for tr, fn in plans:
             for node in ast.walk(fn):
                 if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
-                        and node.func.id in ("collect_pending_inst_ids", "build_state_payload")):
+                        and node.func.id in targets):
                     work.append((tr, fn, node))
         for tree, func, node in work:
             if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
-                    and node.func.id in ("collect_pending_inst_ids",
-                                         "build_state_payload")):
+                    and node.func.id in targets):
                 continue
             passed = set()
             for arg in node.args:
@@ -412,55 +235,8 @@ class WiringTest(unittest.TestCase):
                              f"{node.func.id} 调用（L{node.lineno}）引用了未定义的名字 "
                              f"{missing}；实盘会 NameError")
             checked += 1
-        self.assertEqual(checked, 2, f"应有 2 处调用，实际 {checked}")
+        self.assertEqual(checked, 3, f"应有 3 处调用，实际 {checked}")
 
-
-class BrokenExecutionVenuesTest(unittest.TestCase):
-    """凭证已死场所的判据（第一百三十一刀）：**闸开着却不可就绪** ⇒ 未计入。
-
-    这条判据存在的理由：此类所被 `venue_execution_ready` 否决 ⇒ 跨所取数也跳过它，
-    且返回 `ok=True` **无任何错误** ⇒ 它的持仓/挂单不进配额与敞口，而"跨所笔数"
-    看起来完整。所以判据必须精确（不误报结构性的"没这个所"），且异常时**不猜**。
-    """
-
-    def _reg(self, *, open_flags):
-        return types.SimpleNamespace(
-            execution_open=lambda v, e: bool(open_flags.get(v, False)))
-
-    def test_flag_on_but_not_ready_is_reported(self):
-        got = cycle_snapshot.broken_execution_venues(
-            ("gate", "binance"), "demo",
-            venue_registry=self._reg(open_flags={"gate": True, "binance": True}),
-            venue_execution_ready=lambda v, e: v != "binance")
-        self.assertEqual(got, ["binance"])
-
-    def test_flag_off_is_not_reported(self):
-        """闸没开 = 结构性无该所（不是"凭证已死"），不得误报。"""
-        got = cycle_snapshot.broken_execution_venues(
-            ("gate", "binance"), "demo",
-            venue_registry=self._reg(open_flags={"gate": False, "binance": False}),
-            venue_execution_ready=lambda v, e: False)
-        self.assertEqual(got, [])
-
-    def test_all_ready_reports_nothing(self):
-        got = cycle_snapshot.broken_execution_venues(
-            ("gate", "binance"), "demo",
-            venue_registry=self._reg(open_flags={"gate": True, "binance": True}),
-            venue_execution_ready=lambda v, e: True)
-        self.assertEqual(got, [])
-
-    def test_exception_on_one_venue_does_not_misreport_or_crash(self):
-        """判据异常时**不猜**：跳过该所，也不影响其余所的判定。"""
-        def _ready(v, e):
-            if v == "gate":
-                raise RuntimeError("能力表读取失败")
-            return False
-
-        got = cycle_snapshot.broken_execution_venues(
-            ("gate", "binance"), "demo",
-            venue_registry=self._reg(open_flags={"gate": True, "binance": True}),
-            venue_execution_ready=_ready)
-        self.assertEqual(got, ["binance"], "异常所不得被当成'已死'，其余所照常判定")
 
 if __name__ == "__main__":
     unittest.main()

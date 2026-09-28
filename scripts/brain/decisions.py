@@ -186,9 +186,6 @@ def assemble_decision_cache(
             "raw_oi": p.get('oiUsd') or "--",
             "raw_taker_vol": p.get('takerNetUsd') or "--",
             "raw_ls_ratio": str(p.get('lsRatio')) if p.get('lsRatio') is not None else "--",
-            # US-007 数据通路：把跨所比对矩阵随决策缓存持久化，供 /api/all 透传前台；
-            # 纯附加键，既有消费方忽略未知键，缺数据时为空 dict
-            "xvenue": p.get("xvenue") or {}
         }
 
     return standard_cache

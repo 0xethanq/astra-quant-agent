@@ -222,39 +222,6 @@ class CryptoRssTests(_Sandbox, unittest.TestCase):
         self.assertEqual(items, [])
         self.assertTrue(any("快讯抓取异常" in x for x in self.printed))
 
-    def test_the_binance_announcement_api_is_parsed(self):
-        # ★ 第 215–223 行 —— 整块此前从未执行
-        payload = {"data": {"articles": [
-            {"title": "币安将上线 XYZ", "code": "abc123", "releaseDate": 1_700_000_000_000},
-            {"title": "   ", "code": "skip", "releaseDate": 1},
-        ]}}
-        items = self._run({"https://www.binance.com/bapi/composite/v1/public/cms/article/"
-                           "catalog/list/query?catalogId=48&pageNo=1&pageSize=10":
-                           _resp(payload)})
-        self.assertEqual(len(items), 1)
-        row = items[0]
-        self.assertEqual(row["title"], "币安将上线 XYZ")
-        self.assertEqual(row["id"], "binance-1700000000000-abc123")
-        self.assertEqual(row["platforms"], ["Binance官方"])
-        self.assertIn("Binance官方动态", row["summary"])
-        self.assertIn("/abc123", row["url"])
-
-    def test_a_binance_article_without_a_code_uses_the_homepage(self):
-        payload = {"data": {"articles": [{"title": "无编号公告", "code": None,
-                                          "releaseDate": 1}]}}
-        items = self._run({"https://www.binance.com/bapi/composite/v1/public/cms/article/"
-                           "catalog/list/query?catalogId=48&pageNo=1&pageSize=10":
-                           _resp(payload)})
-        self.assertEqual(items[0]["url"], "https://www.binance.com")
-
-    def test_the_limit_is_applied(self):
-        payload = {"data": {"articles": [{"title": f"公告{i}", "code": i,
-                                          "releaseDate": 1} for i in range(20)]}}
-        items = self._run({"https://www.binance.com/bapi/composite/v1/public/cms/article/"
-                           "catalog/list/query?catalogId=48&pageNo=1&pageSize=10":
-                           _resp(payload)})
-        self.assertLessEqual(len(items), 30)
-
 
 # ───────────────────── OKX 公告 ─────────────────────
 class OkxAnnouncementTests(_Sandbox, unittest.TestCase):

@@ -14,7 +14,6 @@ export const enRadar = {
     quotes: 'Advisor quotes',
     verdict: 'Final verdict',
     intercept: 'Interceptor chain',
-    xvenue: 'Cross-Venue Evidence',
     raw: 'Raw record',
     adopted: 'Adopted: {role}',
     noQuotes: 'Single-model decision this cycle — no advisor quotes',
@@ -58,14 +57,6 @@ export const enRadar = {
     wait: 'Wait',
     hold: 'Hold',
   },
-  xvenue: {
-    title: 'Cross-Venue Basis & Sentiment',
-    okxPrice: 'OKX Price',
-    bnPrice: 'Binance (Basis)',
-    gatePrice: 'Gate (Basis)',
-    lsRatio: 'BN/Gate L/S',
-    fundingRate: 'BN/Gate Funding',
-  },
   seat: {
     traderTrend: 'Trader A · Trend',
     traderMomentum: 'Trader B · Momentum',
@@ -88,8 +79,4 @@ export const enRadar = {
   seatsIndependent: 'Independent proposals per seat',
   statusDegraded: 'Degraded',
   viewReasoning: 'View reasoning chain',
-  thSymbol: 'Symbol',
-  thBasis: 'BN basis',
-  thBasisGate: 'Gate basis',
-  thLs: 'L/S (BN/Gate)',
 };

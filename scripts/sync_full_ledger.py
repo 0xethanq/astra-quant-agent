@@ -224,353 +224,6 @@ def get_ct_val(inst_name):
     return ct
 
 
-def _resolve_trade_leverage(
-    symbol_or_base: str,
-    venue_symbol_leverage: dict,
-    decisions_cache: dict | None = None,
-) -> int:
-    """解析外所（Binance/Gate）平仓单杠杆：
-    1. 优先从交易所账户读取的各标的实际档位中获取；
-    2. 次选从本地 AI 决策快照中读取该标的当时决策杠杆；
-    3. 再次根据标的分层（Tier-1 / Tier-2）派生杠杆上限；
-    4. 保底回退至系统配置的杠杆基线（彻底消除硬编码 2x 缺陷）。
-    """
-    clean_sym = symbol_or_base.upper().replace("_USDT", "").replace("USDT", "").replace("-SWAP", "")
-    lever = (
-        venue_symbol_leverage.get(symbol_or_base)
-        or venue_symbol_leverage.get(symbol_or_base.upper())
-        or venue_symbol_leverage.get(f"{clean_sym}USDT")
-        or venue_symbol_leverage.get(f"{clean_sym}_USDT")
-        or venue_symbol_leverage.get(clean_sym)
-    )
-    if not lever and decisions_cache:
-        dec_entry = decisions_cache.get(f"{clean_sym}-USDT-SWAP") or decisions_cache.get(clean_sym) or {}
-        dec_lev = dec_entry.get("decision", {}).get("leverage")
-        if dec_lev:
-            try:
-                lever = int(float(dec_lev))
-            except (TypeError, ValueError):
-                pass
-    if not lever:
-        try:
-            from scripts.instrument_pool import evaluate_instrument_tier, derive_instrument_leverage_cap
-            tier = evaluate_instrument_tier(f"{clean_sym}-USDT-SWAP", clean_sym)
-            lever = derive_instrument_leverage_cap(tier)
-        except Exception:
-            pass
-    if not lever or lever <= 0:
-        try:
-            from scripts.risk_constants import MIN_LEVERAGE
-            lever = int(float(os.getenv("ASTRA_MIN_LEVERAGE", "") or MIN_LEVERAGE or 3.0))
-        except Exception:
-            lever = 3
-    return max(1, int(lever))
-
-
-def fetch_binance_closed_trades(environment: str = "demo", tz_bj=None) -> list:
-    """拉取币安真实平仓盈亏台账（/fapi/v1/income REALIZED_PNL + /fapi/v1/userTrades）。"""
-    if tz_bj is None:
-        tz_bj = datetime.timezone(datetime.timedelta(hours=8))
-    out = []
-    try:
-        from astra_backend.exchanges import get_adapter, venue_credentials
-        ak, sk = venue_credentials("binance", environment)
-        if not (ak and sk):
-            # 未配置私有凭证（仅提供免密公共行情），无账户台账可同步，安全跳过
-            return []
-        ad_bn = get_adapter("binance", environment=environment)
-        income_rows = ad_bn.signed_request("GET", "/fapi/v1/income", params={"incomeType": "REALIZED_PNL", "limit": 100})
-        if not income_rows or not isinstance(income_rows, list):
-            return []
-
-        # 批量获取币安各标的的当前杠杆档位（/fapi/v2/positionRisk 返回全量 symbol 的 leverage）
-        symbol_leverage_map = {}
-        try:
-            risk_rows = ad_bn.signed_request("GET", "/fapi/v2/positionRisk")
-            if isinstance(risk_rows, list):
-                for pr in risk_rows:
-                    s = str(pr.get("symbol", "")).upper()
-                    lev = pr.get("leverage")
-                    if s and lev is not None:
-                        try:
-                            lev_val = int(float(lev))
-                            if lev_val > 0:
-                                symbol_leverage_map[s] = lev_val
-                        except (TypeError, ValueError):
-                            pass
-        except Exception:
-            pass
-
-        decisions_cache = {}
-        try:
-            dec_path = os.path.join(DATA_DIR, "ai_brain_decisions.json")
-            if os.path.exists(dec_path):
-                with open(dec_path, "r", encoding="utf-8") as f:
-                    decisions_cache = json.load(f)
-        except Exception:
-            pass
-
-        symbols = sorted(set(r.get("symbol", "") for r in income_rows if r.get("symbol")))
-        user_trades_by_id = {}
-        user_trades_by_symbol = {}
-        for sym in symbols:
-            try:
-                ut = ad_bn.signed_request("GET", "/fapi/v1/userTrades", params={"symbol": sym, "limit": 50})
-                user_trades_by_symbol[sym] = ut or []
-                for t in (ut or []):
-                    user_trades_by_id[str(t.get("id"))] = t
-            except Exception:
-                pass
-
-        # 尝试拉取最近资金费（incomeType=FUNDING_FEE）
-        funding_by_symbol = {}
-        try:
-            funding_rows = ad_bn.signed_request("GET", "/fapi/v1/income", params={"incomeType": "FUNDING_FEE", "limit": 100})
-            if isinstance(funding_rows, list):
-                for fr in funding_rows:
-                    fsym = str(fr.get("symbol", "")).upper()
-                    funding_by_symbol.setdefault(fsym, []).append(fr)
-        except Exception:
-            pass
-
-        for r in income_rows:
-            t_id = str(r.get("tradeId") or r.get("tranId") or "")
-            time_ms = int(r.get("time", 0) or 0)
-            pnl = round(float(r.get("income", 0) or 0), 4)
-            symbol = str(r.get("symbol", "")).upper()
-            base = symbol.replace("USDT", "").replace("_USDT", "")
-            close_time = datetime.datetime.fromtimestamp(time_ms / 1000.0, tz=tz_bj).strftime("%Y-%m-%d %H:%M:%S")
-
-            matched = user_trades_by_id.get(t_id) or {}
-            side_raw = str(matched.get("side", "")).upper()
-            side = "多" if side_raw == "SELL" else ("空" if side_raw == "BUY" else "多")
-            close_px = float(matched.get("price", 0) or 0)
-            sz = float(matched.get("qty", 0) or 0)
-            close_fee = round(abs(float(matched.get("commission", 0) or 0)), 4)
-
-            open_time = close_time
-            open_px = close_px
-            open_fee = 0.0
-            duration_str = "0时0分"
-
-            # 寻找同标的在 close 之前的真实 open 记录
-            sym_trades = user_trades_by_symbol.get(symbol, [])
-            want_open_side = "BUY" if side_raw == "SELL" else "SELL"
-            open_candidates = [
-                t for t in sym_trades
-                if str(t.get("side", "")).upper() == want_open_side and int(t.get("time", 0) or 0) <= time_ms
-            ]
-            op_time_ms = 0
-            if open_candidates:
-                matched_open = open_candidates[-1]
-                op_time_ms = int(matched_open.get("time", 0) or 0)
-                if op_time_ms > 0:
-                    open_time = datetime.datetime.fromtimestamp(op_time_ms / 1000.0, tz=tz_bj).strftime("%Y-%m-%d %H:%M:%S")
-                    open_px = float(matched_open.get("price", 0) or open_px)
-                    open_fee = round(abs(float(matched_open.get("commission", 0) or 0)), 4)
-                    dur_s = max(0.0, (time_ms - op_time_ms) / 1000.0)
-                    dur_mins = int(dur_s / 60)
-                    duration_str = f"{dur_mins}分钟" if dur_mins < 60 else f"{dur_mins // 60}时{dur_mins % 60}分"
-
-            fee = round(open_fee + close_fee, 4) if open_fee > 0 else close_fee
-            if fee == 0.0 and close_fee > 0:
-                fee = close_fee
-
-            # 统计持仓周期内的资金费（funding fee）
-            sym_fundings = funding_by_symbol.get(symbol, [])
-            funding_fee = 0.0
-            if open_candidates and op_time_ms > 0:
-                funding_fee = round(sum(float(fr.get("income", 0.0) or 0.0) for fr in sym_fundings if op_time_ms <= int(fr.get("time", 0) or 0) <= time_ms), 4)
-
-            lever = _resolve_trade_leverage(symbol, symbol_leverage_map, decisions_cache)
-            margin = round(sz * (open_px or close_px) / lever, 2) if (sz > 0 and (open_px or close_px) > 0) else 50.0
-            net_pnl = round(pnl - fee + funding_fee, 2)
-            roi_pct = round((pnl / max(1.0, margin)) * 100, 2)
-
-            # 尝试附加开仓数理快照（自进化复盘可观测性）
-            bn_snap = None
-            try:
-                calc_path = os.path.join(DATA_DIR, "calculus_snapshot.json")
-                if os.path.exists(calc_path):
-                    with open(calc_path, "r", encoding="utf-8") as cf:
-                        c_data = json.load(cf)
-                        for item in c_data.get("instruments", []):
-                            if item.get("name") == base or item.get("instId") in (base, f"{base}-USDT-SWAP"):
-                                from scripts.trader.signal_snapshot import build_signal_snapshot
-                                f_mock = {
-                                    "name": base,
-                                    "instId": f"{base}-USDT-SWAP",
-                                    "price": close_px,
-                                    "atr": 0.0,
-                                    "calculus": item.get("calculus", {})
-                                }
-                                bn_snap = build_signal_snapshot(f_mock, data_dir=DATA_DIR)
-                                break
-            except Exception:
-                pass
-
-            out.append({
-                "id": f"binance_closed_{t_id}_{time_ms}",
-                "inst": base,
-                "side": side,
-                "venue": "binance",
-                "account_mode": environment.upper(),
-                "environment": environment.lower(),
-                "lever": f"{lever}x",
-                "strategy": "🏛️ Binance",
-                "margin": margin,
-                "sz": sz,
-                "open_time": open_time,
-                "open_px": open_px,
-                "close_time": close_time,
-                "close_px": close_px,
-                "gross_pnl": pnl,
-                "open_fee": open_fee,
-                "close_fee": close_fee,
-                "fee": fee,
-                "funding_fee": funding_fee,
-                "pnl": net_pnl,
-                "net_pnl": net_pnl,
-                "roi": roi_pct,
-                "roi_pct": roi_pct,
-                "duration": duration_str,
-                "status": "closed",
-                "exit_reason": "🎯 目标止盈达成" if net_pnl > 0 else "🛑 触发云端止损",
-                "signal_snapshot": bn_snap,
-            })
-    except Exception as exc:
-        _mark("binance", "failed", reason=str(exc)[:200])
-        print(f"[sync_full_ledger] warn Binance 台账同步跳过: {exc}")
-    return out
-
-
-def fetch_gate_closed_trades(environment: str = "sandbox", tz_bj=None) -> list:
-    """拉取 Gate 真实平仓记录（/api/v4/futures/usdt/position_close）。"""
-    if tz_bj is None:
-        tz_bj = datetime.timezone(datetime.timedelta(hours=8))
-    out = []
-    try:
-        from astra_backend.exchanges import get_adapter, venue_credentials
-        ak, sk = venue_credentials("gate", environment)
-        if not (ak and sk):
-            # 未配置私有凭证（仅提供免密公共行情），无账户台账可同步，安全跳过
-            return []
-        ad_gate = get_adapter("gate", environment=environment)
-        close_rows = ad_gate.signed_request("GET", "/api/v4/futures/usdt/position_close", params={"limit": 100})
-        if not close_rows or not isinstance(close_rows, list):
-            return []
-
-        # 批量获取 Gate 各标的的当前杠杆档位 (/api/v4/futures/usdt/positions)
-        gate_leverage_by_contract = {}
-        try:
-            gt_positions = ad_gate.signed_request("GET", "/api/v4/futures/usdt/positions")
-            if isinstance(gt_positions, list):
-                for gp in gt_positions:
-                    c = str(gp.get("contract", "")).upper()
-                    lev = gp.get("leverage")
-                    if c and lev is not None:
-                        try:
-                            lev_val = int(float(lev))
-                            if lev_val > 0:
-                                gate_leverage_by_contract[c] = lev_val
-                        except (TypeError, ValueError):
-                            pass
-        except Exception:
-            pass
-
-        decisions_cache = {}
-        try:
-            dec_path = os.path.join(DATA_DIR, "ai_brain_decisions.json")
-            if os.path.exists(dec_path):
-                with open(dec_path, "r", encoding="utf-8") as f:
-                    decisions_cache = json.load(f)
-        except Exception:
-            pass
-
-        for r in close_rows:
-            close_id = str(r.get("id") or "")
-            contract = str(r.get("contract", "")).upper()
-            base = contract.replace("_USDT", "").replace("USDT", "")
-            pnl = round(float(r.get("pnl", 0) or 0), 4)
-            # Gate API 返回 pnl_fee 为手续费，pnl_fund 为资金费
-            fee = round(abs(float(r.get("pnl_fee") or r.get("fee", 0) or 0)), 4)
-            funding_fee = round(float(r.get("pnl_fund", 0) or 0), 4)
-            net_pnl = round(float(r.get("pnl_pnl", pnl) or pnl), 2)
-            time_sec = int(r.get("time", 0) or 0)
-            close_time = datetime.datetime.fromtimestamp(time_sec, tz=tz_bj).strftime("%Y-%m-%d %H:%M:%S")
-            first_open = int(r.get("first_open_time", 0) or 0)
-            open_time = datetime.datetime.fromtimestamp(first_open, tz=tz_bj).strftime("%Y-%m-%d %H:%M:%S") if first_open else close_time
-
-            dur_mins = 0
-            if first_open > 0 and time_sec >= first_open:
-                dur_mins = int((time_sec - first_open) / 60)
-            duration_str = f"{dur_mins}分钟" if dur_mins < 60 else f"{dur_mins // 60}时{dur_mins % 60}分"
-
-            side = "多" if float(r.get("long_price") or 0) > 0 else "空"
-            open_px = float(r.get("long_price") if side == "多" else (r.get("short_price") or 0))
-            close_px = float(r.get("short_price") if side == "多" else (r.get("long_price") or 0))
-            sz = abs(float(r.get("accum_size", 0) or 0))
-            lever = _resolve_trade_leverage(contract, gate_leverage_by_contract, decisions_cache)
-            margin = round(sz * (open_px or close_px) / lever, 2) if sz > 0 else 50.0
-            roi_pct = round((net_pnl / max(1.0, margin)) * 100, 2)
-
-            # 尝试附加开仓数理快照（自进化复盘可观测性）
-            gt_snap = None
-            try:
-                calc_path = os.path.join(DATA_DIR, "calculus_snapshot.json")
-                if os.path.exists(calc_path):
-                    with open(calc_path, "r", encoding="utf-8") as cf:
-                        c_data = json.load(cf)
-                        for item in c_data.get("instruments", []):
-                            if item.get("name") == base or item.get("instId") in (base, f"{base}-USDT-SWAP"):
-                                from scripts.trader.signal_snapshot import build_signal_snapshot
-                                f_mock = {
-                                    "name": base,
-                                    "instId": f"{base}-USDT-SWAP",
-                                    "price": close_px,
-                                    "atr": 0.0,
-                                    "calculus": item.get("calculus", {})
-                                }
-                                gt_snap = build_signal_snapshot(f_mock, data_dir=DATA_DIR)
-                                break
-            except Exception:
-                pass
-
-            out.append({
-                "id": f"gate_closed_{close_id}_{time_sec}",
-                "inst": base,
-                "side": side,
-                "venue": "gate",
-                "account_mode": "DEMO" if environment == "sandbox" else "LIVE",
-                "environment": "demo" if environment == "sandbox" else "live",
-                "lever": f"{lever}x",
-                "strategy": "🏛️ Gate",
-                "margin": margin,
-                "sz": sz,
-                "open_time": open_time,
-                "open_px": open_px,
-                "close_time": close_time,
-                "close_px": close_px,
-                "gross_pnl": pnl,
-                "open_fee": round(fee / 2.0, 4),
-                "close_fee": round(fee / 2.0, 4),
-                "fee": fee,
-                "funding_fee": funding_fee,
-                "pnl": net_pnl,
-                "net_pnl": net_pnl,
-                "roi": roi_pct,
-                "roi_pct": roi_pct,
-                "duration": duration_str,
-                "status": "closed",
-                "exit_reason": "🎯 目标止盈达成" if net_pnl > 0 else "🛑 触发云端止损",
-                "signal_snapshot": gt_snap,
-            })
-    except Exception as exc:
-        _mark("gate", "failed", reason=str(exc)[:200])
-        print(f"[sync_full_ledger] warn Gate 台账同步跳过: {exc}")
-    return out
-
-
 def _history_truncated_in_scope(truncated, oldest_ms, reset_time, tz_bj):
     """分页未取尽时，判断「是否仍可能漏掉在册记录」。
 
@@ -596,181 +249,20 @@ def _history_truncated_in_scope(truncated, oldest_ms, reset_time, tz_bj):
     return _t >= str(reset_time)
 
 
-def _binance_position_lifecycle(ad, symbol: str, size_signed: float) -> tuple:
-    """币安**在仓**的真实开仓时刻、已付手续费与已结算资金费。
-
-    为什么必须回放成交：`/fapi/v2/positionRisk` **不返回任何费用字段**，且它的
-    `updateTime` 是"最后变更"时刻而非开仓时刻 —— 实测 UNI 空仓真实开仓
-    2026-09-23 18:01，`updateTime` 却是 21:50（差 3.8 小时）。用它当开仓时间，
-    持仓时长与资金费窗口都是错的。
-
-    做法：自最新一笔成交向前累加**带符号**成交量（BUY 为 +、SELL 为 −），累加值
-    首次等于当前持仓量时，该笔即本仓的开仓笔 ⇒ 得真实开仓时刻；并把自该笔起的
-    全部佣金累加为已付手续费。再以开仓时刻为 `startTime` 汇总 `FUNDING_FEE`，
-    只统计**本仓生命周期内**的资金费（不带 startTime 会把同一标的历史仓位结算
-    一起算进来）。
-
-    返回 `(open_ms, fee_usdt, funding_usdt)`；任何一步失败返回已求得的部分，绝不抛
-    （台账同步不允许因某个标的的富化失败而整体失败）。
-    """
-    open_ms = 0
-    fee = 0.0
-    funding = 0.0
-    # 本函数的前提是"该所有签名请求面"（`signed_request` 只在 binance/gate 适配器上
-    # 存在，`tests/audit/test_venue_capability_calls.py` 要求按所分流的能力调用必须有
-    # 守卫）。缺了它就如实返回"不知道"，而不是让 AttributeError 被下面的宽 except 吞掉
-    # ——吞掉之后症状是"费用恒为 0"，看起来像"真的一分钱没花"。
-    if not hasattr(ad, "signed_request"):
-        return open_ms, fee, funding
-    trades: list = []
-    try:
-        trades = ad.signed_request(
-            "GET", "/fapi/v1/userTrades",
-            params={"symbol": symbol, "limit": 500}) or []
-    except Exception:
-        trades = []
-    if isinstance(trades, list) and trades:
-        try:
-            want = float(size_signed or 0.0)
-            acc = 0.0
-            start_idx = None
-            for i in range(len(trades) - 1, -1, -1):
-                t = trades[i]
-                if not isinstance(t, dict):
-                    continue
-                try:
-                    q = float(t.get("qty", 0) or 0)
-                except (TypeError, ValueError):
-                    q = 0.0
-                acc += q if str(t.get("side", "")).upper() == "BUY" else -q
-                if abs(acc - want) <= 1e-9:
-                    start_idx = i
-                    break
-            if start_idx is None:
-                # ⚠️ 对不上就**如实说不知道**：绝不退回"最早一笔"充数 —— 那会把同一
-                # 标的**历史已平仓位**的佣金一起计入本仓，并给出一个远古的开仓时刻。
-                # （币安测试网实测存在持仓量与成交史不一致的账户，正是此情形。）
-                return 0, 0.0, 0.0
-            open_ms = int(trades[start_idx].get("time", 0) or 0)
-            for t in trades[start_idx:]:
-                if not isinstance(t, dict):
-                    continue
-                try:
-                    fee += abs(float(t.get("commission", 0) or 0))
-                except (TypeError, ValueError):
-                    pass
-        except Exception:
-            pass
-    if open_ms > 0:
-        try:
-            rows = ad.signed_request(
-                "GET", "/fapi/v1/income",
-                params={"incomeType": "FUNDING_FEE", "symbol": symbol,
-                        "startTime": open_ms, "limit": 1000}) or []
-            if isinstance(rows, list):
-                for fr in rows:
-                    if not isinstance(fr, dict):
-                        continue
-                    try:
-                        funding += float(fr.get("income", 0) or 0)
-                    except (TypeError, ValueError):
-                        pass
-        except Exception:
-            pass
-    return open_ms, round(fee, 4), round(funding, 4)
-
-
-def _other_venue_live_positions(env_axis):
-    """binance/gate 活动持仓，归一成与 OKX 同形的字段（与仪表盘同一事实源：
-    astra_backend.exchanges.get_adapter）。
-
-    批E(2026-09-13·用户报「台账和活动持仓对不上」)：台账 holding 行原本**只由
-    okx_rest.positions() 生成**（builder 全源 OKX V5），于是活动持仓面板显示 6 条
-    binance 持仓时，台账只有 1 条 OKX 的——用户在两个页面看到两个事实。
-
-    返回 (items, ok_venues)。ok_venues **只含真正取数成功的场所**：清理失效 holding
-    行必须以它为闸，取数失败时宁留旧行——「不知道」绝不能渲染成「已平仓」。
-    """
-    items: list = []
-    ok_venues: set = set()
-    try:
-        from astra_backend.exchanges import get_adapter
-    except Exception:
-        return items, ok_venues
-    for v_name in ("binance", "gate"):
-        try:
-            ad = get_adapter(v_name, environment=env_axis)
-            v_positions = ad.positions() if hasattr(ad, "positions") else []
-        except Exception as _e:
-            print(f"[sync_full_ledger] {v_name} 活动持仓取数失败（保守跳过，不清旧行）: {str(_e)[:120]}")
-            continue
-        ok_venues.add(v_name)
-        for vp in (v_positions or []):
-            try:
-                amt = float(vp.get("size_signed", 0) or 0)
-            except (TypeError, ValueError):
-                continue
-            if abs(amt) < 1e-12:
-                continue
-            base = str(vp.get("base") or vp.get("symbol", "")).replace("USDT", "").replace("_USDT", "").upper()
-            if not base:
-                continue
-            v_side = str(vp.get("side") or ("long" if amt > 0 else "short")).lower()
-            raw_d = vp.get("raw") if isinstance(vp.get("raw"), dict) else {}
-            v_notional = abs(float(vp.get("notional") or raw_d.get("notional") or raw_d.get("value") or 0.0))
-            v_margin = float(vp.get("margin") or raw_d.get("margin") or raw_d.get("initial_margin") or 0.0)
-
-            # 开仓时刻 / 已付手续费 / 已结算资金费
-            c_time_ms = 0
-            v_fee = 0.0
-            v_funding = 0.0
-            if v_name == "gate":
-                # Gate 持仓载荷自带 open_time（秒）与 pnl_fee / pnl_fund，直接取用
-                g_open = int(raw_d.get("open_time", 0) or vp.get("open_time", 0) or 0)
-                if g_open > 0:
-                    c_time_ms = g_open * 1000
-                v_fee = abs(float(raw_d.get("pnl_fee") or raw_d.get("fee") or vp.get("fee") or 0.0))
-                v_funding = float(raw_d.get("pnl_fund") or vp.get("funding_fee") or 0.0)
-            else:
-                # ⚠️ 币安 positionRisk **不含**费用字段，且 updateTime 是"最后变更"
-                # 而非开仓时刻 ⇒ 回放 userTrades 求真实开仓笔与佣金，再汇总资金费。
-                c_time_ms, v_fee, v_funding = _binance_position_lifecycle(
-                    ad, str(vp.get("inst_id") or raw_d.get("symbol") or ""), amt)
-            if c_time_ms <= 0:
-                c_time_ms = int(vp.get("open_time") or vp.get("cTime") or 0)
-
-            items.append({
-                "venue": v_name,
-                "instId": f"{base}-USDT-SWAP",
-                "posSide": v_side,
-                "pos": abs(amt),
-                "avgPx": float(vp.get("entry_price", 0) or 0),
-                "markPx": float(vp.get("mark_price", 0) or vp.get("entry_price", 0) or 0),
-                "upl": float(vp.get("unrealized_pnl", 0) or 0),
-                "lever": vp.get("leverage", 3) or 3,
-                "fee": v_fee,
-                "funding_fee": v_funding,
-                "cTime": c_time_ms,
-                "notional": v_notional,
-                "margin": v_margin,
-            })
-    return items, ok_venues
-
-
 def _holding_row(p, venue, *, env, trackers, tz_bj, allowed, council_by_inst,
                  unmanaged=None):
-    """活动持仓 → 台账 holding 行（OKX 与 binance/gate 共用同一构造器，字段语义一致）。
+    """活动持仓 → 台账 holding 行。
 
     id 带场所：`holding_{venue}_{inst}_{side}`。旧式 `holding_{inst}_{side}` 不含场所，
-    多所同时持有同一标的即撞键（后写覆盖先写）。
+    同一标的重复持有即撞键（后写覆盖先写）。
     """
     pos_sz = float(p.get("pos", 0.0) or 0.0)
     if pos_sz == 0.0:
         return None
     inst_id = p.get("instId", "")
     if inst_id not in allowed:
-        # ⚠️ 2026-09-20 实测：这里曾**静默丢弃**——ARB 在 binance 持有 -2416.7 空仓，
-        # 却因不在准入清单而连一行 holding 都没有；台账于是"看不见"这笔在持敞口，
+        # ⚠️ 2026-09-20 实测：这里曾**静默丢弃**——持仓因不在准入清单而连一行 holding
+        # 都没有；台账于是"看不见"这笔在持敞口，
         # 而开仓预检又把它当"外部仓"永久拒开（两处都错，且都没人说）。
         # 现在把丢弃的活仓**记入调用方收集器**（写入同步旁车 + 日志 + 面板 source_errors）：
         # 仍然**不**把它写进台账（那会改变风险界面语义，须单独拍板），但**不许再无声**。
@@ -798,8 +290,6 @@ def _holding_row(p, venue, *, env, trackers, tz_bj, allowed, council_by_inst,
     raw_notional = abs(float(p.get("notional", 0.0) or 0.0))
     if raw_notional > 0:
         notional = raw_notional
-    elif venue in ("binance", "gate"):
-        notional = pos_sz * mark_px
     else:
         notional = pos_sz * ct_val * mark_px
 
@@ -915,30 +405,9 @@ def build_lifecycle_ledger():
     tz_bj = datetime.timezone(datetime.timedelta(hours=8))
 
     env = okx_runtime.current_environment()
-    _allow_alt_only = False
-    if not env.configured:
-        try:
-            raw_flag = str(os.environ.get("ASTRA_ALLOW_ALT_ONLY_SYNC", "")).strip().lower()
-            if raw_flag in ("1", "true", "yes"):
-                from astra_backend.exchanges import venue_credentials
-                _allow_alt_only = any(
-                    bool(venue_credentials(v, getattr(env, "mode", "live"))[0]) for v in ("binance", "gate")
-                )
-            else:
-                from astra_backend.exchanges.routing_policy import load_preferred_venue
-                from astra_backend.exchanges import venue_credentials
-                pref = load_preferred_venue()
-                if pref in ("binance", "gate"):
-                    ak, sk = venue_credentials(pref, getattr(env, "mode", "live"))
-                    if ak and sk:
-                        _allow_alt_only = True
-        except Exception:
-            _allow_alt_only = False
 
     if not env.configured:
-        if not _allow_alt_only:
-            raise okx_rest.OKXNotConfigured("OKX API Key 未配置 — 台账同步 fail-closed（既有 trading_ledger.json 保持不动）")
-        _mark("okx", "skipped", reason="unconfigured")
+        raise okx_rest.OKXNotConfigured("OKX API Key 未配置 — 台账同步 fail-closed（既有 trading_ledger.json 保持不动）")
 
     pos_history = []
     pos_data = []
@@ -973,10 +442,10 @@ def build_lifecycle_ledger():
 
     trades_lifecycle = []
 
-    # Process Active Holding Positions FIRST（批E·多所）
+    # Process Active Holding Positions FIRST（批E）
     # 用户报「台账和活动持仓对不上」根因：本 builder 全源 OKX V5，holding 行只由
-    # okx_rest.positions() 生成——活动持仓面板显示 6 条 binance 持仓时台账只有 1 条
-    # OKX 的；而旧行靠 id 合并续命，OKX 平掉后那条 holding 行永不消失（幽灵持仓）。
+    # okx_rest.positions() 生成；而旧行靠 id 合并续命，OKX 平掉后那条 holding 行
+    # 永不消失（幽灵持仓）。
     _holding_rows = []
     _unmanaged_live = []           # 被准入清单挡掉的活动持仓（不许静默）
     _UNMANAGED_LIVE.clear()
@@ -985,15 +454,6 @@ def build_lifecycle_ledger():
         _queried_venues.add("okx")
     for p in pos_data:
         _row = _holding_row(p, "okx", env=env, trackers=trackers, tz_bj=tz_bj,
-                            allowed=allowed, council_by_inst=council_by_inst,
-                            unmanaged=_unmanaged_live)
-        if _row:
-            _holding_rows.append(_row)
-
-    _other_positions, _ok_venues = _other_venue_live_positions(env.mode)
-    _queried_venues |= _ok_venues
-    for p in _other_positions:
-        _row = _holding_row(p, str(p.get("venue") or ""), env=env, trackers=trackers, tz_bj=tz_bj,
                             allowed=allowed, council_by_inst=council_by_inst,
                             unmanaged=_unmanaged_live)
         if _row:
@@ -1040,19 +500,8 @@ def build_lifecycle_ledger():
             continue
         trades_lifecycle.append(_trade)
 
-    # 多所台账协同（US-009 / v7.9.1）：自动并发拉取 Binance 与 Gate 真实平仓盈亏
-    # 审计 A2：fetch 内部吞异常（except 内 _mark failed）——调用点为未标失败的所
-    # 记 ok，并携带行数与 limit=100 截断风险标记，供旁车/data_health 诚实呈现。
-    binance_trades = fetch_binance_closed_trades("demo" if env.simulated else "live", tz_bj=tz_bj)
-    gate_trades = fetch_gate_closed_trades("sandbox" if env.simulated else "live", tz_bj=tz_bj)
-    for _v, _rows in (("binance", binance_trades), ("gate", gate_trades)):
-        if _FETCH_STATUS.get(_v, {}).get("status") != "failed":
-            _mark(_v, "ok", rows=len(_rows), truncated=len(_rows) >= 100)
-
     # 聚合去重合并（按 id 去重，按 close_time 降序）
     trades_map = merge_lifecycle_trades(
-        binance_trades=binance_trades,
-        gate_trades=gate_trades,
         old_trades=old_trades,
         trades_lifecycle=trades_lifecycle    )
 
@@ -1085,17 +534,13 @@ def build_lifecycle_ledger():
     _write_sync_status(env)
 
     notify_newly_closed_trades(
-        binance_trades=binance_trades,
         existing_closed_ids=existing_closed_ids,
-        gate_trades=gate_trades,
         trades_lifecycle=trades_lifecycle    )
 
-    # 批E：trades_lifecycle 现含「OKX 平仓 + 全场所活动持仓」，输出必须分开报，
-    # 否则「OKX: 12」会把 binance 的 6 条持仓算进 OKX 业绩里（口径自欺）。
+    # 批E：trades_lifecycle 现含「OKX 平仓 + OKX 活动持仓」，输出必须分开报。
     _okx_closed_n = sum(1 for t in trades_lifecycle if t.get("status") != "holding")
-    print(f"✅ Authentic Multi-Venue Ledger: {len(combined_trades)} total trades "
-          f"(OKX 平仓: {_okx_closed_n}, 活动持仓: {len(_holding_rows)}, "
-          f"Binance 平仓: {len(binance_trades)}, Gate 平仓: {len(gate_trades)}).")
+    print(f"✅ Authentic OKX Ledger: {len(combined_trades)} total trades "
+          f"(OKX 平仓: {_okx_closed_n}, 活动持仓: {len(_holding_rows)}).")
     return combined_trades
 
 if __name__ == "__main__":

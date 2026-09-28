@@ -17,11 +17,13 @@
 | 组件 | 唯一消费者 |
 | --- | --- |
 | `SettingsSection.vue` | `views/admin/SecurityPage.vue` |
-| `VenueCredentialCard.vue` | `views/admin/SecurityPage.vue` |
 | `DangerZone.vue` | `views/admin/RiskPage.vue` |
 
 放进子目录是**刻意的**：让"单页专用"这件事写在路径上，而不是靠读者去数引用。
-F7 的另一种解法（推广）对这三个组件目前**不成立**，理由见下。
+F7 的另一种解法（推广）对这两个组件目前**不成立**，理由见下。
+
+> 2026-10 更新：`VenueCredentialCard.vue` 已随「全站收口 OKX」一并删除
+> （多交易所凭证录入不再存在），`page-parts/` 现只剩上面两个。
 
 ## `SettingsSection` 为什么没有"推广"
 
@@ -56,14 +58,17 @@ F7 的另一种解法（推广）对这三个组件目前**不成立**，理由�
 | `base/BaseSwitch` | 11 | `dashboard/SettingsPopover` · `views/admin/CouncilPage` · `views/admin/PromptStudioPage` · `views/admin/EvolutionPage` · `views/admin/InterceptorsPage` · `views/admin/NotifyPage` · `views/admin/llm/ProviderListView` · `views/admin/llm/ProviderDetailView` · `views/admin/SecurityPage` · `views/admin/RiskPage` |
 | `base/BaseSparkline` | 1 | `dashboard/KpiRibbon` |
 | `base/BaseTabs` | 1 | `dashboard/RadarDrawer` |
-| `dashboard/VenueAccountCard` | 1 | `dashboard/VenueAccountsPanel` |
 | `dashboard/DataStatus` | 1 | `dashboard/KpiRibbon` |
 | `dashboard/SettingsPopover` | 1 | `dashboard/TopBar` |
 | `dashboard/FactorDrawer` | 1 | `dashboard/FactorMatrix` |
 
+> 注：`dashboard/VenueAccountCard` 与 `dashboard/VenueAccountsPanel` 已随 2026-10
+> 「全站收口 OKX」删除（旧的最小消费者链随之消失）。
+
 **错在哪（值得记下来）**：本条是**误读台账 F7** 的产物。
 台账 §3 F7 讲的是 **`components/admin/` 自己那 5 个组件里有 4 个单用**
-（`DataTable`/`SettingsSection`/`DangerZone`/`VenueCredentialCard`），
+（`DataTable`/`SettingsSection`/`DangerZone`/`VenueCredentialCard` ——
+最后一个已于 2026-10 随「全站收口 OKX」删除），
 而不是 `base/` 与 `dashboard/` 里的组件。把"单用（1 个消费者）"
 误当成"0 个引用者"，再顺手列成了另外两个目录的清单。
 

@@ -1,4 +1,4 @@
-"""跨域长尾收口 —— 12 个模块各 1–3 行的残余分支 —— 第 316 刀。
+"""跨域长尾收口 —— 11 个模块各 1–3 行的残余分支 —— 第 316 刀。
 
 这批都是"每个模块只剩最后两三行"的零头，散落在 5 个域里，单独成刀会让每刀成本
 远高于收益，故合并为**一刀清扫**：
@@ -7,8 +7,8 @@
 |---|---|---|
 | `brain/cycle_parts.py` | `brain/account_text.py` | `brain/runtime.py` |
 | `brain/snapshots.py` | `trader/scale_out.py` | `trader/reservation_reconcile.py` |
-| `trader/signal_snapshot.py` | `trader/venue_evidence.py` | `calculus/regime.py` |
-| `news/importance.py` | `ledger/okx_history.py` | `backtest/lifecycle.py` |
+| `trader/signal_snapshot.py` | `calculus/regime.py` | `news/importance.py` |
+| `ledger/okx_history.py` | `backtest/lifecycle.py` | |
 
 它们的共同性质：**只在失败/未知/低波这类"不好走"的路上跑**，所以既有用例
 （多为正常路径的集成测试）碰不到。
@@ -36,7 +36,7 @@ from scripts.calculus import regime  # noqa: E402
 from scripts.ledger import okx_history  # noqa: E402
 from scripts.news import importance  # noqa: E402
 from scripts.trader import (reservation_reconcile, scale_out,  # noqa: E402
-                            signal_snapshot, venue_evidence)
+                            signal_snapshot)
 
 
 # ───────────────────────── brain/cycle_parts.py ─────────────────────────
@@ -417,80 +417,6 @@ class SignalSnapshotTests(unittest.TestCase):
         self.assertEqual(snap["funding_rate"], 0.012)
         self.assertEqual(snap["smart_money_net"], -1234.0)
         self.assertEqual(snap["composite_alpha_score"], 0.77)
-
-
-# ───────────────────── trader/venue_evidence.py ─────────────────────
-class VenueEvidenceFallbackTests(unittest.TestCase):
-    """候选所清单来自能力表；表不可用时**回落 OKX 单候选**（不硬编码）。"""
-
-    def _candidates(self, registry):
-        return venue_evidence.build_venue_candidates(
-            "BTC-USDT-SWAP", "live", venue_health_stamp=lambda: ("stamp", {}),
-            venue_registry=registry, load_preferred_venue=lambda: "auto",
-            venue_execution_ready=lambda name, env: True,
-            MAKER_FEE_RATE=0.0002, VENUE_HEALTH_MAX_AGE_S=900.0)
-
-    def test_registry_venues_are_used_when_available(self):
-        class _Reg:
-            def registered_venues(self):
-                return ["okx", "gate"]
-        names = [c["venue"] for c in self._candidates(_Reg())]
-        self.assertEqual(names, ["okx", "gate"])
-
-    def test_registry_failure_falls_back_to_okx_only(self):
-        # ★ 第 47 行
-        class _Reg:
-            def registered_venues(self):
-                raise RuntimeError("registry 表损坏")
-        names = [c["venue"] for c in self._candidates(_Reg())]
-        self.assertEqual(names, ["okx"], "表读不出来只能退回唯一确定能下单的所")
-
-    def test_empty_registry_yields_no_candidates(self):
-        class _Reg:
-            def registered_venues(self):
-                return []
-        self.assertEqual(self._candidates(_Reg()), [])
-
-
-class PersistVenueDecisionTests(unittest.TestCase):
-    """选所证据落盘：**best-effort**，失败只打警告不许影响本轮交易。"""
-
-    def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(self.tmp.cleanup)
-        self.cache = os.path.join(self.tmp.name, "cache.json")
-        # 缓存是**扁平**的 `{instId: 决策}` —— 不是 `{"symbols": {...}}`
-        Path(self.cache).write_text(
-            json.dumps({"BTC-USDT-SWAP": {"action": "WAIT"}}), encoding="utf-8")
-
-    def _run(self):
-        from contextlib import contextmanager
-        import astra_backend.file_locks as file_locks
-
-        @contextmanager
-        def _no_lock(path):
-            yield
-        with patch.object(venue_evidence, "print", lambda *a, **k: None), \
-             patch.object(file_locks, "file_lock", _no_lock):
-            return venue_evidence.persist_venue_decision(
-                "BTC-USDT-SWAP", {"venue": "okx"}, AI_DECISION_CACHE_FILE=self.cache)
-
-    def test_missing_symbol_is_refused_rather_than_invented(self):
-        # 缓存里没有该标的 ⇒ 不伪造决策，直接 False
-        Path(self.cache).write_text(json.dumps({"ETH-USDT-SWAP": {}}), encoding="utf-8")
-        self.assertFalse(self._run())
-
-    def test_successful_persist_returns_true_and_merges(self):
-        self.assertTrue(self._run())
-        merged = json.loads(Path(self.cache).read_text(encoding="utf-8"))
-        self.assertEqual(merged["BTC-USDT-SWAP"]["action"], "WAIT", "既有字段逐键保留")
-        self.assertEqual(merged["BTC-USDT-SWAP"]["venue_decision"], {"venue": "okx"})
-
-    def test_failure_returns_false_instead_of_raising(self):
-        # ★ 第 123 行
-        with patch.object(venue_evidence.os, "replace",
-                          lambda src, dst: (_ for _ in ()).throw(OSError("busy"))):
-            self.assertFalse(self._run())
 
 
 # ───────────────────────── calculus/regime.py ─────────────────────────

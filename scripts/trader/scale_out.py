@@ -57,10 +57,8 @@ def execute_scale_out_if_eligible(
     name = str(f.get("name", inst_id.split("-")[0]))
     cur_px = float(f.get("price", 0.0) or 0.0)
     atr = max(float(f.get("atr", 0.0) or 0.0), cur_px * 0.005)
-    # ⚠️ 单位纪律（三所持仓接管）：`ctVal`/`minSz`/尺寸精度对**外所在仓**必须取
-    # 该所自己的值 —— `f[...]` 一律来自 OKX 合约池，而币安的 `pos` 是币数
-    # （OKX 面值 100 会算错 100 倍）、Gate 是自家张数（面值 10，错 10 倍）。
-    # 持仓记录上挂的值优先；缺失时回落 OKX 口径 ⇒ OKX 路径逐位不变。
+    # ⚠️ 单位纪律：`ctVal`/`minSz`/尺寸精度优先取**持仓记录**上挂的值
+    # （`curr_pos`），缺失时才回落 `f[...]`（OKX 合约池口径）⇒ OKX 路径逐位不变。
     # 注意 `prec` 只用于**尺寸**取整（价格精度见下方 `px_prec`，仍取 `f`）。
     _pos_ct = curr_pos.get("ctVal")
     _pos_min = curr_pos.get("minSz")
@@ -74,10 +72,9 @@ def execute_scale_out_if_eligible(
         return False, "无持仓"
 
     # ── 展示口径：一切对外文案只说**钱**（保证金 / 名义额），不说张 ──────────
-    # 用户 2026-09-28 拍板：三所的"张"单位不同（OKX 张 / 币安币数 / Gate 张），
-    # 且**各币种的合约面值算法都不一样** ⇒ 张数既不能跨场所比也不能跨币种比，
-    # 交易员无法从它判断"这笔占了我多少钱"。张数仍用于**切分计算**本身（必须），
-    # 但绝不进入文案。
+    # 用户 2026-09-28 拍板：OKX 的"张"是合约单位，且**各币种的合约面值算法都不一样**
+    # ⇒ 张数不能跨币种比，交易员无法从它判断"这笔占了我多少钱"。张数仍用于
+    # **切分计算**本身（必须），但绝不进入文案。
     _lever = float(curr_pos.get("lever", curr_pos.get("leverage", 0.0)) or 0.0) or 1.0
 
     def _margin_of(_sz):
@@ -170,54 +167,12 @@ def execute_scale_out_if_eligible(
         except Exception as exc:
             order_success = False
             order_detail = f"OKX分批平仓异常: {exc}"
-    elif pos_venue == "binance":
-        if venue_registry:
-            try:
-                ad = venue_registry.get_adapter(pos_venue)
-                symbol_native = inst_id.split("-")[0]
-                raw_pos = curr_pos.get("raw") if isinstance(curr_pos.get("raw"), dict) else {}
-                ps = str(curr_pos.get("positionSide") or raw_pos.get("positionSide") or "").upper()
-                if ps in ("LONG", "SHORT"):
-                    res = ad.place_order(symbol_native, close_side, close_sz, position_side=ps)
-                else:
-                    res = ad.place_order(symbol_native, close_side, close_sz, reduce_only=True)
-                order_success = True
-                order_detail = str(res)
-            except Exception as exc:
-                order_success = False
-                order_detail = f"BINANCE分批平仓异常: {exc}"
-        else:
-            order_success = False
-            order_detail = "未提供 BINANCE 适配器注册表"
-    elif pos_venue == "gate":
-        if venue_registry:
-            try:
-                ad = venue_registry.get_adapter(pos_venue)
-                symbol_native = inst_id.split("-")[0]
-                res = ad.place_order(symbol_native, close_side, close_sz, reduce_only=True)
-                order_success = True
-                order_detail = str(res)
-            except Exception as exc:
-                order_success = False
-                order_detail = f"GATE分批平仓异常: {exc}"
-        else:
-            order_success = False
-            order_detail = "未提供 GATE 适配器注册表"
     else:
-        # 多所适配器路径兜底
-        if venue_registry:
-            try:
-                ad = venue_registry.get_adapter(pos_venue)
-                symbol_native = inst_id.split("-")[0]
-                res = ad.place_order(symbol_native, close_side, close_sz, reduce_only=True)
-                order_success = True
-                order_detail = str(res)
-            except Exception as exc:
-                order_success = False
-                order_detail = f"{pos_venue.upper()}分批平仓异常: {exc}"
-        else:
-            order_success = False
-            order_detail = f"未提供 {pos_venue.upper()} 适配器注册表"
+        # 已移除场所的历史持仓：instId 与 OKX 同名，绝不能把它的
+        # instId 交给 OKX 直签接口（平的是别人的仓）。只读留痕跳过，不抛异常、不平仓。
+        executed_actions.append(
+            f"[{name}] 非 OKX 场所({pos_venue})历史持仓，只读跳过分批止盈（不下发任何交易所指令）")
+        return False, f"非 OKX 场所({pos_venue})，只读跳过"
 
     if not order_success:
         executed_actions.append(f"[{name}] ⚠️ 分批止盈市价平仓提交失败: {order_detail}")
@@ -237,15 +192,6 @@ def execute_scale_out_if_eligible(
                 okx_rest.cancel_algo_orders(old_algo_ids[:10], inst_id=inst_id)
         except Exception as cxl_exc:
             print(f"[Scale-Out] 清理 {inst_id} 旧OCO异常（由新保护单覆盖）: {cxl_exc}")
-    elif pos_venue in ("binance", "gate") and venue_registry:
-        try:
-            adapter = venue_registry.get_adapter(pos_venue)
-            if adapter and hasattr(adapter, "cancel_protective_orders"):
-                adapter.cancel_protective_orders(name)
-            elif adapter and hasattr(adapter, "cancel_all_algo_open_orders"):
-                adapter.cancel_all_algo_open_orders(symbol=adapter.native_symbol(name))
-        except Exception as cxl_exc:
-            print(f"[Scale-Out] 清理 {pos_venue.upper()} {name} 旧保护单异常: {cxl_exc}")
 
     # 6. 计算保本止损线并为剩余仓位重建云端 OCO
     breakeven_cushion = 0.0025 * entry_px
@@ -259,16 +205,6 @@ def execute_scale_out_if_eligible(
             )
         except Exception as oco_exc:
             print(f"[Scale-Out] 剩余仓位云端保护更新异常: {oco_exc}")
-    elif pos_venue in ("binance", "gate") and venue_registry:
-        try:
-            adapter = venue_registry.get_adapter(pos_venue)
-            if adapter and hasattr(adapter, "attach_protective_orders"):
-                adapter.attach_protective_orders(
-                    name, pos_side, tp_px=take_profit_px if take_profit_px > 0 else None,
-                    sl_px=breakeven_sl, contracts=remaining_sz
-                )
-        except Exception as oco_exc:
-            print(f"[Scale-Out] 外所 {pos_venue.upper()} 剩余仓位云端保护更新异常: {oco_exc}")
 
     # 7. 更新本地状态机与账本
     t["scale_out_phase"] = 1

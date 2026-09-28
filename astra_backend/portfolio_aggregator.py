@@ -1,4 +1,4 @@
-"""多所 6 账户权益聚合与组合风险隔离引擎（US-006）。
+"""单所账户权益聚合与组合风险隔离引擎（US-006）。
 
 设计原则与铁律：
 1. 严格分区：demo 与 live 两环境绝对物理隔离，严禁跨环境混合相加。
@@ -7,6 +7,10 @@
 4. 资产分布与风控利用率：
    - asset_distribution: 各所在当前环境总权益中的占比 (0.0 ~ 100.0%)
    - portfolio_risk_utilization: 保证金占用额与利用率百分比，给出 LOW/MEDIUM/HIGH 风险级别。
+
+> 本仓已收口为 OKX 专用：`target_venues` 只剩 `okx`，多所合并语义随之退化为单所。
+> 聚合公式、状态门槛与「未知≠0」纪律**逐字未动**，故 OKX 单所结果与三所时代的
+> OKX 分量逐位一致（其余场所本就不在册）。
 """
 from __future__ import annotations
 
@@ -14,10 +18,10 @@ from typing import Any, Dict, List
 
 
 def aggregate_venue_accounts(venues_dict: Dict[str, Any], environment: str) -> Dict[str, Any]:
-    """按资金环境聚合 OKX / Binance / Gate 权益与组合风险。
+    """按资金环境聚合账户权益与组合风险（OKX 专用）。
 
     入参：
-    - venues_dict: {"okx": {...}, "binance": {...}, "gate": {...}} 各所只读卡片
+    - venues_dict: {"okx": {...}} 各所只读卡片
     - environment: "demo" | "live"
     """
     env = str(environment or "").strip().lower()
@@ -31,7 +35,7 @@ def aggregate_venue_accounts(venues_dict: Dict[str, Any], environment: str) -> D
     active_venues: List[str] = []
     venue_equities: Dict[str, float] = {}
 
-    target_venues = ("okx", "binance", "gate")
+    target_venues = ("okx",)
     for v in target_venues:
         card = venues_dict.get(v)
         if not isinstance(card, dict):

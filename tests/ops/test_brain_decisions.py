@@ -413,12 +413,12 @@ class CacheContractTests(_CacheBase, unittest.TestCase):
         out = self._assemble(packages=[_pkg(lsRatio=0)], decisions={})
         self.assertEqual(out["BTC-USDT-SWAP"]["raw_ls_ratio"], "0")
 
-    def test_smart_money_and_xvenue_default_to_empty_dicts(self):
+    def test_smart_money_defaults_to_an_empty_dict(self):
         out = self._assemble(packages=[_pkg()], decisions={})
         # 包里有 smart_money 就透传；没有就给空 dict（不是 None）
         out2 = self._assemble(packages=[_pkg(smart_money={"available": False})], decisions={})
         self.assertEqual(out2["BTC-USDT-SWAP"]["smart_money"], {"available": False})
-        self.assertEqual(out["BTC-USDT-SWAP"]["xvenue"], {})
+        self.assertEqual(out["BTC-USDT-SWAP"]["smart_money"], {})
 
     def test_absent_data_quality_defaults_to_invalid_not_valid(self):
         # ★ 默认值是 "invalid"（宁可说无效，也不默认有效）

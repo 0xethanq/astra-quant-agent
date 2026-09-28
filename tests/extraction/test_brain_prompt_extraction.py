@@ -74,7 +74,6 @@ class ImplementationActuallyMovedTest(unittest.TestCase):
         facade = FACADE.read_text(encoding="utf-8")
         self.assertIn("_construct_full_market_prompt_impl(", facade)
         for kw in ("safe_float=safe_float,", "sl_atr_mult_for=_sl_atr_mult_for,",
-                   "xvenue_prompt_line=_xvenue_prompt_line,",
                    "build_risk_budget_text=build_risk_budget_text,",
                    "active_profile=active_profile,",
                    "apply_module_layout=apply_module_layout,",
@@ -138,7 +137,7 @@ class InjectionContractTest(unittest.TestCase):
             return real(value, default)
 
         with patch.object(abt, "safe_float", spy):
-            abt.construct_full_market_prompt([_PACKAGE()])
+            abt.construct_full_market_prompt([_PACKAGE()], active_positions_detail=[{"instId": "BTC", "pos": 1.0}])
         self.assertTrue(calls, "safe_float 未被调用 —— 未走注入项")
 
     def test_active_profile_patch_is_observed(self):
@@ -167,11 +166,11 @@ class DualCallShapeTest(unittest.TestCase):
     def test_user_args_only_shape_resolves_from_globals(self):
         """模拟 AST 隔离执行：只传用户参数，注入项从 globals() 回退。
 
-        把子模块所需的 15 个名字临时放进模块全局，然后**不传任何注入参数**调用 ——
+        把子模块所需的 14 个名字临时放进模块全局，然后**不传任何注入参数**调用 ——
         这正是 `test_prompt_rendering_isolated` 的调用形态。若子模块把注入项设成
         必填（无默认），这里会 TypeError。
         """
-        names = ["safe_float", "sl_atr_mult_for", "xvenue_prompt_line",
+        names = ["safe_float", "sl_atr_mult_for",
                  "build_risk_budget_text", "active_profile", "apply_module_layout",
                  "system_version", "ai_memory_md_file", "ai_memory_file",
                  "news_sentiment_file", "max_leverage", "min_leverage",
@@ -181,7 +180,6 @@ class DualCallShapeTest(unittest.TestCase):
         injected = {
             "safe_float": abt.safe_float,
             "_sl_atr_mult_for": abt._sl_atr_mult_for,
-            "_xvenue_prompt_line": abt._xvenue_prompt_line,
             "build_risk_budget_text": abt.build_risk_budget_text,
             "active_profile": abt.active_profile,
             "apply_module_layout": abt.apply_module_layout,
@@ -205,7 +203,7 @@ class DualCallShapeTest(unittest.TestCase):
                     brain_prompt.__dict__[k] = v
         self.assertIn("2~9x", text, "回退解析未生效（注入项未从 globals 取到）")
         self.assertNotIn("2~5x", text, "回退到了真实门面值，说明回退逻辑没生效")
-        self.assertEqual(len(names), 15)
+        self.assertEqual(len(names), 14)
 
 
 _MISSING = object()

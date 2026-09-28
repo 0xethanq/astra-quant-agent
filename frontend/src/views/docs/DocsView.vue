@@ -44,7 +44,7 @@ onBeforeUnmount(releaseZoomFocus);
 
 const sections = [
   { id: 'overview', title: '1. 系统架构与量化哲学', icon: TrendingUp },
-  { id: 'dashboard', title: '2. 双翼工作台与资产控制舱', icon: Terminal },
+  { id: 'dashboard', title: '2. 量化工作台与资产控制舱', icon: Terminal },
   { id: 'council', title: '3. 对冲基金投委会 (Trading Desk)', icon: Users },
   { id: 'policy_snapshot', title: '4. 策略版本快照控制台 (Policy Snapshot)', icon: Layers },
   { id: 'prompt_studio', title: '5. 提示词策略与语义变量插槽', icon: FileText },
@@ -245,7 +245,7 @@ onUnmounted(() => {
           </div>
 
           <p class="text-xs sm:text-sm leading-body font-sans text-[var(--ink-2)]">
-            <strong>AstraQuant</strong> 是一套专为高波动加密货币（Crypto）打造的<strong>机构级全自动波段量化决策与执行系统</strong>。系统通过 OKX / Binance / Gate.io REST API 直签执行私有账户与交易请求。系统运行在严格的北京时间（UTC+8）自然日财务基准之上，聚焦 1H~4H 大级别顺势波段，以<strong>“胜率第一、宁缺毋滥、三位一体 Fail-Closed 物理硬防线”</strong>为最高风控宗旨。
+            <strong>AstraQuant</strong> 是一套专为高波动加密货币（Crypto）打造的<strong>机构级全自动波段量化决策与执行系统</strong>。系统通过 OKX V5 REST API 直签执行私有账户与交易请求。系统运行在严格的北京时间（UTC+8）自然日财务基准之上，聚焦 1H~4H 大级别顺势波段，以<strong>“胜率第一、宁缺毋滥、三位一体 Fail-Closed 物理硬防线”</strong>为最高风控宗旨。
           </p>
 
           <!-- 4 Core Pillars Grid -->
@@ -292,7 +292,7 @@ onUnmounted(() => {
           </div>
         </section>
 
-        <!-- 2. 双翼工作台与资产控制舱 -->
+        <!-- 2. 量化工作台与资产控制舱 -->
         <section id="dashboard" class="space-y-4 pt-6 border-t scroll-mt-14" style="border-color: var(--line-1);">
           <div class="flex items-center space-x-2">
             <span class="dsh-pill font-mono font-bold text-3xs">CHAPTER 02</span>
@@ -307,7 +307,7 @@ onUnmounted(() => {
             <div class="dsh-card-sub p-3.5 space-y-1.5">
               <div class="font-bold text-xs text-[var(--ink-strong)]">主工位操盘中心</div>
               <p class="text-[var(--ink-2)] leading-body">
-                • <strong>6 单元多所资产 HUD</strong>：多所总权益、走势折线、今日已结、持仓浮盈、多空敞口与云端防线解耦呈现。<br>
+                • <strong>6 单元资产 HUD</strong>：OKX 总权益、走势折线、今日已结、持仓浮盈、多空敞口与云端防线解耦呈现。<br>
                 • <strong>资金费与手续费明细透传</strong>：实时汇总跨周期永续合约资金费与手续费，消除浮盈与已结盈亏认知差。<br>
                 • <strong>TradingView 官方原生 K 线操盘工作站</strong>：本地打包集成，0 外部依赖免 VPN 秒开；支持 150 根 K 线全屏铺满、MA/BOLL/VOL 多指标独立共存。
               </p>
@@ -404,7 +404,7 @@ onUnmounted(() => {
                 <tr>
                   <td class="font-mono font-bold text-[var(--accent)]">&#123;&#123;account_balance&#125;&#125;</td>
                   <td>账户资产</td>
-                  <td class="text-[var(--ink-2)]">交易所私有接口实时拉取的可用 USDT 现金余额（如 4393.08 USDT）</td>
+                  <td class="text-[var(--ink-2)]">OKX 私有接口实时拉取的可用 USDT 现金余额（如 4393.08 USDT）</td>
                 </tr>
                 <tr>
                   <td class="font-mono font-bold text-[var(--accent)]">&#123;&#123;risk_budget&#125;&#125;</td>
@@ -499,7 +499,7 @@ onUnmounted(() => {
           </div>
 
           <p class="text-xs sm:text-sm leading-body font-sans text-[var(--ink-2)]">
-            物理拦截插件体系是整个系统的安全底座。任何发往交易所的开平仓请求，必须严格穿透全部活跃拦截器的串行校验。
+            物理拦截插件体系是整个系统的安全底座。任何发往 OKX 的开平仓请求，必须严格穿透全部活跃拦截器的串行校验。
           </p>
 
           <div class="dsh-card-sub p-3.5 space-y-2">

@@ -1,4 +1,4 @@
-"""Exchanges credentials, multi-venue status, and account snapshot routes."""
+"""Exchange credentials, venue status, and account snapshot routes (OKX-only)."""
 from __future__ import annotations
 import json
 import time
@@ -42,8 +42,6 @@ _VENUE_ACCOUNT_FIELDS = ("equity", "available", "positions_count", "open_orders_
 
 _LISTING_ENV_MAP: dict[str, dict[str, str]] = {
     "okx": {"demo": "demo", "live": "live"},
-    "binance": {"demo": "demo", "live": "live"},
-    "gate": {"demo": "sandbox", "live": "live"},
 }
 
 
@@ -111,131 +109,18 @@ def _venue_accounts_okx(environment: str) -> dict[str, Any]:
     return out
 
 
-def _venue_accounts_gate(environment: str) -> dict[str, Any]:
-    from astra_backend.exchanges import ExchangeCapabilityError, get_adapter, venue_credentials
-    from astra_backend.close_intent import adapter_environment as _ae
-    # 审计 C7：预检必须按档位轴取凭证（与 binance :151 同权），否则仅有分层
-    # GATE_DEMO/LIVE 键时误报"未配置"，或反向放行 generic LIVE 键打错主机
-    api_key, secret = venue_credentials("gate", _ae("gate", environment))
-    if not api_key or not secret:
-        return _venue_account_unknown(
-            "unavailable", f"Gate {_ae('gate', environment)} 档 API Key/Secret 未配置，未发起任何请求；请在后台「多交易所凭证」录入")
-    gate_env = "sandbox" if environment == "demo" else "live"
-    try:
-        ad = get_adapter("gate", environment=gate_env)
-        acct = ad.account_snapshot()
-        positions = [p for p in ad.positions() if abs(float(p.get("size_signed") or 0)) > 1e-12]
-        open_rows = ad.signed_request("GET", "/api/v4/futures/usdt/orders",
-                                      {"status": "open", "limit": "100"})
-    except ExchangeCapabilityError as exc:
-        return _venue_account_unknown("unavailable", f"Gate 账户面不可用：{exc}")
-    except Exception as exc:
-        err_msg = str(exc)
-        if "INVALID_KEY" in err_msg or "Invalid key" in err_msg:
-            return _venue_account_unknown("unavailable", "Gate API Key 凭证无效或已过期，请在后台核对 API 密钥与签名")
-        if "IP" in err_msg or "ip" in err_msg:
-            return _venue_account_unknown("unavailable", "Gate 访问 IP 未加白名单，请在交易所后台添加服务器 IP")
-        if "PERMISSION" in err_msg or "permission" in err_msg:
-            return _venue_account_unknown("unavailable", "Gate API Key 权限不足，请确认已开启合约读取权限")
-        return _venue_account_unknown("degraded", f"Gate 账户读取失败: {type(exc).__name__}: {exc}")
-    try:
-        return {
-            "status": "ready",
-            "equity": float(acct.get("equity_usdt") or 0),
-            "available": float(acct.get("available_usdt") or 0),
-            "positions_count": len(positions),
-            "open_orders_count": len(open_rows if isinstance(open_rows, list) else []),
-            "last_sync_ms": int(time.time() * 1000),
-            "reason": f"Gate {gate_env} 档适配器直读",
-        }
-    except Exception as exc:
-        return _venue_account_unknown("degraded", f"Gate 返回解析失败: {type(exc).__name__}: {exc}")
-
-
-def _venue_accounts_binance(environment: str = "demo") -> dict[str, Any]:
-    try:
-        from astra_backend.exchanges import ExchangeCapabilityError, get_adapter, venue_credentials
-        from astra_backend.exchanges.binance import BinanceAdapter
-        supports = bool(getattr(BinanceAdapter.capabilities, "supports_account", False))
-    except Exception as exc:
-        return _venue_account_unknown("degraded", f"Binance 能力表读取失败: {type(exc).__name__}: {exc}")
-    if not supports:
-        return _venue_account_unknown(
-            "not_implemented", "Binance 适配器账户面未实装（supports_account=False）")
-
-    api_key, secret = venue_credentials("binance", environment)
-    if not api_key or not secret:
-        return _venue_account_unknown(
-            "unavailable", f"Binance {environment.upper()} API Key/Secret 未配置，未发起任何请求；请在后台「多交易所凭证」录入")
-
-    bn_env = "demo" if environment == "demo" else "live"
-    try:
-        ad = get_adapter("binance", environment=bn_env)
-        acct = ad.account_snapshot()
-        positions = [p for p in ad.positions() if abs(float(p.get("size_signed") or 0)) > 1e-12]
-        open_rows = ad.open_orders()
-    except ExchangeCapabilityError as exc:
-        return _venue_account_unknown("unavailable", f"Binance 账户面不可用：{exc}")
-    except Exception as exc:
-        err_msg = str(exc)
-        if "-2015" in err_msg or "Invalid API-key" in err_msg:
-            return _venue_account_unknown("unavailable", "Binance API Key 凭证无效或 IP 未加白，请在后台核对密钥与权限")
-        if "-2014" in err_msg:
-            return _venue_account_unknown("unavailable", "Binance API Key 格式无效，请在后台核对 API Key")
-        if "-1021" in err_msg or "Timestamp" in err_msg:
-            return _venue_account_unknown("degraded", "Binance 系统时间戳不同步，建议宿主机校准时间")
-        if "PERMISSION" in err_msg or "permission" in err_msg:
-            return _venue_account_unknown("unavailable", "Binance API Key 权限不足，请确认已开启合约读取权限")
-        return _venue_account_unknown("degraded", f"Binance 账户读取失败: {type(exc).__name__}: {exc}")
-
-    try:
-        return {
-            "status": "ready",
-            "equity": float(acct.get("equity_usdt") or 0.0),
-            "available": float(acct.get("available_usdt") or 0.0),
-            "positions_count": len(positions),
-            "open_orders_count": len(open_rows if isinstance(open_rows, list) else []),
-            "last_sync_ms": int(time.time() * 1000),
-            "reason": f"Binance {bn_env} 档适配器直读",
-        }
-    except Exception as exc:
-        return _venue_account_unknown("degraded", f"Binance 返回解析失败: {type(exc).__name__}: {exc}")
-
-
 @router.get("/api/v1/admin/multi-exchange")
 def admin_multi_exchange_status(x_astra_admin_token: str | None = Header(default=None)) -> dict[str, Any]:
     require_admin_header(x_astra_admin_token)
-    from astra_backend.exchanges import (
-        execution_open, registered_venues,
-        venue_credentials, venue_passphrase, venue_testnet_enabled
-    )
+    from astra_backend.exchanges import venue_credentials, venue_passphrase
+    # 外所凭证卡已随外所下架移除：`venues` 保留空字典只为维持响应形状
+    # （前端据 `venues` 是否存在渲染"多交易所"区块；本仓收口后恒为空）。
     venues: dict[str, Any] = {}
     def _read_creds(v: str, env: str | None = None) -> tuple[str, str]:
         try:
             return venue_credentials(v, env)
         except TypeError:
             return venue_credentials(v)
-
-    for v in registered_venues():
-        if v == "okx":
-            continue
-        api_key, secret = _read_creds(v)
-        live_ak, live_sk = _read_creds(v, "live")
-        demo_ak, demo_sk = _read_creds(v, "demo")
-        venues[v] = {
-            "has_api_key": bool(api_key),
-            "has_secret": bool(secret),
-            "live": {
-                "has_api_key": bool(live_ak),
-                "has_secret": bool(live_sk),
-            },
-            "demo": {
-                "has_api_key": bool(demo_ak),
-                "has_secret": bool(demo_sk),
-            },
-            "testnet": venue_testnet_enabled(v),
-            "execution_open": execution_open(v),
-        }
 
     from scripts.okx_runtime import current_environment
     okx_env = current_environment()
@@ -251,14 +136,6 @@ def admin_multi_exchange_status(x_astra_admin_token: str | None = Header(default
             "live": {"has_api_key": bool(okx_live_ak), "has_secret": bool(okx_live_sk), "has_passphrase": bool(okx_live_pp)},
             "demo": {"has_api_key": bool(okx_demo_ak), "has_secret": bool(okx_demo_sk), "has_passphrase": bool(okx_demo_pp)},
         },
-        "binance": {
-            "live": venues.get("binance", {}).get("live", {}),
-            "demo": venues.get("binance", {}).get("demo", {}),
-        },
-        "gate": {
-            "live": venues.get("gate", {}).get("live", {}),
-            "demo": venues.get("gate", {}).get("demo", {}),
-        },
     }
 
     health: dict[str, Any] = {}
@@ -269,7 +146,7 @@ def admin_multi_exchange_status(x_astra_admin_token: str | None = Header(default
     except Exception:
         health = {}
 
-    # 保证 OKX 健康度与延迟展示（与 Binance / Gate 对齐）
+    # 保证 OKX 健康度与延迟展示
     if "venues" in health and "okx" in health["venues"]:
         okx_h = health["venues"]["okx"]
         okx_h["testnet"] = bool(okx_env.simulated)
@@ -294,18 +171,6 @@ def admin_multi_exchange_update(payload: MultiExchangeUpdate,
                                 x_astra_session: str | None = Header(default=None, alias="X-Astra-Session")) -> dict[str, Any]:
     actor = require_superadmin(x_astra_session)
     secret_map = {
-        "BINANCE_API_KEY": payload.binance_api_key,
-        "BINANCE_SECRET_KEY": payload.binance_secret_key,
-        "BINANCE_LIVE_API_KEY": payload.binance_live_api_key,
-        "BINANCE_LIVE_SECRET_KEY": payload.binance_live_secret_key,
-        "BINANCE_DEMO_API_KEY": payload.binance_demo_api_key,
-        "BINANCE_DEMO_SECRET_KEY": payload.binance_demo_secret_key,
-        "GATE_API_KEY": payload.gate_api_key,
-        "GATE_SECRET_KEY": payload.gate_secret_key,
-        "GATE_LIVE_API_KEY": payload.gate_live_api_key,
-        "GATE_LIVE_SECRET_KEY": payload.gate_live_secret_key,
-        "GATE_DEMO_API_KEY": payload.gate_demo_api_key,
-        "GATE_DEMO_SECRET_KEY": payload.gate_demo_secret_key,
         "OKX_LIVE_API_KEY": payload.okx_live_api_key,
         "OKX_LIVE_SECRET_KEY": payload.okx_live_secret_key,
         "OKX_LIVE_PASSPHRASE": payload.okx_live_passphrase,
@@ -321,20 +186,6 @@ def admin_multi_exchange_update(payload: MultiExchangeUpdate,
     if secret_values:
         fn_save_secrets(secret_values)
     env_values: dict[str, Any] = {}
-    if payload.binance_testnet is not None:
-        env_values["ASTRA_BINANCE_TESTNET"] = "1" if payload.binance_testnet else "0"
-    if payload.gate_testnet is not None:
-        env_values["ASTRA_GATE_TESTNET"] = "1" if payload.gate_testnet else "0"
-    if payload.gate_execution is not None:
-        if payload.confirmation.strip().upper() != "OPEN GATE EXECUTION":
-            raise HTTPException(status_code=400,
-                                detail="变更执行开关确认短语必须精确为：OPEN GATE EXECUTION")
-        env_values["ASTRA_GATE_EXECUTION"] = "1" if payload.gate_execution else "0"
-    if payload.binance_execution is not None:
-        if payload.confirmation.strip().upper() != "OPEN BINANCE EXECUTION":
-            raise HTTPException(status_code=400,
-                                detail="变更执行开关确认短语必须精确为：OPEN BINANCE EXECUTION")
-        env_values["ASTRA_BINANCE_EXECUTION"] = "1" if payload.binance_execution else "0"
     if payload.okx_execution is not None:
         if payload.confirmation.strip().upper() != "OPEN OKX EXECUTION":
             raise HTTPException(status_code=400,
@@ -451,60 +302,6 @@ def admin_okx_account_snapshot(
     except Exception as exc:  # 审计 C6：所失败显式化，不再抹平为"完整"
         venue_errors["okx"] = f"{type(exc).__name__}: {str(exc)[:180]}"
 
-    from astra_backend.close_intent import (
-        create as _create_close_intent, INTENT_TTL_SECONDS as _CLOSE_INTENT_TTL,
-        adapter_environment as _close_adapter_env, _current_credential_fp as _close_cred_fp,
-    )
-    for venue in ("binance", "gate"):
-        try:
-            from astra_backend.exchanges import get_adapter
-            adapter_env = _close_adapter_env(venue, env.mode)
-            ad = get_adapter(venue, environment=adapter_env)
-            cred_fp = _close_cred_fp(venue, adapter_env)  # 审计 B3：令牌钉住凭证身份
-            if hasattr(ad, "positions"):
-                for p in (ad.positions() or []):
-                    amt = float(p.get("size_signed", 0) or 0)
-                    if abs(amt) < 1e-12:
-                        continue
-                    sym = str(p.get("symbol") or p.get("base") or "").split("-")[0]
-                    if not sym:
-                        continue
-                    inst_display = f"{sym}-USDT-SWAP"
-                    pos_side = "long" if amt > 0 else "short"
-                    close_token, close_confirmation = _create_close_intent(
-                        venue=venue, environment=env.mode, display_inst=inst_display,
-                        symbol=sym, pos_side=pos_side, expected_size=abs(amt),
-                        credential_fingerprint=cred_fp)
-                    # 保证金口径与 OKX 段对齐：优先交易所给的 margin，缺失时用
-                    # 名义额/杠杆推（两者都来自交易所实况）；都拿不到就是 0，
-                    # 前端据此回落显示原生张数，不显示捏造的数字。
-                    _pos_margin = float(p.get("margin") or 0.0)
-                    if _pos_margin <= 0:
-                        _pos_lev = float(p.get("leverage") or 0.0)
-                        _pos_notional = float(p.get("notional") or 0.0)
-                        if _pos_lev > 0 and _pos_notional > 0:
-                            _pos_margin = round(_pos_notional / _pos_lev, 2)
-                    combined_positions.append({
-                        "venue": venue,
-                        "exchange": venue,
-                        "instId": inst_display,
-                        "posSide": pos_side,
-                        "pos": str(abs(amt)),
-                        "margin": _pos_margin,
-                        "mgnMode": "cross",
-                        "upl": float(p.get("unrealized_pnl", 0) or 0),
-                        "close_confirmation": close_confirmation,
-                        "close_token": close_token,
-                        "close_token_expires_in": _CLOSE_INTENT_TTL,
-                    })
-            if hasattr(ad, "open_orders"):
-                for o in (ad.open_orders() or []):
-                    o_copy = dict(o)
-                    o_copy.setdefault("venue", venue)
-                    combined_orders.append(o_copy)
-        except Exception as exc:
-            venue_errors[venue] = f"{type(exc).__name__}: {str(exc)[:180]}"
-
     if not env.configured and not combined_positions and not combined_orders:
         raise HTTPException(status_code=503, detail=f"OKX {str(env.mode).upper()} API Key 未配置：V5 直签是唯一私有通道（fail-closed，无 CLI 回退）")
 
@@ -529,8 +326,6 @@ def venue_accounts(environment: str = Query(default="demo"),
     require_admin_header(x_astra_admin_token, x_astra_session)
     venues_map = {
         "okx": _venue_accounts_okx(env_key),
-        "gate": _venue_accounts_gate(env_key),
-        "binance": _venue_accounts_binance(env_key),
     }
     from astra_backend.portfolio_aggregator import aggregate_venue_accounts
     summary = aggregate_venue_accounts(venues_map, env_key)
@@ -552,7 +347,7 @@ def listing_status(environment: str = Query(default="demo"),
         raise HTTPException(status_code=400, detail="environment 只允许 demo 或 live")
     from astra_backend.exchanges.listing import listing_snapshot
     venues: dict[str, dict[str, Any]] = {}
-    for venue in ("okx", "gate", "binance"):
+    for venue in ("okx",):
         snap = listing_snapshot(venue, _LISTING_ENV_MAP[venue][env_key])
         venues[venue] = {
             "ok": snap.ok,
@@ -567,58 +362,3 @@ def listing_status(environment: str = Query(default="demo"),
         "venues": venues,
         "captured_at_ms": int(time.time() * 1000),
     }
-
-
-@router.get("/api/v1/admin/venue-protection/scan")
-def venue_protection_scan(
-    x_astra_admin_token: str | None = Header(default=None),
-    x_astra_session: str | None = Header(default=None, alias="X-Astra-Session"),
-) -> dict[str, Any]:
-    """跨所保护单**只读预演**（roadmap G8）：开闸前先看"这一轮会做什么"。
-
-    - **绝不下单、绝不撤单**：走 `audit_cross_venue_protection(dry_run=True)`，
-      只读交易所的保护单列表并判定（缺口/临期/不可判定）；
-    - 需要 live 网络（每所一次持仓读取 + 每仓一次保护单列表），故需管理员鉴权；
-    - 输出 `would`（本该做什么：renew/repair/verify/noop）、`critical`（完全没有止损腿）、
-      `errors`（逐所隔离的失败）。`ASTRA_VENUE_PROTECTION_WATCHDOG` 的开关状态一并回传，
-      便于区分"巡检没开"与"巡检开了但没发现问题"。
-    """
-    require_admin_header(x_astra_admin_token, x_astra_session)
-    from scripts.okx_runtime import current_environment
-    from astra_backend.close_intent import adapter_environment
-    from astra_backend.exchanges import get_adapter
-    from scripts.trader.venue_protection import audit_cross_venue_protection
-
-    env = current_environment()
-    snapshot: dict[str, Any] = {}
-    snapshot_errors: dict[str, str] = {}
-    for venue in ("gate", "binance"):
-        try:
-            ad = get_adapter(venue, environment=adapter_environment(venue, env.mode))
-            rows = [p for p in (ad.positions() or [])
-                    if abs(float(p.get("size_signed") or 0) or 0) > 0]
-            snapshot[venue] = rows
-        except Exception as exc:
-            # 与巡检同一纪律：读不到就如实登记，绝不假装"该所干净"
-            snapshot_errors[venue] = f"{type(exc).__name__}: {exc}"
-            snapshot[venue] = []
-
-    class _Registry:
-        @staticmethod
-        def get_adapter(v: str, environment: str | None = None):
-            return get_adapter(v, environment=environment or adapter_environment(v, env.mode))
-
-    # 第一百七十四刀：把台账行交给归属层做**取证**（`ledger` 档证据＝同币同向同量已平记录）。
-    # 读不到 ⇒ None ⇒ 不产生证据（腿留在"归属不可判定"，绝不自动撤）。
-    from scripts.trader.venue_protection import read_ledger_rows
-    report = audit_cross_venue_protection(snapshot, venue_registry=_Registry,
-                                          environment=env.mode, dry_run=True,
-                                          ledger_rows=read_ledger_rows(DATA_DIR / "trading_ledger.json"))
-    report["environment"] = env.mode
-    report["snapshot_errors"] = snapshot_errors
-    try:
-        from scripts import ai_factor_trader as _aft
-        report["watchdog_enabled"] = bool(getattr(_aft, "ASTRA_VENUE_PROTECTION_WATCHDOG", False))
-    except Exception:
-        report["watchdog_enabled"] = None
-    return report

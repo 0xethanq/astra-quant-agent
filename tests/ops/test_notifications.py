@@ -134,10 +134,10 @@ class NotificationsTests(unittest.TestCase):
             self.assertEqual(payload["body"], "Bark测试消息")
             self.assertEqual(payload["group"], "AstraQuant-Trade")
 
-    def test_modern_notifier_double_tp_and_three_venues(self):
+    def test_modern_notifier_double_tp_and_okx_venue(self):
         import scripts.qq_notifier as notifier
         with patch("scripts.qq_notifier._publish", return_value=True) as mock_pub:
-            # Test Binance multi-venue + double TP1/TP2
+            # OKX-only 迁移后唯一在场：双止盈 TP1/TP2 + OKX 符号约定
             res = notifier.notify_trade_open(
                 inst="ETH",
                 side="多",
@@ -150,7 +150,7 @@ class NotificationsTests(unittest.TestCase):
                 leverage=5,
                 tp1_px=3320.0,
                 scale_out_ratio=0.50,
-                venue="binance",
+                venue="okx",
                 margin_usdt=325.0,
                 rr_ratio=2.45,
                 confidence=88.0,
@@ -160,9 +160,10 @@ class NotificationsTests(unittest.TestCase):
             self.assertTrue(res)
             event_type, title, msg, payload = mock_pub.call_args[0][:4]
             self.assertEqual(event_type, "trade.opened")
-            self.assertIn("[BINANCE]", title)
-            self.assertIn("BINANCE", msg)
-            self.assertIn("ETHUSDT 永续", msg)
+            # OKX 是默认场所：不叠加 `[OKX]` 标题前缀
+            self.assertNotIn("[OKX]", title)
+            self.assertIn("OKX", msg)
+            self.assertIn("ETH-USDT-SWAP", msg)
             self.assertIn("首批止盈 (TP1 · 50%仓位)：3320.0", msg)
             self.assertIn("终极波段 (TP2 · 剩余仓位)：3450.0", msg)
             self.assertIn("几何盈亏比：2.45 R", msg)
@@ -202,14 +203,14 @@ class NotificationsTests(unittest.TestCase):
                 side="多",
                 entry_px=175.0,
                 fee=1.2,
-                venue="gate",
+                venue="okx",
                 is_partial=True,
             )
             self.assertTrue(res)
             _, title, msg, payload = mock_pub.call_args[0][:4]
             self.assertIn("阶梯止盈 TP1 达成", title)
-            self.assertIn("GATE", msg)
-            self.assertIn("SOL_USDT 永续", msg)
+            self.assertIn("OKX", msg)
+            self.assertIn("SOL-USDT-SWAP", msg)
             self.assertIn("到手净利", msg)
             self.assertIn("+13.8000 USDT", msg)
             self.assertIn("交易手续费: -1.2000 U", msg)

@@ -46,9 +46,6 @@ from astra_backend.dashboard_payload.factors_view import (  # noqa: E402
 from astra_backend.dashboard_payload.ledger_view import (  # noqa: E402
     load_ledger_lifecycle_trades as _core_load_ledger_lifecycle_trades,
 )
-from astra_backend.dashboard_payload.multi_venue import (  # noqa: E402
-    collect_cross_venue_positions as _core_collect_cross_venue_positions,
-)
 from astra_backend.dashboard_payload.local_reads import (  # noqa: E402
     load_local_reads as _core_load_local_reads,
 )
@@ -330,17 +327,9 @@ def update_cache_cycle():
     # （阶段 2·B2 第九刀：迁至 dashboard_payload/algo_protection.py）
     _core_collect_algo_protection(positions, source_errors, _fetch_json,
                                   enrich_position_risk_fields, trackers)
-    # 2.5 Multi-Venue Parity: Aggregate active positions & open orders from Binance & Gate
-    # （阶段 2·B2 第七刀：整段迁至 dashboard_payload/multi_venue.py）
-    # 第一百七十五刀：孤儿腿归属取证要台账行（只读；读不到 ⇒ None ⇒ 候选可能偏少，面板会披露）
-    try:
-        from scripts.trader.venue_protection import read_ledger_rows as _read_ledger_rows
-        _ledger_rows_for_attr = _read_ledger_rows(LEDGER_JSON_FILE)
-    except Exception:
-        _ledger_rows_for_attr = None
-    long_count, short_count, total_pos_upl = _core_collect_cross_venue_positions(
-        positions, pending_orders_list, long_count, short_count, total_pos_upl,
-        source_errors=source_errors, ledger_rows=_ledger_rows_for_attr)
+    # 2.5 多所对齐段已随外所下架整体移除（阶段 2·B2 第七刀迁出的
+    # `dashboard_payload/multi_venue.py` 一并删除）——OKX 持仓/挂单已由上面的
+    # position_view / order_view 收齐，无需再并入任何外所行。
     # 3. Read Reset Initial State（阶段 2·B2 第九刀：迁至 dashboard_payload/reset_state.py）
     reset_time_str, initial_capital_val = _core_read_reset_initial_state(DATA_DIR)
     # 4. Load Bills and Real Order-Level Ledger
@@ -396,10 +385,10 @@ def update_cache_cycle():
     _core_merge_all_integrity_sidecars(source_errors, DATA_DIR, datetime=datetime)
 
     # 审计批7(2026-09-13)·「今日已实现」单一事实源：上方 bills 聚合是 OKX 单所视野
-    # ——binance/gate 当日平仓（实锤：SUI +27.63）前台永远看不见，与三所合并的台账/
+    # ——当时外所当日的平仓（实锤：一单 +27.63）前台永远看不见，与各所合并的台账/
     # 熔断对不上。台账可用时以 ledger_today_stats 覆盖（与熔断锚点逐字同式：
     # net=Σ行pnl，fees 已含行内；funding 单列不混净值），bills 口径退化为
-    # 台账缺失/损坏时的单所降级兜底。
+    # 台账缺失/损坏时的单所降级兜底。字段值 `ledger_multi_venue` 是既有载荷契约，保留。
     _today_stats_source = "okx_bills_degraded"
     if valid_ledger_trades:
         try:
@@ -467,30 +456,18 @@ def update_cache_cycle():
             pass
     try:
         from scripts.okx_runtime import current_environment
-        from astra_backend.exchanges import env_profiles
         _okx_mode = str(current_environment().mode or "demo").lower()
-        _bn_mode = env_profiles.legacy_environment_for("binance")
-        _gate_mode = env_profiles.legacy_environment_for("gate")
-        _venue_envs = {
-            "okx": _okx_mode,
-            "binance": _bn_mode,
-            "gate": _gate_mode,
-        }
-        _is_live_map = {
-            "okx": _okx_mode == "live",
-            "binance": _bn_mode == "live",
-            "gate": _gate_mode == "live",
-        }
-        _distinct_modes = set(_is_live_map.values())
-        _is_mixed = len(_distinct_modes) > 1
+        # 本仓已收口为 OKX 专用：全站只剩一个档位轴 ⇒ `venue_environments` 只含 okx，
+        # `is_mixed_environment` 恒 False（单所不可能"混合"）。
+        # 键名保留是为了不破坏既有载荷契约。
         CACHE_DATA["environment"] = _okx_mode
-        CACHE_DATA["venue_environments"] = _venue_envs
-        CACHE_DATA["is_mixed_environment"] = _is_mixed
+        CACHE_DATA["venue_environments"] = {"okx": _okx_mode}
+        CACHE_DATA["is_mixed_environment"] = False
         if isinstance(CACHE_DATA.get("account"), dict):
             CACHE_DATA["account"]["environment"] = _okx_mode
     except Exception:
         CACHE_DATA["environment"] = "demo"
-        CACHE_DATA["venue_environments"] = {"okx": "demo", "binance": "demo", "gate": "sandbox"}
+        CACHE_DATA["venue_environments"] = {"okx": "demo"}
         CACHE_DATA["is_mixed_environment"] = False
     persist_dashboard_cache(CACHE_DATA)
     LAST_CACHE_TIME = time.time()

@@ -25,7 +25,6 @@ import CryptoLogo from './CryptoLogo.vue';
 const emit = defineEmits<{ (e: 'pick-symbol', instId: string): void }>();
 
 const store = useDashboardStore();
-const crossVenue = computed(() => (store.data as any)?.cross_venue || null);
 const { t } = useI18n();
 
 const rows = computed(() => store.factors || []);
@@ -422,7 +421,6 @@ const processedRows = computed(() => {
 
     <FactorDrawer
       :factor="detail"
-      :cross-venue="crossVenue"
       @close="detail = null"
       @pick-symbol="(id: string) => { detail = null; emit('pick-symbol', id) }"
     />

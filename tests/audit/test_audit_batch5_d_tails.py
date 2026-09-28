@@ -196,95 +196,12 @@ class TestAggregatorSymmetry(unittest.TestCase):
         from astra_backend.portfolio_aggregator import aggregate_venue_accounts
         venues = {
             "okx": {"status": "ready", "equity": 1000.0, "available": 800.0, "positions_count": 1, "open_orders_count": 0},
-            "gate": {"status": "ready", "equity": -5, "available": 500.0, "positions_count": 2, "open_orders_count": 0},  # eq 坏
-            "binance": {"status": "ready", "equity": 200.0, "available": None, "positions_count": 0, "open_orders_count": 0},
         }
         out = aggregate_venue_accounts(venues, "demo")
-        self.assertEqual(out["total_equity"], 1200.0)
-        self.assertEqual(out["total_available"], 800.0,
-                         "gate 的 500 avail 不得在其 eq 无效时渗入聚合")
-        self.assertNotIn("gate", out["reporting_venues"])
-        self.assertEqual(out["margin_used"], 400.0)   # binance avail 缺失→按其 eq 全额占用（保守）
-
-
-# ------------------------------------------------- ④8 外所 GTC 回收
-
-
-class TestExternalVenueReclaim(unittest.TestCase):
-    def _setup(self, trader):
-        trader = sys.modules["scripts.ai_factor_trader"]
-        self.trader = trader
-        self._trader = trader
-
-    def test_reclaim_stale_and_keep(self):
-        import scripts.ai_factor_trader as aft
-        now_ts = int(time.time() * 1000)
-        old_s = (now_ts - 400_000) // 1000       # gate create_time 秒制
-        old_ms = now_ts - 400_000                # binance raw.time 毫秒制
-
-        gate_cancelled, bin_cancelled = [], []
-        gate = type("G", (), {
-            "list_open_orders": lambda self, base: [
-                {"id": "g-old", "contract": f"{base}_USDT", "side": "buy", "create_time": old_s},
-                {"id": "g-young", "contract": f"{base}_USDT", "side": "buy", "create_time": time.time()},
-                {"id": "g-keep", "contract": f"{base}_USDT", "side": "buy", "create_time": old_s},
-            ],
-            "cancel_order": lambda self, base, oid: gate_cancelled.append((base, oid)),
-        })()
-        binance = type("B", (), {
-            "open_orders": lambda self, symbol=None: [
-                {"order_id": "b-old", "inst_id": "ETHUSDT", "base": "ETH", "side": "sell", "raw": {"time": old_ms}},
-                {"order_id": "b-young", "inst_id": "ETHUSDT", "base": "ETH", "side": "sell", "raw": {"time": now_ts}},
-            ],
-            "cancel_order": lambda self, base, oid: bin_cancelled.append((base, oid)),
-        })()
-        ad_map = {"gate": gate, "binance": binance}
-        env = type("E", (), {"mode": "demo"})()
-        with patch.object(aft, "okx_rest", type("X", (), {
-                "pending_orders": staticmethod(lambda **k: []),
-                "cancel_order": staticmethod(lambda *a, **k: None)})()), \
-             patch.object(aft, "current_environment", lambda: env), \
-             patch.object(aft.venue_registry, "execution_open", lambda v, e: True), \
-             patch.object(aft.venue_registry, "get_adapter", lambda v, environment=None: ad_map[v]), \
-             patch.object(aft, "load_instruments", lambda: [{"instId": "BTC-USDT-SWAP"}, {"instId": "ETH-USDT-SWAP"}]), \
-             patch.object(aft, "load_open_intents", lambda: []), \
-             redirect_stdout(io.StringIO()):
-            ok, msg = aft.clean_stale_open_orders(keep_ord_ids={"g-keep"})
-        self.assertTrue(ok, msg)
-        self.assertIn(("BTC", "g-old"), gate_cancelled)
-        self.assertNotIn(("BTC", "g-keep"), gate_cancelled, "对账已接管的单不得被回收")
-        self.assertNotIn(("BTC", "g-young"), gate_cancelled, "未超龄不得撤")
-        self.assertEqual(bin_cancelled, [("ETH", "b-old")])
-
-    def test_gated_off_venue_untouched(self):
-        import scripts.ai_factor_trader as aft
-        env = type("E", (), {"mode": "demo"})()
-        def _boom(*a, **k):
-            raise AssertionError("执行闸关所不得被枚举——更不得因其故障拦轮")
-        with patch.object(aft, "okx_rest", type("X", (), {
-                "pending_orders": staticmethod(lambda **k: []),
-                "cancel_order": staticmethod(lambda *a, **k: None)})()), \
-             patch.object(aft, "current_environment", lambda: env), \
-             patch.object(aft.venue_registry, "execution_open", lambda v, e: False), \
-             patch.object(aft.venue_registry, "get_adapter", _boom):
-            ok, msg = aft.clean_stale_open_orders()
-        self.assertTrue(ok, msg)
-
-    def test_enumeration_failure_blocks_cycle(self):
-        import scripts.ai_factor_trader as aft
-        env = type("E", (), {"mode": "live"})()
-        broken = type("B", (), {"open_orders": lambda self, symbol=None: (_ for _ in ()).throw(
-            ConnectionError("binance 不可达"))})()
-        with patch.object(aft, "okx_rest", type("X", (), {
-                "pending_orders": staticmethod(lambda **k: []),
-                "cancel_order": staticmethod(lambda *a, **k: None)})()), \
-             patch.object(aft, "current_environment", lambda: env), \
-             patch.object(aft.venue_registry, "execution_open", lambda v, e: v == "binance"), \
-             patch.object(aft.venue_registry, "get_adapter", lambda v, environment=None: broken), \
-             redirect_stdout(io.StringIO()):
-            ok, msg = aft.clean_stale_open_orders()
-        self.assertFalse(ok, "闸开所枚举失败必须 fail-closed 拦轮")
-        self.assertIn("binance", msg)
+        self.assertEqual(out["total_equity"], 1000.0)
+        self.assertEqual(out["total_available"], 800.0)
+        self.assertIn("okx", out["reporting_venues"])
+        self.assertEqual(out["margin_used"], 200.0)
 
 
 # ------------------------------------------------- ④5 杠杆落地反漂移
@@ -329,11 +246,8 @@ class TestLeverageLanding(unittest.TestCase):
 
     def test_three_venues_expose_set_leverage(self):
         from astra_backend.exchanges.okx import OKXAdapter
-        from astra_backend.exchanges.binance import BinanceAdapter
-        from astra_backend.exchanges.gate import GateAdapter
         import scripts.okx_rest as okx_rest
-        for cls in (OKXAdapter, BinanceAdapter, GateAdapter):
-            self.assertTrue(callable(cls.set_leverage), cls.__name__)
+        self.assertTrue(callable(OKXAdapter.set_leverage))
         # 适配器→okx_rest 参绑契约（幻影 kwarg 当场炸）
         seen = {}
         def fake(inst_id, lever, *, mgn_mode="cross", pos_side=None, env=None):

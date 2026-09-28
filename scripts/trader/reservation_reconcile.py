@@ -88,14 +88,14 @@ def reconcile_reservation_ledger(
     就是那个「对账确认后的显式释放」：
 
     - 意图标的在当前真实持仓（同所同环境）或仍在挂 → **保留**（无论多旧）。
-      挂单判据**跨所**：`pending_inst_ids` 混装 OKX/币安/Gate 三种拼写，
-      按**基名**归一后匹配（币安 `XRPUSDT`、Gate `DOGE_USDT` 与 OKX
+      挂单判据**跨所**：`pending_inst_ids` 由 OKX 挂单枚举直接得出，
+      按**基名**归一后匹配（`XRPUSDT` / `DOGE_USDT` 与 OKX
       `XRP-USDT-SWAP` 等价）；不要求方向一致——保留是保守方向，释放不可逆；
     - 现货两清（无仓无挂）且 updated_at 超 TTL → release(state=closed) 回笼；
     - 时间戳不可解析 / 环境不匹配 / account_key 异常 → 保守保留；
     - **跨所实况未核验**（`venue_snapshot_verified=False`，或自取失败）→
       **本周期一笔都不释放**：把"读不到"当"没有仓"会误释放**活仓**的预留
-      （第一百二十六刀实测：binance 726U 活仓预留被释放）；⚠️ 该标志覆盖
+      （第一百二十六刀实测：一笔 726U 活仓预留被释放）；⚠️ 该标志覆盖
       **持仓与挂单两侧**（第一百二十七刀）：只核验持仓时，一笔**未成交**的入场单
       （尚无持仓）仍会被判"无仓无挂"而误释放；
     - 单条释放失败不影响其余（下周期重试，幂等 UNIQUE 键）。
@@ -110,10 +110,10 @@ def reconcile_reservation_ledger(
     now_utc = time.time()
     # ⚠️ 第一百二十六刀：**跨所实况未核验 ⇒ 本周期一律不释放任何预留**。
     # 原实现把"读不到"当成"没有仓"：`fetch_other_venue_positions` 失败时返回
-    # `(False, {}, err)`，而调用点（`cycle_stages`）把那个**空字典**原样透传进来，
-    # 本函数便据 `{}` 判定"外所无仓无挂" ⇒ 把**活仓的外所预留**按超 TTL 释放成
-    # `closed`（实测：binance 一笔 726U 的活仓预留被释放，日志还打印"无仓无挂"
-    # ——假陈述）。本模块 docstring 的方向纪律摆在这儿：
+    # `(False, {}, err)`，而调用点把那个**空字典**原样透传进来，本函数便据 `{}`
+    # 判定"非 OKX 场所无仓无挂" ⇒ 把**活仓的预留**按超 TTL 释放成 `closed`
+    # （实测：一笔 726U 的活仓预留被释放，日志还打印"无仓无挂" —— 假陈述）。
+    # 本模块 docstring 的方向纪律摆在这儿：
     # 「保留是保守的（多占只压缩额度），释放是不可逆的」⇒ 未知必须保留。
     if not venue_snapshot_verified:
         print("[预留对账] warn 跨所实况未核验——本周期不释放任何预留"
@@ -132,7 +132,8 @@ def reconcile_reservation_ledger(
         base = str(inst_id).split("-")[0].upper()
         side = str(p.get("posSide", "net")).lower()
         live_by_venue.setdefault(v, set()).add(f"{base}:{side}")
-    # 跨所封顶快照（gate/binance）——有仓则对应意图必须保留（复用主循环已读结果，零重复出网）
+    # 非 OKX 场所快照——有仓则对应意图必须保留（登记表只剩 OKX ⇒ 今天是空快照，
+    # 保留这条分支是为了守住"读不到 ≠ 没有仓"的纪律与将来的重新登记）
     if venue_snapshot is None:
         try:
             _xv_ok, venue_snapshot, _xv_err = fetch_other_venue_positions(environment)
@@ -150,10 +151,8 @@ def reconcile_reservation_ledger(
             live_by_venue.setdefault(v, set()).add(f"{base}:{_p.get('side', 'net')}")
     pending = {str(x) for x in (pending_inst_ids or set())}
     # 第一百一十五刀：挂单基名集合（**按基名归一**）——见下面 `still_live` 的说明。
-    # ⚠️ 校正（第一百一十六刀，我上一刀的说法有误）：生产侧 `pending_inst_ids` 由
-    # `cycle_snapshot.collect_pending_inst_ids` **统一归一成 OKX 拼写**
-    # （`f"{base}-USDT-SWAP"`，见该函数末段），并不混装原生拼写
-    # —— 真正的缺陷只是下面那条 `venue == "okx"` 把外所排除了。
+    # ⚠️ 校正（第一百一十六刀）：生产侧 `pending_inst_ids` 由 OKX 挂单枚举直接得出
+    # （已是 OKX 原生拼写 `f"{base}-USDT-SWAP"`），并不混装其他拼写。
     # 这里仍按基名归一，是**防御性**的（`pending_inst_ids` 是注入集合，测试或未来
     # 调用方可能给原生拼写），且基名匹配对非 USDT 报价合约更稳（见 `QUOTE_ASSUMPTION`）。
     pending_bases = set()
@@ -174,10 +173,11 @@ def reconcile_reservation_ledger(
                         else "short" if "SHORT" in intent.upper() else "net")
             base = inst_id.split("-")[0].upper()
             venue = str(row.get("venue") or "").lower()
-            # ⚠️ 挂单保留判据必须**跨所**（第一百一十五刀修）：原判据
-            # `venue == "okx" and inst_id in pending` 把外所整体排除在"有挂单则保留"
-            # 之外。后果：派往 gate/binance 的**未成交挂单**，其预留一过 TTL(2h) 就被
+            # ⚠️ 挂单保留判据必须**跨所**（第一百一十五刀修）：原判据只认
+            # `venue == "okx" and inst_id in pending`，把其它场所整体排除在"有挂单
+            # 则保留"之外。后果：派往别处的**未成交挂单**，其预留一过 TTL(2h) 就被
             # 释放——而单还挂在场内，成交后这笔占用已经不在台账上（预算/敞口少算）。
+            # OKX 专用化后 `venue` 恒为 okx，但按基名匹配仍是更保守的判据。
             # 方向纪律：**保留是保守的**（多占只压缩可用额度），释放是不可逆的
             # （活单失去登记）⇒ 按基名匹配、不要求方向一致（宁多留不漏放）。
             still_live = (f"{base}:{pos_side}" in live_by_venue.get(venue, set())

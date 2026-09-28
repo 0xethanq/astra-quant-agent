@@ -14,7 +14,6 @@ from pathlib import Path
 from unittest.mock import patch
 
 import astra_backend.app  # noqa: F401  预导入：沙箱只重定向已加载模块
-import astra_backend.execution_router  # noqa: F401
 import astra_backend.routers.risk  # noqa: F401
 import scripts.ai_brain_trader  # noqa: F401
 import scripts.instrument_pool  # noqa: F401
@@ -81,33 +80,36 @@ class EnvInjectionTests(_Base):
         self.assertIn(self.ss.EnvValueError, handlers, "EnvValueError 必须映射为 400，而不是裸 500")
 
 
-class RoutingAssetsTests(_Base):
-    """P2-10：assets 写成字符串会被逐个字符迭代成 ['B','C','T']。"""
+class RoutingPolicySurvivorsTests(_Base):
+    """P2-10 的**存活面**：所池 API 已随多所执行面下架。
+
+    原先这里钉的是 `assets` 写成字符串会被逐字符迭代成 `['B','C','T']`
+    （`load_venue_pool` / `_normalize_assets`）。这两个函数连同整个池 API
+    （`global_risk_defaults` / `DEFAULT_GATE_POOL` / `load_gate_pool` /
+    `load_binance_pool` / `gate_pool_assets` / `effective_mode` /
+    `gate_environment_axis` / `_gate_execution_ready` / `_normalize_assets`）
+    已随外所执行面整体拆除 —— 系统只在 OKX 上交易，不再有"多所池"。
+    留下的路由策略只有首选场所 / 路由模式两组读写，本类只钉它们仍在。
+    """
 
     def setUp(self):
         super().setUp()
         from astra_backend.exchanges import routing_policy
         self.rp = routing_policy
-        self.file = self.root / "data" / "venue_routing.json"
-        self.file.parent.mkdir(parents=True, exist_ok=True)
-        self.rp.ROUTING_FILE = self.file
 
-    def _pool(self, assets):
-        self.file.write_text(json.dumps({"gate": {"assets": assets}}), encoding="utf-8")
-        with patch.object(self.rp, "_gate_execution_ready", lambda: True):
-            return self.rp.load_venue_pool("gate")
+    def test_pool_api_is_gone_not_merely_unused(self):
+        for gone in ("load_venue_pool", "load_gate_pool", "load_binance_pool",
+                     "gate_pool_assets", "effective_mode", "gate_environment_axis",
+                     "_gate_execution_ready", "_normalize_assets",
+                     "global_risk_defaults", "DEFAULT_GATE_POOL"):
+            self.assertFalse(hasattr(self.rp, gone),
+                             f"外所池 API {gone} 应随多所执行面删除")
 
-    def test_single_string_is_one_asset_not_chars(self):
-        self.assertEqual(self._pool("BTC")["assets"], ["BTC"])
-
-    def test_junk_and_non_string_dropped(self):
-        self.assertEqual(self._pool(["BTC", "btc", " eth ", "!!", 5])["assets"], ["BTC", "ETH"])
-
-    def test_non_list_type_becomes_empty_pool(self):
-        self.assertEqual(self._pool(42)["assets"], [])
-
-    def test_empty_list_stays_empty(self):
-        self.assertEqual(self._pool([])["assets"], [])
+    def test_surviving_routing_api_is_intact(self):
+        for kept in ("ROUTING_FILE", "_read_raw_routing", "VALID_PREFERRED_VENUES",
+                     "VALID_ROUTING_MODES", "load_preferred_venue",
+                     "load_routing_mode", "save_routing_mode", "save_preferred_venue"):
+            self.assertTrue(hasattr(self.rp, kept), f"路由策略仍应保留 {kept}")
 
 
 class LeverageFloorTests(_Base):
@@ -115,28 +117,36 @@ class LeverageFloorTests(_Base):
 
     def setUp(self):
         super().setUp()
-        import astra_backend.execution_router as er
         from scripts.risk_constants import MAX_LEVERAGE, MIN_LEVERAGE
-        self.er = er
         self.min_lev, self.max_lev = MIN_LEVERAGE, MAX_LEVERAGE
 
     def test_floor_is_applied_at_execution_layer(self):
-        """1x 决策（低于配置下限）必须在执行层被抬到下限。"""
-        import os
-        from tests.test_gate_execution_router import _StubAdapter
+        """1x 决策（低于配置下限）必须在执行层被抬到下限。
 
-        ad = _StubAdapter()
-        decision = {"asset": "BTC", "action": "BUY_LONG", "margin_usdt": 50.0, "leverage": 1.0,
-                    "entry_price": 79000.0, "take_profit_price": 82000.0, "stop_loss_price": 77000.0}
-        with patch.object(self.er, "_load_venue_pool_soft", lambda venue: {}), \
-             patch.dict(os.environ, {"ASTRA_GATE_EXECUTION": "1"}):
-            result = self.er.open_protected_position(decision, adapter=ad, max_margin_usdt=1000.0)
-        leverage_calls = [c for c in ad.calls if c[0] == "leverage"]
-        self.assertTrue(leverage_calls or result.get("stage") in {"risk_gate", "margin", "exposure", "precheck"},
-                        f"未进入杠杆阶段: {result}")
-        if leverage_calls:
-            self.assertGreaterEqual(leverage_calls[0][2], self.min_lev, "执行层未抬升到 MIN_LEVERAGE")
-            self.assertLessEqual(leverage_calls[0][2], self.max_lev)
+        ⚠️ 多所执行面下架后的定位变化（断言语义不变）：原入口
+        `astra_backend.execution_router.open_protected_position` 已整体删除；
+        OKX 直签路径的杠杆夹取落点是 `scripts/trader/entry_execution.py` 调用的
+        `scripts/trader/leverage.clamp_ai_leverage`。故这里断言：
+        ① 执行层真的把配置下限/上限传进夹取函数；② 该函数确实抬下限、夹上限。
+        """
+        from scripts.trader.leverage import clamp_ai_leverage
+
+        src = (ROOT / "scripts" / "trader" / "entry_execution.py").read_text(encoding="utf-8")
+        self.assertIn("min_leverage=MIN_LEVERAGE", src, "执行层未把配置下限传进杠杆夹取")
+        self.assertIn("max_leverage=MAX_LEVERAGE", src, "执行层未把配置上限传进杠杆夹取")
+
+        # 显式区间（与环境无关）：低于下限 ⇒ 抬到下限；高于上限 ⇒ 夹回上限。
+        self.assertEqual(
+            clamp_ai_leverage(1.0, min_leverage=3.0, max_leverage=7.0, inst_lever_cap=0.0)[0], 3.0)
+        self.assertEqual(
+            clamp_ai_leverage(99.0, min_leverage=3.0, max_leverage=7.0, inst_lever_cap=0.0)[0], 7.0)
+
+        # 真实配置值：下限缺省/为 0 时兜底 1x（实现语义），上限缺省兜底 20x。
+        expected_floor = float(self.min_lev or 0.0) or 1.0
+        lev, _ = clamp_ai_leverage(1.0, min_leverage=self.min_lev,
+                                   max_leverage=self.max_lev, inst_lever_cap=0.0)
+        self.assertGreaterEqual(lev, expected_floor, "执行层未抬升到 MIN_LEVERAGE")
+        self.assertLessEqual(lev, float(self.max_lev or 20.0))
 
     def test_per_instrument_cap_tightens_global_upper(self):
         self.assertLessEqual(min(self.max_lev, 3.0), self.max_lev)
@@ -359,50 +369,54 @@ class ExposureCapTests(_Base):
         self.assertIn("ASTRA_MAX_TOTAL_EXPOSURE_USDT", DEFAULTS)
         self.assertIn("ASTRA_MAX_TOTAL_EXPOSURE_USDT", RISK_ENV_KEYS)
 
-    def test_router_refuses_when_projected_exposure_exceeds_cap(self):
-        import astra_backend.execution_router as er
+    def test_enforcement_refuses_when_projected_exposure_exceeds_cap(self):
+        """闸门**按设计**拒开 —— 不是异常兜底。
 
-        class _Ad:
-            environment = "demo"
+        ⚠️ 多所执行面下架后的定位变化（断言强度不变）：原入口
+        `astra_backend.execution_router.open_protected_position` 已删除，
+        但敞口闸门本体与 OKX 直签路径的调用点都还在
+        （`astra_backend/execution/risk_gates.py::check_total_exposure`，由
+        `scripts/trader/order_submit.py::_shared_venue_entry_gate` 调用）。
+        这里直接驱动闸门本体，断言它给的是**敞口语义**的拒开理由。
+        """
+        from astra_backend.execution.risk_gates import check_total_exposure
 
-            def positions(self):
-                return [{"base": "BTC", "size_signed": 1.0, "side": "long", "mark_price": 100000.0}]
+        def _fail_factory(stage, detail, **extra):
+            return {"stage": stage, "detail": detail, **extra}
 
-        # ⚠️ 本用例**过去是"因为错误的理由"通过的**（结构优化阶段 4·B3 第三十八刀查明）：
-        #   ① `action` 曾写成 `"buy"`，而 R:R 闸门只认 `"BUY_LONG"`/`"SELL_SHORT"`
-        #   —— 故物理风控**先**拒开，根本走不到敞口闸门；
-        #   ② 敞口闸门那行 `_all_positions if _all_positions is not None else ...`
-        #   的 `_all_positions` 是**局部变量**（赋值在其后）→ 抛 UnboundLocalError，
-        #   被裸 `except Exception` 吞掉并返回 `_fail("exposure", ...)`。
-        #   于是 `ok is False` 恒成立、`stage == "exposure"` 恒成立 —— 断言全中，
-        #   但走的是**异常路径**，闸门一天也没真正生效过。
-        # 现改用合法方向 + 真正会让闸门触发的上限，断言它**按设计**拒开。
-        decision = {"asset": "BTC", "action": "BUY_LONG", "margin_usdt": 200.0, "leverage": 5.0,
-                    "entry_price": 100.0, "take_profit_price": 110.0, "stop_loss_price": 95.0}
         # 已有同向 1.0 张 × 100000 = 100000U；本单名义 200×5 = 1000U。
         # 上限设 50000U → 预计敞口 101000U 必然超限。
-        with patch.object(er, "TOTAL_EXPOSURE_CAP", 50000.0), \
-             patch.object(er, "_load_venue_pool_soft", lambda venue: {}), \
-             patch.object(er, "require_execution", lambda *a, **k: None):
-            result = er.open_protected_position(decision, adapter=_Ad(), max_margin_usdt=5000.0)
-        self.assertFalse(result.get("ok"), "同向敞口超上限必须拒开")
+        result = check_total_exposure(
+            venue="okx", asset="BTC", action="BUY_LONG", margin=200.0, leverage=5.0,
+            total_exposure_cap=50000.0, all_positions=None,
+            positions_reader=lambda: [
+                {"base": "BTC", "venue": "okx", "size_signed": 1.0, "side": "long",
+                 "mark_price": 100000.0}],
+            fail_factory=_fail_factory)
+        self.assertIsNotNone(result, "同向敞口超上限必须拒开")
         self.assertEqual(result.get("stage"), "exposure")
         self.assertIn("同向敞口", result.get("detail") or "",
                       "必须是闸门给出的敞口理由，而不是异常兜底")
 
-    def test_cap_zero_means_unlimited(self):
-        import astra_backend.execution_router as er
-        with patch.object(er, "TOTAL_EXPOSURE_CAP", 0.0):
-            # 结构优化阶段 4·B3 第三十八刀：敞口闸门实现已迁至
-            # `astra_backend/execution/risk_gates.py`（`check_total_exposure`），
-            # 故定位随之改到那里。语义不变：0 / 负数 = 不限制（与其余风控键一致）——
-            # 现在写成早退形式 `if exposure_cap <= 0: return None`。
-            src = (ROOT / "astra_backend" / "execution" / "risk_gates.py").read_text(encoding="utf-8")
-            router_src = (ROOT / "astra_backend" / "execution_router.py").read_text(encoding="utf-8")
+    def test_cap_zero_means_unlimited_and_entry_point_still_calls_the_gate(self):
+        from astra_backend.execution.risk_gates import check_total_exposure
+
+        def _reader_that_must_not_run():
+            raise AssertionError("上限为 0 时闸门必须短路，不得取数")
+
+        result = check_total_exposure(
+            venue="okx", asset="BTC", action="BUY_LONG", margin=200.0, leverage=5.0,
+            total_exposure_cap=0.0, all_positions=None,
+            positions_reader=_reader_that_must_not_run,
+            fail_factory=lambda stage, detail, **extra: {"stage": stage})
+        self.assertIsNone(result, "0 必须表示不限制（与其余风控键语义一致）")
+
+        src = (ROOT / "astra_backend" / "execution" / "risk_gates.py").read_text(encoding="utf-8")
         self.assertIn("if exposure_cap <= 0:", src,
                       "0 必须表示不限制（与其余风控键语义一致）")
-        self.assertIn("_check_total_exposure(", router_src,
-                      "门面仍须在发送前调用敞口闸门")
+        submit_src = (ROOT / "scripts" / "trader" / "order_submit.py").read_text(encoding="utf-8")
+        self.assertIn("_check_exposure(", submit_src,
+                      "下单主路径仍须在发送前调用敞口闸门")
 
 
 class HighRiskConfirmationTests(_Base):
@@ -548,14 +562,14 @@ class ConfigEffectMatrixTests(_Base):
 
     # key → 引擎执行点源码指纹（该键被真正消费的位置）
     ENFORCERS = {
-        "ASTRA_MAX_TOTAL_EXPOSURE_USDT": ("astra_backend/execution_router.py", "TOTAL_EXPOSURE_CAP"),
-        "ASTRA_MAX_LEVERAGE": ("astra_backend/execution_router.py", "MAX_LEVERAGE"),
-        "ASTRA_MIN_LEVERAGE": ("astra_backend/execution_router.py", "MIN_LEVERAGE"),
-        "ASTRA_MAX_SINGLE_ASSET_MARGIN_USDT": ("astra_backend/execution_router.py", "MAX_SINGLE_ASSET_MARGIN"),
+        "ASTRA_MAX_TOTAL_EXPOSURE_USDT": ("scripts/risk_constants.py", "MAX_TOTAL_EXPOSURE_USDT"),
+        "ASTRA_MAX_LEVERAGE": ("scripts/risk_constants.py", "MAX_LEVERAGE"),
+        "ASTRA_MIN_LEVERAGE": ("scripts/risk_constants.py", "MIN_LEVERAGE"),
+        "ASTRA_MAX_SINGLE_ASSET_MARGIN_USDT": ("scripts/risk_constants.py", "MAX_SINGLE_ASSET_MARGIN"),
         "ASTRA_PORTFOLIO_RISK_BUDGET_USDT": ("scripts/ai_brain_trader.py", "PORTFOLIO_RISK_BUDGET_USDT"),
         "ASTRA_MAX_CONCURRENT_POSITIONS": ("scripts/risk_constants.py", "effective_max_positions"),
         "ASTRA_MAX_SAME_DIRECTION_POSITIONS": ("scripts/risk_constants.py", "MAX_SAME_DIRECTION_POSITIONS"),
-        "ASTRA_MAX_MARGIN_EQUITY_RATIO": ("astra_backend/execution_router.py", "MAX_MARGIN_EQUITY_RATIO"),
+        "ASTRA_MAX_MARGIN_EQUITY_RATIO": ("scripts/risk_constants.py", "MAX_MARGIN_EQUITY_RATIO"),
         "ASTRA_SINGLE_ASSET_EQUITY_RATIO": ("scripts/risk_constants.py", "SINGLE_ASSET_EQUITY_RATIO"),
         "ASTRA_RISK_PER_TRADE_RATIO": ("scripts/risk_constants.py", "RISK_PER_TRADE_RATIO"),
         "ASTRA_MAX_RISK_PER_TRADE_USDT": ("scripts/risk_constants.py", "MAX_RISK_PER_TRADE_USDT"),

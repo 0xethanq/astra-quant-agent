@@ -93,7 +93,6 @@ class PersistStageTest(unittest.TestCase):
 
         log = self.root / "trader.log"
         persist_state_and_sync_ledger(
-            _xv_total=2, xv_positions_by_venue={"binance": [{"inst_id": "SOL"}]},
             venue_position_span=venue_position_span,
             active_pos_count=1, all_factors=[], cb_active=False, cb_reason="",
             executed_actions=["开了 1 单"], long_count=1, short_count=0,

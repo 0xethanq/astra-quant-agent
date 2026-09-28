@@ -11,7 +11,7 @@
 | `data/r20_quant.db` | 交易台账认不出来 ⇒ 系统"忘了"自己的历史成交 |
 | `data/r20_admin.db` | 管理员账号消失 ⇒ 进不去后台 |
 | `data/r20_gateway.db` | 事件投递/调度状态归零 |
-| `data/r20_secrets.enc` + `.r20_secret_key` | **加密的交易所凭证打不开** ⇒ 三所全部 NOT READY |
+| `data/r20_secrets.enc` + `.r20_secret_key` | **加密的交易所凭证打不开** ⇒ 交易所凭证全部 NOT READY |
 | `data/.r20_gateway.lock` / `_heartbeat` / pid | 锁与心跳指向旧路径 ⇒ 监督与存活判据读不到 |
 | `logs/r20_admin_audit.jsonl` | 审计链断代 |
 

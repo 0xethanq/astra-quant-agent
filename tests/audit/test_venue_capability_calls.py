@@ -1,34 +1,31 @@
-"""按所分流的能力调用必须**带守卫**（第一百九十二刀）。
+"""适配器**能力差异**调用必须带守卫（第一百九十二刀；多所拆除后收口为单所口径）。
 
-## 为什么（上一刀真机踩到）
+## 为什么
 
-三个适配器的能力**并不一致**（实测矩阵）：
+适配器实现之间的能力**并不一致**。真机踩到的那次是：`cancel_orphan_attributed_legs`
+直接 `ad.cancel_price_order(leg_id)`，而只有某一个实现有这个方法 ⇒ 对另一个实现恒
+`AttributeError` ⇒ 腿撤不掉（而它恰是孤儿腿最多的那一所）。这类调用的失败往往是
+**被 except 吞掉**的（"读不到/做不到"静默变成"没有"），所以必须靠门钉住。
 
-| 方法 | okx | binance | gate |
-|---|---|---|---|
-| `cancel_price_order` | ✗ | ✗ | ✓ |
-| `cancel_algo_order` | ✗ | ✓ | ✗ |
-| `list_open_orders` | ✗ | ✗ | ✓ |
-| `detect_position_mode` | ✗ | ✓ | ✓ |
-| `signed_request` | ✗ | ✓ | ✓ |
-
-`cancel_orphan_attributed_legs`（跨所、默认含 binance）此前直接 `ad.cancel_price_order(leg_id)`
-⇒ 对 **Binance 恒 `AttributeError`** ⇒ 腿撤不掉（而 Binance 恰是孤儿腿最多的所）。
-这类调用的失败往往是**被 except 吞掉**的（"读不到/做不到"静默变成"没有"），所以必须靠门钉住。
+多所执行面（含 `execution_router` / `venue_protection` 的跨所清理）已随 OKX 专用化
+移除，**能力差异的来源也随之变了**：不再是"三家适配器的差异"，而是
+"`OKXAdapter` / `OKXPublicAdapter` / `SandboxExchangeAdapter` 这几个**实现**之间的差异"。
+本门因此把矩阵改成**从实现集合动态推导**（不写死任何场所名单）：
+凡"至少一个实现有、至少一个实现没有"的公共方法，调用它就必须带守卫。
 
 ## 判据
 
-在 `scripts/`、`astra_backend/` 里，对**按所分流的能力**（至少一所有、至少一所无）的调用，
+在 `scripts/`、`astra_backend/`、`astra_gateway/`、`plugins/` 里，对上述方法的调用，
 必须能在其所在函数里找到下列**任一**守卫：
 
 1. `hasattr(同一接收者, "方法")` / `getattr(同一接收者, "方法", …)` —— 能力探针；
-2. **按所分流**：形如 `_v == "gate"` / `venue in ("gate", "binance")` 的字符串比较
-   （结构化识别：比较双方是"场所名变量"与"场所字面量"）；
-3. **接收者本身绑定到某个所**：`ad_bn` / `ad_gate` / `_venue_accounts_gate` 这类名字里含场所名；
+2. **按实现分流**：形如 `_v == "okx"` 的字符串比较（结构化识别）；
+3. **接收者本身绑定到某个实现**：`ad = get_adapter("okx", …)`，或名字里含实现名
+   （`okx_rest` / `sandbox_sb` …）且该实现确有这个方法；
 4. `self.方法(...)` —— 适配器**自身内部**调用（只有它自己有这个方法）；
 5. 显式允许清单（附理由）。
 
-现状：**0 处无守卫**。另附非空自检与牙齿（合成的无守卫 `ad.cancel_price_order(x)` 必被抓）。
+另附非空自检与牙齿（合成的无守卫 `ad.cancel_price_order(x)` 必被抓）。
 """
 
 from __future__ import annotations
@@ -42,29 +39,48 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 SCAN_DIRS = ("scripts", "astra_backend", "astra_gateway", "plugins")
-VENUES = ("okx", "binance", "gate")
-VENUE_WORDS = set(VENUES)
-#: 形如 `_v` / `venue` / `_gv` 的"场所名变量"（用于结构化识别按所分流）
+
+#: 需要比对能力差异的**实现**集合（基类不参与：基类声明的是契约，不是差异来源）。
+#: ⚠️ 只收 `astra_backend/exchanges/` 里的**交易所适配器实现**；
+#: `sandbox/adapter.py` 是测试替身（`reset`/`step` 之类是它自己的回放契约），
+#: 把它算进来会把回放实现自己的调用点误判成"无守卫"。
+IMPL_NAMES = ("okx", "okx_public")
+#: 接收者名字里出现即视为"绑定到某实现"的词。
+IMPL_WORDS = set(IMPL_NAMES)
+#: 形如 `v` / `venue` / `_v` 的"场所名变量"（用于结构化识别按所分流）
 VENUEISH_NAMES = {"v", "venue", "_v", "_gv", "target_venue", "venue_key", "name", "self_venue"}
 #: 显式放行（附理由）。当前为空 —— 守卫都能结构化识别。
 ALLOWLIST: dict[tuple[str, str, int], str] = {}
 
 
-def adapter_classes():
-    from astra_backend.exchanges import get_adapter
-    return {v: type(get_adapter(v, environment="demo")) for v in VENUES}
+def adapter_classes() -> dict:
+    """所有**具体交易所适配器实现**（差异来源）。"""
+    from astra_backend.exchanges import OKXAdapter, OKXPublicAdapter
+    return {"okx": OKXAdapter, "okx_public": OKXPublicAdapter}
 
 
-def venue_specific_methods(classes) -> dict:
-    """至少一所有、至少一所无的公共能力 ⇒ 调用它们就得带守卫。"""
-    allm = set()
-    for c in classes.values():
-        allm |= {m for m in dir(c) if not m.startswith("_") and callable(getattr(c, m, None))}
+def capability_gap_methods(classes) -> dict:
+    """**基类契约之外**的公共能力 ⇒ 调用它们就得带守卫。
+
+    单所口径下"各所有没有"这个差异源消失了，但**契约差异**仍在：
+    凡 `BaseExchangeAdapter` 没有声明、只在某个具体实现上存在的公共方法，
+    调用方都不能假定"任何适配器都有它"—— 这正是那次真事故的形状
+    （`ad.cancel_price_order(leg_id)` 对没有该方法的实现恒 `AttributeError`）。
+    """
+    from astra_backend.exchanges.base import BaseExchangeAdapter
+    base = {m for m in dir(BaseExchangeAdapter)
+            if not m.startswith("_") and callable(getattr(BaseExchangeAdapter, m, None))}
     out = {}
-    for m in sorted(allm):
+    for m in sorted({m for c in classes.values() for m in dir(c)
+                     if not m.startswith("_") and callable(getattr(c, m, None))}):
+        if m in base:
+            continue
         have = [v for v, c in classes.items() if hasattr(c, m)]
-        if 0 < len(have) < len(VENUES):
+        if 0 < len(have) < len(classes):
             out[m] = have
+        elif have:
+            # 所有具体实现都有、但基类没有声明 ⇒ 同样不能假定"任何适配器都有"
+            out[m] = sorted(classes)
     return out
 
 
@@ -78,12 +94,8 @@ def _enclosing(tree: ast.AST, lineno: int):
     return best
 
 
-def venue_bound_by_binding(tree, fn, recv: str, method: str, specific: dict):
-    """③ 接收者是否**由 `get_adapter("<venue>", …)` 绑定**（同函数或模块级），且该所有这个方法。
-
-    真机形态：`ad_bn = get_adapter("binance", environment=…)`、`ad = get_adapter("gate", …)`
-    以及模块级 `okx_rest`（名字里就含场所）。这类接收者天然只可能是某一个所 ⇒ 无需再探测。
-    """
+def impl_bound_by_binding(tree, fn, recv: str, method: str, gaps: dict):
+    """③ 接收者是否**由 `get_adapter("<impl>", …)` 绑定**，且该实现有这个方法。"""
     scopes = [n for n in (fn, tree) if n is not None]
     for scope in scopes:
         for node in ast.walk(scope):
@@ -96,32 +108,28 @@ def venue_bound_by_binding(tree, fn, recv: str, method: str, specific: dict):
             if not (isinstance(value, ast.Call) and isinstance(value.func, ast.Name)
                     and value.func.id == "get_adapter"):
                 continue
-            venue = None
+            impl = None
             for arg in value.args:
                 if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
-                    venue = arg.value.lower()
+                    impl = arg.value.lower()
                     break
-            if venue is None:                      # get_adapter(venue, …) 变量参数：看名字
-                for kw in value.keywords + []:
-                    if isinstance(kw.value, ast.Constant) and isinstance(kw.value.value, str):
-                        venue = kw.value.value.lower()
-            if venue and method in specific and venue in specific[method]:
-                return f"bound-to-{venue}"
+            if impl and method in gaps and impl in gaps[method]:
+                return f"bound-to-{impl}"
     return None
 
 
-def guard_kind(fn, recv: str, method: str, *, tree=None, specific=None):
+def guard_kind(fn, recv: str, method: str, *, tree=None, gaps=None):
     """返回守卫类型名，或 None（无守卫）。"""
     if recv == "self":
         return "self-internal"                                   # ④
-    named = [w for w in VENUE_WORDS if w in recv.lower()]
-    if named and specific is not None:
-        # ③a 名字里带场所 ⇒ 只在该所**确实有这个方法**时才算守卫；
-        # 若带的是"没有该方法的所"（如 `ad_gate.cancel_algo_order`）⇒ **不豁免**，这正是危险。
-        if any(w in specific.get(method, []) for w in named):
-            return f"venue-bound-name:{'/'.join(sorted(named))}"
-    if tree is not None and specific is not None:
-        bound = venue_bound_by_binding(tree, fn, recv, method, specific)   # ③b ad_bn = get_adapter("binance")
+    named = [w for w in IMPL_WORDS if w in recv.lower()]
+    if named and gaps is not None:
+        # ③a 名字里带实现 ⇒ 只在该实现**确实有这个方法**时才算守卫；
+        # 若带的是"没有该方法的实现"⇒ **不豁免**，这正是危险。
+        if any(w in gaps.get(method, []) for w in named):
+            return f"impl-bound-name:{'/'.join(sorted(named))}"
+    if tree is not None and gaps is not None:
+        bound = impl_bound_by_binding(tree, fn, recv, method, gaps)   # ③b
         if bound:
             return bound
     if fn is None:
@@ -136,12 +144,12 @@ def guard_kind(fn, recv: str, method: str, *, tree=None, specific=None):
             ops = [ast.unparse(o) for o in [node.left] + list(node.comparators)]
             lits = {n.value for n in ast.walk(node)
                     if isinstance(n, ast.Constant) and isinstance(n.value, str)}
-            if (lits & VENUE_WORDS) and any(o in VENUEISH_NAMES for o in ops):
-                return "venue-branch"
+            if (lits & IMPL_WORDS) and any(o in VENUEISH_NAMES for o in ops):
+                return "impl-branch"
     return None
 
 
-def find_unguarded_calls(source: str, rel_path: str, specific: dict):
+def find_unguarded_calls(source: str, rel_path: str, gaps: dict):
     out = []
     try:
         tree = ast.parse(source)
@@ -151,15 +159,15 @@ def find_unguarded_calls(source: str, rel_path: str, specific: dict):
         if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
             continue
         method = node.func.attr
-        if method not in specific:
+        if method not in gaps:
             continue
         recv = ast.unparse(node.func.value)
         fn = _enclosing(tree, node.lineno)
-        if guard_kind(fn, recv, method, tree=tree, specific=specific):
+        if guard_kind(fn, recv, method, tree=tree, gaps=gaps):
             continue
         if (rel_path, method, node.lineno) in ALLOWLIST:
             continue
-        out.append((node.lineno, method, recv, fn.name if fn else "<module>", specific[method]))
+        out.append((node.lineno, method, recv, fn.name if fn else "<module>", gaps[method]))
     return out
 
 
@@ -171,70 +179,79 @@ def _iter_py():
             yield path
 
 
-class VenueCapabilityCallsTest(unittest.TestCase):
+class AdapterCapabilityCallsTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.specific = venue_specific_methods(adapter_classes())
+        cls.gaps = capability_gap_methods(adapter_classes())
 
-    def test_every_venue_specific_call_has_a_guard(self):
+    def test_every_capability_gap_call_has_a_guard(self):
         problems = []
         for path in _iter_py():
             rel = str(path.relative_to(ROOT))
             for line, method, recv, fname, have in find_unguarded_calls(
-                    path.read_text(encoding="utf-8"), rel, self.specific):
+                    path.read_text(encoding="utf-8"), rel, self.gaps):
                 problems.append(f"{rel}:{line} ({fname}) {recv}.{method}(…) 仅 {have} 有该方法")
-        self.assertEqual(problems, [], "按所分流的能力调用没有守卫（另一所会 AttributeError，"
+        self.assertEqual(problems, [], "适配器能力差异调用没有守卫（另一实现会 AttributeError，"
                                        "且常被 except 吞掉）：\n" + "\n".join(problems))
 
     def test_matrix_is_not_vacuous(self):
-        self.assertGreaterEqual(len(self.specific), 5,
-                                f"按所分流的能力只有 {len(self.specific)} 个 ⇒ 门可能已与实现脱节")
-        for must in ("cancel_price_order", "cancel_algo_order", "list_open_orders"):
-            self.assertIn(must, self.specific)
+        self.assertGreaterEqual(len(self.gaps), 3,
+                                f"实现间的能力差异只推出 {len(self.gaps)} 个 ⇒ 门可能已与实现脱节")
+        for must in ("detect_position_mode", "open_orders"):
+            self.assertIn(must, self.gaps,
+                          f"{must} 应被识别为「并非所有实现都有」的能力（矩阵与实现脱节）")
 
     def test_call_sites_are_actually_scanned(self):
-        seen = 0
+        """扫描器必须**真的看见**调用点（防路径写错导致空转）。
+
+        ⚠️ 单所口径下调用点数量大幅下降：原先 15+ 处大多是跨所分支（已随多所执行面
+        删除）。判据因此改成**点名**：至少要在 `scripts/` 侧看见一个真实调用点 ——
+        只看适配器实现内部（`self.`）不算，那证明不了调用侧被扫到。
+        """
+        seen = []
         for path in _iter_py():
-            src = path.read_text(encoding="utf-8")
-            tree = ast.parse(src)
+            rel = str(path.relative_to(ROOT))
+            tree = ast.parse(path.read_text(encoding="utf-8"))
             for node in ast.walk(tree):
                 if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) \
-                        and node.func.attr in self.specific:
-                    seen += 1
-        self.assertGreaterEqual(seen, 15, f"只扫到 {seen} 个相关调用点 ⇒ 门与实现脱节")
+                        and node.func.attr in self.gaps:
+                    seen.append((rel, node.func.attr))
+        self.assertTrue(seen, "一个相关调用点都没扫到 ⇒ 门与实现脱节")
+        self.assertTrue(any(rel.startswith("scripts/") for rel, _ in seen),
+                        f"只在适配器定义内部看见调用点（{seen}）⇒ 调用侧可能漏扫")
 
     def test_teeth_on_unguarded_call(self):
         # ⚠️ 这张表必须覆盖下面每个用例用到的方法 —— 否则 `find_unguarded_calls` 根本不看它，
         # 断言 `== []` 就成了**空转**（本刀自己踩到过一次，见提交信息）。
-        specific = {"cancel_price_order": ["gate"], "cancel_algo_order": ["binance"]}
+        gaps = {"cancel_price_order": ["okx"], "cancel_algo_order": ["sandbox"]}
         unguarded = ("def f(ad, oid):\n"
                      "    return ad.cancel_price_order(oid)\n")
-        self.assertTrue(find_unguarded_calls(unguarded, "scripts/x.py", specific),
-                        "无守卫的按所能力调用没被抓到 ⇒ 门没有牙齿")
+        self.assertTrue(find_unguarded_calls(unguarded, "scripts/x.py", gaps),
+                        "无守卫的能力差异调用没被抓到 ⇒ 门没有牙齿")
         for guarded in (
             "def f(ad, oid):\n"
             "    if hasattr(ad, 'cancel_price_order'):\n"
             "        return ad.cancel_price_order(oid)\n",
             "def f(_v, ad, oid):\n"
-            "    return ad.cancel_price_order(oid) if _v == 'gate' else None\n",
-            "def f(ad_gate, oid):\n"
-            "    return ad_gate.cancel_price_order(oid)\n",
-            # ③b：接收者由 get_adapter("binance") 绑定 ⇒ 该所确有 cancel_algo_order ⇒ 合规
+            "    return ad.cancel_price_order(oid) if _v == 'okx' else None\n",
+            "def f(okx_ad, oid):\n"
+            "    return okx_ad.cancel_price_order(oid)\n",
+            # ③b：接收者由 get_adapter("sandbox") 绑定 ⇒ 该实现确有 cancel_algo_order ⇒ 合规
             "def f(oid):\n"
-            "    ad_bn = get_adapter('binance', environment='demo')\n"
-            "    return ad_bn.cancel_algo_order(algo_id=oid)\n",
+            "    ad_sb = get_adapter('sandbox', environment='demo')\n"
+            "    return ad_sb.cancel_algo_order(algo_id=oid)\n",
             "class A:\n"
             "    def f(self, oid):\n"
             "        return self.cancel_price_order(oid)\n",
         ):
-            self.assertEqual(find_unguarded_calls(guarded, "scripts/x.py", specific), [],
+            self.assertEqual(find_unguarded_calls(guarded, "scripts/x.py", gaps), [],
                              f"合规写法被误判：{guarded[:40]!r}")
-        # 反例：**绑错所**必须被抓（gate 没有 cancel_algo_order）
-        wrong_venue = ("def f(oid):\n"
-                       "    ad_gate = get_adapter('gate', environment='demo')\n"
-                       "    return ad_gate.cancel_algo_order(algo_id=oid)\n")
-        self.assertTrue(find_unguarded_calls(wrong_venue, "scripts/x.py", specific),
-                        "把某所专有方法调到**绑错所**的接收者上没被抓到 ⇒ 门漏掉真实危险")
+        # 反例：**绑错实现**必须被抓（okx 没有 cancel_algo_order）
+        wrong_impl = ("def f(oid):\n"
+                      "    ad_okx = get_adapter('okx', environment='demo')\n"
+                      "    return ad_okx.cancel_algo_order(algo_id=oid)\n")
+        self.assertTrue(find_unguarded_calls(wrong_impl, "scripts/x.py", gaps),
+                        "把某实现专有方法调到**绑错实现**的接收者上没被抓到 ⇒ 门漏掉真实危险")
 
     def test_allowlist_entries_have_reasons(self):
         for key, reason in ALLOWLIST.items():

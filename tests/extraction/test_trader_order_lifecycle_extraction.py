@@ -119,35 +119,6 @@ def _body_dump(fn: ast.FunctionDef) -> str:
 
 
 class OrderLifecycleVerbatimTest(unittest.TestCase):
-    def test_signed_size_side_inference_lands_on_the_moved_impl(self):
-        """正向断言：外所不返回 `side` 时按带符号张数推断方向（aa6d4e0）。
-
-        没有这段推断时，Δ 白名单里的两个代码块就只剩"删掉也不红"，
-        而外所孤儿挂单会重新变成永不回收 —— 所以必须行为级钉住。
-        """
-        import scripts.ai_factor_trader as aft
-        cancelled = []
-        gate = types.SimpleNamespace(
-            # Gate 形状：带符号张数（-3 = 空），无 `side` 字段，字段名 size
-            list_open_orders=lambda b: [{"id": "g1", "contract": "BTC_USDT",
-                                        "create_time": 1, "size": -3}],
-            cancel_order=lambda inst, oid: cancelled.append((inst, oid)))
-        okx = types.SimpleNamespace(pending_orders=lambda: [], cancel_order=lambda *a: None)
-        with patch.object(aft, "_BROKEN_VENUES", set()), \
-             patch.object(aft, "okx_rest", okx), \
-             patch.object(aft, "current_environment",
-                          lambda: types.SimpleNamespace(mode="demo")), \
-             patch.object(aft.venue_registry, "execution_open", lambda v, e: v == "gate"), \
-             patch.object(aft.venue_registry, "get_adapter",
-                          lambda v, environment=None: gate), \
-             patch.object(aft, "load_instruments", lambda: [{"instId": "BTC-USDT-SWAP"}]), \
-             patch.object(aft, "load_open_intents", lambda: []), \
-             redirect_stdout(io.StringIO()):
-            ok, msg = aft.clean_stale_open_orders()
-        self.assertTrue(ok, msg)
-        self.assertEqual(cancelled, [("BTC", "g1")],
-                         "带符号张数没推断出方向 ⇒ 外所孤儿挂单不会被回收")
-
     def test_shells_are_def_with_lazy_same_name_injection(self):
         tree = ast.parse((ROOT / "scripts/ai_factor_trader.py").read_text(encoding="utf-8"))
         want = {
@@ -168,33 +139,6 @@ class OrderLifecycleVerbatimTest(unittest.TestCase):
                 for g in names:
                     self.assertIn(f"{g}={g}", dumped, f"壳缺同名注入 {g}")
                     self.assertIn(g, facade, f"{g} 不是门面全局 ⇒ 壳传参必 NameError")
-
-    def test_broken_venues_reference_semantics_survive_injection(self):
-        """**本刀最易静默失效的一条**：凭证坏所必须被记进**调用方那个**集合。
-
-        既有 batch6 用例只断言"跳过而非拦轮"，没断言集合被改到 ——
-        注入若传成副本，`venue_execution_ready` 就永远看不到坏所，
-        本轮路由会继续往外所派单（真金白银的口子）。
-        """
-        import scripts.ai_factor_trader as aft
-        gate_err = type("GateAPIError", (Exception,), {})("Gate INVALID_KEY: Invalid key provided")
-        gate = type("G", (), {
-            "list_open_orders": lambda self, b: (_ for _ in ()).throw(gate_err)})()
-        okx = types.SimpleNamespace(pending_orders=lambda: [], cancel_order=lambda *a: None)
-        broken = set()   # ← 我们自己持有引用
-        with patch.object(aft, "_BROKEN_VENUES", broken), \
-             patch.object(aft, "okx_rest", okx), \
-             patch.object(aft, "current_environment",
-                          lambda: types.SimpleNamespace(mode="demo")), \
-             patch.object(aft.venue_registry, "execution_open", lambda v, e: v == "gate"), \
-             patch.object(aft.venue_registry, "get_adapter",
-                          lambda v, environment=None: gate), \
-             patch.object(aft, "load_instruments", lambda: [{"instId": "BTC-USDT-SWAP"}]), \
-             redirect_stdout(io.StringIO()):
-            ok, msg = aft.clean_stale_open_orders()
-        self.assertTrue(ok, f"凭证坏所应跳过而非拦轮: {msg}")
-        self.assertIn("gate", broken,
-                      "注入的是集合副本 ⇒ 坏所没被登记，路由仍会派单到该所")
 
     def test_reconcile_reacts_to_facade_patches_and_fails_closed(self):
         """孤儿单撤销 + reason 文案（门面常量注入）+ 撤销失败 fail-closed。"""
@@ -292,29 +236,6 @@ class UnreadableIntentsFailClosedTest(unittest.TestCase):
         self.assertEqual(kept, set())
         self.assertIn("本地意图不可读", buf.getvalue())
 
-    def test_stale_cleanup_does_not_cancel_anything_when_intents_unreadable(self):
-        import scripts.ai_factor_trader as aft
-        calls = []
-
-        def _boom():
-            raise aft.OpenIntentsUnreadable("坏文件")
-
-        binance = types.SimpleNamespace(
-            open_orders=lambda: [{"inst_id": "BTCUSDT", "order_id": "b1", "side": "buy",
-                                  "size": 1.0, "status": "NEW"}],
-            cancel_order=lambda *a, **k: calls.append(a))
-        with patch.object(aft, "load_open_intents", _boom), \
-             patch.object(aft, "current_environment",
-                          lambda: types.SimpleNamespace(mode="demo")), \
-             patch.object(aft.venue_registry, "execution_open", lambda v, e: v == "binance"), \
-             patch.object(aft.venue_registry, "get_adapter",
-                          lambda v, environment=None: binance), \
-             patch.object(aft, "_BROKEN_VENUES", set()), \
-             redirect_stdout(io.StringIO()) as buf:
-            ok, msg = aft.clean_stale_open_orders()
-        self.assertFalse(ok, "回收侧读不到归属依据 ⇒ 必须 fail-closed")
-        self.assertEqual(calls, [], "读不到意图时绝不允许撤外所挂单")
-        self.assertIn("本地意图不可读", buf.getvalue() + str(msg))
 
 if __name__ == "__main__":
     unittest.main()

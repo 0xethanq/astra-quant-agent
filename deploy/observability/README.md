@@ -38,7 +38,7 @@ ASTRA_GRAFANA_PASSWORD='<自己设>' \
 | `ASTRAVenueInstrumentsFailing` | 某所失败标的数 > 0 持续 30m | warning | 该所行情不完整 ⇒ 不应作为决策依据 |
 | `ASTRAVenueHealthStale` | `venue_health.json` 超 45m 未更新 | warning | 同 worker 断档（与行情快照同一个写入周期） |
 | `ASTRAModelCallFailureRate` | 1h 成功率 < 80% 且样本 > 5 持续 15m | warning | 模型/密钥/额度；连续失败会同时走 AI 健康告警 |
-| `ASTRAMarketStreamSilent` | 某所曾收到 tick 但已静默 > 90s 持续 5m | critical | 该所流是否被静默（Binance JSON 订阅实测形态）；**没部署探测时此序列不存在，不会误报** |
+| `ASTRAMarketStreamSilent` | 某所曾收到 tick 但已静默 > 90s 持续 5m | critical | 该所流是否被静默（上游订阅静默的实际形态）；**没部署探测时此序列不存在，不会误报** |
 | `ASTRAMarketStreamParseErrors` | 15m 内帧解析失败 > 0 持续 5m | warning | 上游是否改了字段/频道格式（REST 取数不受影响） |
 | `ASTRAMarketStreamConnectErrors` | 15m 内连接/订阅错误 > 2 持续 5m | warning | 连错域、合约名拼错、『已连接但零数据帧』 |
 | `ASTRARiskLimitMissing` | `count(astra_risk_limit) < 10` 持续 30m | warning | `risk_constants` 是否改名/导入失败（取不到就跳过，不补 0） |

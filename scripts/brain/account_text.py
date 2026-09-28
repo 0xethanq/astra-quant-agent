@@ -113,7 +113,7 @@ def build_position_lines(active_positions_detail: Optional[List[Dict[str, Any]]]
             lwm = safe_float(p.get('lowWaterMark', 0))
             # ⚠️ 第一百一十九刀：原写法是 `p.get(k, 默认)` —— **键存在但值为 None 时
             # 回退不生效**，于是把字面量 `None` / 假的 `--` 喂给模型。
-            # 真机实测（`data/dashboard_last_good.json` 里的 binance UNI 行）：
+            # 真机实测（`data/dashboard_last_good.json` 里的一条历史持仓行）：
             #   `trailingStopPx: None` 而 `trailingSl: 9.025`、`exchangeTp: 8.365`、
             #   `stage_desc: None` 而 `stageDesc: '云端双腿防护中'`
             # ⇒ 模型被告知"动态止损线: -- / 目标止盈: -- / 状态: None"，
@@ -136,7 +136,7 @@ def build_position_lines(active_positions_detail: Optional[List[Dict[str, Any]]]
             # 止损线同样走 `or` 链（trailingStopPx → trailingSl → exchangeSl → `--`）
             sl_px = (p.get('trailingStopPx') or p.get('trailingSl')
                      or p.get('exchangeSl') or '--')
-            # 保护判据（第一百一十八刀起面板/外所持仓都带）：让模型的态势认知
+            # 保护判据（第一百一十八刀起面板持仓就带）：让模型的态势认知
             # 与交易所事实一致 —— 缺口要显式说出来，不可判定**不得**含糊成"已保护"。
             _prot_txt = _protection_text(p)
             _venue_key = str(p.get("venue") or "OKX").upper()

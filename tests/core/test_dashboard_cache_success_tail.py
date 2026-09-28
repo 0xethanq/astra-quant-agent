@@ -41,8 +41,6 @@ class SuccessTailTest(unittest.TestCase):
         patches = {
             "collect_core_account_state": mock.Mock(return_value=core),
             "_core_collect_algo_protection": mock.Mock(return_value=None),
-            "_core_collect_cross_venue_positions": mock.Mock(
-                side_effect=lambda p_, pend, l, s_, u, **kw: (l, s_, u)),
             "_core_read_reset_initial_state": mock.Mock(return_value=("", 1000.0)),
             "_fetch_json": mock.Mock(return_value=(True, ["B"], "")),
             "aggregate_bills_and_metrics": mock.Mock(return_value=bills),

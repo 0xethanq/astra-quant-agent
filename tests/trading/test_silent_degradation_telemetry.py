@@ -250,6 +250,7 @@ class SignalJournalIsolationTest(unittest.TestCase):
         leftovers = [n for n in os.listdir(self.tmp) if n != "signal_journal.json"]
         self.assertEqual(leftovers, [], f"原子写不得留临时文件：{leftovers}")
 
+
 class CycleDisclosureSummaryTest(unittest.TestCase):
     """周期披露汇总（第 50 刀）：每轮必须留下**一条可检索**的"跳过/未核验"行。
 
@@ -283,25 +284,9 @@ class CycleDisclosureSummaryTest(unittest.TestCase):
         self.assertIn("a", line)
         self.assertNotIn("e", line, "只展示前 3 条明细（避免刷屏）")
 
-    def test_watchdog_report_counts_errors_and_critical(self):
-        rep = {"errors": [{"stage": "list"}], "critical": [{"venue": "gate"}, {"venue": "x"}]}
-        line = self._sum(watchdog_report=rep)
-        self.assertIn("跨所保护：错误=1 严重缺口=2", line)
-
-    def test_clean_watchdog_report_adds_no_clause(self):
-        line = self._sum(watchdog_report={"errors": [], "critical": []})
-        self.assertNotIn("跨所保护", line)
-
-    def test_disabled_watchdog_is_disclosed_as_not_running(self):
-        """未开闸的加固层是"没在跑的保护" —— 应当被看见（但不算错误）。"""
-        line = self._sum(watchdog_enabled=False)
-        self.assertIn("跨所保护巡检未开闸", line)
-        self.assertIn("本轮无跳过/未核验项", line)
-
     def test_reporter_never_raises_on_garbage_input(self):
         """报告器不得成为新的单点故障（本仓固有约束）。"""
         for kw in ({"broken_venues": None, "shape_violations": None},
-                   {"watchdog_report": MagicMock()},
                    {"broken_venues": [None, ""], "shape_violations": [None]},
                    {"entries_blocked": None}):
             with self.subTest(kw=sorted(kw)):
@@ -318,10 +303,10 @@ class CycleDisclosureSummaryTest(unittest.TestCase):
         self.assertIn("write_cycle_disclosure_snapshot(", src)
         self.assertIn("path=CYCLE_DISCLOSURE_FILE", src)
         for kw in ("broken_venues=_BROKEN_VENUES", "entries_blocked=entries_blocked",
-                   "shape_violations=_shape_violations", "watchdog_report=_wd_report",
-                   "watchdog_enabled=ASTRA_VENUE_PROTECTION_WATCHDOG"):
+                   "shape_violations=_shape_violations"):
             with self.subTest(arg=kw):
                 self.assertIn(kw, src, f"汇总缺参数 {kw} ⇒ 该路披露不会被汇总")
+
 
 class CycleDisclosurePayloadAndSnapshotTest(unittest.TestCase):
     """披露载荷（结构化）+ 快照落盘（第 51 刀）。
@@ -335,7 +320,6 @@ class CycleDisclosurePayloadAndSnapshotTest(unittest.TestCase):
         clean = cycle_disclosure_payload()
         self.assertTrue(clean["clean"])
         self.assertEqual(clean["broken_venue_count"], 0)
-        self.assertFalse(clean["watchdog_enabled"] is None)
         dirty = cycle_disclosure_payload(broken_venues=["gate"], entries_blocked=True,
                                          shape_violations=["x", "y"])
         self.assertFalse(dirty["clean"])
@@ -345,11 +329,9 @@ class CycleDisclosurePayloadAndSnapshotTest(unittest.TestCase):
 
     def test_payload_tolerates_garbage(self):
         from scripts.trader.cycle_stages import cycle_disclosure_payload
-        p = cycle_disclosure_payload(broken_venues=None, shape_violations=[None],
-                                     watchdog_report=MagicMock())
+        p = cycle_disclosure_payload(broken_venues=None, shape_violations=[None])
         self.assertEqual(p["broken_venue_count"], 0)
         self.assertEqual(p["shape_violation_count"], 1)     # None 也如实计入（不假装没发生）
-        self.assertEqual(p["watchdog_errors"], 0)           # 非 dict ⇒ 不猜、不计
 
     def test_snapshot_is_written_atomically_with_freshness_stamp(self):
         import json as _json
@@ -376,3 +358,7 @@ class CycleDisclosurePayloadAndSnapshotTest(unittest.TestCase):
             raise OSError("磁盘满")
         self.assertFalse(write_cycle_disclosure_snapshot(
             path="/proc/nonexistent/x.json", payload={}, _atomic_write_json=boom))
+
+
+if __name__ == "__main__":
+    unittest.main()

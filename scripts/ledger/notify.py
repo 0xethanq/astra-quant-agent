@@ -1,7 +1,7 @@
 """台账同步后的新平仓通知（从 sync_full_ledger.build_lifecycle_ledger 搬出）。
 
-判定"新平仓"= id 不在本轮既有已平集合里、且 status == "closed"；三路来源
-（OKX 生命周期 + Binance + Gate）合并后逐条通知。
+判定"新平仓"= id 不在本轮既有已平集合里、且 status == "closed"；本轮
+OKX 生命周期来源逐条通知。
 
 qq_notifier 用**惰性导入**（函数内），保持原语义以免拖慢/拖挂在未配置通知的环境；
 通知失败只打印告警，绝不影响台账落盘（整段在 try 内）。
@@ -9,14 +9,12 @@ qq_notifier 用**惰性导入**（函数内），保持原语义以免拖慢/拖
 返回值为空：副作用是外部通知，与本模块纯判定部分不同，故单列一个文件。
 """
 def notify_newly_closed_trades(*,
-        binance_trades,
         existing_closed_ids,
-        gate_trades,
         trades_lifecycle):
     # Notify newly closed trades via QQ
     try:
         from qq_notifier import notify_trade_close
-        for t in (trades_lifecycle + binance_trades + gate_trades):
+        for t in trades_lifecycle:
             if t["id"] not in existing_closed_ids and t.get("status") == "closed":
                 _kw = dict(
                     inst=t.get("inst", "CRYPTO"),

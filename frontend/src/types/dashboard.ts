@@ -13,7 +13,6 @@ export interface AccountSummary {
   pos_upl_total?: number
   margin_usage_pct?: number
   risk_level?: string
-  currency?: string
   initial_capital?: number
   cum_net_pnl?: number
   cum_realized_pnl?: number
@@ -139,7 +138,6 @@ export interface InstrumentFactor {
     stop_loss_price: number
     risk_reward_ratio: string
     summary_reason: string
-    venue_decision?: VenueDecisionEvidence | null
   }
   thought_process?: {
     market_structure?: string
@@ -149,41 +147,6 @@ export interface InstrumentFactor {
     risk_reward_evaluation?: string
   }
   position?: any
-  /**
-   * US-004 · 选所决策证据（US-003 路由落盘 → 决策缓存 → /api/all 透传）。
-   * 后端未接线/老快照时为 null/undefined——消费端必须优雅降级（缺 ≠ 0）。
-   */
-  venue_decision?: VenueDecisionEvidence | null
-}
-
-/** 被淘汰的候选交易所及淘汰阶段（venue_router._stage_of 口径） */
-export interface VenueRejectedRow {
-  venue?: string
-  stage?: string
-  reason?: string
-}
-
-/** US-004 · venue_decision 段的线上结构（纯附加字段，逐键可选） */
-export interface VenueDecisionEvidence {
-  /** 手动选所优先项：'auto' = 评分路由 */
-  preferred_venue?: string
-  /** 中选交易所；null = 全部候选被硬筛淘汰 */
-  venue?: string | null
-  /** OK / OK_HYSTERESIS / ALL_REJECTED / NO_CANDIDATES */
-  reason_code?: string
-  /** 逐所评分/判定明细（人读文本） */
-  reasons?: string[]
-  /** 被淘汰候选及原因 */
-  rejected?: VenueRejectedRow[]
-  hysteresis_applied?: boolean
-  /** 多所分配切片（分配开关 off 时为 null） */
-  allocation?: Array<{ venue?: string; amount_usdt?: number | null }> | null
-  decided_utc?: string
-  /** selected / rejected / budget_rejected / budget_error */
-  outcome?: string
-  skip_reason?: string
-  executed_venue?: string | null
-  budget?: Record<string, unknown> | null
 }
 
 /**
@@ -252,8 +215,6 @@ export interface DashboardResponse {
   data_health?: any
   state_snapshot?: any
   environment?: 'demo' | 'live'
-  venue_environments?: Record<string, string>
-  is_mixed_environment?: boolean
   /** US-004 · 组合风险占用（预算/已预留/可用余量；未接入时为缺省） */
   portfolio_risk?: PortfolioRiskRow | null
   [key: string]: any

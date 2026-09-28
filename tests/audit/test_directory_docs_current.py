@@ -69,7 +69,9 @@ MANAGED = {
     # 第四十二刀新增：自进化引擎的可观测性聚簇外提。
     "scripts/evolution": {"allowed_extra": {"self_improvement_engine.py"}},
     # 第四十三刀新增：选所质量域外提（门面仍是单文件 venue_router.py）。
-    "astra_backend/venue_routing": {"allowed_extra": {"venue_router.py"}},
+    # ⚠️ 2026-09-28 移除：Binance/Gate 下架、系统改为 OKX 专用后，
+    # `astra_backend/venue_routing/` 与 `venue_router.py` 整体删除，
+    # 本受管条目随之退场（留着一个只剩 `__pycache__` 的空目录会让本门 FileNotFoundError）。
     # 第四十四刀新增：快讯纯判断逻辑外提（门面仍是 news_sentiment_harvester.py）。
     "scripts/news": {"allowed_extra": {"news_sentiment_harvester.py"}},
     # 第四十五刀新增：微积分引擎实现外提（门面仍只做再导出）。
@@ -239,7 +241,7 @@ class RootLevelModulesRegisteredTest(unittest.TestCase):
             and not any((ROOT / "astra_backend" / sub / n).exists()
                         for sub in ("dashboard_payload", "council", "execution",
                                     "exchanges", "routers", "llm", "policy",
-                                    "sandbox", "venue_routing")))
+                                    "sandbox")))
         self.assertEqual(
             dangling, [],
             f"README 提到这些 `.py` 但全仓找不到 —— 会把人引到死路: {dangling}")

@@ -328,7 +328,6 @@ def canonical_package_projection(payload: Mapping[str, Any]) -> Dict[str, Any]:
         "council_config": _canon_council_config(src.get("council_config")),
         "risk_config": {str(k): v for k, v in sorted((src.get("risk_config") or {}).items())}
         if isinstance(src.get("risk_config"), Mapping) else {},
-        "venue_routing": src.get("venue_routing") or {},
     }
 
 
@@ -339,7 +338,7 @@ def _projection_digest(projection: Mapping[str, Any]) -> str:
 
 
 def package_identity(payload: Mapping[str, Any]) -> str:
-    """整包标识（16 hex）：用于归档文件命名，保证「只差风控/路由」的版本不再同名。"""
+    """整包标识（16 hex）：用于归档文件命名，保证「只差风控」的版本不再同名。"""
     return _projection_digest(canonical_package_projection(payload))
 
 
@@ -350,7 +349,7 @@ def package_restore_diff(archived_payload: Mapping[str, Any],
     - 归档**没装**的单元（空/None）无从承诺，一律跳过——不能因为「当前有、归档没有」
       就判恢复失败（旧包无法清空它诞生之后才出现的内容）；
     - 已装的顺序性单元（提示词/心法/拦截器/委员会）要求全等；
-    - 已装的字典类单元（风控/路由）只核对归档里出现过的键；归档之后新增的键由
+    - 已装的字典类单元（风控）只核对归档里出现过的键；归档之后新增的键由
       `restore_archived_policy` 以 `uncovered_risk_keys` 如实披露。
     """
     archived = canonical_package_projection(archived_payload)
@@ -362,7 +361,7 @@ def package_restore_diff(archived_payload: Mapping[str, Any],
             continue
         if want != current.get(unit):
             bad.append(unit)
-    for unit in ("risk_config", "venue_routing"):
+    for unit in ("risk_config",):
         want, got = archived.get(unit) or {}, current.get(unit) or {}
         if not want:
             continue

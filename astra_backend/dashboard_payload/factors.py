@@ -73,7 +73,7 @@ def enrich_position_risk_fields(tracker_file: str | os.PathLike[str], positions,
             # 而这两个键**后端从未发过** ⇒ 徽标永远不亮、TP 永远走别的来源。
             # 数据就在 tracker 里（`scripts/trader/scale_out.py` 写 `scale_out_phase`/
             # `scale_out_tp`），只是没被接出来。**缺席即缺席**：tracker 没这项就不写这一项
-            # （不写 0 —— 币安/Gate 行本来就没有 tracker，写成 0 等于替它们断言"未开始"）。
+            # （不写 0 —— 没有 tracker 的行本来就没有该项，写成 0 等于替它断言"未开始"）。
             **({"scaleOutPhase": int(float(tracker.get("scale_out_phase")))} if str(tracker.get("scale_out_phase", "")).strip() not in ("", "None") else {}),
             **({"scaleOutTp": float(tracker.get("scale_out_tp"))} if str(tracker.get("scale_out_tp", "")).strip() not in ("", "None") else {}),
             "cloudProtectionLastVerified": (tracker.get("cloudProtection") or {}).get("verifiedAt"),

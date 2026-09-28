@@ -15,12 +15,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from astra_backend.exchanges.routing_policy import (
-    _gate_execution_ready,
-    _normalize_assets,
     _read_raw_routing,
-    gate_pool_assets,
-    load_binance_pool,
-    load_venue_pool,
     save_preferred_venue,
     save_routing_mode,
 )
@@ -39,74 +34,7 @@ class VenueRoutingPolicyTailsTests(unittest.TestCase):
         self.addCleanup(p.stop)
 
     # -------------------------------------------------------------------------
-    # 1. 资产规范化 (_normalize_assets)
-    # -------------------------------------------------------------------------
-    def test_normalize_assets_distinguishes_unconfigured_from_explicitly_empty(self):
-        """★ 2026-09-28 三所平权：`None` 与 `""`/`[]` **不再同解**。
-
-        此前两者都归一成 `[]`，而 `[]` 在**执行层**是「该所停发」的开关、
-        在**选所层**是「不设限」的代名词 —— 同一个值两层语义相反，正是审计里
-        「OKX 无法用池开关停发、却又能被空池误停」的根因。
-
-        现在：`None` = 未配置 ⇒ 不设限（返回 `None`）；显式空 ⇒ 停发（返回 `[]`）。
-        """
-        with self.subTest(unconfigured=None):
-            self.assertIsNone(_normalize_assets(None, "gate"),
-                              "未配置必须与显式空池区分开（None=不设限）")
-        for empty_val in ("", [], (), set()):
-            with self.subTest(explicitly_empty=empty_val):
-                self.assertEqual(_normalize_assets(empty_val, "gate"), [],
-                                 "显式空池 = 该所停发")
-
-    # -------------------------------------------------------------------------
-    # 2. 交易所资产池加载容错 (load_venue_pool & shortcuts)
-    # -------------------------------------------------------------------------
-    def test_load_venue_pool_corrupt_json_handled(self):
-        # 配置文件损坏（坏 JSON）时捕获异常并安全回退默认池 (line 135)
-        self.test_routing_file.write_text("{ corrupt json", encoding="utf-8")
-        pool = load_venue_pool("gate")
-        self.assertIn("assets", pool)
-        self.assertIn("margin_per_trade_usdt", pool)
-        # 坏 JSON ⇒ 读不到任何覆盖项 ⇒ 该所**未配置**准入清单 ⇒ 不设限（None）。
-        # （显式 `[]` 才代表"停发"，见 `_normalize_assets` 的说明。）
-        self.assertIsNone(pool["assets"])
-
-    def test_load_venue_pool_non_numeric_risk_fields_handled(self):
-        # 覆盖配置中数值字段为非数值类型时安全捕获并保留 (line 143)
-        self.test_routing_file.write_text(
-            json.dumps({"gate": {"margin_per_trade_usdt": "not-a-number"}}),
-            encoding="utf-8",
-        )
-        pool = load_venue_pool("gate")
-        self.assertEqual(pool["margin_per_trade_usdt"], "not-a-number")
-
-    def test_load_binance_pool_shortcut(self):
-        # 验证 load_binance_pool 捷径调用 load_venue_pool("binance") (line 154)
-        pool = load_binance_pool()
-        self.assertIn("assets", pool)
-        self.assertIn("dry_run", pool)
-        self.assertFalse(pool["dry_run"])
-
-    def test_gate_pool_assets_shortcut(self):
-        # 验证 gate_pool_assets 捷径调用 list(load_gate_pool()["assets"]) (line 292)
-        self.test_routing_file.write_text(
-            json.dumps({"gate": {"assets": ["BTC", "ETH"]}}),
-            encoding="utf-8",
-        )
-        assets = gate_pool_assets()
-        self.assertEqual(assets, ["BTC", "ETH"])
-
-    # -------------------------------------------------------------------------
-    # 3. Gate 实盘就绪校验 (_gate_execution_ready)
-    # -------------------------------------------------------------------------
-    def test_gate_execution_ready_secrets_exception_returns_false(self):
-        # 读取加密密钥抛出异常时捕获并安全返回 False (line 172)
-        with patch("astra_backend.exchanges.routing_policy.execution_open", return_value=True):
-            with patch("astra_gateway.secrets.load_secrets", side_effect=RuntimeError("decrypt error")):
-                self.assertFalse(_gate_execution_ready())
-
-    # -------------------------------------------------------------------------
-    # 4. 原始配置读取与保存容错 (_read_raw_routing, save_routing_mode, save_preferred_venue)
+    # 原始配置读取与保存容错 (_read_raw_routing, save_routing_mode, save_preferred_venue)
     # -------------------------------------------------------------------------
     def test_read_raw_routing_corrupt_file_returns_empty_dict(self):
         # 坏 JSON 时捕获异常返回空字典 (line 183)

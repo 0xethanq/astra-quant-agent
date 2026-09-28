@@ -84,12 +84,15 @@ class SnapshotTest(unittest.TestCase):
         self.assertEqual(out["orders"][0]["venue"], "okx")
 
     def test_venue_failures_are_recorded_not_flattened(self):
-        """★ 审计 C6：所失败**显式化**（`venue_errors`），响应仍成功 —— 不假装"完整"。"""
-        out, exc = self._run({"positions": [], "orders": []})
-        self.assertIsNone(exc, "单所失败不整体失败")
-        self.assertEqual(sorted(out["venue_errors"]), ["binance", "gate"])
-        self.assertIn("RuntimeError", out["venue_errors"]["binance"],
-                      "记下异常类型名便于定位")
+        """★ 审计 C6：所失败显式化（venue_errors），响应仍成功 —— 不假装"完整"。"""
+        p = patch("scripts.okx_runtime.current_environment",
+                  return_value=self._env(True))
+        p.start(); self.addCleanup(p.stop)
+        p2 = patch.object(R, "app_attr", side_effect=lambda name, default: lambda: (_ for _ in ()).throw(RuntimeError("OKX 崩了")))
+        p2.start(); self.addCleanup(p2.stop)
+        out = R.admin_okx_account_snapshot(None, None)
+        self.assertIn("okx", out["venue_errors"])
+        self.assertIn("RuntimeError", out["venue_errors"]["okx"])
 
     def test_unconfigured_and_empty_is_fail_closed_503(self):
         _out, exc = self._run({"positions": [], "orders": []}, configured=False)
@@ -122,26 +125,23 @@ class VenueAccountsRouteTest(unittest.TestCase):
     def test_environment_is_normalised_before_dispatch(self):
         """★ 大小写与首尾空白**先归一再看档位**（我原以为 "  demo  " 会被拒 —— 错：它被受理）。"""
         with patch.object(R, "_venue_accounts_okx", return_value={}) as a, \
-             patch.object(R, "_venue_accounts_gate", return_value={}), \
-             patch.object(R, "_venue_accounts_binance", return_value={}), \
              patch("astra_backend.portfolio_aggregator.aggregate_venue_accounts",
                    return_value={}):
             out = R.venue_accounts("  DEMO  ", None, None)
         self.assertEqual(out["environment"], "demo", "回执里的档位是归一后的值")
-        self.assertEqual(a.call_args.args[0], "demo", "三所收到的是归一后的档位")
+        self.assertEqual(a.call_args.args[0], "demo")
 
-    def test_valid_environment_aggregates_all_three_venues(self):
-        sentinel = {"三所汇总": True}
+    def test_valid_environment_aggregates_okx(self):
+        sentinel = {"OKX汇总": True}
         with patch.object(R, "_venue_accounts_okx", return_value={"status": "ready"}) as a, \
-             patch.object(R, "_venue_accounts_gate", return_value={"status": "ready"}) as b, \
-             patch.object(R, "_venue_accounts_binance", return_value={"status": "ready"}) as c, \
              patch("astra_backend.portfolio_aggregator.aggregate_venue_accounts",
                    return_value=sentinel) as agg:
             out = R.venue_accounts("live", None, None)
-        self.assertEqual(sorted(out["venues"]), ["binance", "gate", "okx"])
+        self.assertEqual(list(out["venues"]), ["okx"])
         self.assertIs(out["portfolio_summary"], sentinel, "汇总来自聚合器（不自己算）")
-        self.assertEqual([a.call_args.args[0], b.call_args.args[0], c.call_args.args[0]],
-                         ["live", "live", "live"], "三所都收到同一个档位")
+        self.assertEqual(a.call_args.args[0], "live")
+        self.assertEqual(out["environment"], "live")
+        self.assertTrue(self.auth.called)
         self.assertEqual(out["environment"], "live")
         self.assertTrue(self.auth.called)
 

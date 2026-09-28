@@ -128,41 +128,6 @@ class TestTraderBreakerLiveWiring(unittest.TestCase):
 class TestRoutingPolicySingleSource(unittest.TestCase):
     """②1：曾 MAX_CONCURRENT_POSITIONS（真名 *_CAP）100% ImportError 被吞成 50/5/72。"""
 
-    def test_defaults_follow_risk_constants(self):
-        import scripts.risk_constants as rc
-        from astra_backend.exchanges.routing_policy import global_risk_defaults
-        d = global_risk_defaults()
-        # ⚠️ 这里**不得**写成 `rc.MAX_SINGLE_ASSET_MARGIN or 50.0`：`.env` 里该项的
-        # 0 语义是"不限单标的封顶"，而 0.0 是 falsy ⇒ 那样写会把"不限"断言成 50，
-        # 于是「每笔硬夹 50U」这个缺陷在门禁里变成"预期行为"。
-        self.assertAlmostEqual(d["margin_per_trade_usdt"], float(rc.MAX_SINGLE_ASSET_MARGIN))
-        self.assertAlmostEqual(d["min_confidence"], float(rc.MIN_ENTRY_CONFIDENCE or 72.0))
-        self.assertGreaterEqual(d["max_open"], 1)
-
-    def test_zero_means_unlimited_and_must_not_be_read_as_fifty(self):
-        """`.env` 置 0 = 不限单标的；绝不能被 `or 50.0` 反转成每笔 50U 硬顶。
-
-        实测 2026-09-28：币安账户 4739U、Gate 1302U，每单却只占 ~50U 保证金 ——
-        正是这条 falsy 兜底把"不限"变成了"50"。
-        """
-        import scripts.risk_constants as rc
-        from astra_backend.exchanges.routing_policy import global_risk_defaults
-        # `global_risk_defaults` 在**调用期**从 `scripts.risk_constants` 取该名字，
-        # 故补丁要打在源模块上（routing_policy 里没有这个模块级名字）。
-        with patch.object(rc, "MAX_SINGLE_ASSET_MARGIN", 0.0):
-            self.assertEqual(global_risk_defaults()["margin_per_trade_usdt"], 0.0)
-        with patch.object(rc, "MAX_SINGLE_ASSET_MARGIN", 250.0):
-            self.assertEqual(global_risk_defaults()["margin_per_trade_usdt"], 250.0)
-
-    def test_no_import_error_swallowing(self):
-        import warnings
-        from astra_backend.exchanges import routing_policy
-        with warnings.catch_warnings(record=True) as w, \
-             patch.dict(sys.modules, {"scripts.risk_constants": None}):  # 强制 import 失败
-            d = routing_policy.global_risk_defaults()
-        self.assertEqual(d["margin_per_trade_usdt"], 50.0)  # 兜底仍在（fail-safe 保守值）
-        # 兜底不再静默：必须有输出可见（print warn 被 capsys 之外验证成本高，这里退验值域）
-
     def test_symbol_cap_actually_named_cap(self):
         import scripts.risk_constants as rc
         self.assertTrue(hasattr(rc, "MAX_CONCURRENT_POSITIONS_CAP"))  # 钉住名字，防再改
@@ -279,12 +244,12 @@ class TestPriceSanityAnchor(unittest.TestCase):
         self.assertIn("ASTRA_MAX_PRICE_CROSS_PCT", src)
         i_geo = src.find("validate_quote_geometry_and_rr")
         i_anchor = src.find("ASTRA_MAX_PRICE_CROSS_PCT")
-        i_multi = src.find("多所平权执行")
+        i_multi = src.find("okx_rest.place_order")
         self.assertLess(i_geo, i_anchor)
         self.assertLess(i_anchor, i_multi)
         # 反证：门面壳里不得出现这三段（否则上面的定位可能虚 Hits）
         shell = inspect.getsource(aft.submit_protected_limit_order)
-        for frag in ("入场价穿价幻觉", "ASTRA_MAX_PRICE_CROSS_PCT", "多所平权执行"):
+        for frag in ("入场价穿价幻觉", "ASTRA_MAX_PRICE_CROSS_PCT", "okx_rest.place_order"):
             self.assertNotIn(frag, shell, f"门面壳残留 {frag} 会虚 Hits 本断言")
 
     def test_semantic_matrix_via_env_thresholds(self):

@@ -78,9 +78,10 @@ test('所有 dsh-card-header 必须使用语义化 <header> 标签', () => {
 
 test('LedgerView 筛选下拉菜单必须使用语义化筛选器名称（而非默认选项值）', () => {
   const vue = readFileSync(path.join(SRC, 'views/dashboard/LedgerView.vue'), 'utf8');
-  assert.match(vue, /v-model="fVenue"[^>]*:aria-label="t\('dash\.ledger\.filters\.venue'\)"/);
   assert.match(vue, /v-model="fMode"[^>]*:aria-label="t\('dash\.ledger\.filters\.mode'\)"/);
   assert.match(vue, /v-model="fInst"[^>]*:aria-label="t\('dash\.ledger\.filters\.symbol'\)"/);
+  // 2026-10 全站收口 OKX：台账不再有场所筛选下拉（历史行仅只读降级展示）
+  assert.doesNotMatch(vue, /fVenue/, '场所筛选下拉已移除，不得回潮');
 });
 
 test('闸自检：能准确拦截无 aria-label 的 select 与非 header 卡片头', () => {

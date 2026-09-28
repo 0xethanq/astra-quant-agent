@@ -90,5 +90,5 @@ test('判据自检：能真的命中（拿两个样例字面量验证）', () =>
   assert.ok(BROKER_CODE_SHAPE.test('0123456789ab' + 'ABCD'), '形状判据必须认得出合法码');
   assert.ok(BROKER_CODE_SHAPE.test('6099c63a8d75SCDE'), '文档样例必须被认出来');
   assert.ok(!BROKER_CODE_SHAPE.test('48039151'), '纯数字邀请码不该被误判为经纪商 code');
-  assert.ok(!BROKER_CODE_SHAPE.test('MCHDBKYF'), 'Gate 邀请码不该被误判为经纪商 code');
+  assert.ok(!BROKER_CODE_SHAPE.test('MCHDBKYF'), '邀请码形状的字符串不该被误判为经纪商 code');
 });

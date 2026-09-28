@@ -32,7 +32,7 @@ const searchQuery = ref<string>('');
 const isBandCollapsed = ref<boolean>(false);
 
 const cryptoNewsCount = computed(() => rawNews.value.filter((item) =>
-  (item.platforms || []).some((p: string) => ['Cointelegraph', 'CoinDesk', 'TheBlock', 'Binance'].some((k) => p.includes(k))) || (item.coins && item.coins.length > 0)
+  (item.platforms || []).some((p: string) => ['Cointelegraph', 'CoinDesk', 'TheBlock'].some((k) => p.includes(k))) || (item.coins && item.coins.length > 0)
 ).length);
 
 const jin10NewsCount = computed(() => rawNews.value.filter((item) =>
@@ -97,7 +97,7 @@ const filteredNews = computed(() => {
   let list = rawNews.value;
   if (selectedSource.value === 'crypto') {
     list = list.filter((item) =>
-      (item.platforms || []).some((p: string) => ['Cointelegraph', 'CoinDesk', 'TheBlock', 'Binance'].some((k) => p.includes(k))) || (item.coins && item.coins.length > 0)
+      (item.platforms || []).some((p: string) => ['Cointelegraph', 'CoinDesk', 'TheBlock'].some((k) => p.includes(k))) || (item.coins && item.coins.length > 0)
     );
   } else if (selectedSource.value === 'jin10') {
     list = list.filter((item) => (item.platforms || []).some((p: string) => p.includes('金十')));

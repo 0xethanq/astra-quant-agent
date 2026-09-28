@@ -83,19 +83,14 @@ class _Base(unittest.TestCase):
         with open(self.paths["LEDGER_JSON_FILE"], "w", encoding="utf-8") as f:
             json.dump(rows, f, ensure_ascii=False)
 
-    def _build(self, *, okx_positions=(), other=(None, None)):
-        """other=(items, ok_venues)：None 表示不 patch（走真实适配器，测试里别用）。"""
+    def _build(self, *, okx_positions=()):
         patchers = [
             patch.object(okx_rest, "positions_history", lambda **k: []),
             patch.object(okx_rest, "orders_history", lambda **k: []),
             patch.object(okx_rest, "positions", lambda **k: list(okx_positions)),
             patch.multiple(sfl, **self.paths),
             patch.object(sfl, "get_ct_val", lambda inst: 1.0),
-            patch.object(sfl, "fetch_binance_closed_trades", lambda *a, **k: []),
-            patch.object(sfl, "fetch_gate_closed_trades", lambda *a, **k: []),
         ]
-        if other and other[0] is not None:
-            patchers.append(patch.object(sfl, "_other_venue_live_positions", lambda axis: other))
         for p in patchers:
             p.start()
             self.addCleanup(p.stop)
@@ -106,23 +101,6 @@ class _Base(unittest.TestCase):
 
 
 class TestMultiVenueHoldings(_Base):
-    def test_binance_holdings_land_in_ledger(self):
-        """活动持仓面板有的，台账必须有（用户报障的直接症状）。"""
-        other = ([
-            {"venue": "binance", "instId": "ETH-USDT-SWAP", "posSide": "long", "pos": 0.275,
-             "avgPx": 2538.5, "markPx": 2470.29, "upl": -18.59, "lever": 2, "fee": 0.0, "cTime": 0},
-            {"venue": "binance", "instId": "SUI-USDT-SWAP", "posSide": "short", "pos": 569.4,
-             "avgPx": 0.7287, "markPx": 0.7495, "upl": 11.86, "lever": 2, "fee": 0.0, "cTime": 0},
-        ], {"binance"})
-        ledger = self._build(other=other)
-        hold = {t["id"]: t for t in ledger if t.get("status") == "holding"}
-        self.assertIn("holding_binance_ETH_多", hold)
-        self.assertIn("holding_binance_SUI_空", hold)
-        self.assertEqual(len(hold), 2)
-        self.assertEqual(hold["holding_binance_ETH_多"]["venue"], "binance")
-        self.assertEqual(hold["holding_binance_SUI_空"]["side"], "空")
-        self.assertAlmostEqual(hold["holding_binance_ETH_多"]["net_pnl"], -18.59, places=2)
-
     def test_ghost_holding_purged_when_venue_has_no_position(self):
         """OKX 平仓后旧 holding 行必须消失（实测幽灵 holding_ALGO_多 / venue=okx）。"""
         self._seed_ledger([{
@@ -130,27 +108,14 @@ class TestMultiVenueHoldings(_Base):
             "status": "holding", "sz": 473.0, "open_px": 0.0934, "close_px": 0.0926,
             "close_time": "持仓中...", "net_pnl": -0.38,
         }])
-        ledger = self._build(okx_positions=(), other=([], {"binance", "gate"}))
+        ledger = self._build(okx_positions=())
         ids = {t["id"] for t in ledger}
         self.assertNotIn("holding_ALGO_多", ids, "幽灵持仓必须被清理")
         self.assertEqual([t for t in ledger if t.get("status") == "holding"], [])
 
-    def test_failed_venue_keeps_old_holdings(self):
-        """取数失败的场所不得清行：缺失≠已平仓（保守留旧行，宁多勿删）。"""
-        self._seed_ledger([{
-            "id": "holding_binance_ETH_多", "inst": "ETH", "side": "多", "venue": "binance",
-            "status": "holding", "sz": 0.275, "open_px": 2538.5, "close_px": 2470.29,
-            "close_time": "持仓中...", "net_pnl": -18.59,
-        }])
-        # binance 取数失败（ok_venues 空）→ 旧行原样保留
-        ledger = self._build(okx_positions=(), other=([], set()))
-        ids = {t["id"] for t in ledger}
-        self.assertIn("holding_binance_ETH_多", ids, "取数失败时旧持仓行必须保留")
-
     def test_okx_holdings_still_built(self):
         """回归：OKX 自己的活动持仓仍要照常入账。"""
-        ledger = self._build(okx_positions=[_okx_pos("BTC", "short", 0.01, 77000.0, 5.0)],
-                             other=([], {"binance", "gate"}))
+        ledger = self._build(okx_positions=[_okx_pos("BTC", "short", 0.01, 77000.0, 5.0)])
         hold = [t for t in ledger if t.get("status") == "holding"]
         self.assertEqual(len(hold), 1)
         self.assertEqual(hold[0]["id"], "holding_okx_BTC_空")

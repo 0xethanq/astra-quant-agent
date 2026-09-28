@@ -9,10 +9,9 @@ import BaseCodeBlock from '../base/BaseCodeBlock.vue';
 import ConfBadge from '../base/ConfBadge.vue';
 import DirTag from '../base/DirTag.vue';
 import { useI18n } from '../../composables/useI18n';
-import { fmtNum, fmtPct, fmtPrice, arrow, dirClass, utcStrToBj } from '../../utils/format';
-import { venueLabel, venueColor, stageLabel, decisionBadgeCls, numOrNull, isPlainObj } from '../../utils/venueMeta';
+import { fmtNum, fmtPct, fmtPrice, arrow, dirClass } from '../../utils/format';
 
-const props = defineProps<{ factor: any | null; crossVenue?: any | null }>();
+const props = defineProps<{ factor: any | null }>();
 const emit = defineEmits<{ (e: 'close'): void; (e: 'pick-symbol', instId: string): void }>();
 
 const { t } = useI18n();
@@ -60,86 +59,6 @@ const smart = computed(() => [
   row('OI', asIs(f.value.oiUsd)),
 ]);
 
-/** US-007 跨所块：本币 OKX/币安/Gate 价与基差 + 双所大户比/费率 + 三所取数健康。
- * 消费面统一走后端合并好的 by_asset（symbols 仅作旧快照兼容回退）；缺值 "--"。 */
-const cvSymbol = computed(() => {
-  const name = String(f.value.name || '').toUpperCase();
-  const cv = props.crossVenue || {};
-  return (cv.by_asset || {})[name] || (cv.symbols || {})[name] || null;
-});
-function _missing(v: unknown): boolean {
-  return v === null || v === undefined || v === '' || !Number.isFinite(Number(v));
-}
-function _num(v: unknown, digits = 2): string {
-  return _missing(v) ? '--' : fmtNum(Number(v), digits);
-}
-function _px(v: unknown): string {
-  return _missing(v) ? '--' : fmtPrice(Number(v));
-}
-function _basis(v: unknown): string {
-  return _missing(v) ? '' : ` (${fmtPct(Number(v), 2, false)})`;
-}
-const cvRows = computed(() => {
-  const s = cvSymbol.value;
-  return [
-    row('OKX', fmtPrice(f.value.price), ''),
-    row('Binance', s ? _px(s.bin_last) + _basis(s.bin_basis_pct) : '--', dirClass(s?.bin_basis_pct)),
-    row('Gate', s ? _px(s.gate_last) + _basis(s.gate_basis_pct) : '--', dirClass(s?.gate_basis_pct)),
-    row(t('dash.matrix.venue.crossLs'), s ? `${_num(s.bin_ls)} / ${_num(s.gate_ls)}` : '--', ''),
-    row(t('dash.matrix.venue.crossFund'), s ? `${_num(s.bin_funding_pct, 4)} / ${_num(s.gate_funding_pct, 4)}` : '--', ''),
-  ];
-});
-const cvHealth = computed(() => {
-  const v = props.crossVenue?.venues || {};
-  return ['okx', 'binance', 'gate'].map((k) => {
-    const x = v[k] || {};
-    const okN = Array.isArray(x.ok) ? x.ok.length : 0;
-    const failN = x.failed ? Object.keys(x.failed).length : 0;
-    return {
-      key: k, ok: okN, fail: failN,
-      avg: x.avg_ms || 0, testnet: !!x.testnet,
-      fresh: okN + failN > 0,
-    };
-  });
-});
-const cvUpdated = computed(() => String(props.crossVenue?.updated_utc || ''));
-
-/** US-004 选所决策证据（venue_decision）：US-003 路由层随决策落盘的纯附加字段。
- *  消费面 factor 顶层优先、decision 嵌套回退；缺数据 → null（区块优雅降级，绝不报错）。 */
-const vd = computed(() => {
-  const raw = f.value.venue_decision ?? d.value.venue_decision ?? null;
-  return isPlainObj(raw) ? raw : null;
-});
-const vdReasons = computed<string[]>(() => {
-  const arr = vd.value?.reasons;
-  return Array.isArray(arr) ? arr.map((x: unknown) => String(x ?? '')).filter(Boolean) : [];
-});
-const vdRejected = computed<Record<string, any>[]>(() => {
-  const arr = vd.value?.rejected;
-  return Array.isArray(arr) ? arr.filter(isPlainObj) : [];
-});
-const vdAllocation = computed<Record<string, any>[]>(() => {
-  const arr = vd.value?.allocation;
-  return Array.isArray(arr) ? arr.filter(isPlainObj) : [];
-});
-const vdBudget = computed(() => (isPlainObj(vd.value?.budget) ? vd.value.budget : null));
-const vdBadgeCls = computed(() => decisionBadgeCls(vd.value));
-const vdIsAuto = computed(() => String(vd.value?.preferred_venue || 'auto').trim().toLowerCase() === 'auto');
-/** 预算预留行文案：limit/前占/本次 逐值 null-safe（"--" ≠ 0） */
-const vdBudgetText = computed(() => {
-  const b = vdBudget.value;
-  if (!b) return '';
-  const parts: string[] = [];
-  const limit = numOrNull(b.limit_usdt);
-  parts.push(t('dash.matrix.budget.limit', undefined, { v: limit === null ? '--' : fmtNum(limit, 0) + 'U' }));
-  const before = numOrNull(b.reserved_before_usdt);
-  if (before !== null) parts.push(t('dash.matrix.budget.before', undefined, { v: fmtNum(before, 2) + 'U' }));
-  const thisAmt = numOrNull(b.amount_usdt ?? b.margin_usdt);
-  parts.push(t('dash.matrix.budget.this', undefined, { v: thisAmt === null ? '--' : fmtNum(thisAmt, 2) + 'U' }));
-  if (b.state) parts.push(t('dash.matrix.budget.state', undefined, { v: String(b.state) }));
-  if (b.error) parts.push(String(b.error));
-  return parts.join(' · ');
-});
 </script>
 
 <template>
@@ -185,57 +104,6 @@ const vdBudgetText = computed(() => {
         </p>
       </div>
 
-      <!-- 选所决策证据（US-004：消费 US-003 venue_decision 落盘段；缺数据优雅降级） -->
-      <div class="card-flat p-3.5" data-test="venue-decision">
-        <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <p class="t-label">{{ t('dash.matrix.venue.title') }}</p>
-          <span v-if="vd?.decided_utc" class="num text-4xs" style="color: var(--ink-3)">
-            {{ utcStrToBj(String(vd.decided_utc), true) }} {{ t('dash.matrix.venue.beijing') }}
-          </span>
-        </div>
-        <template v-if="vd">
-          <div class="flex flex-wrap items-center gap-1.5">
-            <span class="badge" :style="{ color: vd.venue ? venueColor(vd.venue) : 'var(--ink-3)', borderColor: 'currentColor' }">
-              <span class="dot" :style="{ backgroundColor: vd.venue ? venueColor(vd.venue) : 'var(--ink-3)' }" aria-hidden="true" />
-              {{ t('dash.matrix.venue.selectedPrefix') }} {{ vd.venue ? venueLabel(vd.venue) : t('dash.matrix.venue.notSelected') }}
-            </span>
-            <span :class="vdBadgeCls">{{ vd.reason_code || t('dash.matrix.venue.reasonCodeFallback') }}</span>
-            <span v-if="!vdIsAuto" class="badge">{{ t('dash.matrix.venue.manualPrefix') }} · {{ venueLabel(vd.preferred_venue) }}</span>
-            <span v-if="vd.hysteresis_applied" class="badge">{{ t('dash.matrix.venue.hysteresis') }}</span>
-            <span v-if="vd.outcome" class="badge">{{ vd.outcome }}</span>
-          </div>
-          <p v-if="vd.skip_reason" class="mt-2 text-xs leading-body" style="color: var(--down)">{{ vd.skip_reason }}</p>
-          <ul v-if="vdReasons.length" class="mt-2 space-y-1 border-t pt-2" style="border-color: var(--line-1)">
-            <li v-for="(r, i) in vdReasons" :key="'vd-r-' + i" class="text-xs leading-body" style="color: var(--ink-2)">{{ r }}</li>
-          </ul>
-          <div v-if="vdAllocation.length" class="mt-2 flex flex-wrap gap-1.5">
-            <span v-for="(a, i) in vdAllocation" :key="'vd-a-' + i" class="badge num text-4xs">
-              {{ t('dash.matrix.venue.allocPrefix') }} {{ venueLabel(a.venue) }} {{ fmtNum(numOrNull(a.amount_usdt), 2) }}U
-            </span>
-          </div>
-          <!-- 被淘汰候选：移动端横滑不折列 -->
-          <div v-if="vdRejected.length" class="mt-2.5">
-            <p class="t-label mb-1">{{ t('dash.matrix.venue.rejectedTitle', undefined, { n: vdRejected.length }) }}</p>
-            <div class="table-scroll-container rounded-lg" style="border: 1px solid var(--line-1)">
-              <table class="table" :aria-label="t('dash.matrix.venue.rejectedTitle', undefined, { n: vdRejected.length })">
-                <thead>
-                  <tr><th scope="col">{{ t('dash.matrix.venue.thVenue') }}</th><th scope="col">{{ t('dash.matrix.venue.thStage') }}</th><th scope="col">{{ t('dash.matrix.venue.thReason') }}</th></tr>
-                </thead>
-                <tbody>
-                  <tr v-for="(r, i) in vdRejected" :key="'vd-j-' + i">
-                    <td class="font-semibold" :style="{ color: venueColor(r.venue) }">{{ venueLabel(r.venue) }}</td>
-                    <td><span class="badge">{{ stageLabel(r.stage, t) }}</span></td>
-                    <td class="max-w-[320px] truncate text-xs" style="color: var(--ink-2)" :title="String(r.reason || '')">{{ r.reason || '--' }}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-          <p v-if="vdBudgetText" class="mt-2 border-t pt-2 text-4xs leading-body" style="border-color: var(--line-1); color: var(--ink-3)">{{ vdBudgetText }}</p>
-        </template>
-        <p v-else class="t-muted text-xs">{{ t('dash.matrix.venue.noEvidence') }}</p>
-      </div>
-
       <!-- 数据组 -->
       <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div v-for="grp in [
@@ -260,28 +128,6 @@ const vdBudgetText = computed(() => {
             <dd class="num text-sm font-semibold" :class="r.cls">{{ r.value }}</dd>
           </div>
         </dl>
-      </div>
-
-      <!-- 跨所协调（US-007：/api/all cross_venue 消费端） -->
-      <div class="card-flat p-3">
-        <div class="mb-2 flex items-baseline justify-between gap-2">
-          <p class="t-label">{{ t('dash.matrix.venue.crossTitle') }}</p>
-          <span v-if="cvUpdated" class="num text-4xs" style="color: var(--ink-3)">{{ utcStrToBj(cvUpdated, true) }} {{ t('dash.matrix.venue.beijing') }}</span>
-        </div>
-        <div class="mb-2 flex flex-wrap gap-1.5">
-          <span v-for="h in cvHealth" :key="h.key"
-                class="badge num text-4xs"
-                :style="h.testnet ? 'color:var(--info);border-color:currentColor' : (h.fail > 0 ? 'color:var(--warn);border-color:currentColor' : (h.fresh ? 'color:var(--up);border-color:currentColor' : 'color:var(--ink-3);border-color:currentColor'))">
-            {{ h.key.toUpperCase() }} {{ h.fresh ? `${h.ok}/${h.ok + h.fail}` : '--' }}<template v-if="h.avg"> · {{ h.avg }}ms</template><template v-if="h.testnet"> · TN</template>
-          </span>
-        </div>
-        <dl class="space-y-1.5">
-          <div v-for="r in cvRows" :key="r.label" class="flex items-baseline justify-between gap-3 text-xs">
-            <dt style="color: var(--ink-3)">{{ r.label }}</dt>
-            <dd class="num font-semibold" :class="r.cls" style="color: var(--ink-1)">{{ r.value }}</dd>
-          </div>
-        </dl>
-        <p v-if="!cvSymbol" class="t-muted mt-2 text-4xs">{{ t('dash.matrix.venue.crossEmpty') }}</p>
       </div>
 
       <!-- 推演过程 -->

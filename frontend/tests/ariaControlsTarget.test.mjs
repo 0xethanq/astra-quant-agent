@@ -21,7 +21,7 @@
  * 判据看不见它。本批已修为 `drawerOpen ? 'admin-mobile-drawer' : undefined`。
  *
  * 教训：手写的「往回退、数标签配对深度」的启发式会把**兄弟**当成祖先
- * （实测对 `BaseCollapse` / `VenueAccountsPanel` / `DocsView` 三处误报，
+ * （实测对 `BaseCollapse` / `DocsView` 等处误报，
  * 而 live 实测这 3 处都没问题）。本批改用 **`@vue/compiler-dom` 真解析器** 建 AST，
  * 沿 parents 走祖先链 —— 只会对真祖先的 `v-if` 报警。
  *

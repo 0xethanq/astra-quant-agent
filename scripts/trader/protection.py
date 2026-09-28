@@ -134,9 +134,8 @@ def close_trade_payload(*, is_long, timestamp_full, name, action_type, side_suff
     """装配一条平仓台账载荷（原门面 7 处 `record_trade({...})` 的公共 14 字段）。
 
     `venue` 不在这里给：`record_trade()` 会 `setdefault("venue", "okx")`，
-    而 7 处调用点全部是 OKX V5 直签链路（gate lab 写侧自带 `venue="gate"`）。
-    在此显式写 `okx` 会在 dict 顺序上**多一个键**，与旧载荷不再逐字节相同 ——
-    故保持原样交给 `setdefault`。
+    而 7 处调用点全部是 OKX V5 直签链路。在此显式写 `okx` 会在 dict 顺序上
+    **多一个键**，与旧载荷不再逐字节相同 —— 故保持原样交给 `setdefault`。
 
     `direction` / `side` 的拼法与旧载荷逐字一致：
     `direction = f"平{'多' if is_long else '空'}"`、`side = f"{前缀}单{side_suffix}"`。

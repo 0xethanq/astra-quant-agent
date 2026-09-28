@@ -4,7 +4,7 @@
 
 本模块是 roadmap「从轮询迈向流式」的**基础层**，本刀只交付：
 
-1. **帧解析**：把三所公共行情的原始帧归一成 tick；
+1. **帧解析**：把 OKX 公共行情的原始帧归一成 tick；
 2. **有界缓冲**：每个标的只留最近 N 条 tick（内存有界，绝不攒无界表）；
 3. **健康账本**：帧数/tick 数/解析失败/连接错误/**陈旧度**；
 4. **探测 CLI**：`python -m scripts.market_stream --probe`（只读、按需跑、不常驻）。
@@ -12,20 +12,12 @@
 **它不**：不常驻、不接决策路径、不改任何下单行为。现有 REST 取数（
 `market_data_service`）一字未动 —— 流式是**并存**的观测与未来取数面，不是替换。
 
-## 三条被真实端点教出来的规则（本机实跑核对，2026-09-20）
+## 被真实端点教出来的规则（本机实跑核对，2026-09-20）
 
-1. **Gate 期货流要连专用域**：`wss://fx-ws.gateio.ws/v4/ws/usdt`。
-   往现货域 `wss://api.gateio.ws/ws/v4/` 发 `futures.tickers` 会收到
-   `error: Unknown channel futures.tickers` —— **连接成功、订阅被拒**，
-   只看"连上了"会以为一切正常。
-2. **Binance 用路径式订阅**：`wss://fstream.binance.com/ws/btcusdt@trade`。
-   JSON `{"method":"SUBSCRIBE","params":["btcusdt@ticker"]}` 会回
-   `{"result":null,"id":1}`（**订阅成功应答**）但**一条数据都不推**；
-   `markPrice@1s`、`/stream?streams=` 同样静默。⇒ 用路径式，且必须把
-   "已订阅但长时间无数据"当成**故障**（这正是陈旧度账本存在的理由）。
-3. **OKX**：`wss://ws.okx.com:8443/ws/v5/public`，`{"op":"subscribe",...}` 正常，
+1. **OKX**：`wss://ws.okx.com:8443/ws/v5/public`，`{"op":"subscribe",...}` 正常，
    帧里 `data[].ts` 是**交易所毫秒时间戳**，与本地接收时间分开记
    （两者之差才是链路延迟，混在一起就永远看不出延迟）。
+2. **"已订阅但长时间无数据"必须当成故障**：这正是陈旧度账本存在的理由。
 
 ## 与既有可观测性的关系
 
@@ -51,12 +43,7 @@ _BUFFER_MAXLEN = 256
 
 VENUE_ENDPOINTS: Dict[str, str] = {
     "okx": "wss://ws.okx.com:8443/ws/v5/public",
-    # ⚠️ 期货专用域：现货域不接受 futures.tickers（实测 error code=2 "Unknown channel"）
-    "gate": "wss://fx-ws.gateio.ws/v4/ws/usdt",
-    "binance": "wss://fstream.binance.com/ws",
 }
-#: 路径式订阅场所（订阅写在 URL 里，不发 JSON 订阅帧）
-_PATH_SUBSCRIBE = frozenset({"binance"})
 
 __all__ = [
     "SCHEMA_VERSION",
@@ -88,11 +75,8 @@ def _num(value: Any) -> Optional[float]:
 def venue_symbol(venue: str, symbol: str) -> str:
     """把**规范写法**（OKX 形态，如 `BTC-USDT-SWAP`）翻成该所原生合约名。
 
-    第一版直接 `symbol.replace("-", "_")`，实测两个后果**都很难看**：
-    - Gate 收到 `BTC_USDT_SWAP` → 订阅被拒 `code=2 unknown currency pair`；
-    - Binance 收到 `btcusdtswap` → 连接成功、订阅"成功"、**永远不推数据**
-      （路径式订阅对不存在的符号不报错，就是静默）。
-    ⇒ 合约名必须按所生成，且"静默零帧"要能被账本抓到（见 probe 的零帧留痕）。
+    合约名必须按所生成：OKX 收到 `BTC_USDT_SWAP` 这类写法会订阅被拒，
+    故先把分隔符归一，再拼回 OKX 形态。
     """
     core = str(symbol or "").upper().replace("/", "-").replace("_", "-")
     core = core.replace("-SWAP", "").replace("-PERP", "")
@@ -101,34 +85,18 @@ def venue_symbol(venue: str, symbol: str) -> str:
     quote = parts[1] if len(parts) > 1 else "USDT"
     if venue == "okx":
         return f"{base}-{quote}-SWAP"
-    if venue == "gate":
-        return f"{base}_{quote}"
-    if venue == "binance":
-        return f"{base}{quote}"
     raise KeyError(f"未知场所：{venue}")
 
 
-def _binance_stream_name(symbol: str) -> str:
-    return f"{str(symbol).replace('-', '').replace('_', '').replace('/', '').lower()}@trade"
-
-
 def stream_url(venue: str, symbol: str) -> str:
-    """该所在**路径式**订阅下的连接地址（非路径式场所返回裸地址）。"""
-    base = VENUE_ENDPOINTS[venue]
-    if venue in _PATH_SUBSCRIBE:
-        return f"{base}/{_binance_stream_name(symbol)}"
-    return base
+    """该所的公共行情连接地址。"""
+    return VENUE_ENDPOINTS[venue]
 
 
 def subscribe_payload(venue: str, symbol: str) -> Optional[Dict[str, Any]]:
-    """非路径式场所的订阅帧；路径式场所返回 None（不发订阅帧）。"""
-    if venue in _PATH_SUBSCRIBE:
-        return None
+    """该所的订阅帧。"""
     if venue == "okx":
         return {"op": "subscribe", "args": [{"channel": "tickers", "instId": symbol}]}
-    if venue == "gate":
-        return {"time": int(time.time()), "channel": "futures.tickers",
-                "event": "subscribe", "payload": [symbol]}
     raise KeyError(f"未知场所：{venue}")
 
 
@@ -188,63 +156,6 @@ def parse_frame(venue: str, raw: Any, *, now_ms: Optional[int] = None) -> Dict[s
                     tick["ask"] = _num(row.get("askPx"))
                     out["ticks"].append(tick)
 
-        elif venue == "gate":
-            event = payload.get("event")
-            result = payload.get("result")
-            if event == "subscribe":
-                status = (result or {}).get("status") if isinstance(result, dict) else None
-                if status == "fail" or payload.get("error"):
-                    err = payload.get("error") or {}
-                    return {"ticks": [], "control": None,
-                            "error": f"gate 订阅被拒 code={err.get('code')} msg={err.get('message')}"}
-                # 订阅应答**不是** tick：必须直接返回，不能落进下面的行解析。
-                # 第一版就栽在这里：应答帧被当成 tickers 帧 ⇒ 每连一次多一条假解析错误
-                # （本机实跑看到 "gate futures.tickers 帧里没有可解析的 last" 才发现）。
-                return {"ticks": [], "control": f"gate subscribe {status}", "error": None}
-            if event == "error" or payload.get("error"):
-                err = payload.get("error") or {}
-                return {"ticks": [], "control": None,
-                        "error": f"gate error code={err.get('code')} msg={err.get('message')}"}
-            out["control"] = f"gate {event}"
-            rows = result if isinstance(result, list) else []
-            for row in rows:
-                if not isinstance(row, dict):
-                    continue
-                tick = _tick("gate", row.get("contract"), row.get("last"),
-                             kind="ticker", exchange_ms=row.get("time_ms") or row.get("t"),
-                             now_ms=now_ms)
-                if tick is None:
-                    out["error"] = "gate futures.tickers 帧里没有可解析的 last"
-                else:
-                    tick["mark_price"] = _num(row.get("mark_price"))
-                    out["ticks"].append(tick)
-
-        elif venue == "binance":
-            if isinstance(payload.get("stream"), str) and isinstance(payload.get("data"), dict):
-                return parse_frame("binance", payload["data"], now_ms=now_ms)   # 组合流解包
-            if "result" in payload and "id" in payload:
-                out["control"] = f"binance ack id={payload.get('id')}"
-            if payload.get("code") is not None and payload.get("msg"):
-                return {"ticks": [], "control": None,
-                        "error": f"binance error code={payload.get('code')} msg={payload.get('msg')}"}
-            event = payload.get("e")
-            if event == "trade":
-                tick = _tick("binance", payload.get("s"), payload.get("p"), kind="trade",
-                             exchange_ms=payload.get("T") or payload.get("E"), now_ms=now_ms)
-            elif event == "markPriceUpdate":
-                tick = _tick("binance", payload.get("s"), payload.get("p"), kind="mark",
-                             exchange_ms=payload.get("E"), now_ms=now_ms)
-            elif event == "24hrTicker":
-                tick = _tick("binance", payload.get("s"), payload.get("c"), kind="ticker",
-                             exchange_ms=payload.get("E"), now_ms=now_ms)
-            elif event:
-                return {"ticks": [], "control": f"binance {event}", "error": None}
-            else:
-                tick = None
-            if tick is not None:
-                tick["qty"] = _num(payload.get("q"))
-                out["ticks"].append(tick)
-
         else:
             return {"ticks": [], "control": None, "error": f"未知场所：{venue}"}
     except Exception as exc:          # 解析器自身异常也必须留痕，绝不上抛
@@ -297,7 +208,7 @@ class TickBuffer:
 class StreamHealth:
     """流健康账本：帧/tick/解析失败/连接错误/最近消息与最近 tick 时刻（按场所）。
 
-    "已连接但没数据"是本模块最要防的形态（Binance JSON 订阅实测就是这个行为），
+    "已连接但没数据"是本模块最要防的形态，
     故 `last_tick_ms` 与 `last_msg_ms` **分开**记：只连上、只收到订阅应答，
     在账本里必须表现为 tick 陈旧，而不是"健康"。
     """
@@ -405,19 +316,17 @@ def load_snapshot(path: str) -> Dict[str, Any]:
     return payload
 
 
-def probe(*, venues: Sequence[str] = ("okx", "gate", "binance"),
+def probe(*, venues: Sequence[str] = ("okx",),
           symbol: str = "BTC-USDT-SWAP", symbol_by_venue: Optional[Dict[str, str]] = None,
           seconds: float = 10.0, snapshot_path: Optional[str] = None,
           connect_factory: Any = None, now: Any = _now_ms) -> Dict[str, Any]:
-    """只读探测：连上各所公共行情流各收若干秒，返回健康快照（可选落盘）。
+    """只读探测：连上 OKX 公共行情流收若干秒，返回健康快照（可选落盘）。
 
-    `seconds` 是**每所**的窗口（总耗时 ≈ seconds × 场所数）—— 第一版把 deadline 设成
-    全场共享，结果 OKX 收满 8 秒后 Gate/Binance 的窗口已经是负数、一轮都没跑
-    （本机实跑才发现：快照里只有 okx）。
+    `seconds` 是**每所**的窗口（总耗时 ≈ seconds × 场所数）。
 
     `connect_factory(url, **kw)` 可注入（测试用假传输，绝不出网）。
     每一所独立 try：**一个所挂了不许影响另一个所**；
-    "连上了但一条数据都没来"也要**留痕**（Binance JSON 订阅实测就是这个形态）——
+    "连上了但一条数据都没来"也要**留痕**——
     静默的失败正是第 137 刀事故里最贵的那种。
     """
     if connect_factory is None:                     # 延迟导入：本模块被 import 时不拉网络栈
@@ -461,10 +370,10 @@ def probe(*, venues: Sequence[str] = ("okx", "gate", "binance"),
 def _main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(
         description="ASTRA 公共行情流只读探测（不常驻、不下单）")
-    parser.add_argument("--probe", action="store_true", help="连接三所公共流收若干秒")
+    parser.add_argument("--probe", action="store_true", help="连接 OKX 公共流收若干秒")
     parser.add_argument("--seconds", type=float, default=10.0)
     parser.add_argument("--symbol", default="BTC-USDT-SWAP")
-    parser.add_argument("--venues", default="okx,gate,binance")
+    parser.add_argument("--venues", default="okx")
     parser.add_argument("--snapshot", default="")
     args = parser.parse_args(list(argv) if argv is not None else None)
     if not args.probe:

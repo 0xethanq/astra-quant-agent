@@ -48,7 +48,7 @@
  *
  * 这两类的回归由**实机审计工具**的「悬停无反馈」一类兜底；
  * 而**移动端专属组件**（MobileTabBar 等）必须用**窄屏视口**跑审计才会被量到
- * —— 批 101 就是这么发现「展开三所卡片」那个按钮的。
+ * —— 批 101 就是这么发现「展开卡片列表」那个按钮的（该组件已随全站收口 OKX 删除）。
  *
  * 运行：`node --test tests/*.test.mjs`
  */
@@ -134,7 +134,7 @@ export function deadInlineTransitions() {
   for (const f of walk(SRC)) {
     if (!f.endsWith('.vue')) continue;
     const src = readFileSync(f, 'utf8');
-    // ⚠️ 静态 `style="..."` 也要扫：移动端「展开三所卡片」按钮就是静态 style，
+    // ⚠️ 静态 `style="..."` 也要扫：移动端「展开卡片列表」按钮就是静态 style，
     // 第一版只扫 `:style` 于是漏了它。
     const re = /class="([^"]*transition-(?:colors|all)[^"]*)"\s*\n\s*:?style="([^"]*)"/g;
     let m;

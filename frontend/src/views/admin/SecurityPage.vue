@@ -1,18 +1,19 @@
 <script setup lang="ts">
 /**
- * SecurityPage.vue · 交易场所与安全配置工位
+ * SecurityPage.vue · OKX 交易场所与安全配置工位
  * ---------------------------------------------------------------------------
- * 骨架（推倒重来）：
- *   旧 = 页头内联 chip + 4 张总览小卡 + 下划线 Tab 条
- *        + 页签1：路由卡（**7 个手写 radio 卡，每个 6 行内联 :style 三元**）+ 三所凭证卡 + 健康 chip
- *        + 页签2：本金卡 + 标的池 DataTable
- *        + 页签3：手动平仓 checkbox + 持仓 DataTable + **手写 fixed 遮罩平仓弹窗**
- *   新 = 共享 PageHeader（路由态移入状态带）
- *        → **接入状态带**（OKX / Binance / Gate / 标的池）
- *        → **共享 `.seg` 三页签**
- *        → venues：路由策略（**radio 组全部数据驱动**）+ 三所凭证 + 跨所健康
- *        → pool：本金基线 + 标的池行式清单
- *        → emergency：手动平仓总闸（BaseSwitch）+ 持仓行式清单 + **BaseDialog 平仓双确认**
+ * 骨架：
+ *   共享 PageHeader（路由态移入状态带）
+ *   → 接入状态带（OKX / 标的池）
+ *   → 共享 `.seg` 三页签
+ *   → venues：统一资金环境 + 委托订单模式 + 路由策略（**radio 组全部数据驱动**）
+ *             + OKX 接入凭证 + OKX 行情健康
+ *   → pool：本金基线 + 标的池行式清单
+ *   → emergency：手动平仓总闸（BaseSwitch）+ 持仓行式清单 + **BaseDialog 平仓双确认**
+ *
+ * 本系统仅对接 OKX（V5 REST 直签）。非 OKX 交易所的凭证输入、探测按钮、逐所保存、
+ * 状态 chip 与手选路由入口已全部移除；`venues` 页签的手选优先（执行锁）只保留
+ * `auto` + `okx` 两档，就绪度汇总也只统计 OKX。
  *
  * 后端契约（逐字未改）：
  *   GET  /api/v1/admin/config · /api/v1/admin/okx/runtime?refresh=1 · /api/v1/admin/instruments
@@ -23,8 +24,8 @@
  *   DELETE /api/v1/admin/instruments/{instId}
  *
  * ⚠️ 高风险门禁逐字保留：切 LIVE 需逐字 `LIVE`；改本金需超管 + 逐字 `UPDATE CAPITAL`；
- *    删标的需逐字 `REMOVE <instId>`；Gate 开闸需短语；平仓需管理员密码 + 令牌短语。
- * ⚠️ 派生逻辑仍全部来自 `./securityLogic.ts`（未触碰）。
+ *    删标的需逐字 `REMOVE <instId>`；平仓需管理员密码 + 令牌短语。
+ * ⚠️ 派生逻辑来自 `./securityLogic.ts`（未触碰）。
  */
 import { useToast } from '../../composables/useToast'
 import { useConfirm } from '../../composables/useConfirm'
@@ -39,10 +40,8 @@ import { useApi } from '../../composables/useApi'
 import { useAuthStore } from '../../stores/auth'
 import { fmtDateTime } from '../../utils/format'
 import {
-  deriveOkxLinked, deriveMxHealthChips, deriveGateExecDirty,
-  venueStatus, envTextOf, okxEnvText as okxEnvTextOf, envBadge,
+  deriveOkxLinked, deriveMxHealthChips, okxEnvText as okxEnvTextOf, envBadge,
 } from './securityLogic'
-import VenueCredentialCard from '../../components/admin/page-parts/VenueCredentialCard.vue'
 import BaseSwitch from '../../components/base/BaseSwitch.vue'
 import BaseDialog from '../../components/base/BaseDialog.vue'
 import BaseEmpty from '../../components/base/BaseEmpty.vue'
@@ -139,10 +138,8 @@ const closeReady = computed(() => {
   return !!closePassword.value && closePhraseOk.value
 })
 
-// ---- 多所凭证与档位（Binance / Gate 独立保存） ----
+// ---- 路由与健康读数（本系统仅 OKX；`mx` 仍承载路由与健康字段） ----
 const mx = ref<any>(null)
-const mxForm = ref({ binance_api_key: '', binance_secret_key: '', gate_api_key: '', gate_secret_key: '' })
-const mxTestnet = ref({ binance: false, gate: false })
 const preferredVenue = ref('auto')
 const routingMode = ref('auto')
 const okxCredViewLive = ref(false)
@@ -151,8 +148,7 @@ const savingOrderMode = ref(false)
 const venueLatencies = ref<Record<string, number>>({})
 const savingMx = ref(false)
 const savingOkx = ref(false)
-const savingVenue = ref<'binance' | 'gate' | ''>('')
-const probingVenue = ref<'binance' | 'gate' | 'okx' | ''>('')
+const probingVenue = ref<'' | 'okx'>('')
 const savingUnifiedEnv = ref(false)
 const isUnifiedLive = computed(() => config.value?.editable?.okx_environment === 'live')
 
@@ -177,13 +173,10 @@ async function requestUnifiedEnvSwitch(targetEnv: 'demo' | 'live') {
 
   savingUnifiedEnv.value = true
   try {
-    const isDemo = targetEnv === 'demo'
     await api('/api/v1/admin/multi-exchange', {
       method: 'PUT',
       body: JSON.stringify({
         okx_environment: targetEnv,
-        binance_testnet: isDemo,
-        gate_testnet: isDemo,
       }),
     })
     await api('/api/v1/admin/config', {
@@ -195,8 +188,6 @@ async function requestUnifiedEnvSwitch(targetEnv: 'demo' | 'live') {
     if (config.value?.editable) {
       config.value.editable.okx_environment = targetEnv
     }
-    mxTestnet.value.binance = isDemo
-    mxTestnet.value.gate = isDemo
     okxCredViewLive.value = (targetEnv === 'live')
     toast.ok(t('admin.security.toastUnifiedEnvSaved', undefined, { env: targetEnv.toUpperCase() }))
     await Promise.all([loadAll(), loadMx()])
@@ -416,10 +407,6 @@ async function confirmClose() {
 async function loadMx() {
   try {
     mx.value = await api('/api/v1/admin/multi-exchange')
-    if (mx.value?.venues) {
-      mxTestnet.value.binance = !!mx.value.venues.binance?.testnet
-      mxTestnet.value.gate = !!mx.value.venues.gate?.testnet
-    }
     if (mx.value?.health?.venues) {
       for (const [k, v] of Object.entries(mx.value.health.venues as Record<string, any>)) {
         if (v?.avg_ms) {
@@ -436,13 +423,11 @@ async function loadMx() {
   } catch { mx.value = null }
 }
 
-/** 单所凭证连接诊断：支持未保存凭证的预检与公共连通性探测。 */
-async function probeVenue(venue: 'binance' | 'gate' | 'okx') {
+/** OKX 凭证连接诊断：支持未保存凭证的预检与公共连通性探测。 */
+async function probeVenue(venue: 'okx') {
   probingVenue.value = venue
   try {
-    const isDemo = venue === 'okx'
-      ? (config.value?.editable?.okx_environment === 'demo')
-      : !!mxTestnet.value[venue]
+    const isDemo = config.value?.editable?.okx_environment === 'demo'
     const env = isDemo ? 'demo' : 'live'
 
     const payload: Record<string, any> = {
@@ -450,26 +435,14 @@ async function probeVenue(venue: 'binance' | 'gate' | 'okx') {
       environment: env,
     }
 
-    if (venue === 'binance') {
-      const k = mxForm.value.binance_api_key.trim()
-      const s = mxForm.value.binance_secret_key.trim()
-      if (k) payload.api_key = k
-      if (s) payload.secret_key = s
-    } else if (venue === 'gate') {
-      const k = mxForm.value.gate_api_key.trim()
-      const s = mxForm.value.gate_secret_key.trim()
-      if (k) payload.api_key = k
-      if (s) payload.secret_key = s
-    } else if (venue === 'okx') {
-      if (isDemo) {
-        if (keys.value.demo_key.trim()) payload.api_key = keys.value.demo_key.trim()
-        if (keys.value.demo_secret.trim()) payload.secret_key = keys.value.demo_secret.trim()
-        if (keys.value.demo_pass.trim()) payload.passphrase = keys.value.demo_pass.trim()
-      } else {
-        if (keys.value.live_key.trim()) payload.api_key = keys.value.live_key.trim()
-        if (keys.value.live_secret.trim()) payload.secret_key = keys.value.live_secret.trim()
-        if (keys.value.live_pass.trim()) payload.passphrase = keys.value.live_pass.trim()
-      }
+    if (isDemo) {
+      if (keys.value.demo_key.trim()) payload.api_key = keys.value.demo_key.trim()
+      if (keys.value.demo_secret.trim()) payload.secret_key = keys.value.demo_secret.trim()
+      if (keys.value.demo_pass.trim()) payload.passphrase = keys.value.demo_pass.trim()
+    } else {
+      if (keys.value.live_key.trim()) payload.api_key = keys.value.live_key.trim()
+      if (keys.value.live_secret.trim()) payload.secret_key = keys.value.live_secret.trim()
+      if (keys.value.live_pass.trim()) payload.passphrase = keys.value.live_pass.trim()
     }
 
     const res: any = await api('/api/v1/admin/multi-exchange/test-connection', {
@@ -511,71 +484,18 @@ async function saveRouting() {
   }
 }
 
-/** 逐所保存凭证与档位：只提交本所键位，留空即不改；Gate / Binance 承载执行总闸。 */
-async function saveVenue(venue: 'binance' | 'gate') {
-  savingVenue.value = venue
-  try {
-    const body: any = {}
-    if (venue === 'binance') {
-      body.binance_testnet = mxTestnet.value.binance
-      const k = mxForm.value.binance_api_key.trim()
-      const s = mxForm.value.binance_secret_key.trim()
-      if (k) body.binance_api_key = k
-      if (s) body.binance_secret_key = s
-      if (!mx.value?.venues?.binance?.execution_open) {
-        body.binance_execution = true
-        body.confirmation = 'OPEN BINANCE EXECUTION'
-      }
-    } else {
-      body.gate_testnet = mxTestnet.value.gate
-      const k = mxForm.value.gate_api_key.trim()
-      const s = mxForm.value.gate_secret_key.trim()
-      if (k) body.gate_api_key = k
-      if (s) body.gate_secret_key = s
-      if (!mx.value?.venues?.gate?.execution_open) {
-        body.gate_execution = true
-        body.confirmation = 'OPEN GATE EXECUTION'
-      }
-    }
-    await api('/api/v1/admin/multi-exchange', { method: 'PUT', body: JSON.stringify(body) })
-    toast.ok(t('admin.security.toastVenueSaved', undefined, { venue: venue === 'binance' ? 'Binance' : 'Gate' }))
-    if (venue === 'binance') { mxForm.value.binance_api_key = ''; mxForm.value.binance_secret_key = ''; }
-    else { mxForm.value.gate_api_key = ''; mxForm.value.gate_secret_key = ''; }
-    await loadMx()
-  } catch (e: any) {
-    toast.err(t('admin.security.errSaveFailed', undefined, { msg: e.message }))
-  } finally {
-    savingVenue.value = ''
-  }
-}
-
 // ---- 总览派生（纯计算，零请求） ----
 // 显示派生逻辑已抽至 ./securityLogic.ts（阶段 4·B3 第三十四刀）——
 // 纯函数、可脱离组件单测；此处只保留响应式包装。
 const okxLinked = computed(() => deriveOkxLinked(runtime.value))
 const mxHealthChips = computed(() => deriveMxHealthChips(mx.value))
-// 批 34 纯派生契约对齐：保留纯逻辑调用锚点供测试对拍
-const gateExecDirty = computed(() => deriveGateExecDirty(false, mx.value))
-void gateExecDirty
-
-const binanceStatus = computed(() => venueStatus('binance', mx.value, t))
-const gateStatus = computed(() => venueStatus('gate', mx.value, t))
 
 const okxEnvText = computed(() => okxEnvTextOf(config.value?.editable?.okx_environment, t))
-const binanceEnvText = computed(() => envTextOf('binance', t('admin.security.envDemoBinance'), mx.value, mxTestnet.value, t))
-const gateEnvText = computed(() => envTextOf('gate', t('admin.security.envDemoGate'), mx.value, mxTestnet.value, t))
 
+/** 就绪度汇总：本系统仅 OKX 一所。 */
 const venueReadiness = computed(() => {
-  const okxReady = okxLinked.value
-  const b = mx.value?.venues?.binance
-  const binanceReady = !!(b?.has_api_key && b?.execution_open)
-  const g = mx.value?.venues?.gate
-  const gateReady = !!(g?.has_api_key && g?.execution_open)
-
   const list: Array<{ id: string; name: string; ready: boolean }> = [
-    { id: 'okx', name: t('admin.security.okxNameShort'), ready: okxReady },
-    { id: 'binance', name: 'Binance', ready: binanceReady },
-    { id: 'gate', name: 'Gate.io', ready: gateReady },
+    { id: 'okx', name: t('admin.security.okxNameShort'), ready: okxLinked.value },
   ]
   const readyList = list.filter((v) => v.ready)
   return {
@@ -608,18 +528,14 @@ const ROUTING_MODES = [
   { value: 'split', labelKey: 'admin.security.modeC', descKey: 'admin.security.modeCDesc' },
 ]
 
-/** 手选优先四档（旧版 4 段手写 radio 卡） */
+/** 手选优先两档：本系统仅 OKX，锁定即 `okx`，否则交给路由模式。 */
 const PREFERRED_VENUES = [
   { value: 'auto', labelKey: 'admin.security.noManual', descKey: 'admin.security.noManualDesc' },
   { value: 'okx', labelKey: 'admin.security.lockOkx', descKey: 'admin.security.lockOkxDesc' },
-  { value: 'binance', labelKey: 'admin.security.lockBinance', descKey: 'admin.security.lockBinanceDesc' },
-  { value: 'gate', labelKey: 'admin.security.lockGate', descKey: 'admin.security.lockGateDesc' },
 ]
 
-/** 接入状态带（4 项事实） */
+/** 接入状态带（2 项事实：OKX 与标的池） */
 const bandFacts = computed(() => {
-  const b = mx.value?.venues?.binance
-  const g = mx.value?.venues?.gate
   return [
     {
       icon: ShieldCheck,
@@ -627,22 +543,6 @@ const bandFacts = computed(() => {
       value: okxLinked.value ? t('admin.security.okxLinked') : t('admin.security.okxUnconfigured'),
       foot: envBadge(runtime.value?.environment),
       tone: okxLinked.value ? 'is-up' : 'is-down',
-    },
-    {
-      icon: KeyRound,
-      label: 'Binance · USDT-M',
-      value: b?.has_api_key ? t('admin.security.binanceKeyed') : t('admin.security.publicMarket'),
-      foot: mxTestnet.value.binance ? 'DEMO' : 'LIVE',
-      tone: b?.has_api_key ? 'is-up' : 'is-warn',
-    },
-    {
-      icon: KeyRound,
-      label: t('admin.security.gatePerp'),
-      value: g?.has_api_key
-        ? (g?.execution_open ? t('admin.security.gateOpenLive') : t('admin.security.gateClosed'))
-        : t('admin.security.publicMarket'),
-      foot: mxTestnet.value.gate ? 'TESTNET' : 'LIVE',
-      tone: g?.has_api_key ? 'is-up' : 'is-warn',
     },
     {
       icon: Layers,
@@ -925,7 +825,7 @@ onMounted(() => { loadAll(); loadMx(); loadChannels(); loadPlazaSettings() })
               <div class="sc-coord-header">
                 <span class="badge mono" :class="venueReadiness.readyCount === 0 ? 'badge-warn' : 'badge-accent'">
                   <Activity :size="11" />
-                  {{ t('admin.security.readyVenuesCount', undefined, { count: venueReadiness.readyCount, total: 3 }) }}
+                  {{ t('admin.security.readyVenuesCount', undefined, { count: venueReadiness.readyCount, total: venueReadiness.all.length }) }}
                 </span>
                 <span class="sc-coord-names">
                   {{ venueReadiness.readyCount > 0 ? venueReadiness.readyNames : t('admin.security.noReadyVenues') }}
@@ -933,21 +833,15 @@ onMounted(() => { loadAll(); loadMx(); loadChannels(); loadPlazaSettings() })
               </div>
               <p class="sc-coord-text">
                 <template v-if="routingMode === 'balanced'">
-                  <span v-if="venueReadiness.readyCount === 1">
+                  <span v-if="venueReadiness.readyCount > 0">
                     {{ t('admin.security.balancedCoordSingle', undefined, { venue: venueReadiness.readyNames }) }}
-                  </span>
-                  <span v-else-if="venueReadiness.readyCount === 2">
-                    {{ t('admin.security.balancedCoordDouble', undefined, { venues: venueReadiness.readyNames }) }}
-                  </span>
-                  <span v-else-if="venueReadiness.readyCount === 3">
-                    {{ t('admin.security.balancedCoordTriple') }}
                   </span>
                   <span v-else>
                     {{ t('admin.security.balancedCoordNone') }}
                   </span>
                 </template>
                 <template v-else-if="routingMode === 'auto'">
-                  {{ t('admin.security.autoCoordDesc', undefined, { venues: venueReadiness.readyCount > 0 ? venueReadiness.readyNames : t('admin.security.noReadyVenues') }) }}
+                  {{ t('admin.security.autoCoordDesc') }}
                 </template>
                 <template v-else>
                   {{ t('admin.security.splitCoordDesc') }}
@@ -958,7 +852,7 @@ onMounted(() => { loadAll(); loadMx(); loadChannels(); loadPlazaSettings() })
 
           <div class="sc-group">
             <span class="form-label">{{ t('admin.security.manualLabel') }}</span>
-            <div class="sc-radios sc-radios-4" role="radiogroup" :aria-label="t('admin.security.manualLabel')">
+            <div class="sc-radios sc-radios-2" role="radiogroup" :aria-label="t('admin.security.manualLabel')">
               <label
                 v-for="v in PREFERRED_VENUES"
                 :key="v.value"
@@ -992,17 +886,26 @@ onMounted(() => { loadAll(); loadMx(); loadChannels(); loadPlazaSettings() })
           </p>
         </SettingsSection>
 
-        <!-- 三所凭证 -->
+        <!-- OKX 接入凭证 -->
         <SettingsSection :title="t('admin.security.credsTitle')" :description="t('admin.security.credsDesc')" :icon="KeyRound">
           <div class="sc-venues">
-            <!-- OKX -->
-            <VenueCredentialCard
-              :name="t('admin.security.okxName')" :api-label="t('admin.security.okxApiLabel')"
-              :status-text="okxLinked ? t('admin.security.okxReady') : t('admin.security.okxNotReady')"
-              :tone="okxLinked ? 'up' : 'down'"
-              :env-text="okxEnvText" :env-label="t('admin.security.fundEnv')"
-            >
-              <template #env>
+            <article class="sc-venue-card">
+              <header class="sc-venue-head">
+                <div class="sc-venue-id">
+                  <h3 class="sc-venue-name">{{ t('admin.security.okxName') }}</h3>
+                  <span class="sc-venue-api">{{ t('admin.security.okxApiLabel') }}</span>
+                </div>
+                <span class="badge" :class="okxLinked ? 'badge-up' : 'badge-down'">
+                  {{ okxLinked ? t('admin.security.okxReady') : t('admin.security.okxNotReady') }}
+                </span>
+              </header>
+
+              <div class="kv-row">
+                <span class="sc-venue-env-label">{{ t('admin.security.fundEnv') }}</span>
+                <span class="sc-venue-env-value mono">{{ okxEnvText }}</span>
+              </div>
+
+              <div class="sc-venue-body">
                 <div class="field-stack">
                   <span class="form-label">{{ t('admin.security.endpointTier') }}</span>
                   <div class="sc-env-indicator">
@@ -1012,46 +915,44 @@ onMounted(() => { loadAll(); loadMx(); loadChannels(); loadPlazaSettings() })
                     <span class="sc-env-hint">{{ t('admin.security.envFollowsUnified') }}</span>
                   </div>
                 </div>
-              </template>
 
-              <div class="sc-creds">
-                <div class="sc-creds-header">
-                  <span class="form-label">
-                    {{ (okxCredViewLive ? t('admin.security.liveTrio') : t('admin.security.demoTrio')) }}
-                  </span>
-                  <div class="seg seg-compact" role="group" :aria-label="t('admin.security.okxCredViewLabel')">
-                    <button
-                      type="button"
-                      :aria-pressed="!okxCredViewLive"
-                      :class="{ 'seg-on': !okxCredViewLive }"
-                      @click="okxCredViewLive = false"
-                    >
-                      <span>{{ t('admin.security.viewDemoCred') }}</span>
-                    </button>
-                    <button
-                      type="button"
-                      :aria-pressed="okxCredViewLive"
-                      :class="{ 'seg-on': okxCredViewLive }"
-                      @click="okxCredViewLive = true"
-                    >
-                      <span>{{ t('admin.security.viewLiveCred') }}</span>
-                    </button>
+                <div class="sc-creds">
+                  <div class="sc-creds-header">
+                    <span class="form-label">
+                      {{ (okxCredViewLive ? t('admin.security.liveTrio') : t('admin.security.demoTrio')) }}
+                    </span>
+                    <div class="seg seg-compact" role="group" :aria-label="t('admin.security.okxCredViewLabel')">
+                      <button
+                        type="button"
+                        :aria-pressed="!okxCredViewLive"
+                        :class="{ 'seg-on': !okxCredViewLive }"
+                        @click="okxCredViewLive = false"
+                      >
+                        <span>{{ t('admin.security.viewDemoCred') }}</span>
+                      </button>
+                      <button
+                        type="button"
+                        :aria-pressed="okxCredViewLive"
+                        :class="{ 'seg-on': okxCredViewLive }"
+                        @click="okxCredViewLive = true"
+                      >
+                        <span>{{ t('admin.security.viewLiveCred') }}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div v-show="!okxCredViewLive" class="sc-creds-group">
+                    <input v-model="keys.demo_key" type="password" :placeholder="t('admin.security.apiKeyKeep')" class="field" :aria-label="t('admin.security.demoKeyAria')" />
+                    <input v-model="keys.demo_secret" type="password" :placeholder="t('admin.security.phSecretKey')" class="field" :aria-label="t('admin.security.demoSecretAria')" />
+                    <input v-model="keys.demo_pass" type="password" :placeholder="t('admin.security.phPassphrase')" class="field" :aria-label="t('admin.security.demoPassAria')" />
+                  </div>
+                  <div v-show="okxCredViewLive" class="sc-creds-group">
+                    <input v-model="keys.live_key" type="password" :placeholder="t('admin.security.apiKeyKeep')" class="field" :aria-label="t('admin.security.liveKeyAria')" />
+                    <input v-model="keys.live_secret" type="password" :placeholder="t('admin.security.phSecretKey')" class="field" :aria-label="t('admin.security.liveSecretAria')" />
+                    <input v-model="keys.live_pass" type="password" :placeholder="t('admin.security.phPassphrase')" class="field" :aria-label="t('admin.security.livePassAria')" />
                   </div>
                 </div>
 
-                <div v-show="!okxCredViewLive" class="sc-creds-group">
-                  <input v-model="keys.demo_key" type="password" :placeholder="t('admin.security.apiKeyKeep')" class="field" :aria-label="t('admin.security.demoKeyAria')" />
-                  <input v-model="keys.demo_secret" type="password" :placeholder="t('admin.security.phSecretKey')" class="field" :aria-label="t('admin.security.demoSecretAria')" />
-                  <input v-model="keys.demo_pass" type="password" :placeholder="t('admin.security.phPassphrase')" class="field" :aria-label="t('admin.security.demoPassAria')" />
-                </div>
-                <div v-show="okxCredViewLive" class="sc-creds-group">
-                  <input v-model="keys.live_key" type="password" :placeholder="t('admin.security.apiKeyKeep')" class="field" :aria-label="t('admin.security.liveKeyAria')" />
-                  <input v-model="keys.live_secret" type="password" :placeholder="t('admin.security.phSecretKey')" class="field" :aria-label="t('admin.security.liveSecretAria')" />
-                  <input v-model="keys.live_pass" type="password" :placeholder="t('admin.security.phPassphrase')" class="field" :aria-label="t('admin.security.livePassAria')" />
-                </div>
-              </div>
-
-              <template #extra>
                 <div v-if="channelOf('okx')" class="sc-channel-box">
                   <button
                     v-if="channelOf('okx')?.invite_url"
@@ -1063,145 +964,30 @@ onMounted(() => { loadAll(); loadMx(); loadChannels(); loadPlazaSettings() })
                   </button>
                 </div>
                 <p class="sc-hint"><AlertTriangle :size="11" />{{ t('admin.security.liveConfirmNote') }}</p>
-              </template>
-              <template #footer-left>
+              </div>
+
+              <footer class="sc-venue-foot">
                 <span v-if="venueLatencies.okx" class="sc-latency mono num">
                   <Radar :size="12" />
                   <span>{{ venueLatencies.okx }}ms</span>
                 </span>
-              </template>
-              <template #probe>
-                <button type="button" class="btn btn-quiet btn-sm" :disabled="probingVenue === 'okx'" @click="probeVenue('okx')">
-                  <RefreshCw :size="14" :class="probingVenue === 'okx' ? 'animate-spin shrink-0' : ''" />
-                  <span>{{ probingVenue === 'okx' ? t('admin.security.probing') : t('admin.security.detect') }}</span>
-                </button>
-              </template>
-              <template #save>
-                <button type="button" class="btn btn-primary btn-sm" :disabled="savingOkx" @click="saveEnvironment">
-                  <Loader2 v-if="savingOkx" :size="12" class="animate-spin shrink-0" />
-                  <Save v-else :size="12" />
-                  <span>{{ savingOkx ? t('admin.security.saving') : t('admin.security.saveOkx') }}</span>
-                </button>
-              </template>
-            </VenueCredentialCard>
-
-            <!-- Binance -->
-            <VenueCredentialCard
-              :name="t('admin.security.binanceName')" :api-label="t('admin.security.binanceApiLabel')"
-              :status-text="binanceStatus.text" :tone="binanceStatus.tone"
-              :env-text="binanceEnvText" :env-label="t('admin.security.fundEnv')"
-            >
-              <template #env>
-                <div class="field-stack">
-                  <span class="form-label">{{ t('admin.security.endpointTier') }}</span>
-                  <div class="sc-env-indicator">
-                    <span class="badge mono" :class="!mxTestnet.binance ? 'badge-warn' : 'badge-accent'">
-                      {{ !mxTestnet.binance ? t('admin.security.envLive') : t('admin.security.binanceDemoDomain') }}
-                    </span>
-                    <span class="sc-env-hint">{{ t('admin.security.envFollowsUnified') }}</span>
-                  </div>
-                </div>
-              </template>
-
-              <div class="sc-creds">
-                <span class="form-label">{{ t('admin.security.binanceCredLabel') }}</span>
-                <input v-model="mxForm.binance_api_key" type="text" :aria-label="t('admin.security.binanceKeyAria')" :placeholder="t('admin.security.apiKeyKeep')" class="field mono" />
-                <input v-model="mxForm.binance_secret_key" type="password" :aria-label="t('admin.security.binanceSecretAria')" :placeholder="t('admin.security.phApiSecret')" class="field" />
-              </div>
-
-              <!-- 2026-09：与本页另两个所对齐——注册入口同样由后端出值（此前只有 OKX/Gate 有） -->
-              <template #extra>
-                <div v-if="channelOf('binance')?.invite_url" class="sc-channel-box">
-                  <button
-                    type="button"
-                    class="sc-channel-btn"
-                    @click="openExternal(channelOf('binance')!.invite_url)"
-                  >
-                    <span>{{ t('admin.security.binanceRegisterDiscount') }}</span>
+                <div class="sc-venue-actions">
+                  <button type="button" class="btn btn-quiet btn-sm" :disabled="probingVenue === 'okx'" @click="probeVenue('okx')">
+                    <RefreshCw :size="14" :class="probingVenue === 'okx' ? 'animate-spin shrink-0' : ''" />
+                    <span>{{ probingVenue === 'okx' ? t('admin.security.probing') : t('admin.security.detect') }}</span>
+                  </button>
+                  <button type="button" class="btn btn-primary btn-sm" :disabled="savingOkx" @click="saveEnvironment">
+                    <Loader2 v-if="savingOkx" :size="12" class="animate-spin shrink-0" />
+                    <Save v-else :size="12" />
+                    <span>{{ savingOkx ? t('admin.security.saving') : t('admin.security.saveOkx') }}</span>
                   </button>
                 </div>
-              </template>
-
-              <template #footer-left>
-                <span v-if="venueLatencies.binance" class="sc-latency mono num">
-                  <Radar :size="12" />
-                  <span>{{ venueLatencies.binance }}ms</span>
-                </span>
-              </template>
-              <template #probe>
-                <button type="button" class="btn btn-quiet btn-sm" :disabled="probingVenue !== '' && probingVenue !== 'binance'" @click="probeVenue('binance')">
-                  <RefreshCw :size="14" />
-                  <span>{{ t('admin.security.detect') }}</span>
-                </button>
-              </template>
-              <template #save>
-                <button type="button" class="btn btn-primary btn-sm" :disabled="savingVenue !== ''" @click="saveVenue('binance')">
-                  <Loader2 v-if="savingVenue === 'binance'" :size="12" class="animate-spin shrink-0" />
-                  <Save v-else :size="12" />
-                  <span>{{ savingVenue === 'binance' ? t('admin.security.saving') : t('admin.security.saveBinance') }}</span>
-                </button>
-              </template>
-            </VenueCredentialCard>
-
-            <!-- Gate -->
-            <VenueCredentialCard
-              :name="t('admin.security.gateName')" :api-label="t('admin.security.gateApiLabel')"
-              :status-text="gateStatus.text" :tone="gateStatus.tone"
-              :env-text="gateEnvText" :env-label="t('admin.security.fundEnv')"
-            >
-              <template #env>
-                <div class="field-stack">
-                  <span class="form-label">{{ t('admin.security.endpointTier') }}</span>
-                  <div class="sc-env-indicator">
-                    <span class="badge mono" :class="!mxTestnet.gate ? 'badge-warn' : 'badge-accent'">
-                      {{ !mxTestnet.gate ? t('admin.security.envLive') : t('admin.security.gateSandboxDomain') }}
-                    </span>
-                    <span class="sc-env-hint">{{ t('admin.security.envFollowsUnified') }}</span>
-                  </div>
-                </div>
-              </template>
-
-              <div class="sc-creds">
-                <span class="form-label">{{ t('admin.security.gateCredLabel') }}</span>
-                <input v-model="mxForm.gate_api_key" type="text" :aria-label="t('admin.security.gateKeyAria')" :placeholder="t('admin.security.apiKeyKeep')" class="field mono" />
-                <input v-model="mxForm.gate_secret_key" type="password" :aria-label="t('admin.security.gateSecretAria')" :placeholder="t('admin.security.phApiSecret')" class="field" />
-              </div>
-
-              <template #extra>
-                <div v-if="channelOf('gate')?.invite_url" class="sc-channel-box">
-                  <button
-                    type="button"
-                    class="sc-channel-btn"
-                    @click="openExternal(channelOf('gate')!.invite_url)"
-                  >
-                    <span>{{ t('admin.security.gateRegisterDiscount') }}</span>
-                  </button>
-                </div>
-              </template>
-              <template #footer-left>
-                <span v-if="venueLatencies.gate" class="sc-latency mono num">
-                  <Radar :size="12" />
-                  <span>{{ venueLatencies.gate }}ms</span>
-                </span>
-              </template>
-              <template #probe>
-                <button type="button" class="btn btn-quiet btn-sm" :disabled="probingVenue !== '' && probingVenue !== 'gate'" @click="probeVenue('gate')">
-                  <RefreshCw :size="14" />
-                  <span>{{ t('admin.security.detect') }}</span>
-                </button>
-              </template>
-              <template #save>
-                <button type="button" class="btn btn-primary btn-sm" :disabled="savingVenue !== ''" @click="saveVenue('gate')">
-                  <Loader2 v-if="savingVenue === 'gate'" :size="12" class="animate-spin shrink-0" />
-                  <Save v-else :size="12" />
-                  <span>{{ savingVenue === 'gate' ? t('admin.security.saving') : t('admin.security.saveGate') }}</span>
-                </button>
-              </template>
-            </VenueCredentialCard>
+              </footer>
+            </article>
           </div>
         </SettingsSection>
 
-        <!-- 跨所行情健康 -->
+        <!-- OKX 行情健康 -->
         <SettingsSection :title="t('admin.security.healthTitle')" :description="t('admin.security.healthDesc')" :icon="Activity">
           <template #actions>
             <span class="badge" :class="healthAllOk ? 'badge-up' : 'badge-warn'">
@@ -1777,8 +1563,8 @@ onMounted(() => { loadAll(); loadMx(); loadChannels(); loadPlazaSettings() })
   .sc-radios-3 {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
-  .sc-radios-4 {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+  .sc-radios-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 .sc-radio {
@@ -1822,16 +1608,80 @@ onMounted(() => { loadAll(); loadMx(); loadChannels(); loadPlazaSettings() })
   color: var(--ds-color-text-placeholder);
 }
 
-/* ══ 三所凭证 ══ */
+/* ══ OKX 凭证 ══ */
 .sc-venues {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--ds-space-3);
 }
-@media (min-width: 900px) {
-  .sc-venues {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
+
+.sc-venue-card {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--ds-color-border-default);
+  border-radius: var(--r-ctl);
+  background-color: var(--ds-color-bg-surface-inset);
+  overflow: hidden;
+}
+.sc-venue-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--ds-space-3);
+  padding: 10px var(--ds-space-3);
+  border-bottom: 1px solid var(--ds-color-border-default);
+}
+.sc-venue-id {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.sc-venue-name {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--ds-color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sc-venue-api {
+  font-size: var(--text-4xs);
+  color: var(--ds-color-text-placeholder);
+}
+.sc-venue-head .badge {
+  flex-shrink: 0;
+}
+.sc-venue-env-label {
+  font-size: var(--text-4xs);
+  color: var(--ds-color-text-placeholder);
+}
+.sc-venue-env-value {
+  font-size: var(--text-3xs);
+  font-weight: 600;
+  color: var(--ds-color-text-primary);
+}
+.sc-venue-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  padding: var(--ds-space-3);
+}
+.sc-venue-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  flex-wrap: wrap;
+  padding: 10px var(--ds-space-3);
+  border-top: 1px solid var(--ds-color-border-default);
+  background-color: var(--ds-color-bg-surface-1);
+}
+.sc-venue-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  margin-left: auto;
 }
 
 .sc-creds {

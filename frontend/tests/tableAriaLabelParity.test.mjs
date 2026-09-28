@@ -3,15 +3,9 @@
  *
  * ## 实测发现的 3 处表格 aria-label 复制错位缺陷：
  *
- * 1. `RadarDrawer.vue` 跨所基差与价差表格被误标为"持仓管理"：
- *    - 表格内容：展示 OKX/Binance/Gate 三所行情价差、资金费与多空比（Cross-Venue Evidence）；
- *    - 修复前：`:aria-label="t('dash.radar.posMgmt')"`（"持仓管理" / "Position management"）；
- *    - 修复后：`:aria-label="t('dash.radar.detail.xvenue')"`（"跨所证据与基差" / "Cross-Venue Evidence"）。
- *
- * 2. `FactorDrawer.vue` 淘汰候选表格跨页面借用台账词条：
- *    - 表格内容：当前决策周期被算法淘汰的场所与原因（Rejected Candidates）；
- *    - 修复前：`:aria-label="t('dash.ledger.venue')"`（"场所"，从台账页抄过来的裸列名）；
- *    - 修复后：`:aria-label="t('dash.matrix.venue.rejectedTitle', undefined, { n: vdRejected.length })"`（"被淘汰候选 · 3"）。
+ * 1–2. （2026-10 更新：`RadarDrawer` 的跨所基差价差表与 `FactorDrawer` 的淘汰候选表
+ *    已随「全站收口 OKX」整体删除。原先那两条错位缺陷随之消失，判据改为
+ *    **"这两张表不得回潮"** 的反向守卫，仍然盯住同一批文件。）
  *
  * 3. `CouncilPage.vue` 六标的点位矩阵表格复制了上一张席位表的标题：
  *    - 表格内容：BTC/ETH/SOL/DOGE/XRP/ADA 六标的推演点位与止盈止损矩阵；
@@ -27,32 +21,23 @@ import path from 'node:path';
 
 const SRC = path.resolve(import.meta.dirname, '..', 'src');
 
-test('RadarDrawer 跨所证据表格必须准确绑定 detail.xvenue（严禁误标为 posMgmt）', () => {
+test('RadarDrawer 跨所证据表格已移除，且不得带着错误 aria-label 回潮', () => {
   const vue = readFileSync(path.join(SRC, 'components/dashboard/RadarDrawer.vue'), 'utf8');
-  assert.doesNotMatch(
-    vue,
-    /<table[^>]*:aria-label="t\('dash\.radar\.posMgmt'\)"/,
-    'RadarDrawer 跨所证据表格错误使用了持仓管理 posMgmt 的 aria-label',
-  );
-  assert.match(
-    vue,
-    /<table[^>]*:aria-label="t\('dash\.radar\.detail\.xvenue'\)"/,
-    'RadarDrawer 跨所证据表格缺少 :aria-label="t(\'dash.radar.detail.xvenue\')"',
-  );
+  assert.doesNotMatch(vue, /xvenue/i, 'RadarDrawer 又出现了跨所（xvenue）页签或表格');
+  assert.doesNotMatch(vue, /cross_venue/, 'RadarDrawer 又去读 cross_venue 载荷了');
+  // 真删除（而不是"留着表只删了标签"）：跨所行情字段一个都不该再被引用
+  for (const f of ['bin_last', 'bin_basis_pct', 'gate_last', 'gate_basis_pct', 'bin_ls', 'gate_ls']) {
+    assert.ok(!vue.includes(f), `RadarDrawer 仍在引用跨所字段 ${f}`);
+  }
 });
 
-test('FactorDrawer 淘汰候选表格必须准确绑定 rejectedTitle（严禁跨模块借用 ledger.venue）', () => {
+test('FactorDrawer 选所决策与跨所区块已移除，且不得回潮', () => {
   const vue = readFileSync(path.join(SRC, 'components/dashboard/FactorDrawer.vue'), 'utf8');
-  assert.doesNotMatch(
-    vue,
-    /<table[^>]*:aria-label="t\('dash\.ledger\.venue'\)"/,
-    'FactorDrawer 淘汰候选表格错误借用了台账模块的 dash.ledger.venue 词条',
-  );
-  assert.match(
-    vue,
-    /<table[^>]*:aria-label="t\('dash\.matrix\.venue\.rejectedTitle'/,
-    'FactorDrawer 淘汰候选表格缺少准确的 rejectedTitle aria-label',
-  );
+  assert.doesNotMatch(vue, /venue_decision/, 'FactorDrawer 又去读 venue_decision 载荷了');
+  assert.doesNotMatch(vue, /venueLabel|venueColor|decisionBadgeCls/, 'FactorDrawer 又引用了已删除的 venueMeta 助手');
+  for (const f of ['rejectedTitle', 'crossTitle', 'preferred_venue', 'crossVenue']) {
+    assert.ok(!vue.includes(f), `FactorDrawer 仍在引用选所/跨所字段 ${f}`);
+  }
 });
 
 test('CouncilPage 六标的点位矩阵表格必须绑定 matrixTitle（严禁复制 seatsTitle）', () => {

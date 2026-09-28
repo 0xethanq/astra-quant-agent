@@ -50,19 +50,17 @@ test('面板把四种取值分别映射（且 unknown 不等于 mark）', () => 
   assert.match(body, /return\s+''/, 'slTriggerType 的默认分支必须返回空串');
 });
 
-test('外所取值：Binance 字面量映射、Gate 数字码原样不翻译', () => {
+test('系统已收口 OKX：只有 OKX 三态被翻译，历史遗留原始码一律原样透传', () => {
   const fn = panel.slice(panel.indexOf('function slTriggerType('));
   const body = fn.slice(0, fn.indexOf('\n}'));
-  assert.match(body, /===\s*'mark_price'/, '未处理 Binance MARK_PRICE');
-  assert.match(body, /===\s*'contract_price'/, '未处理 Binance CONTRACT_PRICE');
-  // Gate 数字码：必须原样返回（`v.startsWith('price_type:')`），**不得**落到任何中文文案键
+  // 已移除的旧场所字面量不得回潮
+  assert.doesNotMatch(body, /'mark_price'/, '旧场所字面量 MARK_PRICE 又回到展示层');
+  assert.doesNotMatch(body, /'contract_price'/, '旧场所字面量 CONTRACT_PRICE 又回到展示层');
+  // 认不出的历史原始码（price_type:<n>）必须原样返回，**不得**落到任何文案键
   const rawBranch = body.match(/startsWith\('price_type:'\)\)\s*return\s+([^;]+);/)?.[1];
-  assert.ok(rawBranch, '未处理 Gate 数字码（price_type:<n>）');
-  assert.doesNotMatch(rawBranch, /t\(/, 'Gate 数字码被翻译成了文案 ⇒ 本仓未核实其映射，不许猜');
-  // CONTRACT_PRICE 不得被画成"标记价"的文案键
-  const cpKey = body.match(/===\s*'contract_price'\).*?t\('([^']+)'\)/)?.[1];
-  const markKey = body.match(/===\s*'mark'\).*?t\('([^']+)'\)/)?.[1];
-  assert.notEqual(cpKey, markKey, 'CONTRACT_PRICE 被画成了标记价');
+  assert.ok(rawBranch, '未处理历史遗留原始码（price_type:<n>）⇒ 台账旧行会被猜成某个语义');
+  assert.doesNotMatch(rawBranch, /t\(/, '历史遗留原始码被翻译成了文案 ⇒ 本仓未核实其映射，不许猜');
+  assert.match(body, /return\s+''/, '未识别的原始码必须回落空串（不显示），不得编造');
 });
 
 test('悬停说明覆盖四态，且 last 明确提示插针风险', () => {
@@ -80,7 +78,7 @@ test('两个语言的文案键齐备', () => {
   const keys = [
     'triggerMark', 'triggerLast', 'triggerIndex', 'triggerUnknown',
     'triggerMarkHint', 'triggerLastHint', 'triggerIndexHint', 'triggerUnknownHint',
-    'triggerMarkPrice', 'triggerContractPrice', 'triggerRawCodeHint',
+    'triggerRawCodeHint',
   ];
   for (const key of keys) {
     assert.match(zh, new RegExp(`\\b${key}:`), `中文缺键 ${key}`);

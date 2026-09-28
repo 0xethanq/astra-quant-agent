@@ -45,7 +45,7 @@ _BUDGET_NODE, _BUDGET_PATH = source_scan.find_function_node(
     BRAIN_FACADE, "build_risk_budget_text", **BRAIN_DOMAIN)
 _EXTRA_NODES = {
     name: source_scan.find_function_node(BRAIN_FACADE, name, **BRAIN_DOMAIN)[0]
-    for name in ("_sl_atr_mult_for", "_xvenue_prompt_line")
+    for name in ("_sl_atr_mult_for",)
 }
 
 APP_TREE = ast.parse((PROJECT / "astra_backend/app.py").read_text())
@@ -102,9 +102,9 @@ class Sandbox(unittest.TestCase):
                        # 下面两个是被 exec 的节点按**全局名**解析的主脑私有函数。
                        # 本测试刻意不 import trader 模块（隔离），故同样从领域 AST
                        # 取节点注入 —— 它们只被"按名解析"，不参与本测试的实际调用
-                       # （用例传 packages=[]，两个函数体都不会执行）。
-                       _sl_atr_mult_for=_EXTRA_NODES["_sl_atr_mult_for"],
-                       _xvenue_prompt_line=_EXTRA_NODES["_xvenue_prompt_line"])
+                       # （用例传 packages=[]，函数体不会执行）。OKX-only 迁移后
+                       # `_xvenue_prompt_line` 已从主脑域删除，故不再注入。
+                       _sl_atr_mult_for=_EXTRA_NODES["_sl_atr_mult_for"])
         self.ns.update({k: v for k, v in vars(risk_constants).items() if k.isupper()})
         exec(compile(ast.Module(body=[budget_node, node], type_ignores=[]), "scripts/ai_brain_trader.py", "exec"), self.ns)
         self.construct = self.ns["construct_full_market_prompt"]

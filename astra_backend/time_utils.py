@@ -12,7 +12,7 @@ BJ_TZ = timezone(timedelta(hours=8), name="Asia/Shanghai")
 #:
 #: ⚠️ 必须是 `1e11` 而不是 `1e9`：epoch **秒**本身已经 ~1.79e9，用 1e9 当分界会把"秒"
 #: 误判成"毫秒"再除以 1000 —— 结果"还剩 7 天"被算成"已过期"（本仓真实踩过）。
-#: 同一判据此前在本仓有**四处**写法（本文件、`dashboard_payload/multi_venue.py`、
+#: 同一判据此前在本仓有**多处**写法（本文件、已下架的外所面板聚合件、
 #: `trader/venue_protection.py` 的函数版与内联版）⇒ 统一到这里，其余各处委派。
 EPOCH_MS_THRESHOLD = 1e11
 

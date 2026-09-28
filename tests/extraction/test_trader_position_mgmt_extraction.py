@@ -17,7 +17,12 @@
 - 指令 **超过 300 秒** → 视为过期，不执行（防用陈旧指令操作当前盘面）。
 
 本文件用**假交易所**（记录调用）对拍"搬走前门面实现"与"搬后子模块"，覆盖
-上述四条，并额外验证注入契约（9 项依赖必须调用期从门面取）。
+上述四条，并额外验证注入契约（6 项依赖必须调用期从门面取）。
+
+⚠️ **OKX 专用化**：多所（Binance/Gate）云端止损改单分支随场所下线整体移除 ——
+`execute_ai_position_management` 只走 OKX 直签链（`okx_rest`），不再有
+`amend_venue_stop_loss` / 多所适配器路径。历史台账里的外所持仓行一律**只读容错**
+（查不到即留痕跳过，绝不触达交易所）。
 """
 from __future__ import annotations
 
@@ -60,8 +65,12 @@ class _FakeOkx:
 
 def _legacy(real_pos_dict, trackers, timestamp_full, executed_actions, *,
             ai_position_management_file, ai_tightens_stop, close_position_confirmed,
-            okx_rest, venue_registry, current_environment, amend_venue_stop_loss):
-    """搬走前门面里的实现（逐字原样；仅把模块全局改成入参以便参数化）。"""
+            okx_rest, venue_registry, current_environment):
+    """搬走前门面里的实现（OKX 直签链部分逐字原样；模块全局改为入参以便参数化）。
+
+    多所（Binance/Gate）`amend_venue_stop_loss` 分支已随场所下线移除，不再是
+    本执行器的契约，故对照基准里也不再有它。
+    """
     if not os.path.exists(ai_position_management_file):
         return
     try:
@@ -111,38 +120,23 @@ def _legacy(real_pos_dict, trackers, timestamp_full, executed_actions, *,
 
             amend_ok = False
             old_sl = 0.0
-            if pos_venue != "okx":
-                try:
-                    from astra_backend.close_intent import adapter_environment as _sl_env
-                    ad = venue_registry.get_adapter(
-                        pos_venue, environment=_sl_env(pos_venue, str(current_environment().mode)))
-                    _c3_ok, _c3_note = amend_venue_stop_loss(
-                        ad, name, pos_side, float(new_sl), abs(float(position.get("pos", 0) or 0)))
-                    amend_ok = bool(_c3_ok)
-                    if not amend_ok:
-                        executed_actions.append(f"[{name}] {pos_venue.upper()} 云端止损更新失败: {_c3_note}")
-                        continue
-                except Exception as vexc:
-                    executed_actions.append(f"[{name}] {pos_venue.upper()} 云端止损更新失败: {vexc}")
-                    continue
-            else:
-                try:
-                    algo_orders = okx_rest.pending_algo_orders(inst_id)
-                except Exception as exc:
-                    executed_actions.append(f"[{name}] 云端止损收紧失败，原保护单保持不变（查询异常：{exc}）")
-                    continue
-                live_algo = next((o for o in algo_orders
-                                  if o.get("state") == "live" and o.get("posSide") == pos_side
-                                  and o.get("slTriggerPx")), None)
-                if not live_algo:
-                    executed_actions.append(f"[{name}] 未找到真实云端止损单，无法更新")
-                    continue
-                old_sl = float(live_algo.get("slTriggerPx", 0) or 0)
-                try:
-                    okx_rest.amend_algo_sl(live_algo["algoId"], new_sl, inst_id=inst_id, new_sl_ord_px="-1")
-                    amend_ok = True
-                except Exception:
-                    amend_ok = False
+            try:
+                algo_orders = okx_rest.pending_algo_orders(inst_id)
+            except Exception as exc:
+                executed_actions.append(f"[{name}] 云端止损收紧失败，原保护单保持不变（查询异常：{exc}）")
+                continue
+            live_algo = next((o for o in algo_orders
+                              if o.get("state") == "live" and o.get("posSide") == pos_side
+                              and o.get("slTriggerPx")), None)
+            if not live_algo:
+                executed_actions.append(f"[{name}] 未找到真实云端止损单，无法更新")
+                continue
+            old_sl = float(live_algo.get("slTriggerPx", 0) or 0)
+            try:
+                okx_rest.amend_algo_sl(live_algo["algoId"], new_sl, inst_id=inst_id, new_sl_ord_px="-1")
+                amend_ok = True
+            except Exception:
+                amend_ok = False
 
             if amend_ok:
                 executed_actions.append(f"[{name}] 云端止损收紧至 {new_sl} ({pos_venue.upper()}): {reason}")
@@ -189,8 +183,7 @@ class _Harness:
            close_position_confirmed=self.close,
            okx_rest=self.okx,
            venue_registry=None,
-           current_environment=None,
-           amend_venue_stop_loss=None)
+           current_environment=None)
         return actions
 
     @property
@@ -224,8 +217,7 @@ class ImplementationMovedTest(unittest.TestCase):
                    "close_position_confirmed=close_position_confirmed,",
                    "okx_rest=okx_rest,",
                    "venue_registry=venue_registry,",
-                   "current_environment=current_environment,",
-                   "amend_venue_stop_loss=amend_venue_stop_loss,"):
+                   "current_environment=current_environment,"):
             self.assertIn(kw, facade, f"门面未注入 {kw}")
 
     def test_confidence_threshold_stays_a_literal(self):
@@ -247,9 +239,12 @@ class ParityTest(unittest.TestCase):
     #: 非 HOLD 时，旧实现**静默 continue**，新实现**如实留痕**。
     #:
     #: 实测可达性（2026-09-20）：AI 指令文件里唯一一条是 `UNI-USDT-SWAP`（HOLD），
-    #: 而它正是 **binance** 的 UNI 空仓 ⇒ 只要 AI 改成 CLOSE_MARKET/UPDATE_SL，
+    #: 而它当时并不在本路径持仓字典里 ⇒ 只要 AI 改成 CLOSE_MARKET/UPDATE_SL，
     #: 旧实现就"什么都没做、一个字也不说"。本刀只改**可见性**，不动交易行为
     #: （能力补齐属改变实盘行为的改动，须单独决策）。
+    #:
+    #: OKX 专用化后，本字典不再可能有外所持仓；差异的**实际形态**变为命中
+    #: 历史台账里已移除场所的行（只读容错：不执行、不清算、不抛异常）。
     #:
     #: 差异用"从 got 里剥掉这些留痕后必须与 legacy 逐字一致"来表达：
     #: 于是**除留痕之外**的任何行为分叉仍会翻红。
@@ -262,7 +257,7 @@ class ParityTest(unittest.TestCase):
             if inst and inst not in harness.positions and act != "HOLD":
                 nm = inst.replace("-USDT-SWAP", "") or inst
                 out.append(f"[{nm}] AI{act}指令未执行：{inst} 不在本路径持仓字典"
-                           f"（该字典仅 OKX 直签链；外所持仓由云端保护腿链路管理）")
+                           f"（该字典为 OKX 直签链的真实持仓）")
         return out
 
     def _both(self, harness):
@@ -301,8 +296,7 @@ class ParityTest(unittest.TestCase):
             {}, {}, "T", actions_got,
             ai_position_management_file="/nonexistent/nope.json",
             ai_tightens_stop=aft.ai_tightens_stop, close_position_confirmed=lambda *a, **k: (True, ""),
-            okx_rest=_FakeOkx(), venue_registry=None, current_environment=None,
-            amend_venue_stop_loss=None)
+            okx_rest=_FakeOkx(), venue_registry=None, current_environment=None)
         self.assertEqual(actions_got, [])
 
     def test_stale_file_beyond_300s_is_skipped(self):
@@ -328,8 +322,8 @@ class ParityTest(unittest.TestCase):
     def test_unknown_position_is_reported_and_hold_is_silent(self):
         """第一百一十七刀改判：**非 HOLD** 的未知持仓指令必须留痕（旧实现静默）。
 
-        实测的正是这个形状：AI 对 **binance** 的 `UNI-USDT-SWAP` 发文，而
-        `real_pos_dict` 仅 OKX 直签链 ⇒ 旧实现一个字都不说，看起来像"无事可做"。
+        这里模拟的正是这个形状：AI 对一笔**不在本路径持仓字典**里的标的发文
+        （字典由 OKX 直签链构建）⇒ 旧实现一个字都不说，看起来像"无事可做"。
         HOLD 仍然静默（没要求动作，无需留痕）。
         """
         h = _Harness({"instructions": [
@@ -344,20 +338,20 @@ class ParityTest(unittest.TestCase):
         raw = self._delta_lines(h)
         self.assertEqual(len(raw), 1)
         self.assertIn("不在本路径持仓字典", raw[0])
-        self.assertIn("仅 OKX 直签链", raw[0])
+        self.assertIn("OKX 直签链的真实持仓", raw[0])
         self.assertEqual(g_env[0], [], "未知持仓绝不得触发平仓")
 
-    def test_binance_position_instruction_is_reported_not_silent(self):
-        """真机形状：`real_pos_dict` 只有 OKX 仓，AI 却对 binance 仓发 CLOSE_MARKET。"""
+    def test_known_position_survives_a_removed_venue_row_in_history(self):
+        """只读容错：历史台账里残留的外所行（`venue` 已下线）只读跳过，不下发任何指令。"""
         h = _Harness({"instructions": [
-            {"instId": "UNI-USDT-SWAP", "action": "CLOSE_MARKET", "confidence": 99, "reason": "x"}],
-        }, {})          # OKX 字典为空 = 与真机"OKX 无仓、外所 1 笔"同形
-        got_raw = h.run(position_mgmt.execute_ai_position_management)
+            {"instId": "XRP-USDT-SWAP", "action": "CLOSE_MARKET", "confidence": 99, "reason": "x"}],
+        }, {"XRP-USDT-SWAP": {"posSide": "short", "pos": 3, "markPx": 2.0,
+                              "venue": "binance"}})
+        raw = h.run(position_mgmt.execute_ai_position_management)
         self.addCleanup(h.cleanup)
-        self.assertEqual(len(got_raw), 1, "必须留痕，不得静默")
-        self.assertIn("UNI", got_raw[0])
-        self.assertIn("CLOSE_MARKET", got_raw[0])
-        self.assertEqual(h.close_calls, [], "外所仓不得被本路径平掉（能力未接线）")
+        self.assertEqual(len(raw), 1)
+        self.assertIn("只读跳过", raw[0])
+        self.assertEqual(len(h.close_calls), 0, "外所历史持仓不下发平仓指令")
 
     def test_unknown_position_update_sl_is_reported_not_silent(self):
         """UPDATE_SL 同样（且更危险：AI 以为收紧了止损，实际什么都没发生）。"""
@@ -445,38 +439,22 @@ class ParityTest(unittest.TestCase):
         self.assertTrue(any("云端止损收紧至" in a for a in got), f"实际 {got}")
 
     def test_non_okx_venue_routes_through_amend_venue_stop_loss(self):
-        """多所路径必须走 `amend_venue_stop_loss`，且用 `venue` 字段选路。"""
-        calls = []
-
-        class _VR:
-            def get_adapter(self, venue, environment=None):
-                calls.append(("get_adapter", venue))
-                return "ADAPTER"
-
-        def _amend(ad, nm, side, sl, sz):
-            calls.append(("amend", ad, nm, side, round(sl, 4), round(sz, 4)))
-            return True, "ok"
-
+        """非 OKX 场所历史持仓，只读跳过。"""
         h = _Harness({"instructions": [{"instId": "BTC-USDT-SWAP", "action": "UPDATE_SL",
                                         "suggested_sl_price": 116, "confidence": 90, "reason": "提损"}]},
                      {"BTC-USDT-SWAP": {"posSide": "long", "pos": 1, "avgPx": 100, "markPx": 120,
                                         "atr_1h": 2.0, "venue": "binance"}})
         self.addCleanup(h.cleanup)
         actions = []
-        with patch("astra_backend.close_intent.adapter_environment", lambda v, m: "demo"):
-            h.positions["BTC-USDT-SWAP"]["venue"] = "binance"
-            position_mgmt.execute_ai_position_management(
-                h.positions, h.trackers, "T", actions,
-                ai_position_management_file=str(h.path),
-                ai_tightens_stop=aft.ai_tightens_stop,
-                close_position_confirmed=h.close,
-                okx_rest=h.okx,
-                venue_registry=_VR(),
-                current_environment=lambda: type("E", (), {"mode": "demo"})(),
-                amend_venue_stop_loss=_amend)
-        self.assertIn(("get_adapter", "binance"), calls, "多所路径未按 venue 选适配器")
-        self.assertTrue(any(c[0] == "amend" for c in calls), "未调用 amend_venue_stop_loss")
-        self.assertEqual(h.okx.pending_calls, [], "多所路径不得走 OKX 直下")
+        position_mgmt.execute_ai_position_management(
+            h.positions, h.trackers, "T", actions,
+            ai_position_management_file=str(h.path),
+            ai_tightens_stop=aft.ai_tightens_stop,
+            close_position_confirmed=h.close,
+            okx_rest=h.okx,
+            venue_registry=None,
+            current_environment=lambda: type("E", (), {"mode": "demo"})())
+        self.assertEqual(h.okx.pending_calls, [], "非 OKX 场所不得走 OKX 直下")
 
 
 def _read_instr(path):

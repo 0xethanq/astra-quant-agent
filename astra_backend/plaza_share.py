@@ -53,20 +53,16 @@ _FORBIDDEN_KEY_SUBSTRINGS = (
 
 
 def is_live_trading_node() -> bool:
-    """Return True only if the system is genuinely configured for LIVE trading."""
+    """Return True only if the system is genuinely configured for LIVE trading.
+
+    本仓已收口为 OKX 专用：全站唯一档位轴就是 OKX 的 demo/live，
+    故此处不再有"某一外所为实盘"的旁路（该旁路随外所下架一并删除）。
+    """
     try:
         from scripts.okx_runtime import current_environment
 
         okx_env = current_environment()
-        mode = str(getattr(okx_env, "mode", "demo")).strip().lower()
-        if mode == "live":
-            return True
-
-        from astra_backend.exchanges import env_profiles
-
-        bn_mode = str(env_profiles.legacy_environment_for("binance")).strip().lower()
-        gate_mode = str(env_profiles.legacy_environment_for("gate")).strip().lower()
-        return bn_mode == "live" or gate_mode == "live"
+        return str(getattr(okx_env, "mode", "demo")).strip().lower() == "live"
     except Exception:
         return False
 

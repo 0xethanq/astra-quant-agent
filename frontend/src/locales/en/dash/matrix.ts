@@ -3,17 +3,14 @@ export const enMatrix = {
   desc: 'Account, positions, orders and factor matrix on one screen.',
   kpi: {
     equity: 'Total equity',
-    multiEquity: 'Multi-Venue Assets',
-    venuesConnected: '{n} venues',
-    comboEquity: 'Portfolio Equity (U)',
-    comboEquityTip: 'Aggregated equity across venues',
-    comboEquityEmpty: 'No readable account in this environment; other tiers are excluded',
+    // OKX account unreadable for the current tier: show "--", never fake it with 0
+    equityEmpty: 'No readable OKX account for the current tier',
     todayPnl: 'Realized today',
     floatPnl: 'Floating PnL',
     ls: 'Long / short',
     margin: 'Margin used',
     oco: 'Stop Protection',
-    equityTip: 'Wallet balance + unrealized PnL of all positions',
+    equityTip: 'OKX wallet balance + unrealized PnL of all positions',
     todayTip: 'Net realized PnL since 00:00 UTC+8',
     floatTip: 'Unrealized PnL at mark price',
     marginTip: 'Used margin / total equity',
@@ -51,30 +48,28 @@ export const enMatrix = {
     triggerLast: 'last-price trigger',
     triggerIndex: 'index-price trigger',
     triggerUnknown: 'trigger type not reported',
-    triggerMarkPrice: 'mark-price trigger',
-    triggerContractPrice: 'last-price trigger',
-    triggerRawCodeHint: 'Raw code reported by the venue; this repo has not verified its official mapping, so it is shown verbatim',
+    triggerRawCodeHint: 'Raw code reported by OKX; this repo has not verified its official mapping, so it is shown verbatim',
     triggerMarkHint: 'This protective leg triggers on mark price (wick-resistant)',
     triggerLastHint: 'This leg triggers on last traded price: a single wick can knock it out early',
     triggerIndexHint: 'This leg triggers on index price',
-    triggerUnknownHint: 'The venue did not report this leg\'s trigger price type: when it fires is undecidable',
+    triggerUnknownHint: 'OKX did not report this leg\'s trigger price type: when it fires is undecidable',
     ocoMiss: 'Missing',
     ocoMissHint: 'No exchange-side protection',
     orphanPill: 'orphan legs',
-    orphanHint: 'This venue has protective legs attributable to us with no matching position. '
+    orphanHint: 'OKX has protective legs attributable to us with no matching position. '
       + 'They can reduce a NEW position on the same symbol, so an operator must review and '
       + 'cancel them explicitly (the system never cancels automatically).',
     unclassifiedPill: 'unreadable legs',
-    unclassifiedHint: 'This venue has protective legs that were read but cannot be classified '
+    unclassifiedHint: 'OKX has protective legs that were read but cannot be classified '
       + '(no tag of ours, unrecognized type name, or an unparsable row). They are NOT counted '
       + 'as coverage, so coverage may be UNDERESTIMATED (which can cause duplicate legs); review.',
     mismatchPill: 'legs unmatched',
-    mismatchHint: 'This venue has protective legs whose side or size matches no position: '
+    mismatchHint: 'OKX has protective legs whose side or size matches no position: '
       + 'side-mismatched legs are NOT counted as coverage (a reversed leg cannot protect this '
       + 'position); size-mismatched legs ARE counted as coverage but their provenance is unclear '
       + '(possibly left over from an old position; they can still reduce), so review them.',
     orphanUnknownPill: 'orphan legs unknown',
-    orphanUnknownHint: 'This venue has unattributable protective legs (no tag, no matching ledger '
+    orphanUnknownHint: 'OKX has unattributable protective legs (no tag, no matching ledger '
       + 'record) - possibly manual orders; by discipline they are never touched.',
     orphanReadFailHint: 'Leg read failed, so orphan status is undecidable (not readable != none)',
     aiManaged: 'AI-managed positions',
@@ -195,25 +190,6 @@ export const enMatrix = {
     noDecision: 'No action for this symbol this cycle',
     updated: 'Snapshot {t}',
   },
-  venue: {
-    title: 'Venue decision · venue_decision',
-    beijing: 'Beijing',
-    selectedPrefix: 'Selected',
-    notSelected: 'none',
-    reasonCodeFallback: 'reason --',
-    manualPrefix: 'Manual first',
-    hysteresis: 'Hysteresis kept incumbent',
-    allocPrefix: 'Alloc',
-    rejectedTitle: 'Rejected candidates · {n}',
-    thVenue: 'Venue',
-    thStage: 'Stage',
-    thReason: 'Reason',
-    noEvidence: 'No venue-decision evidence — this signal skipped the venue routing pipeline this cycle (appears automatically once generated).',
-    crossTitle: 'Cross-venue · Binance / Gate',
-    crossLs: 'L/S Binance/Gate',
-    crossFund: 'Fund% Binance/Gate',
-    crossEmpty: 'No cross-venue snapshot for this coin yet — generated on the next 15-minute decision cycle.',
-  },
 
   filterAll: 'All',
   filterLong: 'Long',
@@ -229,12 +205,4 @@ export const enMatrix = {
   focusExit: 'Exit Focus',
   // ── batch 41: localize strings previously hardcoded in FactorDrawer / FactorMatrix ──
   searchPlaceholder: 'Search symbol (BTC/ETH)...',
-  budget: {
-    limit: 'Cap {v}',
-    before: 'Reserved before {v}',
-    this: 'This reservation {v}',
-    state: 'State {v}',
-  },
-  // ── batch 44: accessible name for the venue filter tablist ──
-  pop: { venueLabel: 'Filter by venue' },
 };

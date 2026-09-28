@@ -20,16 +20,11 @@ def _publish(event_type: str, title: str, message: str, payload: dict | None = N
 
 
 def _format_symbol(inst: str, venue: str = "okx") -> str:
-    """Intelligently format symbol according to exchange conventions without hardcoding -SWAP."""
+    """Format the OKX symbol without hardcoding -SWAP."""
     raw = str(inst or "").strip()
     if not raw:
         return "UNKNOWN-SWAP"
     clean = raw.replace("-USDT-SWAP", "").replace("-USDT", "").replace("USDT", "").replace("_USDT", "").upper()
-    v = str(venue or "okx").lower()
-    if "binance" in v:
-        return f"{clean}USDT 永续"
-    elif "gate" in v:
-        return f"{clean}_USDT 永续"
     return f"{clean}-USDT-SWAP"
 
 
@@ -97,8 +92,8 @@ def notify_trade_open(
         header_lines.append(f"👥 投委会协同：{' · '.join(c_parts)}")
 
     # Position & Execution details
-    # ⚠️ 2026-09-28 用户拍板：全系统**不再用「张」**表达仓位。三所数量单位不同
-    # （OKX 张 / 币安币数 / Gate 张），且各币种的合约面值算法都不一样 ⇒ 张数既不能
+    # ⚠️ 2026-09-28 用户拍板：全系统**不再用「张」**表达仓位。各所数量单位不同，
+    # 且各币种的合约面值算法都不一样 ⇒ 张数既不能
     # 跨场所比、也不能跨币种比。统一只说**保证金 + 杠杆**（+ 名义额）：
     # 钱是唯一跨场所、跨币种可比的量，也正是交易员判断"这笔占了多少"的依据。
     # 取不到保证金时**不回落张数**（旧文案把 199.9 XRP 说成 26.87 张、49.9U 说成 6.72U）。

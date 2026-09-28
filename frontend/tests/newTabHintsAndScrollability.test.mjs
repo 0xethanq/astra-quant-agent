@@ -68,7 +68,7 @@ test('所有 target="_blank" 外链必须提供「新标签页打开」提示', 
   // 2026-09 三次增量（判据本身不变，只是覆盖面变大，逐次复核过）：
   //   5 → 6：后台「关于页」新增注册通道面板（AboutPage.vue）；
   //   6 → 9：用户可见的 `dashboard/AboutModal.vue` 通道项改为**后端出值**后每个通道
-  //          各一个外链（含新增的 Binance），以及新增的 `dashboard/FirstRunGuide.vue`
+  //          各一个外链，以及新增的 `dashboard/FirstRunGuide.vue`
   //          里 1 个注册通道外链 + 1 个官方仓库外链 —— 全部带 `common.opensInNewTab`。
   //   9 → 10：品牌改名 AstraQuant 后，「关于」浮层新增**自有官网** www.astraquant.tech 入口
   //          （自有域名，不依赖任何第三方托管），同样带新标签页提示。

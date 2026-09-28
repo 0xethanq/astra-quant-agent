@@ -22,15 +22,23 @@ from scripts.trader.position_mgmt import execute_ai_position_management
 INST = "BTC-USDT-SWAP"
 
 
-class _Reg:
-    def __init__(self, ad=None, raises=False):
-        self._ad = ad
-        self._raises = raises
+class _MockOkx:
+    def __init__(self, *, algo_orders=None, query_raises=False, amend_raises=False):
+        self.algo_orders = algo_orders if algo_orders is not None else [
+            {"state": "live", "posSide": "long", "slTriggerPx": "80.0", "algoId": "algo1"}
+        ]
+        self.query_raises = query_raises
+        self.amend_raises = amend_raises
 
-    def get_adapter(self, venue, environment=None):
-        if self._raises:
-            raise RuntimeError("取适配器失败")
-        return self._ad
+    def pending_algo_orders(self, inst_id):
+        if self.query_raises:
+            raise RuntimeError("查询挂单异常")
+        return self.algo_orders
+
+    def amend_algo_sl(self, algo_id, new_sl, inst_id, new_sl_ord_px="-1"):
+        if self.amend_raises:
+            raise RuntimeError("改单失败")
+        return {"code": "0"}
 
 
 class Base(unittest.TestCase):
@@ -48,7 +56,8 @@ class Base(unittest.TestCase):
                               "reason": "AI 收紧", "suggested_sl_price": sl}]}),
             encoding="utf-8")
 
-    def _run(self, *, amend=(True, "ok"), venue="binance", reg=None, pos_side="long"):
+    def _run(self, *, okx=None, venue="okx", pos_side="long"):
+        okx = okx or _MockOkx()
         return execute_ai_position_management(
             {INST: {"posSide": pos_side, "venue": venue, "markPx": 100.0, "pos": 1.0,
                     "avgPx": 90.0}},
@@ -56,10 +65,9 @@ class Base(unittest.TestCase):
             ai_position_management_file=str(self.path),
             ai_tightens_stop=lambda instr, pos: True,
             close_position_confirmed=lambda *a, **k: (True, "ok"),
-            okx_rest=None,
-            venue_registry=reg if reg is not None else _Reg(object()),
-            current_environment=lambda: type("E", (), {"mode": "demo"})(),
-            amend_venue_stop_loss=(amend if callable(amend) else (lambda *a, **k: amend)))
+            okx_rest=okx,
+            venue_registry=None,
+            current_environment=lambda: type("E", (), {"mode": "demo"})())
 
 
 class AiInstructionFileTest(Base):
@@ -81,16 +89,16 @@ class CloudStopUpdateFailureTest(Base):
     def test_rejected_amend_keeps_local_tracker_untouched(self):
         """原生改单被拒 ⇒ 不谎报成功，**本地跟踪器也不许改成没生效的价位**。"""
         self._write()
-        self._run(amend=(False, "交易所拒绝"))
-        self.assertTrue(any("云端止损更新失败" in a and "交易所拒绝" in a for a in self.actions),
+        self._run(okx=_MockOkx(amend_raises=True))
+        self.assertTrue(any("云端止损更新失败" in a for a in self.actions),
                         self.actions)
         self.assertEqual(self.trackers[f"{INST}_long"]["trailingStopPx"], 80.0,
                          "改单没生效 ⇒ 本地 trailingStopPx 必须保持原值（否则本地以为已保本）")
 
     def test_adapter_exception_is_disclosed_and_skipped(self):
         self._write()
-        self._run(reg=_Reg(raises=True))
-        self.assertTrue(any("云端止损更新失败" in a for a in self.actions), self.actions)
+        self._run(okx=_MockOkx(query_raises=True))
+        self.assertTrue(any("云端止损收紧失败" in a for a in self.actions), self.actions)
         self.assertEqual(self.trackers[f"{INST}_long"]["trailingStopPx"], 80.0)
 
     def test_missing_position_is_disclosed_when_action_is_not_hold(self):
@@ -100,9 +108,8 @@ class CloudStopUpdateFailureTest(Base):
             {}, self.trackers, "t", self.actions,
             ai_position_management_file=str(self.path),
             ai_tightens_stop=lambda *a: True, close_position_confirmed=lambda *a, **k: (True, ""),
-            okx_rest=None, venue_registry=_Reg(object()),
-            current_environment=lambda: type("E", (), {"mode": "demo"})(),
-            amend_venue_stop_loss=lambda *a, **k: (True, "ok"))
+            okx_rest=_MockOkx(), venue_registry=None,
+            current_environment=lambda: type("E", (), {"mode": "demo"})())
         self.assertTrue(any("不在本路径持仓字典" in a for a in self.actions), self.actions)
 
 
@@ -118,7 +125,7 @@ class NotificationFailureTest(Base):
             raise RuntimeError("QQ 挂了")
         fake.notify_sl_updated = boom
         with patch.dict(sys.modules, {"qq_notifier": fake}):
-            self._run(amend=(True, "ok"))
+            self._run()
         self.assertEqual(self.trackers[f"{INST}_long"]["trailingStopPx"], 95.0,
                          "通知失败不该影响已生效的止损状态")
         self.assertTrue(any("云端止损收紧至 95.0" in a for a in self.actions), self.actions)

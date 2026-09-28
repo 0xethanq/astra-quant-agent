@@ -10,7 +10,8 @@
  *      切到英文后它们仍是中文，且是**用户最需要看懂**的那类文字。
  *      批 76 实测修复 7 处：`api/http.ts`（网络失败 / 会话过期 / 422 拼接符与回落）、
  *      `stores/dashboard.ts`（扫描中 / 取数失败）、`stores/auth.ts`（登录失败 / 网络错误）。
- *   2. **纯工具模块里的枚举文案** —— `utils/venueMeta.stageLabel` 的阶段名表。
+ *   2. **纯工具模块里的枚举文案** —— `utils/` 下的纯逻辑模块（批 76 原文举的是
+ *      已随「全站收口 OKX」删除的 `utils/venueMeta.stageLabel` 阶段名表）。
  *
  * ## 判定边界（哪些中文是**合理**的，不得误伤）
  *
@@ -101,7 +102,9 @@ test('api / stores 层不得把用户可见文案硬编码成中文', () => {
     }
   }
 
-  assert.ok(examined >= 5, `扫描到的模块过少（${examined}），疑似判据失效`);
+  // 2026-10：`stores/listingStatus` 与 `stores/venueAccounts` 随全站收口 OKX 删除，
+  // api + stores 现存 3 个 .ts 模块；下限随之收紧为 3。
+  assert.ok(examined >= 3, `扫描到的模块过少（${examined}），疑似判据失效`);
   assert.deepEqual(
     bad,
     [],
@@ -112,38 +115,27 @@ test('api / stores 层不得把用户可见文案硬编码成中文', () => {
 test('数据匹配用的中文（正则 / includes）必须保留，不得被"翻译掉"', () => {
   // 反向守卫：这些是解析**后端中文值**的判据，改成英文会导致匹配失败。
   // 若哪天有人"为了 i18n"把它们清了，本断言会立刻翻红。
-  const listing = readFileSync(path.join(SRC, 'stores/listingStatus.ts'), 'utf8');
-  assert.match(listing, /\|会话\|登录\//, 'listingStatus 的会话失效匹配被改掉了');
-  const venue = readFileSync(path.join(SRC, 'stores/venueAccounts.ts'), 'utf8');
-  assert.match(venue, /\|会话\|登录\//, 'venueAccounts 的会话失效匹配被改掉了');
   const dirTag = readFileSync(path.join(SRC, 'components/base/DirTag.vue'), 'utf8');
   assert.match(dirTag, /d === '多'/, "DirTag 的方向匹配被改掉了（后端用中文方向）");
+  const levels = readFileSync(path.join(SRC, 'components/dashboard/chartLiveLevels.ts'), 'utf8');
+  assert.match(levels, /includes\('空'\)/, 'chartLiveLevels 的空头方向匹配被改掉了（后端用中文方向）');
 });
 
-test('stageLabel 必须由调用方注入 labelOf，不得内置中文表', () => {
-  const vm = readFileSync(path.join(SRC, 'utils/venueMeta.ts'), 'utf8');
-  assert.match(vm, /export function stageLabel\(stage: unknown, labelOf\?: \(key: string\) => string\)/, 'stageLabel 未注入 labelOf');
-  // ⚠️ 只断言"前缀出现过"是不够的：表里 6 个键，改坏其中 1 个仍会通过
-  // （变异 M7 暴露）。这里的值是不经 `t()` 的裸键名，**静态扫描器看不到**，
-  // 所以必须逐个解析并在 zh / en 词条里落实。
-  const mapBlock = vm.slice(vm.indexOf('const STAGE_KEY'), vm.indexOf('};', vm.indexOf('const STAGE_KEY')));
-  const keys = [...mapBlock.matchAll(/'([a-z].*?)'/g)].map((m) => m[1]);
-  assert.equal(keys.length, 6, `STAGE_KEY 应有 6 个键，实测 ${keys.length}`);
-  for (const key of keys) {
-    assert.ok(key.startsWith('dash.venueAccounts.stage.'), `阶段键 ${key} 不在 dash.venueAccounts.stage 下`);
-    const leaf = key.split('.').pop();
-    for (const loc of ['zh', 'en']) {
-      const file = readFileSync(path.join(SRC, `locales/${loc}/dash/venueAccounts.ts`), 'utf8');
-      assert.ok(
-        new RegExp(`\\b${leaf}:`).test(file),
-        `${loc} 词条缺少阶段键 ${key} —— 英文界面会回落到裸阶段 id`,
-      );
-    }
+test('纯工具模块不得内置中文文案表，也不得 import i18n', () => {
+  // 批 76 的原始判据挂在 `utils/venueMeta.stageLabel` 上；该模块已随
+  // 「全站收口 OKX」删除，判据改为对**全部存活的 utils 纯逻辑模块**生效 ——
+  // 覆盖面更宽，且不会因为删掉一个模块就整条失效。
+  const files = readdirSync(path.join(SRC, 'utils')).filter((n) => n.endsWith('.ts'));
+  assert.ok(files.length >= 4, `utils 下只扫到 ${files.length} 个模块，疑似判据失效`);
+  const bad = [];
+  for (const f of files) {
+    const src = readFileSync(path.join(SRC, 'utils', f), 'utf8');
+    const code = codeOnly(src);
+    for (const hit of userFacingLiterals(code)) bad.push(`utils/${f} [${hit.why}] :: ${hit.text}`);
+    // 工具模块不得 import i18n（沿用 llmLogic 的既有约定：文案由调用方注入）
+    assert.ok(!/from ['"]\.\.?\/composables\/useI18n/.test(code), `utils/${f} 不应 import i18n`);
   }
-  const fn = vm.slice(vm.indexOf('export function stageLabel'));
-  assert.ok(!CJK.test(codeOnly(fn.slice(0, fn.indexOf('\n}')))), 'stageLabel 里仍有中文表');
-  // 工具模块不得 import i18n（沿用 llmLogic 的既有约定）
-  assert.ok(!/from ['"]\.\.?\/composables\/useI18n/.test(vm), 'venueMeta 不应 import i18n');
+  assert.deepEqual(bad, [], `工具模块里出现硬编码中文文案（英文界面会漏中文）：\n  ${bad.join('\n  ')}`);
 });
 
 test('confTier 不得再返回死的中文 label 字段', () => {

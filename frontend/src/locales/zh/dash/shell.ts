@@ -2,10 +2,8 @@
 export const zhShell = {
   live: '实盘',
   demo: '模拟盘',
-  mixedEnv: '混合环境',
   demoBannerTip: '当前处于模拟盘沙盒环境，资金与下单均为虚拟模拟',
   liveBannerTip: '当前处于实盘真金环境，真实资金正在撮合执行',
-  mixedBannerTip: '各交易所资金环境未对齐，请至管理后台核对',
   breaker: '三级熔断生效',
   cycle: '决策周期 {n} 分钟',
   updated: '更新于 {t}',
@@ -45,7 +43,7 @@ export const zhShell = {
   gateStaleDesc: '当前展示的是 {t} 的最后一次成功快照，数值可能已经过时。',
   gateNoSnapshot: '尚未收到任何行情快照',
 
-  // ── 批 29：壳层此前有 11 处中文写死在模板里（导航分组名、三所网关、
+  // ── 批 29：壳层此前有 11 处中文写死在模板里（导航分组名、
   //    折叠按钮 title/aria、关于系统按钮、实时流指示灯 title）。
   //    英文模式下这些位置仍然是中文，逐条收进语言包。 ──
 trajectoryBtn: '决策轨迹',
@@ -55,7 +53,6 @@ trajectoryBtn: '决策轨迹',
     groupRef: '参考文档',
     docs: '系统文档',
     docsTitle: '系统文档',
-    venues: '交易所网关',
     collapse: '折叠侧边栏',
     expand: '展开侧边栏',
     closeMobile: '收起导航',

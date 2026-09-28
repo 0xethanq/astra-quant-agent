@@ -20,7 +20,10 @@ SECRET_KEYS = {
     "ASTRA_NOTIFICATION_WEBHOOK", "ASTRA_WECHAT_WEBHOOK",
     "ASTRA_TELEGRAM_BOT_TOKEN", "ASTRA_QQ_CLIENT_SECRET",
     "ASTRA_ADMIN_TOKEN", "ASTRA_SETUP_TOKEN",
-    # 多交易所凭证（US-003：三所 6 账户独立凭证加密存储）
+    # 已退役场所的历史凭证槽位：**保留**以免下次写入时把已存密文过筛丢弃
+    # （`_decrypt_store` 按本表白名单过滤；删键会让旧凭证在下次 RMW 时永久消失，
+    # 而收益为零）。这些场所已不再参与交易：既无消费方，也无可写入它们的入口。
+    # ⚠️ 清理这些槽位属**运营动作**（用户执行），不要在重构里顺手删。
     "BINANCE_API_KEY", "BINANCE_SECRET_KEY",
     "BINANCE_LIVE_API_KEY", "BINANCE_LIVE_SECRET_KEY",
     "BINANCE_DEMO_API_KEY", "BINANCE_DEMO_SECRET_KEY",

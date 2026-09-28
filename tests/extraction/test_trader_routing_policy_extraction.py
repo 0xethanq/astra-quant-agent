@@ -29,23 +29,18 @@ sys.path.insert(0, str(ROOT))
 
 PRE = "7ef5e53"  # 本刀动工前最后提交（第八十六刀收口）
 FNS = ("load_routing_mode", "load_preferred_venue", "portfolio_risk_budget_usdt",
-       "estimate_margin_usdt", "_decision_payload", "_rejection_focus_reason",
-       "portfolio_budget_guard", "route_and_reserve_signal")
+       "estimate_margin_usdt", "portfolio_budget_guard", "route_and_reserve_signal")
 INJ = {
     "load_routing_mode": ("routing_policy",),
     "load_preferred_venue": ("routing_policy",),
     "portfolio_risk_budget_usdt": ("PORTFOLIO_RISK_BUDGET_ENV",),
     "estimate_margin_usdt": (),
-    "_decision_payload": (),
-    "_rejection_focus_reason": (),
     "portfolio_budget_guard": (),
-    "route_and_reserve_signal": ("_decision_payload", "_rejection_focus_reason",
-                                 "build_venue_candidates", "estimate_margin_usdt",
-                                 "load_preferred_venue", "load_routing_mode",
-                                 "persist_venue_decision", "portfolio_budget_guard",
+    "route_and_reserve_signal": ("estimate_margin_usdt",
+                                 "load_preferred_venue", "portfolio_budget_guard",
                                  "portfolio_risk_budget_usdt", "reservation_manager",
                                  "VENUE_SUBMITTERS", "current_environment",
-                                 "risk_reservation", "venue_router"),
+                                 "risk_reservation"),
 }
 
 

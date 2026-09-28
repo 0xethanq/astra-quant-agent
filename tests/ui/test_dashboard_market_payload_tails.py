@@ -87,34 +87,20 @@ class DashboardMarketPayloadTailsTests(unittest.TestCase):
     # -------------------------------------------------------------------------
     # 4. 多所组合资产聚合 (_load_multi_venue_portfolio)
     # -------------------------------------------------------------------------
-    def test_load_multi_venue_portfolio_module_import_error_handled(self):
-        # routers.exchanges 模块缺失时 gate 与 binance 标记 unavailable (lines 168-169)
-        with patch.dict(sys.modules, {"astra_backend.routers.exchanges": None}):
-            with patch("astra_backend.portfolio_aggregator.aggregate_venue_accounts", side_effect=lambda m, e: m):
-                res = _load_multi_venue_portfolio(100.0, 50.0, [], [])
-                self.assertEqual(res["gate"]["status"], "unavailable")
-                self.assertIn("账户模块缺失", res["gate"]["reason"])
-                self.assertEqual(res["binance"]["status"], "unavailable")
-                self.assertIn("账户模块缺失", res["binance"]["reason"])
-
-    def test_load_multi_venue_portfolio_individual_venue_exceptions_handled(self):
-        # gate / binance 各自账户面抛异常时独立捕获隔离 (lines 174, 178)
-        with patch("astra_backend.routers.exchanges._venue_accounts_gate", side_effect=RuntimeError("gate query boom")):
-            with patch("astra_backend.routers.exchanges._venue_accounts_binance", side_effect=RuntimeError("binance query boom")):
-                with patch("astra_backend.portfolio_aggregator.aggregate_venue_accounts", side_effect=lambda m, e: m):
-                    res = _load_multi_venue_portfolio(100.0, 50.0, [], [])
-                    self.assertEqual(res["gate"]["status"], "unavailable")
-                    self.assertIn("Gate 账户面异常: gate query boom", res["gate"]["reason"])
-                    self.assertEqual(res["binance"]["status"], "unavailable")
-                    self.assertIn("Binance 账户面异常: binance query boom", res["binance"]["reason"])
+    def test_load_multi_venue_portfolio_okx_assembled(self):
+        with patch("astra_backend.portfolio_aggregator.aggregate_venue_accounts", side_effect=lambda m, e: m):
+            res = _load_multi_venue_portfolio(100.0, 50.0, ["pos1"], ["ord1"])
+            self.assertEqual(res["okx"]["status"], "ready")
+            self.assertEqual(res["okx"]["equity"], 100.0)
+            self.assertEqual(res["okx"]["available"], 50.0)
+            self.assertEqual(res["okx"]["positions_count"], 1)
+            self.assertEqual(res["okx"]["open_orders_count"], 1)
 
     def test_load_multi_venue_portfolio_outer_exception_returns_empty_dict(self):
-        # 聚合器自身发生异常时捕获并安全返回空字典 (line 186)
-        with patch("astra_backend.routers.exchanges._venue_accounts_gate", return_value={"status": "ok"}):
-            with patch("astra_backend.routers.exchanges._venue_accounts_binance", return_value={"status": "ok"}):
-                with patch("astra_backend.portfolio_aggregator.aggregate_venue_accounts", side_effect=RuntimeError("aggregator boom")):
-                    res = _load_multi_venue_portfolio(100.0, 50.0, [], [])
-                    self.assertEqual(res, {})
+        # 聚合器自身发生异常时捕获并安全返回空字典
+        with patch("astra_backend.portfolio_aggregator.aggregate_venue_accounts", side_effect=RuntimeError("aggregator boom")):
+            res = _load_multi_venue_portfolio(100.0, 50.0, [], [])
+            self.assertEqual(res, {})
 
 
 if __name__ == "__main__":

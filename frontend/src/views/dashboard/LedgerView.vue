@@ -9,7 +9,6 @@ import { useDashboardStore } from '../../stores/dashboard';
 import DataGate from '../../components/dashboard/DataGate.vue';
 import { useI18n } from '../../composables/useI18n';
 import { fmtNum, fmtSigned, fmtPct, fmtPrice, arrow, dirClass, cleanReason, fmtDate, fmtDateTime } from '../../utils/format';
-import { venueToneCls } from '../../utils/venueMeta';
 import BaseStat from '../../components/base/BaseStat.vue';
 import BaseEmpty from '../../components/base/BaseEmpty.vue';
 import BaseSegmented from '../../components/base/BaseSegmented.vue';
@@ -76,19 +75,11 @@ const all = computed<any[]>(() => (fullTrades.value.length ? fullTrades.value : 
 const perf = computed<any>(() => (store.data as any)?.performance || {});
 
 /* —— 筛选状态 —— */
-const fVenue = ref<string>('all');
 const fMode = ref<'all' | 'live' | 'demo'>('all');
 const fStatus = ref<'all' | 'closed' | 'holding'>('closed');
 const fSide = ref<'all' | 'long' | 'short'>('all');
 const fResult = ref<'all' | 'win' | 'loss'>('all');
 const fInst = ref('all');
-
-const venueOptions = [
-  { value: 'all', label: t('dash.ledger.venueAll') },
-  { value: 'okx', label: t('dash.ledger.venueOkx') },
-  { value: 'binance', label: t('dash.ledger.venueBinance') },
-  { value: 'gate', label: 'Gate.io' },
-];
 
 const modeOptions = [
   { value: 'all', label: t('dash.ledger.modeAll') },
@@ -110,10 +101,6 @@ function sideNorm(s: unknown): 'long' | 'short' | 'flat' {
 
 const filtered = computed(() =>
   all.value.filter((x) => {
-    if (fVenue.value !== 'all') {
-      const v = String(x.venue || 'okx').toLowerCase();
-      if (v !== fVenue.value) return false;
-    }
     if (fMode.value !== 'all') {
       const m = String(x.account_mode || x.environment || 'live').toLowerCase();
       if (fMode.value === 'live' && !m.includes('live')) return false;
@@ -134,7 +121,7 @@ const page = ref(1);
 const PAGE = 20;
 const pageCount = computed(() => Math.max(1, Math.ceil(filtered.value.length / PAGE)));
 
-watch([fVenue, fMode, fStatus, fSide, fResult, fInst], () => { page.value = 1; });
+watch([fMode, fStatus, fSide, fResult, fInst], () => { page.value = 1; });
 watch(filtered, () => { if (page.value > pageCount.value) page.value = pageCount.value; });
 const rows = computed(() => filtered.value.slice((page.value - 1) * PAGE, page.value * PAGE));
 
@@ -164,9 +151,13 @@ function exportCsv() {
   toast.ok(t('dash.ledger.exported'));
 }
 
-const VENUE_LABELS: Record<string, string> = { okx: 'OKX', gate: 'Gate', binance: 'Binance' };
+/* 历史台账行的场所字段（只读降级）。
+ * 系统已收口为 OKX 专用：台账**不再提供场所筛选**，也不维护所名表。
+ * 但历史行里可能留有早期场所的原始值 —— 一律原样透出、绝不抛错、绝不删除。 */
 function venueLabel(v: unknown): string {
-  return VENUE_LABELS[String(v || '').toLowerCase()] ?? String(v || '');
+  const raw = String(v ?? '').trim();
+  if (!raw) return '';
+  return raw.toLowerCase() === 'okx' ? 'OKX' : raw;
 }
 
 /* —— 数理快照可观测性（证据纪律） ——
@@ -374,16 +365,6 @@ const truncation = computed<{ kept: number; total: number } | null>(() => {
 
           <div class="flex flex-wrap items-center gap-2 ms-auto">
             <select
-              v-model="fVenue"
-              :aria-label="t('dash.ledger.filters.venue')" 
-              class="h-7 rounded border border-[var(--line-1)] px-2 text-3xs transition-colors focus:outline-none focus:border-[var(--ds-color-border-input-focus)] focus:ring-1 focus:ring-[var(--ds-color-border-input-focus)]"
-              style="background-color: var(--surface-2); color: var(--ink-1)"
-              @change="page = 1"
-            >
-              <option v-for="vo in venueOptions" :key="vo.value" :value="vo.value">{{ vo.label }}</option>
-            </select>
-
-            <select
               v-model="fMode"
               :aria-label="t('dash.ledger.filters.mode')" 
               class="h-7 rounded border border-[var(--line-1)] px-2 text-3xs transition-colors focus:outline-none focus:border-[var(--ds-color-border-input-focus)] focus:ring-1 focus:ring-[var(--ds-color-border-input-focus)]"
@@ -446,8 +427,8 @@ const truncation = computed<{ kept: number; total: number } | null>(() => {
                       </span>
                       <span
                         v-if="x.venue"
-                        class="rounded px-1 py-0.5 text-3xs font-mono font-semibold uppercase border"
-                        :class="venueToneCls(x.venue)"
+                        class="rounded px-1 py-0.5 text-3xs font-mono font-semibold border"
+                        style="background-color: var(--surface-2); border-color: var(--line-1); color: var(--ink-3)"
                       >
                         {{ venueLabel(x.venue) }}
                       </span>

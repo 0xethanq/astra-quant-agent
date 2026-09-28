@@ -59,14 +59,12 @@ class _Rig:
             return self.refresh
 
         out = scan_risk_gates_and_ai_brain(
-            _xv_total=2, venue_position_span=venue_position_span,
+            venue_position_span=venue_position_span,
             active_pos_count=1, all_factors=[{"name": "BTC"}],
             executed_actions=self.actions, long_count=1, short_count=0,
             timestamp_full="2026-09-21 12:00:00", trackers={"t": 1}, usdt_available=1000.0,
-            xv_positions_by_venue={"binance": [{"inst_id": "SOL"}, {"inst_id": "UNI"}]},
             MAX_CONCURRENT_POSITIONS=5,
             _collect_okx_position_payloads=collect,
-            _merge_cross_venue_positions=merge,
             effective_single_asset_margin=lambda usdt: self.margin,
             execute_ai_position_management=lambda pos_dict, tr, ts, acts:
                 self.managed.append(pos_dict),
@@ -114,31 +112,6 @@ class ScanRiskGatesAndBrainTest(unittest.TestCase):
         self.assertEqual(rig.managed, [], "拉不到真实仓位 ⇒ 不许拿旧快照执行")
         self.assertTrue(any("AI持仓管理跳过" in a for a in rig.actions), rig.actions)
 
-    def test_cross_venue_positions_are_overlaid_onto_the_refreshed_dict(self):
-        """刷新只覆盖 OKX；外所仓必须并回来，否则 AI 对其指令永远执行不了。
-
-        用户报（2026-09-28）：「币安 gate 的 23、26 号的订单还在」。根因之一就在这里：
-        `query_positions()` 只读 OKX ⇒ 刷新后的字典里没有外所仓 ⇒
-        `execute_ai_position_management` 每轮把外所的 UPDATE_SL / CLOSE_MARKET
-        判成"不在本路径持仓字典"而拒绝执行。实测 UNI 空头 +32.9% 也移不了损。
-        """
-        rig = _Rig(brain={"BTC": {}}, refresh=(True, [
-            {"instId": "BTC-USDT-SWAP", "pos": "2"}], ""))
-        rig.real_pos_dict = {
-            "BTC-USDT-SWAP": {"instId": "BTC-USDT-SWAP", "venue": "okx"},
-            "UNI-USDT-SWAP": {"instId": "UNI-USDT-SWAP", "venue": "binance",
-                              "posSide": "short", "pos": 23.0},
-            "DOGE-USDT-SWAP": {"instId": "DOGE-USDT-SWAP", "venue": "gate",
-                               "posSide": "long", "pos": 861.0},
-        }
-        rig.run()
-        managed = rig.managed[0]
-        self.assertIn("UNI-USDT-SWAP", managed, "币安仓必须进 AI 持仓管理字典")
-        self.assertIn("DOGE-USDT-SWAP", managed, "Gate 仓同上")
-        self.assertEqual(managed["BTC-USDT-SWAP"]["pos"], "2",
-                         "OKX 侧取**刷新后**的值，不被相位 1 的旧快照覆盖")
-        self.assertEqual(managed["UNI-USDT-SWAP"]["venue"], "binance")
-
     def test_refresh_keeps_only_positions_with_size(self):
         rig = _Rig(brain={"BTC": {}}, refresh=(True, [
             {"instId": "BTC-USDT-SWAP", "pos": "2"},
@@ -183,51 +156,11 @@ class ScanRiskGatesAndBrainTest(unittest.TestCase):
         self.assertFalse(any("标的池不可信" in a for a in rig.actions))
         self.assertEqual(rig.actions, [], "没动作时不该制造噪音")
 
-    def test_cross_venue_positions_are_merged_into_the_panorama(self):
+    def test_position_description_shape(self):
         rig = _Rig(brain={"BTC": {}})
         rig.run()
-        self.assertTrue(rig.merged, "必须汇入外所在管持仓（三所平权全景）")
-        self.assertIn("SOL-USDT-SWAP", [p["instId"] for p in rig.active_pos_list],
-                      "外所持仓要进全景，否则模型看不到它")
-
-    def test_position_description_discloses_counts_and_cross_venue(self):
-        """持仓描述必须是**全场所合计 + 逐所点名**。
-
-        ⚠️ 2026-09 改：此前这里断言 `1/5` —— 那是"只报 OKX 的 1 笔 / 上限 5"，
-        而系统实际有 OKX 1 笔 + 跨所 2 笔。用户正是读到这种形状才报
-        「通知有 bug，平台只有 okx」。现在合计 3/5，并把每个所写出来。
-        """
-        rig = _Rig(brain={"BTC": {}})
-        rig.run()
-        self.assertIn("3/5", rig.pos_desc, "合计应为 OKX 1 + 跨所 2")
-        self.assertIn("okx 1", rig.pos_desc, "每个所都要点名")
-        self.assertIn("binance 2", rig.pos_desc, "跨所必须点名到所")
-        self.assertNotIn("持仓 OKX", rig.pos_desc, "不得再写死场所")
-
-    def test_unknown_cross_venue_count_is_spelled_out(self):
-        rig = _Rig(brain={"BTC": {}})
-        rig._xv = None
-        # 直接改调用参数：用 _xv_total=None 再跑一次
-        rig_kwargs = dict(_xv_total=None)
-        import scripts.trader.cycle_stages as cs
-        captured = {}
-        out = cs.scan_risk_gates_and_ai_brain(
-            _xv_total=None, venue_position_span=venue_position_span,
-            active_pos_count=1, all_factors=[], executed_actions=[],
-            long_count=1, short_count=0, timestamp_full="t", trackers={}, usdt_available=1.0,
-            xv_positions_by_venue={}, MAX_CONCURRENT_POSITIONS=5,
-            _collect_okx_position_payloads=lambda a, t: [],
-            _merge_cross_venue_positions=lambda l, x, a: None,
-            effective_single_asset_margin=lambda u: 1.0,
-            execute_ai_position_management=lambda *a: None,
-            execute_batch_ai_brain_cycle=lambda desc, lst, *, usdt_available: captured.update(
-                {"desc": desc}) or {"x": 1},
-            is_circuit_breaker_active=lambda u: (False, ""),
-            pool_is_trustworthy=lambda: True, pool_state=lambda: {},
-            query_positions=lambda: (True, [], ""), read_cycle_health=lambda: {},
-            real_pos_dict={},
-            save_trackers=lambda t: None)
-        self.assertIn("未知", captured["desc"], "跨所笔数拿不到时必须写「未知」，绝不装 0")
+        self.assertIn("1/5", rig.pos_desc)
+        self.assertIn("okx 1", rig.pos_desc)
 
 
 if __name__ == "__main__":

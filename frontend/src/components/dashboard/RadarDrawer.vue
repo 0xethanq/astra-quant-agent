@@ -1,12 +1,11 @@
 <script setup lang="ts">
 /**
  * RadarDrawer.vue · DeepSeek Harness 风格决策白盒透视抽屉
- * 包含：宏观综合研判、机会与持仓调度、投委会多模型博弈流（各交易员提案/辩论/CIO终审）、三所价差与原始 JSON
+ * 包含：宏观综合研判、机会与持仓调度、投委会多模型博弈流（各交易员提案/辩论/CIO终审）与原始 JSON
  */
 import { computed, ref, watch } from 'vue';
-import { fmtDateTime, fmtNum, fmtPrice } from '../../utils/format';
+import { fmtDateTime, fmtPrice } from '../../utils/format';
 import { useI18n } from '../../composables/useI18n';
-import { useDashboardStore } from '../../stores/dashboard';
 import { Scale, Activity, Zap, Landmark } from 'lucide-vue-next';
 import BaseDrawer from '../base/BaseDrawer.vue';
 import BaseTabs from '../base/BaseTabs.vue';
@@ -16,7 +15,6 @@ import DirTag from '../base/DirTag.vue';
 import ConfBadge from '../base/ConfBadge.vue';
 import CryptoLogo from './CryptoLogo.vue';
 
-const dash = useDashboardStore();
 const props = defineProps<{ cycle: any | null }>();
 const emit = defineEmits<{ (e: 'close'): void }>();
 
@@ -56,30 +54,12 @@ const arbitrator = computed<any>(() => transcript.value?.arbitrator || null);
 const modeLabel = computed(() => transcript.value?.consensus_mode === 'cross_examination'
   ? t('dash.radar.council.cross') : t('dash.radar.council.standard'));
 
-const xvenueRows = computed(() => {
-  const byAsset: any = c.value?.cross_venue?.by_asset
-    || (dash.data as any)?.cross_venue?.symbols || {};
-  return Object.entries(byAsset).map(([sym, data]: [string, any]) => ({
-    symbol: sym,
-    okx_last: typeof data?.okx_last === 'number' ? data.okx_last : data?.okx,
-    bin_last: data?.bin_last,
-    bin_basis_pct: data?.bin_basis_pct,
-    gate_last: data?.gate_last,
-    gate_basis_pct: data?.gate_basis_pct,
-    bin_ls: data?.bin_ls,
-    gate_ls: data?.gate_ls,
-    bin_funding_pct: data?.bin_funding_pct,
-    gate_funding_pct: data?.gate_funding_pct,
-  }));
-});
-
 const tabs = computed(() => {
   const items = [
     { key: 'macro', label: t('dash.radar.detail.macro') },
     { key: 'quotes', label: t('dash.radar.detail.quotes'), count: opps.value.length + posMgmt.value.length },
   ];
   if (transcript.value || councilStatus.value) items.push({ key: 'council', label: t('dash.radar.council.title') });
-  if (xvenueRows.value.length > 0) items.push({ key: 'xvenue', label: t('dash.radar.detail.xvenue'), count: xvenueRows.value.length });
   items.push({ key: 'raw', label: t('dash.radar.detail.raw') });
   return items;
 });
@@ -363,46 +343,7 @@ function posActionBadge(action: string): { label: string; class: string } {
       </div>
     </div>
 
-    <!-- 4. 三所价差与费率 -->
-    <div
-      v-else-if="tab === 'xvenue'"
-      id="radar-detail-panel-xvenue"
-      role="tabpanel"
-      tabindex="0"
-      aria-labelledby="radar-detail-tab-xvenue"
-      class="space-y-3"
-    >
-      <div class="overflow-x-auto">
-        <table class="table w-full" :aria-label="t('dash.radar.detail.xvenue')">
-          <thead>
-            <tr>
-              <th scope="col">{{ t('dash.radar.thSymbol') }}</th>
-              <th scope="col" class="col-num">{{ t('dash.radar.xvenue.okxPrice') }}</th>
-              <th scope="col" class="col-num">{{ t('dash.radar.thBasis') }}</th>
-              <th scope="col" class="col-num">{{ t('dash.radar.thBasisGate') }}</th>
-              <th scope="col" class="col-num">{{ t('dash.radar.thLs') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="xv in xvenueRows" :key="xv.symbol">
-              <td class="font-mono font-bold text-xs text-[var(--ink-strong)]">{{ xv.symbol }}</td>
-              <td class="col-num font-mono">{{ fmtPrice(xv.okx_last) }}</td>
-              <td class="col-num font-mono" :class="Number(xv.bin_basis_pct || 0) >= 0 ? 'text-[var(--up)]' : 'text-[var(--down)]'">
-                {{ fmtNum(xv.bin_basis_pct, 3) }}%
-              </td>
-              <td class="col-num font-mono" :class="Number(xv.gate_basis_pct || 0) >= 0 ? 'text-[var(--up)]' : 'text-[var(--down)]'">
-                {{ fmtNum(xv.gate_basis_pct, 3) }}%
-              </td>
-              <td class="col-num font-mono text-[var(--ink-2)]">
-                {{ fmtNum(xv.bin_ls, 2) }} / {{ fmtNum(xv.gate_ls, 2) }}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- 5. 原始记录 -->
+    <!-- 4. 原始记录 -->
     <div
       v-else-if="tab === 'raw'"
       id="radar-detail-panel-raw"

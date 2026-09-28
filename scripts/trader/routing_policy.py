@@ -8,15 +8,19 @@
 | `load_preferred_venue` | 7 | 手选锁定所读取 |
 | `portfolio_risk_budget_usdt` | 5 | 组合风险预算（env `ASTRA_PORTFOLIO_RISK_BUDGET_USDT`，0=不限） |
 | `estimate_margin_usdt` | 6 | 名义额 → 保证金估算 |
-| `_decision_payload` | 12 | 决策载荷取值（含缺省合并） |
-| `_rejection_focus_reason` | 19 | 拒单焦点原因提取（日志/通知用） |
 | `portfolio_budget_guard` | 17 | 跨所合算总闸（纯函数，0=不限，fail-closed） |
-| `route_and_reserve_signal` | 146 | 信号路由 + 预留落账主流程 |
+| `route_and_reserve_signal` | — | 信号路由 + 预留落账主流程 |
 
-## 同名注入（沿第八十二～八十六刀，本刀最宽：14 项）
+⚠️ **OKX 专用化（多所执行面拆除）**：评分选所（候选装配 / 场所路由 / 选所证据
+落盘）随 `astra_backend` 的多所路由模块与 `scripts/trader/venue_evidence` 的删除
+一并移除 —— 全系统只剩 OKX 一个已登记且已接单的场所，选所退化为「锁定 OKX +
+手选合法性校验」，预算预留与审计③的跨所合算总闸逐位保留。
 
-⇒ 函数体 AST **零例外全等**。三个模块对象（`risk_reservation` / `venue_router` /
-`routing_policy`）按**同一对象**注入；`VENUE_SUBMITTERS` 只读（成员判定）。
+## 注入（本刀最宽，全部调用期）
+
+`estimate_margin_usdt` / `load_preferred_venue` / `portfolio_budget_guard` /
+`portfolio_risk_budget_usdt` / `reservation_manager` / `VENUE_SUBMITTERS` /
+`current_environment` / `risk_reservation`。
 
 ⚠️ **源码锚点已同步**：`tests/audit/test_audit_batch2_risk_gates_live.py::
 test_route_and_reserve_wires_guard` 用 `inspect.getsource(门面函数)` 断言
@@ -28,7 +32,7 @@ from __future__ import annotations
 
 import os
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 
 def load_routing_mode(
@@ -74,43 +78,6 @@ def estimate_margin_usdt(notional_usdt: float, margin_usdt: float = 0.0) -> floa
 
 
 
-def _decision_payload(decision, preferred: str) -> Dict[str, Any]:
-    """RouteDecision → 决策 JSON 的 venue_decision 段（纯附加字段）。"""
-    return {
-        "preferred_venue": preferred,
-        "venue": decision.venue,
-        "reason_code": decision.reason_code,
-        "reasons": list(decision.reasons or []),
-        "rejected": [dict(r) for r in (decision.rejected or [])],
-        "hysteresis_applied": bool(decision.hysteresis_applied),
-        "allocation": decision.allocation,
-        "decided_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-    }
-
-
-
-def _rejection_focus_reason(decision, candidates: List[Dict[str, Any]],
-                            preferred: str) -> str:
-    """ALL_REJECTED 时挑「最该解释本次跳过」的那条淘汰理由。
-
-    优先级：手选场所 > 现任所（本链路直签所）> 首个候选 > 第一条记录；同一场所若
-    有多阶段淘汰，取非 executable 的第一条（listing/precision/freshness 才是真因，
-    未开闸只是结构性事实）。
-    """
-    wanted = [preferred] if preferred != "auto" else []
-    wanted += [str(c.get("venue")) for c in candidates if c.get("current_venue")]
-    wanted += [str(c.get("venue")) for c in candidates]
-    rows = list(decision.rejected or [])
-    for venue in wanted:
-        same = [r for r in rows if str(r.get("venue")) == venue]
-        if not same:
-            continue
-        substantive = [r for r in same if r.get("stage") != "executable"]
-        return str((substantive or same)[0].get("reason") or "")
-    return str((rows[0] if rows else {}).get("reason") or "无候选所")
-
-
-
 def portfolio_budget_guard(budget_total: float, budget_used: float, margin_est: float,
                            environment: str = "") -> Optional[str]:
     """审计③：跨所合算总闸的可测纯函数。返回 None=放行；返回 str=拒绝理由。
@@ -135,24 +102,26 @@ def route_and_reserve_signal(inst_id: str, side: str, price: float,
                              notional_usdt: float = 0.0, margin_usdt: float = 0.0,
                              intent_id: str = "", leverage: float = 0.0,
                               *,
-                              _decision_payload,
-                              _rejection_focus_reason,
-                              build_venue_candidates,
                               estimate_margin_usdt,
                               load_preferred_venue,
-                              load_routing_mode,
-                              persist_venue_decision,
                               portfolio_budget_guard,
                               portfolio_risk_budget_usdt,
                               reservation_manager,
                               VENUE_SUBMITTERS,
                               current_environment,
-                              risk_reservation,
-                              venue_router) -> Dict[str, Any]:
-    """选所路由 → 执行面接线校验 → 预算原子预留（US-003 决策面前置闸）。
+                              risk_reservation) -> Dict[str, Any]:
+    """路由 → 执行面接线校验 → 预算原子预留（US-003 决策面前置闸）。
 
     返回 {"ok": bool, "error": str|None, "venue": str|None, "decision": dict,
           "reservation": dict|None}；任何一步不过 → ok=False，调用方本轮不下单。
+
+    ## OKX 专用化后的"路由"
+
+    系统只剩 OKX 一个已登记**且已接单**的场所（`registered_venues()` 恒为 `["okx"]`），
+    评分选所（候选装配 / 拆单 / 选所证据）已随多所执行面移除 ⇒ 目标场所恒为 OKX。
+    唯一保留的抉择是**手选锁定**：`preferred_venue` 若被锁到一个不再登记的场所，
+    这里 **fail-closed 拒单**，绝不"猜所"改派 OKX —— 与配置面 fail-safe 同族
+    （非法值在 `load_preferred_venue` 就回退 auto 并 warn）。
     """
     env = current_environment()
     environment = str(env.mode)
@@ -162,9 +131,8 @@ def route_and_reserve_signal(inst_id: str, side: str, price: float,
     #
     # ⚠️ 2026-09-28：本函数**已不再接收张数**。旧兜底是 `max(0.0, size * price)`，
     # 漏乘合约面值（`size` 是 OKX 张数，XRP 的 `ctVal=100` ⇒ 差 100 倍），它会流进
-    # `signal["size_usdt"]`，被 `venue_routing/selection.py` 的 `min_notional` 闸门
-    # 当成"最小名义额不足"**误杀合格单**。现在路由层只看钱：
-    # 原生数量只在场所边界（`execution_router` / `okx_rest.place_order`）出现一次。
+    # `signal["size_usdt"]`，被选所层的 `min_notional` 闸门当成"最小名义额不足"
+    # **误杀合格单**。现在路由层只看钱：原生数量只在场所边界出现一次。
     notional = float(notional_usdt or 0.0)
     if notional <= 0 and float(margin_usdt or 0.0) > 0 and float(leverage or 0.0) > 0:
         notional = float(margin_usdt) * float(leverage)
@@ -172,28 +140,38 @@ def route_and_reserve_signal(inst_id: str, side: str, price: float,
         print(f"[选所路由] warn {inst_id} 既无 notional_usdt 也无 margin×leverage，"
               f"名义额按不可判定处理（不再用 张数×价格 臆造）")
     margin_est = estimate_margin_usdt(notional, margin_usdt)
-    signal = {
-        "inst_id": inst_id,
-        "symbol_canonical": str(inst_id).split("-")[0].upper(),
-        "side": "long" if str(side).lower() in ("buy", "long") else "short",
-        "size_usdt": notional,
-        "price": float(price or 0.0),
-    }
-    candidates = build_venue_candidates(inst_id, environment)
 
-    if preferred != "auto":
-        # 手动选所优先：只让该所参与评估（直取该所），但**仍过 route_signal**，
-        # 以便 executable/listing 的 rejected 证据照常落盘（可解释不因为手选而失效）。
-        candidates = [c for c in candidates if str(c.get("venue")) == preferred]
-        if not candidates:
-            print(f"[选所路由] warn 手选场所 {preferred} 未在 registry 登记，按不可执行候选处理")
-            candidates = [{
-                "venue": preferred,
-                "environment": environment,
-                "executable": False,
-                "health_updated_utc": None,
-                "current_venue": False,
-            }]
+    venue = "okx"
+    payload: Dict[str, Any] = {
+        "preferred_venue": preferred,
+        "venue": venue,
+        "reason_code": "SINGLE_REGISTERED_VENUE",
+        "reasons": [f"registered={sorted(VENUE_SUBMITTERS)}"],
+        "rejected": [],
+        "hysteresis_applied": False,
+        "allocation": None,
+        "decided_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    }
+
+    if preferred != "auto" and preferred != venue:
+        # 手选锁定到一个不再登记/不再接单的场所：fail-closed，不偷偷改派 OKX
+        reason = (f"手选场所 {preferred} 未登记下单实现"
+                  f"（VENUE_SUBMITTERS 只有 {sorted(VENUE_SUBMITTERS)}）")
+        payload["outcome"] = "rejected"
+        payload["skip_reason"] = reason
+        print(f"[选所路由] 本轮不下单 {inst_id}: {reason}")
+        return {"ok": False, "error": f"路由拒绝: {reason}",
+                "venue": None, "decision": payload, "reservation": None}
+
+    payload["outcome"] = "selected"
+    if venue not in VENUE_SUBMITTERS:
+        # 登记表与下单实现不一致：fail-closed 不硬打端点
+        reason = f"{venue} 未登记下单实现（VENUE_SUBMITTERS 只有 {sorted(VENUE_SUBMITTERS)}）"
+        payload["executed_venue"] = None
+        payload["skip_reason"] = reason
+        print(f"[选所路由] 本轮不下单 {inst_id}: {reason}")
+        return {"ok": False, "error": f"路由拒绝: {reason}",
+                "venue": venue, "decision": payload, "reservation": None}
 
     budget_total = portfolio_risk_budget_usdt()
     try:
@@ -204,47 +182,13 @@ def route_and_reserve_signal(inst_id: str, side: str, price: float,
         budget_used = 0.0
         print(f"[预算预留] warn 预留层不可用，本轮不下单（fail-closed）: {exc}")
 
-    # 预算硬筛**不在路由层重复执行**：路由只负责选所，预算占用由 risk_reservation
-    # 的原子 reserve 单点裁决（口径=保证金，与 notional 混用会双重误杀）。路由层的
-    # budget_view 预筛等 US-004 名义额口径统一后再启用，这里显式传 None。
-    r_mode = load_routing_mode()
-    cfg = venue_router.RouterConfig(
-        routing_mode=r_mode,
-        # 模式 C：生成跨所拆单方案进决策证据；执行面按现任中选所单笔落地，
-        # 逐片真实分发等 US-004 名义额口径统一（allocation 已随证据落盘）
-        split_enabled=(r_mode == "split"))
-    decision = venue_router.route_signal(signal, candidates, budget_view=None, config=cfg)
-    payload = _decision_payload(decision, preferred)
-
-    if decision.venue is None or decision.reason_code in ("ALL_REJECTED", "NO_CANDIDATES"):
-        reason = _rejection_focus_reason(decision, candidates, preferred)
-        payload["outcome"] = "rejected"
-        payload["skip_reason"] = f"{decision.reason_code}: {reason}"
-        persist_venue_decision(inst_id, payload)
-        print(f"[选所路由] 本轮不下单 {inst_id}: {decision.reason_code} → {reason}")
-        return {"ok": False, "error": f"路由拒绝: {reason}",
-                "venue": None, "decision": payload, "reservation": None}
-
-    venue = str(decision.venue)
-    payload["outcome"] = "selected"
-    if venue not in VENUE_SUBMITTERS:
-        # 路由可选中未来所，但下单实现只在登记后存在——fail-closed 不硬打 OKX 端点
-        reason = f"{venue} 未登记下单实现（VENUE_SUBMITTERS 只有 {sorted(VENUE_SUBMITTERS)}）"
-        payload["executed_venue"] = None
-        payload["skip_reason"] = reason
-        persist_venue_decision(inst_id, payload)
-        print(f"[选所路由] 本轮不下单 {inst_id}: {reason}")
-        return {"ok": False, "error": f"路由拒绝: {reason}",
-                "venue": venue, "decision": payload, "reservation": None}
-
     if mgr is None:
-        persist_venue_decision(inst_id, payload)
         return {"ok": False, "error": "预算预留拒绝: 预留层不可用（fail-closed 不下单）",
                 "venue": venue, "decision": payload, "reservation": None}
 
     # 审计③(2026-09-13)：「组合风险总预算」此前名不副实——reserve 的 sqlite 上限按
     # (venue, env, fingerprint) 逐所求和，gross_exposure(environment) 跨所聚合只进证据
-    # payload 不参与裁决，三所全开闸时 1000U 预算实际可占用 3000U。现把跨所合算补成
+    # payload 不参与裁决，多所全开闸时 1000U 预算实际可占用 3000U。现把跨所合算补成
     # 真实总闸（各所子闸保留）。仅显式配置 budget>0 时生效（0=无顶语义不变）。
     # 幂等豁免：同 (account_key, intent) 重提不是新增占用（reserve 底层本就幂等），
     # 需从 gross_exposure 扣回该 intent 已占额，否则重试会被总闸误杀。
@@ -268,7 +212,6 @@ def route_and_reserve_signal(inst_id: str, side: str, price: float,
                              "margin_usdt": margin_est, "error": _pb_err}
         payload["outcome"] = "portfolio_budget_exceeded"
         payload["skip_reason"] = _pb_err
-        persist_venue_decision(inst_id, payload)
         print(f"[预算预留] 本轮不下单 {inst_id}: {_pb_err}")
         return {"ok": False, "error": _pb_err, "venue": venue,
                 "decision": payload, "reservation": None}
@@ -280,7 +223,6 @@ def route_and_reserve_signal(inst_id: str, side: str, price: float,
                              "margin_usdt": margin_est, "error": str(exc)}
         payload["outcome"] = "budget_rejected"
         payload["skip_reason"] = f"预算预留拒绝: {exc}"
-        persist_venue_decision(inst_id, payload)
         print(f"[预算预留] 本轮不下单 {inst_id}: {exc}")
         return {"ok": False, "error": f"预算预留拒绝: {exc}",
                 "venue": venue, "decision": payload, "reservation": None}
@@ -289,7 +231,6 @@ def route_and_reserve_signal(inst_id: str, side: str, price: float,
                              "error": str(exc)}
         payload["outcome"] = "budget_error"
         payload["skip_reason"] = f"预算预留拒绝: {exc}"
-        persist_venue_decision(inst_id, payload)
         print(f"[预算预留] 本轮不下单 {inst_id}: 预留层异常 {exc}")
         return {"ok": False, "error": f"预算预留拒绝: {exc}",
                 "venue": venue, "decision": payload, "reservation": None}
@@ -298,8 +239,7 @@ def route_and_reserve_signal(inst_id: str, side: str, price: float,
                          "intent_id": intent, "amount_usdt": margin_est,
                          "reserved_before_usdt": budget_used,
                          "state": record.get("state") if isinstance(record, dict) else None}
-    persist_venue_decision(inst_id, payload)
-    print(f"[选所路由] {inst_id} → {venue}（{decision.reason_code}"
+    print(f"[选所路由] {inst_id} → {venue}（{payload['reason_code']}"
           + (f"，手选优先 {preferred}" if preferred != "auto" else "")
           + f"；预留保证金估算 {margin_est}U）")
     return {"ok": True, "error": None, "venue": venue, "decision": payload,

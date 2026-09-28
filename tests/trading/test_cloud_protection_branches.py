@@ -4,8 +4,6 @@
 它们看着不起眼，但每一条都能翻转"有没有保护"的结论：
 
 - 数覆盖时把这些单算进去 ⇒ 误判"已保护" ⇒ 裸奔；把它们漏掉 ⇒ 误判"没保护" ⇒ 触发安全退出。
-- 棘轮清理旧 SL 时（`amend_venue_stop_loss`）：残余旧单必须撤掉（否则宽松旧单可能先触发），
-  但**刚挂上的那张**绝不能撤（`_oid == new_id` 那一跳）。
 
 | 行 | 分支 |
 |---|---|
@@ -22,8 +20,7 @@
 import unittest
 from unittest.mock import patch
 
-from scripts.trader.cloud_protection import (amend_venue_stop_loss,
-                                             ensure_cloud_position_protection,
+from scripts.trader.cloud_protection import (ensure_cloud_position_protection,
                                              sync_cloud_algo_stop,
                                              _live_oco_coverage)
 
@@ -80,56 +77,6 @@ class LiveOcoCoverageFilterTest(unittest.TestCase):
         self.assertEqual(self._cov([_oco(posSide="short", side="sell")], pos_side="short"), 0.0)
 
 
-class _Ad:
-    def __init__(self, rows, *, amend=None, cancel_raises=False, attach=None):
-        self._rows = rows
-        self._amend = amend
-        self._attach = attach
-        self._cancel_raises = cancel_raises
-        self.cancelled = []
-        if amend is not None:
-            self.amend_stop_loss = amend
-
-    def list_protective_orders(self, symbol):
-        return self._rows
-
-    def cancel_price_order(self, oid):
-        if self._cancel_raises:
-            raise RuntimeError("cancel boom")
-        self.cancelled.append(oid)
-
-    def attach_protective_orders(self, symbol, pos_side, *, sl_px, contracts):
-        return self._attach if self._attach is not None else {"sl": "new-sl"}
-
-
-def _sl_row(oid, text="t-astrasl1"):
-    return {"id": oid, "type": "STOP", "initial": {"text": text}}
-
-
-class AmendStopLossCleanupTest(unittest.TestCase):
-    def test_non_dict_rows_are_skipped(self):
-        ad = _Ad([None, "junk", _sl_row("sl-1")])
-        ok, detail = amend_venue_stop_loss(ad, "BTC_USDT", "long", 68000.0, 1.0)
-        self.assertTrue(ok, f"非 dict 行不该让棘轮失败：{detail}")
-        self.assertIn("sl-1", ad.cancelled, "合法旧单仍要被撤/改")
-
-    def test_residual_old_legs_are_cancelled_after_native_amend(self):
-        ad = _Ad([_sl_row("sl-1"), _sl_row("sl-2"), _sl_row("sl-3")],
-                 amend=lambda symbol, pos_side, oid, new_sl: "sl-1")
-        ok, detail = amend_venue_stop_loss(ad, "BTC_USDT", "long", 68000.0, 1.0)
-        self.assertTrue(ok)
-        self.assertEqual(sorted(ad.cancelled), ["sl-2", "sl-3"],
-                         f"原生改单后残余旧单必须逐个撤掉（避免宽松旧单先触发）：{ad.cancelled}")
-
-    def test_newly_placed_leg_is_never_cancelled_in_fallback(self):
-        # 没有 amend_stop_loss ⇒ 回退"先挂新、再撤旧"；新单 id 与某张旧单相同 ⇒ 那张不能撤
-        ad = _Ad([_sl_row("sl-1"), _sl_row("sl-2")], attach={"sl": "sl-1"})
-        ok, detail = amend_venue_stop_loss(ad, "BTC_USDT", "long", 68000.0, 1.0)
-        self.assertTrue(ok)
-        self.assertEqual(ad.cancelled, ["sl-2"],
-                         f"刚挂上的那张绝不能被撤（否则保护瞬间消失）：{ad.cancelled}")
-
-
 class _OkxRest:
     """按序列返回持仓；序列里放**异常实例**表示这一次调用直接抛（模拟读失败）。"""
 
@@ -177,50 +124,6 @@ class EnsureProtectionVerifyRetryTest(unittest.TestCase):
         self.assertEqual(
             _live_oco_coverage([_oco(posSide="long", side="buy")], "short", _float_or_zero=_fz),
             0.0)
-
-
-class _BareAd:
-    """既没有 cancel_price_order 也没有 cancel_algo_order，只有 cancel_order。"""
-
-    def __init__(self, rows):
-        self._rows = rows
-        self.called = []
-
-    def list_protective_orders(self, symbol):
-        return self._rows
-
-    def cancel_order(self, symbol, oid):
-        self.called.append(oid)
-
-    def attach_protective_orders(self, symbol, pos_side, *, sl_px, contracts):
-        return {"sl": "new-sl"}
-
-
-class AmendStopLossFailureToleranceTest(unittest.TestCase):
-    def test_list_failure_falls_back_to_attaching(self):
-        class _Boom:
-            def list_protective_orders(self, symbol):
-                raise RuntimeError("list boom")
-
-            def attach_protective_orders(self, symbol, pos_side, *, sl_px, contracts):
-                return {"sl": "new-sl"}
-
-        ok, detail = amend_venue_stop_loss(_Boom(), "BTC_USDT", "long", 68000.0, 1.0)
-        self.assertTrue(ok, f"枚举旧单失败不该让棘轮整体失败（先挂新才是关键）：{detail}")
-
-    def test_cancel_falls_back_to_cancel_order(self):
-        ad = _BareAd([_sl_row("sl-1"), _sl_row("sl-2")])
-        ok, detail = amend_venue_stop_loss(ad, "BTC_USDT", "long", 68000.0, 1.0)
-        self.assertTrue(ok)
-        self.assertEqual(ad.called, ["sl-1", "sl-2"],
-                         f"没有 cancel_price_order/cancel_algo_order 时必须退到 cancel_order：{ad.called}")
-
-    def test_cancel_failure_only_warns_and_keeps_the_new_stop(self):
-        ad = _Ad([_sl_row("sl-1")], cancel_raises=True)
-        ok, detail = amend_venue_stop_loss(ad, "BTC_USDT", "long", 68000.0, 1.0)
-        self.assertTrue(ok, f"撤旧单失败只该告警（新单已生效，宁可双不可裸）：{detail}")
-        self.assertEqual(ad.cancelled, [], "撤单抛错 ⇒ 不会记录成功撤单")
-        self.assertIn("撤旧 0/1", detail, f"detail 要如实说「没撤掉」：{detail}")
 
 
 class EnsureProtectionFailureTest(unittest.TestCase):

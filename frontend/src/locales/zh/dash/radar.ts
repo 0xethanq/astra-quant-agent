@@ -20,7 +20,6 @@ export const zhRadar = {
     quotes: '参谋报价单',
     verdict: '终审结论',
     intercept: '拦截链路',
-    xvenue: '跨所证据与基差',
     raw: '原始记录',
     adopted: '采纳：{role}',
     noQuotes: '本周期为单模型直连决策，无参谋报价',
@@ -64,14 +63,6 @@ export const zhRadar = {
     wait: '观望',
     hold: '持有',
   },
-  xvenue: {
-    title: '三所基差与多空对比',
-    okxPrice: 'OKX 现价',
-    bnPrice: 'Binance (基差)',
-    gatePrice: 'Gate (基差)',
-    lsRatio: 'BN/Gate 多空比',
-    fundingRate: 'BN/Gate 费率',
-  },
   seat: {
     traderTrend: '交易员 A · 顺势',
     traderMomentum: '交易员 B · 动能',
@@ -94,8 +85,4 @@ export const zhRadar = {
   seatsIndependent: '各席位交易员独立提案',
   statusDegraded: '异常降级',
   viewReasoning: '查看思维链 (Reasoning)',
-  thSymbol: '标的',
-  thBasis: 'BN 基差',
-  thBasisGate: 'Gate 基差',
-  thLs: '多空比 (BN/Gate)',
 };

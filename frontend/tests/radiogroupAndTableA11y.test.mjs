@@ -78,8 +78,8 @@ test('BaseStat 提示按钮必须具备键盘焦点可见性', () => {
 });
 
 test('闸自检：能准确拦截无 name 的 radio 与缺少 aria-busy 的表格', () => {
-  const badRadio = '<input type="radio" value="binance" />';
-  const goodRadio = '<input type="radio" name="venue" value="binance" />';
+  const badRadio = '<input type="radio" value="okx" />';
+  const goodRadio = '<input type="radio" name="venue" value="okx" />';
   const badTable = '<table class="table" :aria-label="label">';
   const goodTable = '<table class="table" :aria-label="label" :aria-busy="loading ? \'true\' : undefined">';
 

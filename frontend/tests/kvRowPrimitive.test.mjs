@@ -15,7 +15,6 @@
  * | `.ag-kv-row`（AgentsPage，11 个元素） | 10px 16px | 40px |
  * | `.ab-comp`（AboutPage，3 个） | 10px 16px | 40px |
  * | `.bk-kv-row`（BackupPage，2 个） | **12px** 16px | **44px** ← 离群 |
- * | `.vc-env`（VenueCredentialCard，3 个） | **8px** 12px | **36px** |
  * | `.ps-history-row`（PromptStudioPage，5 个） | **10px 0** | — |
  *
  * 同一个组件在四个页面渲染出 **36 / 40 / 44** 三种行高。
@@ -52,13 +51,13 @@ export const KV_ROW_USERS = {
   'views/admin/AboutPage.vue': 5,
   'views/admin/BackupPage.vue': 2,
   'views/admin/PromptStudioPage.vue': 1,
-  'components/admin/page-parts/VenueCredentialCard.vue': 1,
   'views/admin/llm/ProviderDetailView.vue': 5,
+  // 2026-10：多交易所凭证卡删除后，其键值行随 OKX 凭证区迁入 SecurityPage
+  'views/admin/SecurityPage.vue': 1,
 };
 
 /** 允许保留的形态 delta（值=理由）。它们只许写 padding，不许再抄整份形状。 */
 export const KV_DELTAS = {
-  '.vc-env': { reason: '凭证卡内更紧凑（8px/12px，行高 36px）', padding: 'padding: 8px var(--ds-space-3);' },
   '.ps-history-row': { reason: '历史行左右贴边（外侧容器已有横向内边距）', padding: 'padding: 10px 0;' },
 };
 
@@ -162,7 +161,7 @@ test('末行不画底边框必须由原件提供（4 页各自写过，改类名
   assert.deepEqual(bad, [], `末行规则应由原件提供，不该各页再写：\n  ${bad.join('\n  ')}`);
 });
 
-test('五处必须挂 .kv-row（清册逐文件钉数量）', () => {
+test('必须挂 .kv-row（清册逐文件钉数量）', () => {
   const bad = [];
   let total = 0;
   for (const [rel, expected] of Object.entries(KV_ROW_USERS)) {
@@ -172,7 +171,7 @@ test('五处必须挂 .kv-row（清册逐文件钉数量）', () => {
     if (actual !== expected) bad.push(`${rel} 应挂 ${expected} 处 kv-row，实测 ${actual} 处`);
   }
   assert.deepEqual(bad, [], `键值行丢了 .kv-row：\n  ${bad.join('\n  ')}`);
-  assert.equal(total, 17, `全站键值行模板实例应为 17 个（批 90 并入 AboutPage 4 处 + ProviderDetailView 5 处），实测 ${total} 个`);
+  assert.equal(total, 17, `全站键值行模板实例应为 17 个（批 90 为 17；2026-10 凭证卡删除但键值行迁入 SecurityPage，总数不变），实测 ${total} 个`);
 });
 
 test('被收口的旧类名（ag-kv-row / bk-kv-row / ab-kv-row / ab-comp）都不得回潮', () => {

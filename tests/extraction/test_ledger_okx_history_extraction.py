@@ -549,8 +549,7 @@ class WiringTest(unittest.TestCase):
                    if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
         for must in ("build_lifecycle_ledger", "_fetch_history_paged", "_mark",
                      "_write_sync_status", "_holding_row", "_history_truncated_in_scope",
-                     "allowed_inst_ids", "get_ct_val",
-                     "fetch_binance_closed_trades", "fetch_gate_closed_trades"):
+                     "allowed_inst_ids", "get_ct_val"):
             self.assertIn(must, defined, f"门面必须仍定义 {must}")
 
     def test_id_key_formula_unchanged(self):

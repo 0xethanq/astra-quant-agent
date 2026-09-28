@@ -1,21 +1,20 @@
 """今日 KPI 的**单一事实源**：台账可用则覆盖 OKX 单所 bills（第二百三十七刀）。
 
-背景（代码注释里的真机实锤）：bills 聚合是 **OKX 单所视野** —— binance/gate 当日平仓
-（实锤：**SUI +27.63**）**前台永远看不见**，与三所合并的台账/熔断对不上。
+背景（代码注释里的真机实锤）：bills 聚合是 **OKX 单所视野** —— 当日平仓
+（实锤：**SUI +27.63**）**前台永远看不见**，与台账/熔断对不上。
 所以：台账可用 ⇒ 以 `ledger_today_stats` 覆盖（与熔断锚点**逐字同式**：
 `net=Σ行pnl`，`fees 已含行内`；**funding 单列不混净值**）；bills 口径退化为
 **台账缺失/损坏时的单所降级兜底**，并且 —— ★ **降级必须自曝**（`_today_stats_source`）。
 
 | 语义 | 口径 |
 |---|---|
-| ★ 自曝字段 | 初值 `"okx_bills_degraded"`；台账覆盖成功 ⇒ `"ledger_multi_venue"` |
+| ★ 自曝字段 | 初值 `"okx_bills_degraded"`；台账覆盖成功 ⇒ `"ledger_multi_venue"`（键名为既有载荷契约）|
 | ★ 覆盖字段 | `realized_gross` / `fees_paid` / `net_realized` / `win_trades` / `loss_trades` / `win_rate` 六项逐字覆盖 |
 | ★ **funding 不混** | `today_funding` **不被台账覆盖**（保持 bills 口径）|
 | 环境轴 | `_global_env_axis()` 抛错 ⇒ 用空串（保守纳入），仍走台账覆盖 |
 | 台账失败 | ⇒ `print("[KPI] warn …")` 出声 + **保持** `okx_bills_degraded`（不假装已覆盖）|
 | bills 失败 | ⇒ `source_errors` 追加 `bills: <原因>` **且** `bills_data=[]` |
 | ★ 顺序即语义 | `source_errors` 的条目顺序就是前端展示顺序：**bills 错误先入，旁车合并随后** |
-| 台账行读不到 | ⇒ 交给跨所归属层的是 `ledger_rows=None`（**读不到不产生证据**）|
 """
 
 import types
@@ -38,16 +37,11 @@ LEDGER_STATS = {"realized_gross": 111.0, "fees_paid": 22.0, "net_realized": 89.0
 class KpiSingleSourceTest(unittest.TestCase):
     def setUp(self):
         self.payload_kwargs = {}
-        self.attr_kwargs = {}
         self.sidecar_seen = None
         self.warnings = []
 
-    def _run(self, *, ledger_trades, ledger_rows=None, ledger_rows_raise=False,
-             bills_ok=True, ts_raises=False, env_axis_raises=False):
-        def _cross(positions, pending, long_count, short_count, total_pos_upl, **kw):
-            self.attr_kwargs = kw
-            return (long_count, short_count, total_pos_upl)
-
+    def _run(self, *, ledger_trades, bills_ok=True, ts_raises=False,
+             env_axis_raises=False):
         def _payload(**kw):
             self.payload_kwargs = kw
             return {}
@@ -62,11 +56,6 @@ class KpiSingleSourceTest(unittest.TestCase):
         def _aggregate(**kw):
             return tuple(BILLS)
 
-        def _ledger_rows(*a, **kw):
-            if ledger_rows_raise:
-                raise RuntimeError("台账读不到")
-            return ledger_rows
-
         def _env_axis():
             if env_axis_raises:
                 raise RuntimeError("环境轴不可用")
@@ -79,7 +68,6 @@ class KpiSingleSourceTest(unittest.TestCase):
 
         patches = {
             "collect_core_account_state": mock.Mock(return_value=CORE_TUPLE),
-            "_core_collect_cross_venue_positions": mock.Mock(side_effect=_cross),
             "_core_read_reset_initial_state": mock.Mock(return_value=("", 1000.0)),
             "_fetch_json": mock.Mock(side_effect=_bills),
             "aggregate_bills_and_metrics": mock.Mock(side_effect=_aggregate),
@@ -101,8 +89,6 @@ class KpiSingleSourceTest(unittest.TestCase):
             p.start()
             self.addCleanup(p.stop)
         extras = [
-            mock.patch("scripts.trader.venue_protection.read_ledger_rows",
-                       side_effect=_ledger_rows),
             mock.patch("astra_backend.execution.circuit_breaker.ledger_today_stats",
                        side_effect=_ts),
             mock.patch("astra_backend.llm_manager.get_active_llm_runtime",
@@ -123,7 +109,7 @@ class KpiSingleSourceTest(unittest.TestCase):
     def test_ledger_overrides_the_single_venue_view_and_self_declares(self):
         kw = self._run(ledger_trades=[{"row": 1}])
         self.assertEqual(kw["_today_stats_source"], "ledger_multi_venue",
-                         "台账可用 ⇒ 自曝来源为**三所台账**")
+                         "台账可用 ⇒ 自曝来源为台账口径")
         self.assertEqual(kw["today_realized_gross"], 111.0)
         self.assertEqual(kw["today_fees"], 22.0)
         self.assertEqual(kw["today_net_realized_pnl"], 89.0)
@@ -165,16 +151,6 @@ class KpiSingleSourceTest(unittest.TestCase):
         self._run(ledger_trades=[], bills_ok=False)
         self.assertEqual(self.sidecar_seen, ["bills: 上游 502"],
                          "旁车合并时，bills 错误已在列表里（顺序 = 展示顺序）")
-
-    def test_unreadable_ledger_rows_become_none_not_evidence(self):
-        """★ 台账行读不到 ⇒ 交给归属层 `ledger_rows=None`（**不产生证据**，腿留在不可判定）。"""
-        self._run(ledger_trades=[], ledger_rows_raise=True)
-        self.assertIsNone(self.attr_kwargs.get("ledger_rows"))
-
-    def test_ledger_rows_are_forwarded_as_evidence_when_readable(self):
-        self._run(ledger_trades=[], ledger_rows=[{"row": 9}])
-        self.assertEqual(self.attr_kwargs.get("ledger_rows"), [{"row": 9}])
-        self.assertIn("source_errors", self.attr_kwargs, "错误表按名字透传")
 
 
 if __name__ == "__main__":

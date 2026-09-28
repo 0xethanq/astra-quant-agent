@@ -30,37 +30,21 @@ class AdminUnlockRequest(BaseModel):
 
 
 class MultiExchangeUpdate(BaseModel):
-    binance_api_key: str | None = None
-    binance_secret_key: str | None = None
-    binance_live_api_key: str | None = None
-    binance_live_secret_key: str | None = None
-    binance_demo_api_key: str | None = None
-    binance_demo_secret_key: str | None = None
-    gate_api_key: str | None = None
-    gate_secret_key: str | None = None
-    gate_live_api_key: str | None = None
-    gate_live_secret_key: str | None = None
-    gate_demo_api_key: str | None = None
-    gate_demo_secret_key: str | None = None
     okx_live_api_key: str | None = None
     okx_live_secret_key: str | None = None
     okx_live_passphrase: str | None = None
     okx_demo_api_key: str | None = None
     okx_demo_secret_key: str | None = None
     okx_demo_passphrase: str | None = None
-    binance_testnet: bool | None = None
-    gate_testnet: bool | None = None
-    gate_execution: bool | None = None   # ASTRA_GATE_EXECUTION 总开关
-    binance_execution: bool | None = None  # ASTRA_BINANCE_EXECUTION 总开关
     okx_execution: bool | None = None      # ASTRA_OKX_EXECUTION 总开关
     okx_environment: str | None = None     # OKX 资金环境：demo|live
-    preferred_venue: str | None = None  # 全局路由首选：okx|binance|gate|auto
+    preferred_venue: str | None = None  # 全局路由首选（合法值见 routing_policy.VALID_PREFERRED_VENUES）
     routing_mode: str | None = None     # 选所路由模式：auto|balanced|split
     confirmation: str = ""               # 变更执行开关必须精确确认短语
 
 
 class VenueTestConnectionRequest(BaseModel):
-    venue: str = Field(..., pattern=r"^(okx|binance|gate)$")
+    venue: str = Field(..., pattern=r"^okx$")
     environment: str = Field(default="live", pattern=r"^(live|demo|testnet|sandbox)$")
     api_key: str | None = None
     secret_key: str | None = None

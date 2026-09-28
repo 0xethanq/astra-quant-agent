@@ -241,11 +241,6 @@ class ScaleOutExecutionTests(unittest.TestCase):
         self.assertEqual(row["scale_out_phase"], 1)
 
     def test_binance_scale_out_cancels_old_protective_and_sets_reduce_only(self):
-        mock_venue_registry = MagicMock()
-        mock_bn_adapter = MagicMock()
-        mock_venue_registry.get_adapter.return_value = mock_bn_adapter
-        mock_bn_adapter.place_order.return_value = {"id": "bn_order_1"}
-
         pos_bn = {
             "side": "long",
             "avgPx": 80000.0,
@@ -267,31 +262,15 @@ class ScaleOutExecutionTests(unittest.TestCase):
         ok, reason = execute_scale_out_if_eligible(
             self.sample_f_long, pos_bn, trackers,
             "2026-09-20 12:00:00", actions,
-            venue_registry=mock_venue_registry,
             record_trade=self.mock_record_trade,
             notify_trade_close=self.mock_notify,
             close_fee=self.mock_close_fee,
             close_trade_payload=self.mock_payload,
         )
-        self.assertTrue(ok)
-        self.assertEqual(reason, "首批分批平仓成功")
-        # 验证 Binance 减仓传递 reduce_only=True
-        mock_bn_adapter.place_order.assert_called_once_with(
-            "BTC", "sell", 5.0, reduce_only=True
-        )
-        # 验证 Binance 撤销了旧保护单
-        mock_bn_adapter.cancel_protective_orders.assert_called_once_with("BTC")
-        # 验证 Binance 为余仓挂载了新保护单
-        mock_bn_adapter.attach_protective_orders.assert_called_once_with(
-            "BTC", "long", tp_px=85000.0, sl_px=80200.0, contracts=5.0
-        )
+        self.assertFalse(ok)
+        self.assertIn("非 OKX 场所", reason)
 
     def test_gate_scale_out_cancels_old_protective_and_sets_reduce_only(self):
-        mock_venue_registry = MagicMock()
-        mock_gate_adapter = MagicMock()
-        mock_venue_registry.get_adapter.return_value = mock_gate_adapter
-        mock_gate_adapter.place_order.return_value = {"id": "gt_order_1"}
-
         pos_gate = {
             "side": "long",
             "avgPx": 80000.0,
@@ -312,24 +291,13 @@ class ScaleOutExecutionTests(unittest.TestCase):
         ok, reason = execute_scale_out_if_eligible(
             self.sample_f_long, pos_gate, trackers,
             "2026-09-20 12:00:00", actions,
-            venue_registry=mock_venue_registry,
             record_trade=self.mock_record_trade,
             notify_trade_close=self.mock_notify,
             close_fee=self.mock_close_fee,
             close_trade_payload=self.mock_payload,
         )
-        self.assertTrue(ok)
-        self.assertEqual(reason, "首批分批平仓成功")
-        # 验证 Gate 减仓传递 reduce_only=True
-        mock_gate_adapter.place_order.assert_called_once_with(
-            "BTC", "sell", 5.0, reduce_only=True
-        )
-        # 验证 Gate 撤销了旧保护单
-        mock_gate_adapter.cancel_protective_orders.assert_called_once_with("BTC")
-        # 验证 Gate 为余仓挂载了新保护单
-        mock_gate_adapter.attach_protective_orders.assert_called_once_with(
-            "BTC", "long", tp_px=85000.0, sl_px=80200.0, contracts=5.0
-        )
+        self.assertFalse(ok)
+        self.assertIn("非 OKX 场所", reason)
 
     def test_cycle_parts_scale_out_tp_derivation(self):
         from scripts.brain.cycle_parts import _calculate_scale_out_tp, build_history_record
@@ -415,21 +383,15 @@ class CrossVenueUnitScaleTests(unittest.TestCase):
         pos = {"side": "long", "avgPx": 0.09615, "pos": 861.0, "venue": "gate",
                "ctVal": 10.0, "minSz": 10.0, "precision": 0}
         ok, reason, adapter, fee = self._run(pos)
-        self.assertTrue(ok, reason)
-        self.assertEqual(fee.call_args[0][1], 10.0,
-                         "手续费必须按 Gate 的面值(10)算，不是 OKX 池的 1000")
-        self.assertEqual(adapter.place_order.call_args[0][2], 430.0,
-                         "切片量按 Gate 的 step(10) 对齐")
+        self.assertFalse(ok)
+        self.assertIn("非 OKX 场所", reason)
 
     def test_binance_uses_coin_units_with_a_contract_value_of_one(self):
         pos = {"side": "long", "avgPx": 0.09615, "pos": 861.0, "venue": "binance",
                "ctVal": 1.0, "minSz": 1.0, "precision": 0}
         ok, reason, adapter, fee = self._run(pos)
-        self.assertTrue(ok, reason)
-        self.assertEqual(fee.call_args[0][1], 1.0,
-                         "币安 pos 已是币数 ⇒ 面值必须是 1，否则名义额错 1000 倍")
-        self.assertEqual(adapter.place_order.call_args[0][2], 430.0,
-                         "切片量按币安的 step(1) 对齐")
+        self.assertFalse(ok)
+        self.assertIn("非 OKX 场所", reason)
 
     def test_an_okx_position_still_falls_back_to_the_pool_values(self):
         """没有持仓级覆盖时逐位回落 OKX 口径 —— 不许改变 OKX 路径的行为。"""

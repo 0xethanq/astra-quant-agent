@@ -105,20 +105,6 @@ class EnsureListedTest(unittest.TestCase):
         bad_okx = self._run({"BTC-USDT-SWAP": {"state": "suspend"}})
         self.assertFalse(bad_okx.ok)
         self.assertIn("state=suspend", bad_okx.reason)
-        bad_bn = self._run({"BTCUSDT": {"status": "BREAK"}}, venue="binance",
-                           contract="btcusdt")
-        self.assertFalse(bad_bn.ok)
-        self.assertIn("status=BREAK", bad_bn.reason)
-        good_bn = self._run({"BTCUSDT": {"status": "TRADING"}}, venue="binance",
-                            contract="BTCUSDT")
-        self.assertTrue(good_bn.ok)
-        bad_gate = self._run({"BTC_USDT": {"in_delisting": "true"}}, venue="gate",
-                             contract="btc_usdt")
-        self.assertFalse(bad_gate.ok)
-        self.assertIn("in_delisting=true", bad_gate.reason)
-        good_gate = self._run({"BTC_USDT": {"in_delisting": "false"}}, venue="gate",
-                              contract="BTC_USDT")
-        self.assertTrue(good_gate.ok)
 
     def test_checked_at_is_utc_iso8601(self):
         out = self._run({"BTC-USDT-SWAP": {"state": "live"}})

@@ -62,12 +62,17 @@ CRITICAL_ROUTES: set[tuple[str, str]] = {
 
 #: 基线里**被跨模块引用**的公开名（消失即破坏调用方）。
 #: 这些是第六十九刀实测结果里最容易被后续改动误删的一批。
+#:
+#: ⚠️ **有意移除的一批（OKX 专用化）**：`open_protected_position`（`execution_router`）、
+#: `route_signal` / `split_allocation` / `RouterConfig` / `RouteDecision`（`venue_router`）
+#: —— 它们随多所执行路由层整体删除，属**本迁移显式移除的接口面**，故从基线里摘掉。
+#: 摘除是有代价的（基线只增不减的意义就在于"消失必须被解释"），所以这里逐名写明原因，
+#: 而不是把基线整体下调。其余名字一个都不能少。
 BASELINE_PUBLIC_NAMES: set[str] = {
     # 门面 / 兼容表面（L0）
-    "update_cache_cycle", "route_signal", "split_allocation", "RouterConfig",
-    "RouteDecision",
+    "update_cache_cycle",
     # 执行与风控
-    "open_protected_position", "validate_quote_geometry_and_rr",
+    "validate_quote_geometry_and_rr",
     "load_instruments", "canonical_base",
     # 载荷装配（抽取后被门面再导出）
     "build_factors_list", "load_ledger_lifecycle_trades",
@@ -80,6 +85,15 @@ BASELINE_PUBLIC_NAMES: set[str] = {
     "init_llm_config", "load_llm_config", "upsert_model", "upsert_provider",
     # 委员会
     "execute_council_debate",
+}
+
+#: 本迁移**显式移除**的公开名（不在基线里，但单独钉住"它们确实是被有意删掉的"）。
+INTENTIONALLY_REMOVED_NAMES: set[str] = {
+    "open_protected_position",     # astra_backend/execution_router.py（多所执行路由，已删）
+    "route_signal",                # astra_backend/venue_router.py（选所路由，已删）
+    "split_allocation",            # 同上
+    "RouterConfig",                # 同上
+    "RouteDecision",               # 同上
 }
 
 
@@ -166,6 +180,18 @@ class ApiSurfaceMonotonicTest(unittest.TestCase):
         self.assertEqual(
             missing, [],
             "这些基线里的公开名消失了（调用方会 ImportError）: " + str(missing))
+
+    def test_intentionally_removed_names_are_really_gone(self):
+        """有意移除的一批（多所执行路由层）**不得回潮**。
+
+        `test_baseline_public_names_still_exist` 只保证"没多丢"，防止的是**静默**消失；
+        本用例反过来钉住**显式**消失的那几个名字确实不在了 —— 否则"少了一个名字"
+        既可能是回归、也可能是没删干净。
+        """
+        names = _public_names()
+        resurrected = sorted(n for n in INTENTIONALLY_REMOVED_NAMES if n in names)
+        self.assertEqual(resurrected, [],
+                         f"多所执行路由层的公开名又回来了：{resurrected}（本系统 OKX 专用）")
 
     def test_scanner_actually_sees_things(self):
         """⚠️ 自检 —— 防止路径写错导致"什么都没扫到"就假绿。"""

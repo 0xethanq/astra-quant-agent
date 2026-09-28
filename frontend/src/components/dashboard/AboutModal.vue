@@ -112,7 +112,7 @@ onMounted(loadChannels);
         class="card-flat flex items-center justify-between gap-2 px-3 py-2.5"
       >
         <div class="min-w-0">
-          <p class="t-label">{{ t('dash.about.community.channel', undefined, { venue: ch.name }) }}</p>
+          <p class="t-label">{{ t('dash.about.community.channel', undefined, { channel: ch.name }) }}</p>
           <p class="num truncate text-sm font-semibold" style="color: var(--brand, #3b82f6)">
             {{ ch.code || ch.name }}
           </p>

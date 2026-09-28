@@ -418,13 +418,6 @@ class PortfolioBudgetHonestyTests(_SandboxBase):
         self.assertIsNone(row["reference_cap_usdt"])
         self.assertIsNotNone(row["utilization_pct"])
 
-    def test_frontend_labels_uncapped_instead_of_drawing_a_bar(self):
-        panel = (ROOT / "frontend" / "src" / "components" / "dashboard" / "VenueAccountsPanel.vue").read_text(encoding="utf-8")
-        self.assertIn("budget_mode", panel)
-        self.assertIn("portfolio-uncapped", panel)
-        # 占用率仍只在总预算为真实数值时派生
-        self.assertIn("pTotal.value !== null && pTotal.value > 0", panel)
-
 
 class UIEvidenceHonestyTests(_SandboxBase):
     """P1-9：UI 不得编造审计证据（缺字段时显示「—」，而不是 10 笔 / PASSED / ACTIVE）。"""

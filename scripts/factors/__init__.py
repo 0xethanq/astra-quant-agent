@@ -19,7 +19,7 @@
 | `defaults.py` | `build_default_factors(inst_id, name)` —— 六 Pillar 的完整默认结构（95 行字面量） | 无（除 `time.time()`） |
 | `scoring.py` | `score_composite_alpha(factors)` —— 八项加权打分（-100~+100）与信号建议 | **无**（只读入参 `factors`；不 import 任何取数模块） |
 | `candles_15m.py` | `derive_candle_series` / `compute_15m_indicators` —— 15M 的 ATR/RSI/VWAP 乖离/量比/OBV + Pillar 6 | `safe_float`、`calculate_calculus`（微积分引擎）由调用方传入 |
-| `smart_money.py` | `fetch_smart_money_for_symbol` / `fetch_smart_money_pool` —— 大户多空比与聪明钱资金流（Binance+OKX双源容灾） | 无 |
+| `smart_money.py` | `fetch_smart_money_for_symbol` / `fetch_smart_money_pool` —— 大户多空比与聪明钱资金流（OKX Rubik 单源） | 无 |
 
 ### ⚠️ `candles_15m.py` 的取数**故意留在门面**
 

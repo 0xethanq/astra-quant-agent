@@ -1,4 +1,4 @@
-"""AI 健康度、交易心法渲染与跨所协调快照装配（结构优化阶段 2 / B2 第四刀）。
+"""AI 健康度、交易心法渲染与行情/健康快照装配（结构优化阶段 2 / B2 第四刀）。
 
 这组函数都要读被测试 patch/沙箱重定向的路径（AI_MEMORY_MD_FILE / DATA_DIR /
 AI_DECISIONS_FILE），故同 B4/B5/B6 与前三刀：**门面薄壳调用时解析全局并注入，
@@ -96,26 +96,20 @@ def build_ai_health(data_dir: str | os.PathLike[str], ai_history_list):
 
 
 def _load_cross_venue_data(data_dir: str | os.PathLike[str], decisions_file: str | os.PathLike[str], ) -> dict:
-    """US-007：多所协调快照透传装配（只读，零网络）。
+    """US-007：行情/健康快照透传装配（只读，零网络；已收口为 OKX 专用）。
 
     数据源两路，各自独立兜底，任一缺失/损坏只降级该部分，绝不影响主缓存：
-      1) data/venue_health.json —— 三所健康徽标(venues/updated_utc/package_count)
-         + brain 逐币快照 symbols（含预计算基差，热文件已上线此键）；
-      2) data/ai_brain_decisions.json —— 各币 xvenue（由 US-009 收尾者持久化，
-         现在可能整键缺失，逐键位容错）。
-    by_asset = 两路合并（symbols 优先，xvenue 补缺，缺价时现算基差），
-    键位恒为 {okx_last,bin_last,gate_last,bin_basis_pct,gate_basis_pct,
-    bin_ls,gate_ls,bin_funding_pct,gate_funding_pct}，缺值置 ""（前端渲染 "--"）。
+      1) data/venue_health.json —— 健康徽标(venues/updated_utc/package_count)
+         + brain 逐币快照 symbols；
+      2) data/ai_brain_decisions.json —— 各币 OKX 最新价（`raw_ticker.last`）。
+    by_asset = 两路合并（symbols 优先，决策缓存补缺），键位恒为 {okx_last}，
+    缺值置 ""（前端渲染 "--"）。
+
+    历史外所基差/多空比/资金费字段已随外所下架一并移除。`venues` 与 `symbols`
+    仍**按原样透传**：数据文件不改（历史文件里可能仍有外所行），未知键由读侧忽略
+    —— 只读容忍，绝不因未知场所字段抛错或删数据。
     """
     out = {"updated_utc": "", "package_count": 0, "venues": {}, "symbols": {}, "by_asset": {}}
-
-    def _pos(v):
-        # 基差参照只用正价格；脏值/空值一律 None（fail-soft，不抛）
-        try:
-            x = float(v)
-            return x if x > 0 else None
-        except (TypeError, ValueError):
-            return None
 
     sym_rows = {}
     try:
@@ -133,7 +127,7 @@ def _load_cross_venue_data(data_dir: str | os.PathLike[str], decisions_file: str
         pass
     out["symbols"] = sym_rows
 
-    # 决策缓存侧素材：asset -> (xvenue, okx_last)
+    # 决策缓存侧素材：asset -> okx_last
     src = {}
     try:
         with open(decisions_file, "r", encoding="utf-8") as f:
@@ -145,34 +139,13 @@ def _load_cross_venue_data(data_dir: str | os.PathLike[str], decisions_file: str
                 asset = str(entry.get("name") or str(inst_id).split("-")[0]).upper().strip()
                 if not asset:
                     continue
-                xv = entry.get("xvenue")
                 rt = entry.get("raw_ticker")
-                src[asset] = {
-                    "xv": xv if isinstance(xv, dict) else {},
-                    "okx_last": (rt.get("last") if isinstance(rt, dict) else None) or "",
-                }
+                src[asset] = {"okx_last": (rt.get("last") if isinstance(rt, dict) else None) or ""}
     except Exception:
         pass
 
-    XV_KEYS = ("bin_last", "gate_last", "bin_ls", "gate_ls",
-               "bin_funding_pct", "gate_funding_pct")
     for asset in src.keys() | sym_rows.keys():
-        xv = src.get(asset, {}).get("xv") or {}
         sym = sym_rows.get(asset) or {}
-        row = {}
-        for k in XV_KEYS:
-            v = sym.get(k)
-            if v in (None, ""):
-                v = xv.get(k)
-            row[k] = "" if v is None else v
         okx = sym.get("okx") or src.get(asset, {}).get("okx_last") or ""
-        row["okx_last"] = okx
-        for tag in ("bin", "gate"):
-            b = sym.get(tag + "_basis_pct")
-            if b in (None, ""):
-                p, ref = _pos(row[tag + "_last"]), _pos(okx)
-                if p is not None and ref is not None:
-                    b = round((p - ref) / ref * 100, 3)
-            row[tag + "_basis_pct"] = "" if b is None else b
-        out["by_asset"][asset] = row
+        out["by_asset"][asset] = {"okx_last": okx}
     return out

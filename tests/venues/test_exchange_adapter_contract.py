@@ -32,8 +32,6 @@ for _p in (str(ROOT), str(ROOT / "scripts")):
 
 import scripts.okx_rest as okx_rest  # noqa: E402
 from astra_backend.exchanges.okx import OKXAdapter  # noqa: E402
-from astra_backend.exchanges.binance import BinanceAdapter  # noqa: E402
-from astra_backend.exchanges.gate import GateAdapter  # noqa: E402
 
 
 class _Recorder:
@@ -79,40 +77,12 @@ class TestPositionsVocabulary(unittest.TestCase):
         self.assertLess(by["ETH-USDT-SWAP"]["size_signed"], 0)
         self.assertEqual(by["SOL-USDT-SWAP"]["side"], "long")     # hedge 明示照用
 
-    def test_binance_positions(self):
-        ad = BinanceAdapter(environment="demo")
-        raw = [
-            {"symbol": "BTCUSDT", "positionAmt": "1.2", "entryPrice": "70000", "markPrice": "70001",
-             "leverage": "3", "unRealizedProfit": "0", "marginType": "cross", "positionSide": "LONG",
-             "isolatedMargin": "10", "liquidationPrice": "0"},
-            {"symbol": "ETHUSDT", "positionAmt": "-0.5", "entryPrice": "3000", "markPrice": "3000",
-             "leverage": "3", "unRealizedProfit": "0", "marginType": "cross", "positionSide": "BOTH",
-             "isolatedMargin": "5", "liquidationPrice": "0"},
-            {"symbol": "SOLUSDT", "positionAmt": "0", "entryPrice": "0", "markPrice": "0",
-             "leverage": "1", "unRealizedProfit": "0", "marginType": "cross", "positionSide": "BOTH",
-             "isolatedMargin": "0", "liquidationPrice": "0"},
-        ]
-        with patch.object(ad, "signed_request", lambda *a, **k: raw):
-            rows = self._assert_rows(ad.positions(), "binance")
-        self.assertEqual({r["inst_id"] for r in rows}, {"BTCUSDT", "ETHUSDT"})  # 零仓行剔除
-
-    def test_gate_positions(self):
-        ad = GateAdapter(environment="sandbox")
-        raw = [
-            {"contract": "BTC_USDT", "size": 6, "entry_price": "70000", "mark_price": "70000",
-             "leverage": "3", "margin": "10", "margin_mode": "cross", "unrealised_pnl": 0, "liq_price": "0"},
-            {"contract": "ETH_USDT", "size": -3, "entry_price": "3000", "mark_price": "3000",
-             "leverage": "3", "margin": "5", "margin_mode": "cross", "unrealised_pnl": 0, "liq_price": "0"},
-        ]
-        with patch.object(ad, "signed_request", lambda *a, **k: raw):
-            self._assert_rows(ad.positions(), "gate")
-
 
 # ------------------------------------------------------------------ 形态：orderbook
 
 
 class TestOrderbookUniformShape(unittest.TestCase):
-    """三家 fetch_orderbook 必须吐 bids/asks = [[price, qty], ...]。"""
+    """fetch_orderbook 必须吐 bids/asks = [[price, qty], ...]。"""
 
     def _check(self, ob, venue):
         self.assertIsNotNone(ob)
@@ -131,22 +101,6 @@ class TestOrderbookUniformShape(unittest.TestCase):
                     "asks": [["70001", "2", 0, 0]]}]
         with patch.object(type(ad).__mro__[1], "_get", lambda self, url, params=None: payload):
             self._check(ad.fetch_orderbook("BTC"), "okx")
-
-    def test_binance_native_arrays(self):
-        ad = BinanceAdapter(environment="demo")
-        payload = {"bids": [["100.0", "5"], ["99.9", "1"]], "asks": [["100.1", "2"]]}
-        with patch.object(ad, "_public_get", lambda *a, **k: payload):
-            self._check(ad.fetch_orderbook("BTC"), "binance")
-
-    def test_gate_object_array_normalized(self):
-        # ②#5 实锤形态：Gate 官方 FuturesOrderBookItem = [{"p":价,"s":量}]
-        ad = GateAdapter(environment="sandbox")
-        payload = {"bids": [{"p": "48977.6", "s": "100"}, {"p": "48977.5", "s": "7"}],
-                   "asks": [{"p": "48977.7", "s": "33"}]}
-        with patch.object(ad, "_public_get", lambda *a, **k: payload):
-            ob = self._check(ad.fetch_orderbook("BTC"), "gate")
-            # 自家消费写法（binance.py: bids[0][0]）在 Gate 形态上必须可行
-            self.assertAlmostEqual(float(ob["bids"][0][0]), 48977.6)
 
 
 # ------------------------------------------------------------------ 绑定：okx_rest 签名
@@ -228,61 +182,6 @@ class TestOkxWrapperSignatureBinding(unittest.TestCase):
         self.assertTrue(kwargs.get("reduce_only"))
 
 
-# ------------------------------------------------------------------ 身份：cancel id 族分流
-
-
-class TestCancelIdFamilies(unittest.TestCase):
-    def test_binance_digit_vs_client_handle(self):
-        ad = BinanceAdapter(environment="demo")
-        seen = []
-
-        def fake_signed(method, path, params=None, **kw):
-            seen.append(params)
-            return {"status": "CANCELED"}
-        with patch.object(ad, "signed_request", fake_signed):
-            ad.cancel_order("BTC", order_id="123456789")
-            ad.cancel_order("BTC", order_id="t-astrae1712345")
-        self.assertEqual(str(seen[0].get("orderId")), "123456789")
-        self.assertNotIn("origClientOrderId", seen[0])
-        self.assertEqual(seen[1].get("origClientOrderId"), "t-astrae1712345")
-        self.assertNotIn("orderId", seen[1])
-
-
-# ------------------------------------------------------------------ 语义：fast_close 拒盲平
-
-
-class TestFastCloseRefusalVocabulary(unittest.TestCase):
-    def test_binance_hedge_dual_refuses(self):
-        ad = BinanceAdapter(environment="demo")
-        raw = [
-            {"symbol": "BTCUSDT", "positionAmt": "1", "entryPrice": "1", "markPrice": "1",
-             "leverage": "3", "unRealizedProfit": "0", "marginType": "cross", "positionSide": "LONG",
-             "isolatedMargin": "1", "liquidationPrice": "0"},
-            {"symbol": "BTCUSDT", "positionAmt": "-1", "entryPrice": "1", "markPrice": "1",
-             "leverage": "3", "unRealizedProfit": "0", "marginType": "cross", "positionSide": "SHORT",
-             "isolatedMargin": "1", "liquidationPrice": "0"},
-        ]
-        placed = []
-        with patch.object(ad, "signed_request", lambda *a, **k: raw), \
-             patch.object(ad, "place_order", lambda *a, **k: placed.append(k) or {"closed": True}):
-            out = ad.fast_close_position("BTC")
-        self.assertIs(out["closed"], False)
-        self.assertEqual(placed, [], "拒盲平时绝不发单")
-
-    def test_gate_fractional_size_refuses(self):
-        ad = GateAdapter(environment="sandbox")
-        sent = []
-        # positions() 直接喂归一形态行（B1 语义面，不再测 positions 本身）
-        rows = [{"venue": "gate", "inst_id": "BTC_USDT", "base": "BTC",
-                 "side": "long", "size_signed": 2.5}]
-        with patch.object(ad, "signed_request", lambda *a, **k: sent.append((a, k)) or {}), \
-             patch.object(ad, "positions", lambda: rows):
-            out = ad.fast_close_position("BTC")
-        self.assertIs(out["closed"], False)
-        self.assertIn("非整数", out["reason"])
-        self.assertEqual(sent, [], "拒截断时绝不发单")
-
-
 # ------------------------------------------------------------------ 静态：D4 族全仓扫描
 
 
@@ -350,31 +249,6 @@ class TestCloseCannotOpenOppositeTest(unittest.TestCase):
         self.assertEqual((_body.get("instId"), _body.get("posSide")),
                          ("BTC-USDT-SWAP", "long"))
 
-    def _spec(self):
-        import types
-        return types.SimpleNamespace(step_size=0.1, tick_size=0.1)
-
-    def _params(self, **over):
-        from astra_backend.exchanges.binance_orders import build_order_params
-        kw = dict(inst="BTCUSDT", position_side=None, price=None, qty=1.0,
-                  reduce_only=False, s="SELL", spec=self._spec(), text="", tif="gtc")
-        kw.update(over)
-        return build_order_params(**kw)
-
-    def test_binance_hedge_close_never_sends_reduce_only(self):
-        p = self._params(position_side="LONG", reduce_only=False)
-        self.assertEqual(p.get("positionSide"), "LONG")
-        self.assertNotIn("reduceOnly", p,
-                         "对冲模式发 reduceOnly 会被交易所 -1106 拒单（平不掉仓）")
-
-    def test_binance_one_way_close_sets_reduce_only(self):
-        p = self._params(reduce_only=True)
-        self.assertEqual(p.get("reduceOnly"), "true")
-        self.assertNotIn("positionSide", p)
-
-    def test_binance_contradictory_combination_fails_fast(self):
-        with self.assertRaises(ValueError):
-            self._params(position_side="LONG", reduce_only=True)
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

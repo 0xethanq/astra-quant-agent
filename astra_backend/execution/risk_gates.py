@@ -1,13 +1,13 @@
-"""多所路径的**发送前三道风控闸门**（结构优化阶段 4·B3 第三十八刀）。
+"""发送前三道风控闸门（结构优化阶段 4·B3 第三十八刀）。
 
-原样搬自 `astra_backend/execution_router.py::open_protected_position` 的 L108–173
-（约 66 行）—— 该函数 293 行里最大的一块**内聚逻辑**。
+原为多所执行入口（已随外所下架移除）的 `open_protected_position` L108–173
+（约 66 行）—— 该函数 293 行里最大的一块**内聚逻辑**；多所执行入口已随外所下架移除。
 
 | 闸门 | 作用 |
 |---|---|
 | `clamp_leverage` | 杠杆夹到 `[MIN_LEVERAGE, min(MAX_LEVERAGE, 池内单标的上限)]` |
 | `clamp_margin` | 单笔保证金夹到三道上限的**最小值**（全局单标的封顶 / 调用方权益顶 / 该所预算） |
-| `check_total_exposure` | 跨所**同向**名义额合计超限则**拒开**（不是夹） |
+| `check_total_exposure` | 同向名义额合计超限则**拒开**（不是夹）；统计集合已随单所化退化为 OKX 一所 |
 
 ## 为什么值得单独成模块
 
@@ -33,7 +33,7 @@
 
 `check_total_exposure` 读不到持仓时**不是** fail-open 也不是抛异常，
 而是返回一个 `_fail("exposure", ...)` 的结果对象 —— 由调用方决定怎么返回。
-本模块不 import `execution_router`，`_fail` 由调用方注入（见 `fail_factory` 形参）。
+本模块不 import 执行入口，`_fail` 由调用方注入（见 `fail_factory` 形参）。
 
 同理 `clamp_*` 的 `print` 文案**原样保留**：它们是运维在日志里定位"为什么这单只开了
 这么多"的依据，措辞不得改动。
@@ -131,7 +131,7 @@ def check_total_exposure(
     positions_reader: Callable[[], List[Dict[str, Any]]],
     fail_factory: Callable[..., Any],
 ) -> Optional[Any]:
-    """跨所**同向**合并敞口超限则返回拒开结果；否则返回 `None`（表示放行）。
+    """同向**合并**敞口超限则返回拒开结果；否则返回 `None`（表示放行）。
 
     ⚠️ 超限是**拒**不是**夹** —— 敞口超限意味着不该再开，静默缩量会让
     "为什么只开了一半"无从解释。
@@ -168,10 +168,11 @@ def check_total_exposure(
         #
         # ⚠️ 上面那条"实盘影响：生产未配置 ⇒ 闸门仍然停用"的注释**已于 2026-09-28 作废**：
         # `.env` 里 `ASTRA_MAX_TOTAL_EXPOSURE_USDT` 现在是 **50000.0（真的配了）**，
-        # 即本闸门**是活的**。更要紧的是同一审计发现它当时**只挂在 gate/binance 上**
-        # —— OKX 直签路径不经过 `execution_router` 就完全不查，而 OKX 的仓又**被算进**
-        # 这个上限（见 `_exposure_venues`）。现已收进 `execution/venue_gate.py`，
-        # 两条执行路径共用（`tests/audit/test_three_venue_gate_parity.py` 钉住）。
+        # 即本闸门**是活的**。同一审计还发现它当时**只挂在非 OKX 的执行入口上**
+        # —— OKX 直签路径不经过该入口就完全不查，而 OKX 的仓又**被算进**
+        # 这个上限。现已收进 `execution/venue_gate.py`，两条执行路径共用
+        # （`tests/audit/test_three_venue_gate_parity.py` 钉住）。
+        # 本仓已收口为 OKX 专用 ⇒ 统计集合随之退化为单所，判据逻辑未动。
         _a = str(action or "").lower()
         _want = "buy" if _a in ("buy_long", "buy", "long") else "sell" if _a in ("sell_short", "sell", "short") else ""
         if not _want or row_action != _want:

@@ -156,13 +156,6 @@ def capture_full_strategy_package(root: Path, root_dir: Optional[Path] = None) -
         logger.warning("Failed to capture risk config: %s", e)
         risk_full = {}
 
-    try:
-        from astra_backend.exchanges.routing_policy import _read_raw_routing
-        routing_full = _read_raw_routing()
-    except Exception as e:
-        logger.warning("Failed to capture routing config: %s", e)
-        routing_full = {}
-
     finally:
         if sys_path_added and scripts_dir in sys.path:
             try:
@@ -185,6 +178,5 @@ def capture_full_strategy_package(root: Path, root_dir: Optional[Path] = None) -
             "interceptor_config": interceptor_full,
             "council_config": council_full,
             "risk_config": risk_full,
-            "venue_routing": routing_full,
         },
     }

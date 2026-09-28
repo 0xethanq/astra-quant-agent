@@ -130,11 +130,9 @@ class TestZeroProcessGuarantee(unittest.TestCase):
         self.assertFalse(hasattr(mds, "subprocess"))
 
     def test_ticker_and_candles_dead_rest_no_process_escape_hatch(self):
-        """REST 双域全断 + 备源全断时安静落空/落本地数学，绝不派生任何进程。"""
+        """REST 双域全断时安静落空/落本地数学，绝不派生任何进程。"""
         import scripts.market_data_service as mds
-        with patch("scripts.market_data_service._public_get", return_value=None), \
-                patch("scripts.market_data_service._alt_venue_ticker", return_value=None), \
-                patch("scripts.market_data_service._alt_venue_candles", return_value=[]):
+        with patch("scripts.market_data_service._public_get", return_value=None):
             self.assertIsNone(mds.fetch_ticker("FAKE-USDT-SWAP"))
             self.assertEqual(mds.fetch_candles("FAKE-USDT-SWAP"), [])
 

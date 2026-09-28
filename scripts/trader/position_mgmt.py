@@ -15,14 +15,14 @@
 另有两条 fail-closed 边界：文件不存在直接返回；指令 **超过 300 秒**视为过期不执行
 （防止用上一轮的陈旧指令操作当前盘面）。
 
-## 注入面（9 项，全部调用期）
+## 注入面（全部调用期）
 
 | 依赖 | 说明 |
 |---|---|
 | `ai_position_management_file` | 门面 `AI_POSITION_MANAGEMENT_FILE`；测试会 patch 门面属性 |
 | `ai_tightens_stop` | 来自 `scripts/trader/protection.py`，同一份判定 |
 | `close_position_confirmed` / `okx_rest` | OKX 直下路径 |
-| `venue_registry` / `current_environment` / `amend_venue_stop_loss` | 多所路径 |
+| `venue_registry` / `current_environment` | 场所上下文（保留在签名中；OKX 单所路径不再走多所适配器） |
 
 全部**调用期注入**：门面会被 `pin_baseline_risk_env()` 原地重载，
 import 期绑定会变成过期快照（`astra_backend/README.md` §5）。
@@ -39,7 +39,7 @@ import time
 def execute_ai_position_management(real_pos_dict, trackers, timestamp_full, executed_actions, *,
                                  ai_position_management_file, ai_tightens_stop,
                                  close_position_confirmed, okx_rest, venue_registry,
-                                 current_environment, amend_venue_stop_loss):
+                                 current_environment):
     """Execute only fresh, high-confidence and risk-reducing AI position instructions."""
     if not os.path.exists(ai_position_management_file):
         return
@@ -61,30 +61,33 @@ def execute_ai_position_management(real_pos_dict, trackers, timestamp_full, exec
         position = real_pos_dict.get(inst_id)
         if not position:
             # ⚠️ 第一百一十七刀：旧实现在这里**静默** `continue` —— AI 明明对一笔
-            # **外所**持仓写了 CLOSE_MARKET / UPDATE_SL，面板与日志里毫无痕迹，
+            # **不在本字典**的持仓写了 CLOSE_MARKET / UPDATE_SL，面板与日志里毫无痕迹，
             # 看起来像"本轮无事可做"（假阴性）。
             #
             # 实测（2026-09-20）：AI 指令文件里唯一一条就是 `UNI-USDT-SWAP`（HOLD），
-            # 而它正是 **binance** 的 UNI 空仓；`real_pos_dict` 由
+            # 而它当时并不在本路径持仓字典里；`real_pos_dict` 由
             # `cycle_stages.fetch_positions_and_reconcile` 用 **OKX 直签链**的
-            # `query_positions()` 构建 ⇒ 外所持仓**永远不在**这个字典里，
+            # `query_positions()` 构建 ⇒ 不在字典里的持仓**永远**不会被执行，
             # 这条缺口**实际可达**（只要 AI 把 HOLD 换成 CLOSE_MARKET/UPDATE_SL）。
             #
-            # 本刀只**如实留痕**、不改任何交易行为：真正的执行能力（把外所持仓并入
-            # 本路径管理）属改变实盘行为的改动，须单独决策。
+            # 本刀只**如实留痕**、不改任何交易行为；已移除场所的历史持仓同样只留痕跳过。
             if action != "HOLD":
                 _nm = inst_id.replace("-USDT-SWAP", "") or inst_id
                 executed_actions.append(
                     f"[{_nm}] AI{action}指令未执行：{inst_id} 不在本路径持仓字典"
-                    f"（该字典仅 OKX 直签链；外所持仓由云端保护腿链路管理）")
+                    f"（该字典为 OKX 直签链的真实持仓）")
             continue
         if action == "HOLD":
             continue
 
         pos_side = str(position.get("posSide", "net")).lower()
         pos_venue = str(position.get("venue") or position.get("exchange") or "okx").lower()
-        current_px = float(position.get("markPx", position.get("last", 0)) or 0)
         name = inst_id.replace("-USDT-SWAP", "")
+        if pos_venue != "okx":
+            executed_actions.append(
+                f"[{name}] 非 OKX 场所({pos_venue})历史持仓，只读跳过AI持仓管理（不下发任何交易所指令）")
+            continue
+        current_px = float(position.get("markPx", position.get("last", 0)) or 0)
 
         if action == "CLOSE_MARKET":
             if confidence < 85:
@@ -109,43 +112,27 @@ def execute_ai_position_management(real_pos_dict, trackers, timestamp_full, exec
 
             amend_ok = False
             old_sl = 0.0
-            if pos_venue != "okx":
-                try:
-                    from astra_backend.close_intent import adapter_environment as _sl_env
-                    ad = venue_registry.get_adapter(pos_venue,
-                        environment=_sl_env(pos_venue, str(current_environment().mode)))  # 审计 C2+C3
-                    # 审计 C3（后半）：棘轮而非堆单——原生改单优先，回退先挂新再撤旧
-                    _c3_ok, _c3_note = amend_venue_stop_loss(
-                        ad, name, pos_side, float(new_sl), abs(float(position.get("pos", 0) or 0)))
-                    amend_ok = bool(_c3_ok)
-                    if not amend_ok:
-                        executed_actions.append(f"[{name}] {pos_venue.upper()} 云端止损更新失败: {_c3_note}")
-                        continue
-                except Exception as vexc:
-                    executed_actions.append(f"[{name}] {pos_venue.upper()} 云端止损更新失败: {vexc}")
-                    continue
-            else:
-                try:
-                    algo_orders = okx_rest.pending_algo_orders(inst_id)
-                except Exception as exc:
-                    executed_actions.append(f"[{name}] 云端止损收紧失败，原保护单保持不变（查询异常：{exc}）")
-                    continue
-                # 第一百八十六刀：同 cloud_protection —— 净持仓账户的云端单 `posSide` 是
-                # `"net"`，精确相等会永远找不到 ⇒ 只会打印"未找到真实云端止损单"，
-                # 云端止损上移静默不生效。统一为 net 容错。
-                live_algo = next((o for o in algo_orders
-                                  if str(o.get("state", "")).lower() == "live"
-                                  and str(o.get("posSide", "net")).lower() in {pos_side, "net"}
-                                  and o.get("slTriggerPx")), None)
-                if not live_algo:
-                    executed_actions.append(f"[{name}] 未找到真实云端止损单，无法更新")
-                    continue
-                old_sl = float(live_algo.get("slTriggerPx", 0) or 0)
-                try:
-                    okx_rest.amend_algo_sl(live_algo["algoId"], new_sl, inst_id=inst_id, new_sl_ord_px="-1")
-                    amend_ok = True
-                except Exception:
-                    amend_ok = False
+            try:
+                algo_orders = okx_rest.pending_algo_orders(inst_id)
+            except Exception as exc:
+                executed_actions.append(f"[{name}] 云端止损收紧失败，原保护单保持不变（查询异常：{exc}）")
+                continue
+            # 第一百八十六刀：同 cloud_protection —— 净持仓账户的云端单 `posSide` 是
+            # `"net"`，精确相等会永远找不到 ⇒ 只会打印"未找到真实云端止损单"，
+            # 云端止损上移静默不生效。统一为 net 容错。
+            live_algo = next((o for o in algo_orders
+                              if str(o.get("state", "")).lower() == "live"
+                              and str(o.get("posSide", "net")).lower() in {pos_side, "net"}
+                              and o.get("slTriggerPx")), None)
+            if not live_algo:
+                executed_actions.append(f"[{name}] 未找到真实云端止损单，无法更新")
+                continue
+            old_sl = float(live_algo.get("slTriggerPx", 0) or 0)
+            try:
+                okx_rest.amend_algo_sl(live_algo["algoId"], new_sl, inst_id=inst_id, new_sl_ord_px="-1")
+                amend_ok = True
+            except Exception:
+                amend_ok = False
 
             if amend_ok:
                 executed_actions.append(f"[{name}] 云端止损收紧至 {new_sl} ({pos_venue.upper()}): {reason}")

@@ -160,7 +160,7 @@ def is_circuit_breaker_active():
     return False, {}
 
 def fetch_crypto_rss_news(limit=30) -> list:
-    """多源主流加密货币一手快讯抓取（Cointelegraph + CoinDesk + TheBlock + Binance 官方市场动态）。
+    """多源主流加密货币一手快讯抓取（Cointelegraph + CoinDesk + TheBlock）。
     专门解决泛财经流中缺失 Web3/虚拟币一手资讯的痛点；每源独立 fail-soft 容灾。"""
     tz_bj = datetime.timezone(datetime.timedelta(hours=8))
     items = []
@@ -211,35 +211,6 @@ def fetch_crypto_rss_news(limit=30) -> list:
                 })
         except Exception as e:
             print(f"[news_harvester] warn {name} 快讯抓取异常: {e}")
-
-    # 2. 币安官方市场与合约动态
-    try:
-        url_bn = "https://www.binance.com/bapi/composite/v1/public/cms/article/catalog/list/query?catalogId=48&pageNo=1&pageSize=10"
-        req_bn = urllib.request.Request(url_bn, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req_bn, timeout=4.0) as resp:
-            d_bn = json.loads(resp.read().decode("utf-8"))
-        articles = d_bn.get("data", {}).get("articles", []) or []
-        for a in articles:
-            t_bn = str(a.get("title") or "").strip()
-            if not t_bn:
-                continue
-            code = a.get("code")
-            ts = a.get("releaseDate") or int(time.time() * 1000)
-            dt_bn = datetime.datetime.fromtimestamp(ts / 1000.0, tz=tz_bj)
-            summary_bn = f"Binance官方动态: {t_bn}"
-            items.append({
-                "id": f"binance-{ts}-{code}",
-                "title": t_bn,
-                "summary": summary_bn,
-                "time": dt_bn.strftime("%Y-%m-%d %H:%M:%S"),
-                "cTime": str(ts),
-                "url": f"https://www.binance.com/en/support/announcement/{code}" if code else "https://www.binance.com",
-                "platforms": ["Binance官方"],
-                "importance": _classify_importance(t_bn, summary_bn),
-                "coins": _extract_coins(t_bn, summary_bn, TARGET_COINS),
-            })
-    except Exception as e:
-        print(f"[news_harvester] warn 币安市场动态抓取异常: {e}")
 
     return items[:limit]
 
@@ -469,7 +440,7 @@ def fetch_and_analyze_news_sentiment():
     now_bj = datetime.datetime.now(tz_bj)
     now_str = now_bj.strftime("%Y-%m-%d %H:%M:%S")
 
-    # 1. News sources：直连 OKX 官方公告流 + 国际主流加密快讯（Cointelegraph/CoinDesk/TheBlock/币安）+ 金十宏观要闻。
+    # 1. News sources：直连 OKX 官方公告流 + 国际主流加密快讯（Cointelegraph/CoinDesk/TheBlock）+ 金十宏观要闻。
     #    ⚠️ 公告只进「黑天鹅体检」，不进展示流（见 DISPLAY_OKX_ANNOUNCEMENTS 注释）。
     okx_news = fetch_okx_announcements(limit=20)
     crypto_news = fetch_crypto_rss_news(limit=30)
@@ -613,7 +584,7 @@ def fetch_and_analyze_news_sentiment():
         "updated_at": now_str,
         # 数据源可用性只认**可展示**的快讯源；只剩官方运营公告不算「有舆情」。
         "source_available": bool(parsed_news),
-        "source_reason": ("Cointelegraph/CoinDesk 加密快讯 + 币安动态 + 金十数据宏观要闻 + OKX Rubik 账户多空比" if parsed_news
+        "source_reason": ("Cointelegraph/CoinDesk 加密快讯 + 金十数据宏观要闻 + OKX Rubik 账户多空比" if parsed_news
                           else "金十数据/宏观快讯拉取失败，显示缺失而非中性"),
         "macro_sentiment": macro_env,
         "circuit_breaker": (cb_info if (cb_active or cb_info.get("unknown"))

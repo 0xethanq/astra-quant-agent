@@ -7,7 +7,6 @@
  *    全站所有具有进度指示、比例分布与置信度量规用途的容器：
  *    - `OverviewPage.vue`（AI 决策置信度量规）；
  *    - `TrajectoryPanel.vue`（推演决策置信度指示条）；
- *    - `VenueAccountsPanel.vue`（三所平权总资产使用率进度条）；
  *    - `NewsView.vue`（快讯情绪多空力量对比条）。
  *
  * 2. **必要属性完整性**：
@@ -29,7 +28,6 @@ test('全站关键进度条与量规必须满足 role="progressbar" 规范', () 
   const targets = [
     { file: 'views/admin/OverviewPage.vue', labelMatch: /confidenceGauge/ },
     { file: 'components/dashboard/TrajectoryPanel.vue', labelMatch: /dash\.shell\.panel\.confidence/ },
-    { file: 'components/dashboard/VenueAccountsPanel.vue', labelMatch: /dash\.venueAccounts\.portfolio\.usage/ },
     { file: 'views/dashboard/NewsView.vue', labelMatch: /dash\.news\.ratioLabel/ },
   ];
 

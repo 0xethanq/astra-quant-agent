@@ -73,9 +73,6 @@ DATA_DIR = os.path.join(WORKSPACE_DIR, "data")
 from market_data_service import fetch_single_indicator, fetch_ticker, fetch_candles
 # 结构优化阶段4·B3：单标的数据包装配已搬入 scripts/brain/packages.py（门面保留薄壳）
 from scripts.brain.packages import fetch_single_instrument_package as _fetch_single_instrument_package
-# 结构优化阶段4·B3 第二块：跨所采集/健康度/提示词组装已搬入 scripts/brain/xvenue.py。
-# 依赖面较宽（适配器缝、safe_float、VENUE_HEALTH_FILE、atomic_write_json、_XV_HEALTH），
-# 全部走**调用期注入**，理由见该模块 docstring 与 astra_backend/README.md §5。
 from scripts.brain.prompt import (
     construct_full_market_prompt as _construct_full_market_prompt_impl,
 )
@@ -105,17 +102,6 @@ from scripts.brain.cycle_parts import (
 from scripts.brain.decisions import (
     validate_and_filter_decision as _validate_and_filter_decision_impl,
     assemble_decision_cache as _assemble_decision_cache_impl,
-)
-from scripts.brain.xvenue import (
-    _xvenue_enabled as _xvenue_enabled_impl,
-    _xv_record as _xv_record_impl,
-    _xv_flush_health as _xv_flush_health_impl,
-    _get_xvenue_adapter as _get_xvenue_adapter_impl,
-    _xv_binance_snapshot as _xv_binance_snapshot_impl,
-    _xv_gate_snapshot as _xv_gate_snapshot_impl,
-    fetch_cross_venue_matrix as _fetch_cross_venue_matrix_impl,
-    _xv_divergence_notes as _xv_divergence_notes_impl,
-    _xvenue_prompt_line as _xvenue_prompt_line_impl,
 )
 AI_DECISION_CACHE_FILE = os.path.join(DATA_DIR, "ai_brain_decisions.json")
 AI_DECISION_HISTORY_FILE = os.path.join(DATA_DIR, "ai_brain_history.json")
@@ -183,7 +169,7 @@ from llm_credentials import get_cpa_client_config as _get_cpa_client_config  # n
 
 TARGET_INSTRUMENTS = load_instruments()
 
-try:  # 跨所符号归一（审计 P2-12）：把 BINANCE:BTCUSDT / BTC_USDT / BTC 统一成 OKX 形态
+try:  # 符号归一（审计 P2-12）：把历史合成 id / 原生命中写法统一成 OKX 形态
     from astra_backend.exchanges.base import canonical_base as _canonical_base_name
 except Exception:  # pragma: no cover - scripts/ 直接运行时走兜底
     try:
@@ -508,109 +494,6 @@ _SYSTEM_JSON_CONTRACT = """==== 【严格 JSON 规范契约与完整输出骨架
 - decisions 只包含有明确结论的标的，未涉及的标的不得出现；
 - 每个决策的 calculus_dynamics 与 math_prob_rationale 必须明确引用具体 1H v, a 与概率数值，严禁只写空泛定性词句！"""
 
-# ---------------------------------------------------------------------------
-# 跨所比对矩阵（Phase 2 · 币安/Gate 只读备源）
-# 纯证据增益：任何失败一律 fail-soft，绝不阻塞决策主循环。
-# 熔断开关 ASTRA_XVENUE_PROMPT=0 时整段跳过（网络故障预案/测试封闭性）。
-# ---------------------------------------------------------------------------
-
-# 跨所取数健康度状态：**刻意留在门面**（不是实现细节）——
-# `tests/venues/test_xvenue_prompt.py:120` 直接断言 `abt._XV_HEALTH`，且门面被
-# `pin_baseline_risk_env()` 原地重载后，子模块 import 期持有的引用会与门面的
-# 那个不再是同一个对象。实现模块 scripts/brain/xvenue.py 只保留保护它的锁。
-_XV_HEALTH: Dict[str, Dict[str, Any]] = {}
-
-
-def _xvenue_enabled() -> bool:
-    """跨所提示词总开关。实现见 scripts/brain/xvenue.py。"""
-    return _xvenue_enabled_impl()
-
-
-def _xv_record(venue: str, name: str, ok: bool, latency_ms: float, err: str = "") -> None:
-    """记录场所级取数健康度（写入门面的 `_XV_HEALTH`）。实现见 scripts/brain/xvenue.py。
-
-    `_XV_HEALTH` 必须留在门面：`tests/venues/test_xvenue_prompt.py:120` 直接断言
-    `abt._XV_HEALTH`，且门面被 `pin_baseline_risk_env()` 原地重载后
-    子模块持有的引用会与门面的那个不再是同一个对象。
-    """
-    _xv_record_impl(_XV_HEALTH, venue, name, ok, latency_ms, err)
-
-
-def _xv_flush_health(packages: List[Dict[str, Any]]) -> None:
-    """健康度 + 逐币跨所快照落盘。实现见 scripts/brain/xvenue.py。
-
-    依赖一律在**调用时**从门面全局取名（而不是 import 期绑定或设默认参数）——
-    目的是让 `patch.object(abt, "VENUE_HEALTH_FILE", …)` 与
-    `patch.object(abt, "atomic_write_json", …)` 在调用时被读到；
-    同时 `abt._xv_flush_health([...])` 这种只传 packages 的既有调用
-    （`tests/venues/test_xvenue_prompt.py:129/144`）照旧成立。
-
-    注：不要把默认值写成同名形参（`safe_float=None` 之类）—— 那会让函数体里的
-    裸名解析到形参而不是模块全局，等于把补丁缝静默关掉。
-    """
-    _xv_flush_health_impl(
-        packages,
-        health=_XV_HEALTH,
-        safe_float=safe_float,
-        atomic_write_json=atomic_write_json,
-        venue_health_file=VENUE_HEALTH_FILE,
-    )
-
-
-def _get_xvenue_adapter(venue: str):
-    """适配器获取。实现见 scripts/brain/xvenue.py。
-
-    保留在门面：这是 `tests/venues/test_xvenue_prompt.py` 4 处
-    `patch.object(abt, "_get_xvenue_adapter", …)` 的**既定 mock 缝**
-    （模块注释原话：「测试与故障注入缝：mock 此函数即可完全离线」）。
-    """
-    return _get_xvenue_adapter_impl(venue)
-
-
-def _xv_binance_snapshot(base: str):
-    """单点取币安现价/大户比/费率。实现见 scripts/brain/xvenue.py。"""
-    return _xv_binance_snapshot_impl(
-        base,
-        get_adapter=_get_xvenue_adapter,
-        record=lambda venue, name, ok, ms, err="": _xv_record(venue, name, ok, ms, err),
-    )
-
-
-def _xv_gate_snapshot(base: str):
-    """单点取 Gate 现价/大户比/费率。实现见 scripts/brain/xvenue.py。"""
-    return _xv_gate_snapshot_impl(
-        base,
-        get_adapter=_get_xvenue_adapter,
-        record=lambda venue, name, ok, ms, err="": _xv_record(venue, name, ok, ms, err),
-    )
-
-
-def fetch_cross_venue_matrix(packages: List[Dict[str, Any]]) -> None:
-    """给每个 pkg 就地挂 xvenue（US-003 对称化）。实现见 scripts/brain/xvenue.py。"""
-    _fetch_cross_venue_matrix_impl(
-        packages,
-        enabled=_xvenue_enabled(),
-        snapshot_binance=_xv_binance_snapshot,
-        snapshot_gate=_xv_gate_snapshot,
-        flush_health=_xv_flush_health,
-    )
-
-
-def _xv_divergence_notes(xv: Dict[str, Any]) -> str:
-    """跨所分歧自动标注。实现见 scripts/brain/xvenue.py。"""
-    return _xv_divergence_notes_impl(xv)
-
-
-def _xvenue_prompt_line(p: Dict[str, Any]) -> str:
-    """归一跨所证据行。实现见 scripts/brain/xvenue.py。
-
-    `safe_float` 在调用时注入（它定义在本门面，不是共享叶子函数）。
-    """
-    return _xvenue_prompt_line_impl(p, safe_float=safe_float)
-
-
-
-
 # System 宪法保持静态：全部动态风控阈值由每轮 construct_full_market_prompt 注入的
 # 【本周期风险预算】小节实时携带（该小节直接从 risk_constants 推导，永不进快照）。
 # 这样即使策略快照布局缓存了本节文本，风控改参也不会造成「提示词口径过期」。
@@ -678,7 +561,7 @@ def build_risk_budget_text(usdt_available: float = None) -> str:
             if rc.PORTFOLIO_RISK_BUDGET_USDT > 0 else
             "- 组合风险总预算(跨所合算): 未设上限 (0=引擎不封顶，仅受单标的/同向/并发上限约束)\n"
         )
-        # 审计 P2-1：跨所同向敞口上限现已真执行（execution_router 发送前拒开），
+        # 审计 P2-1：同向敞口上限现已真执行（下单前入场闸门拒开），
         # 这里必须同源披露，否则"提示词口径 == 代码口径"又多一处例外。
         + (
             f"- 跨所同向敞口上限: {rc.MAX_TOTAL_EXPOSURE_USDT:.2f} USDT (同一标同方向跨所合计名义额，含本单；超出执行层拒开)\n"
@@ -738,14 +621,13 @@ def construct_full_market_prompt(
     既有测试缝。理由逐一列在 scripts/brain/prompt.py 的 docstring。
 
     注：不要把默认值写成同名形参（`safe_float=None` 之类）—— 那会让函数体里的
-    裸名解析到形参、静默关掉这些缝（同类教训见 scripts/brain/xvenue.py）。
+    裸名解析到形参、静默关掉这些缝。
     """
     return _construct_full_market_prompt_impl(
         packages, pos_summary, active_positions_detail, pending_orders_detail,
         current_time_str, usdt_available, runtime_context_out, policy_snapshot,
         safe_float=safe_float,
         sl_atr_mult_for=_sl_atr_mult_for,
-        xvenue_prompt_line=_xvenue_prompt_line,
         build_risk_budget_text=build_risk_budget_text,
         active_profile=active_profile,
         apply_module_layout=apply_module_layout,
@@ -794,7 +676,7 @@ def assemble_decision_cache(
     - `safe_float` / `_get_system_version_tag` 定义在本门面。
 
     注：不要把默认值写成同名形参 —— 那会让函数体里的裸名解析到形参、
-    静默关掉补丁缝（详见 scripts/brain/xvenue.py 同名教训）。
+    静默关掉补丁缝。
     """
     return _assemble_decision_cache_impl(
         packages, decisions_dict, active_inst_ids, active_position_sides,
@@ -816,8 +698,8 @@ def assemble_decision_cache(
 def _pending_order_margin_usdt(o: Dict[str, Any]) -> Optional[float]:
     """挂单的**保证金**（USDT）。
 
-    用户 2026-09-28 拍板：全系统不再用「张」表达仓位 —— 三所数量单位不同，
-    且各币种的合约面值算法都不一样（BTC 一张 0.01 币、XRP 一张 100 币），
+    用户 2026-09-28 拍板：全系统不再用「张」表达仓位 —— 各币种的合约面值
+    算法都不一样（BTC 一张 0.01 币、XRP 一张 100 币），
     模型看到"5 张"根本无从判断规模。保证金是唯一跨场所、跨币种可比的量。
 
     取不到（缺面值/缺杠杆/数值非法）返回 `None`，由文案层写 `--` ——
@@ -919,10 +801,7 @@ def execute_batch_ai_brain_cycle(
     with ThreadPoolExecutor(max_workers=8) as executor:
         packages = list(executor.map(fetch_single_instrument_package, TARGET_INSTRUMENTS))
 
-    # 跨所比对（币安/Gate 只读备源，纯证据增益，失败静默跳过不阻塞决策）
-    fetch_cross_venue_matrix(packages)
-
-    # 顶级聪明钱与大户持仓数据接入（Binance 公开大户指标 + OKX Rubik 备选双源容灾）
+    # 顶级聪明钱与大户持仓数据接入（OKX Rubik 公开统计，单一来源）
     try:
         try:
             from scripts.factors.smart_money import fetch_smart_money_for_symbol

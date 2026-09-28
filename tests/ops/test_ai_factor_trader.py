@@ -5,10 +5,14 @@
 1. **薄壳** —— 把 `scripts/trader/*` 的实现按**调用期同名注入**装配起来。这类"缝"
    一旦被改回 import 期绑定就会**静默失效**（函数照跑、结果照对，只是不再受测试控制，
    而且会真的出网/真的下单）。
-2. **编排** —— `execute_portfolio()` 按固定顺序调用九个 stage，任何一步返回 `None`
+2. **编排** —— `execute_portfolio()` 按固定顺序调用各 stage，任何一步返回 `None`
    都必须**立刻中止本轮**（fail-closed），不许带着"读不到"的账户态继续往下走。
 
-另外钉住三处模块级导入兜底与 `single_trader_cycle` 的双重防重（锁 + 同槽去重）。
+另外钉住两处模块级导入兜底与 `single_trader_cycle` 的双重防重（锁 + 同槽去重）。
+
+⚠️ **OKX 专用化**：跨所保护巡检 stage（`venue_protection_watchdog_stage` 及其防抖
+状态读写）与 `ASTRA_VENUE_PROTECTION_WATCHDOG_*` 环境变量已随多所执行面整体移除 ——
+本系统只在 OKX 上持仓，`execute_portfolio` 的 stage 序列里**不再有** watchdog 一步。
 """
 from __future__ import annotations
 
@@ -46,9 +50,8 @@ def _try_with(marker: str) -> ast.Try:
     return hits[0]
 
 
-# 三个兜底块各自的**内容标记**（在块内唯一出现，改行号不会失效）
+# 两个兜底块各自的**内容标记**（在块内唯一出现，改行号不会失效）
 _TRY_VERSION = "astra_backend.version"
-_TRY_DEBOUNCE = "ASTRA_VENUE_PROTECTION_WATCHDOG_DEBOUNCE_MIN"
 _TRY_BACKEND = "from db_manager import"
 
 
@@ -68,25 +71,12 @@ def _exec_node(node, extra=None):
 
 
 class ImportFallbackTests(unittest.TestCase):
-    """三处模块级兜底：失败时也必须留下**可用**对象，而不是让整模块炸掉。"""
+    """两处模块级兜底：失败时也必须留下**可用**对象，而不是让整模块炸掉。"""
 
     def test_version_falls_back_when_version_module_unavailable(self):
         with patch.dict(sys.modules, {"astra_backend.version": None}):
             ns = _exec_node(_try_with(_TRY_VERSION))
         self.assertEqual(ns["__version__"], "7.6.0")
-
-    def test_debounce_falls_back_to_30_minutes_on_bad_env(self):
-        for bad in ("not-a-number", ""):
-            with patch.dict(aft.os.environ,
-                            {"ASTRA_VENUE_PROTECTION_WATCHDOG_DEBOUNCE_MIN": bad}):
-                ns = _exec_node(_try_with(_TRY_DEBOUNCE))
-            self.assertEqual(ns["ASTRA_VENUE_PROTECTION_WATCHDOG_DEBOUNCE_S"], 1800.0, bad)
-
-    def test_debounce_reads_env_when_valid(self):
-        with patch.dict(aft.os.environ,
-                        {"ASTRA_VENUE_PROTECTION_WATCHDOG_DEBOUNCE_MIN": "5"}):
-            ns = _exec_node(_try_with(_TRY_DEBOUNCE))
-        self.assertEqual(ns["ASTRA_VENUE_PROTECTION_WATCHDOG_DEBOUNCE_S"], 300.0)
 
     def test_backend_facade_missing_leaves_six_none_sentinels(self):
         # 六件套缺失时必须是 None 哨兵（调用点据此决定"跳过/降级"），而不是 AttributeError
@@ -366,10 +356,20 @@ class _Frozen:
 
 
 class ExecutePortfolioTests(unittest.TestCase):
-    """`execute_portfolio` 的 stage 编排：任何一步返回 None 都必须**立刻中止本轮**。"""
+    """`execute_portfolio` 的 stage 编排：任何一步返回 None 都必须**立刻中止本轮**。
 
-    PHASE1 = ("XV", 2, [{"instId": "BTC-USDT-SWAP"}], False, 1, {"p1"}, {"BTC-USDT-SWAP": {}},
-              0, 0, 0, 1, 5000.0, {"okx": []})
+    ⚠️ OKX 专用化后 stage 序列为：
+    preflight → 形状预检 → phase1（持仓/挂单/余额）→ 标的池与持仓管理 →
+    熔断/主脑扫描 → 入场扫描（条件）→ 行情健康快照 → 状态落盘 →
+    周期披露。原来的跨所保护巡检（watchdog）一步已整体移除。
+    """
+
+    #: phase1 的 11 项输出（顺序即 `fetch_positions_and_reconcile` 的返回顺序）：
+    #: active_pos_count / all_positions / entries_blocked / long_count /
+    #: pending_inst_ids / real_pos_dict / reserved_long / reserved_short /
+    #: reserved_slot / short_count / usdt_available
+    PHASE1 = (2, [{"instId": "BTC-USDT-SWAP"}], False, 1, {"p1"}, {"BTC-USDT-SWAP": {}},
+              0, 0, 0, 1, 5000.0)
     SCAN = (600.0, {"cache": 1}, False, "")
 
     def setUp(self):
@@ -394,7 +394,6 @@ class ExecutePortfolioTests(unittest.TestCase):
         self._patch("unfreeze_okx_environment", lambda: None)
         self._patch("current_environment", lambda: _Frozen())
         self._patch("pool_is_trustworthy", lambda: True)
-        self._patch("read_ledger_rows", lambda path: None)
         self._patch("write_market_data_health_snapshot", record("health_snapshot"))
         self._patch("cycle_disclosure_summary", lambda payload: "DISCLOSURE")
         self._patch("write_cycle_disclosure_snapshot", record("write_disclosure"))
@@ -422,9 +421,6 @@ class ExecutePortfolioTests(unittest.TestCase):
         self._patch("execute_entry_scan",
                     lambda **kw: (self.stages.append("entry_scan"),
                                   self.calls.__setitem__("entry", kw))[0])
-        self._patch("venue_protection_watchdog_stage",
-                    lambda **kw: (self.stages.append("watchdog"),
-                                  self.calls.__setitem__("watchdog", kw), {"wd": 1})[2])
         self._patch("persist_state_and_sync_ledger",
                     lambda **kw: (self.stages.append("persist"),
                                   self.calls.__setitem__("persist", kw))[0])
@@ -456,7 +452,7 @@ class ExecutePortfolioTests(unittest.TestCase):
         self._wire()
         self._run()
         self.assertEqual(self.stages,
-                         ["entry_scan", "watchdog", "health_snapshot", "persist",
+                         ["entry_scan", "health_snapshot", "persist",
                           "write_disclosure"])
 
     def test_preflight_tuple_is_unpacked_into_shape_stage(self):
@@ -471,7 +467,6 @@ class ExecutePortfolioTests(unittest.TestCase):
         self._wire()
         self._run()
         scan = self.calls["scan"]
-        self.assertEqual(scan["_xv_total"], "XV")
         self.assertEqual(scan["active_pos_count"], 2)
         self.assertEqual(scan["long_count"], 1)
         self.assertEqual(scan["short_count"], 1)
@@ -490,27 +485,20 @@ class ExecutePortfolioTests(unittest.TestCase):
         self._patch("pool_is_trustworthy", lambda: False)
         self._run()
         self.assertNotIn("entry_scan", self.stages)
-        self.assertIn("watchdog", self.stages)
+        # 池不可信只禁新开仓，持仓风控/落盘/披露仍必须跑完
+        self.assertIn("persist", self.stages)
+        self.assertIn("write_disclosure", self.stages)
 
-    def test_watchdog_receives_debounce_and_dry_run_knobs(self):
-        self._wire()
-        self._run()
-        wd = self.calls["watchdog"]
-        self.assertEqual(wd["dry_run"], aft.ASTRA_VENUE_PROTECTION_WATCHDOG_DRY_RUN)
-        self.assertEqual(wd["debounce_s"], aft.ASTRA_VENUE_PROTECTION_WATCHDOG_DEBOUNCE_S)
-        self.assertEqual(wd["state_path"], aft.VENUE_PROTECTION_WATCHDOG_STATE_FILE)
-        self.assertEqual(wd["ledger_rows"], None)
-
-    def test_disclosure_receives_watchdog_report_and_shape_violations(self):
+    def test_disclosure_receives_shape_violations_and_recomputed_entries_blocked(self):
         self._wire(cb_active=True)
         self._run()
         disc = self.calls["disclosure"]
-        self.assertEqual(disc["watchdog_report"], {"wd": 1})
         self.assertEqual(disc["shape_violations"], ["v"])
-        # ★ `entries_blocked` 在披露里是**持仓阶段重算后**的值（PHASE1[3]=False），
+        # ★ `entries_blocked` 在披露里是**持仓阶段重算后**的值（PHASE1[2]=False），
         #   不是 preflight 那个 —— 位置查询比预检更接近事实，后者只是初值
         self.assertIs(disc["entries_blocked"], False)
-        self.assertEqual(disc["watchdog_enabled"], aft.ASTRA_VENUE_PROTECTION_WATCHDOG)
+        # 坏所集合仍按原名注入（OKX 专用化后结构性为空，但注入面保留）
+        self.assertIs(disc["broken_venues"], aft._BROKEN_VENUES)
 
     def test_lock_skip_prevents_the_whole_cycle(self):
         holder = open(aft.TRADER_LOCK_FILE, "a+", encoding="utf-8")

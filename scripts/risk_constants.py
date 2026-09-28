@@ -116,8 +116,9 @@ PORTFOLIO_RISK_BUDGET_USDT = _env_float("ASTRA_PORTFOLIO_RISK_BUDGET_USDT", 0.0)
 # 跨所同向合并敞口上限（USDT；0 = 不限制）。
 # 审计 P2-1(2026-09-13)：该键自 US-005 起就写在 settings_store.MANAGED_KEYS（后台可写、
 # 可落 .env），但**全仓 0 个读者** —— 设了等于没设，UI 却把它当风控项。现落地为
-# execution_router 发送前判定：同向（base 相同且方向一致）已开仓名义额 + 本单名义额
-# 超过本上限即拒开（不夹取——敞口超限意味着这笔根本不该发）。
+# 下单前判定（`scripts/trader/order_submit.py` 的入场闸门）：同向（base 相同且方向
+# 一致）已开仓名义额 + 本单名义额超过本上限即拒开（不夹取——敞口超限意味着这笔
+# 根本不该发）。
 MAX_TOTAL_EXPOSURE_USDT = _env_float("ASTRA_MAX_TOTAL_EXPOSURE_USDT", 0.0)
 
 # ── 默认值表（供后台风控管理页 schema 引用，键 = 环境变量名） ────

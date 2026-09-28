@@ -9,15 +9,16 @@
 - 段内 `else: algo_results = {}` 这支在原文里就是**死赋值**（其后再无使用），
   照抄保留，不在本刀顺手清理。
 
-## 第一百二十二刀：与跨所生产者**统一契约**（`cloud_oco_verified`）
+## 第一百二十二刀：与生产者**统一契约**（`cloud_oco_verified`）
 
-`cloud_oco_verified` 此前**只有跨所路径**（`multi_venue.py`）会写，OKX 路径从来不写；
+`cloud_oco_verified` 此前**只有外所聚合路径**会写，OKX 路径从来不写；
 而前端判据是 `p.cloud_oco_verified !== false && p.protectionStatus !== 'unprotected'`
-⇒ **同一个 `partially_protected` 状态在 OKX 行算"已保护"、在 binance 行算"未保护"**
+⇒ **同一个 `partially_protected` 状态在不同来源的行上判罚不一致**
 （缺字段被当成 not-false）。更糟的是 `unknown`（不可判定）在 OKX 行也会被算作已保护。
 
-现两边同口径：`cloud_oco_verified = (protectionStatus == "fully_protected")`，
-并统一补 `protectionLegs`。⇒ 前端**无需改动**即得到一致且更严的判据
+现统一口径（外所生产者已随外所下架移除，本函数即唯一生产者）：
+`cloud_oco_verified = (protectionStatus == "fully_protected")`，并统一补 `protectionLegs`。
+⇒ 前端**无需改动**即得到一致且更严的判据
 （`partially_protected` / `unknown` 一律不再算"已保护"）。
 """
 from __future__ import annotations
@@ -79,11 +80,11 @@ def collect_algo_protection(positions, source_errors, fetch_json,
                 and str(o.get("reduceOnly", "true")).lower() in {"true", "1", "yes"}
             ]
             # ⚠️ 第一百二十刀修正（真机可达的**假阴性**）：`protected_size` 只累加 `sz`，
-            # 于是「整仓平」语义的腿（OKX `closePosition=true`；Gate `close`+`size=0`）
-            # 因为**给不出张数**而被算成 0 覆盖 ⇒ 面板/提示词把这笔报成
+            # 于是「整仓平」语义的腿（OKX `closePosition=true`）因为**给不出张数**
+            # 而被算成 0 覆盖 ⇒ 面板/提示词把这笔报成
             # `partially_protected / 0%`，而交易所那条腿其实**平掉整个仓位**。
-            # 判定与跨所路径**共用同一个已专测谓词**（`venue_protection._is_full_close`
-            # 覆盖 Gate close/auto_size、Binance/OKX closePosition），不另写一套。
+            # 判定与已专测的共享谓词一致（`venue_protection._is_full_close`
+            # 覆盖各所的整仓平语义），不另写一套。
             _pos_sz = float(position.get("pos_sz") or position.get("pos") or 0)
             _sl_legs = [o for o in matching_algos if o.get("slTriggerPx")]
             full_close = any(_is_full_close(o) for o in _sl_legs)
@@ -97,7 +98,7 @@ def collect_algo_protection(positions, source_errors, fetch_json,
             coverage_unknown = _pos_sz <= 0 or (bool(_sl_legs) and protected_size <= 0
                                                 and not full_close)
             full_coverage = (not coverage_unknown) and protected_size >= _pos_sz * 0.999
-            # 跨所路径也发这个字段 ⇒ 两边字段齐整（口径见 tests/ui/test_protection_contract.py）
+            # 生产侧统一发这个字段 ⇒ 字段齐整（口径见 tests/ui/test_protection_contract.py）
             position["protectionLegs"] = len(matching_algos)
             live_algo = next((o for o in matching_algos if o.get("slTriggerPx") and o.get("tpTriggerPx")), None)
             if live_algo and full_coverage:

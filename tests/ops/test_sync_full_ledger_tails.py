@@ -1,17 +1,22 @@
-"""三所平权台账同步（`scripts/sync_full_ledger.py`）的残余分支收口 —— 第 324 刀。
+"""OKX 专用台账同步（`scripts/sync_full_ledger.py`）的残余分支收口 —— 第 324 刀。
 
-本模块 909 行、24 个公开名，此前**没有专属测试文件**（有若干审计门会导入它，
-但没人系统覆盖它的失败路径）。它是**钱路核心**：三所平仓盈亏与活动持仓
-在此汇总成 `trading_ledger.json`，首页与风控都读它。
+本模块此前**没有专属测试文件**（有若干审计门会导入它，但没人系统覆盖它的
+失败路径）。它是**钱路核心**：OKX 平仓盈亏与活动持仓在此汇总成
+`trading_ledger.json`，首页与风控都读它。
+
+> 迁移说明（Binance/Gate 移除后）：旧版还覆盖「外所活动持仓」「外所平仓
+> 单」「币安在仓生命周期富化」等分支；这些实现连同两个所一起退场，相关
+> 测试类已整体删除。本文件只针对**保留下来的 OKX 路径**钉边界。
 
 ## 本刀的核心纪律：「不知道」绝不能渲染成「已平仓」
 
 本模块反复出现同一条语义，且每条都有独立用例钉住：
 
-- 某所**取数失败** ⇒ 该所的 holding 行**宁留旧行**（`ok_venues` 只含真正成功的所）；
-- 未配置私有凭证 ⇒ **安全跳过**，不是「账户没有交易」；
+- OKX **取数失败** ⇒ 该所的 holding 行**宁留旧行**（只有真正取到数才允许清理）；
+- 未配置私有凭证 ⇒ **fail-closed**，既有 `trading_ledger.json` 保持不动；
 - 分页取不尽 ⇒ 只有在**仍可能漏掉在册记录**时才标 `PARTIAL`（否则是常驻假告警）；
-- 被准入清单挡掉的活仓 ⇒ **不许静默**，写进旁车 + 打日志 + `warnings.warn`。
+- 被准入清单挡掉的活仓 ⇒ **不许静默**，写进旁车 + 打日志 + `warnings.warn`；
+- 历史台账里残留的**已移除场所**行（binance/gate）⇒ 只读容忍，既不崩也不许被清理。
 
 ## ⚠️ 沙箱纪律（第 323 刀事故的教训）
 
@@ -24,7 +29,6 @@ from __future__ import annotations
 import datetime
 import io
 import json
-import os
 import sys
 import tempfile
 import unittest
@@ -85,7 +89,7 @@ class _Sandbox(unittest.TestCase):
 # ───────────────────── 有界旁车载荷 ─────────────────────
 class UnmanagedPayloadTests(unittest.TestCase):
     def test_the_count_is_complete_even_when_the_list_is_capped(self):
-        rows = [{"venue": "binance", "instId": f"C{i}-USDT-SWAP", "size": i,
+        rows = [{"venue": "okx", "instId": f"C{i}-USDT-SWAP", "size": i,
                  "side_raw": "long"} for i in range(25)]
         out = sfl.unmanaged_positions_payload(rows, limit=10)
         self.assertEqual(out["count"], 25, "报少一条等于没报")
@@ -93,7 +97,7 @@ class UnmanagedPayloadTests(unittest.TestCase):
         self.assertEqual(out["omitted"], 15)
 
     def test_nothing_is_omitted_under_the_limit(self):
-        out = sfl.unmanaged_positions_payload([{"venue": "gate", "instId": "X"}], limit=10)
+        out = sfl.unmanaged_positions_payload([{"venue": "okx", "instId": "X"}], limit=10)
         self.assertEqual((out["count"], out["omitted"]), (1, 0))
 
     def test_an_empty_or_missing_list_yields_a_zero_payload(self):
@@ -129,10 +133,10 @@ class WriteSyncStatusTests(_Sandbox, unittest.TestCase):
                 self.assertEqual(data["environment"], expected)
 
     def test_the_venues_block_mirrors_the_fetch_status(self):
-        sfl._FETCH_STATUS.update({"binance": {"status": "failed", "reason": "x"}})
+        sfl._FETCH_STATUS.update({"okx": {"status": "failed", "reason": "x"}})
         sfl._write_sync_status(self._env())
         data = json.loads(self.sidecar.read_text(encoding="utf-8"))
-        self.assertEqual(data["venues"]["binance"]["status"], "failed")
+        self.assertEqual(data["venues"]["okx"]["status"], "failed")
 
     def test_unmanaged_positions_are_only_written_when_present(self):
         # 空/缺字段 = 旧版本旁车，读侧一律容错
@@ -142,7 +146,7 @@ class WriteSyncStatusTests(_Sandbox, unittest.TestCase):
 
     def test_unmanaged_positions_are_written_when_present(self):
         # ★ 第 130 行
-        self.unmanaged.append({"venue": "binance", "instId": "ARB-USDT-SWAP",
+        self.unmanaged.append({"venue": "okx", "instId": "ARB-USDT-SWAP",
                                "size": -2416.7, "side_raw": "short"})
         sfl._write_sync_status(self._env())
         data = json.loads(self.sidecar.read_text(encoding="utf-8"))
@@ -267,61 +271,6 @@ class GetCtValTests(_Sandbox, unittest.TestCase):
             self.assertEqual(sfl.get_ct_val("EMPTYSCOIN"), 1.0)
 
 
-# ───────────────────── 杠杆解析 ─────────────────────
-class ResolveTradeLeverageTests(unittest.TestCase):
-    def test_the_venue_map_wins(self):
-        self.assertEqual(sfl._resolve_trade_leverage("BTCUSDT", {"BTCUSDT": 7}), 7)
-
-    def test_the_map_is_probed_under_several_spellings(self):
-        for key in ("BTC_USDT", "BTC", "BTCUSDT"):
-            with self.subTest(key=key):
-                self.assertEqual(sfl._resolve_trade_leverage("BTC_USDT", {key: 5}), 5)
-
-    def test_the_decision_cache_is_second_choice(self):
-        cache = {"ETH-USDT-SWAP": {"decision": {"leverage": 4}}}
-        self.assertEqual(sfl._resolve_trade_leverage("ETHUSDT", {}, cache), 4)
-
-    def test_a_bare_symbol_in_the_cache_also_works(self):
-        cache = {"ETH": {"decision": {"leverage": 6}}}
-        self.assertEqual(sfl._resolve_trade_leverage("ETHUSDT", {}, cache), 6)
-
-    def test_a_non_numeric_decision_leverage_is_skipped(self):
-        # ★ 第 252/253 行
-        cache = {"ETH-USDT-SWAP": {"decision": {"leverage": "high"}}}
-        lever = sfl._resolve_trade_leverage("ETHUSDT", {}, cache)
-        self.assertGreaterEqual(lever, 1)
-        self.assertNotEqual(lever, 0)
-
-    def test_the_tier_derivation_is_the_third_choice(self):
-        self.assertGreaterEqual(sfl._resolve_trade_leverage("SOLUSDT", {}), 1)
-
-    def test_an_unimportable_instrument_pool_falls_through(self):
-        # ★ 第 259/260 行
-        with patch.dict(sys.modules, {"scripts.instrument_pool": None}):
-            self.assertGreaterEqual(sfl._resolve_trade_leverage("ZZZUSDT", {}), 1)
-
-    def test_the_risk_constant_is_the_last_resort(self):
-        # ★ 第 262–264 行
-        with patch.dict(sys.modules, {"scripts.instrument_pool": None}), \
-             patch.dict(os.environ, {"ASTRA_MIN_LEVERAGE": "4"}):
-            self.assertEqual(sfl._resolve_trade_leverage("ZZZUSDT", {}), 4)
-
-    def test_a_broken_risk_constant_falls_back_to_three(self):
-        # ★ 第 265/266 行
-        with patch.dict(sys.modules, {"scripts.instrument_pool": None,
-                                      "scripts.risk_constants": None}), \
-             patch.dict(os.environ, {}, clear=False):
-            os.environ.pop("ASTRA_MIN_LEVERAGE", None)
-            with patch.object(sfl.os, "getenv", return_value=""):
-                self.assertEqual(sfl._resolve_trade_leverage("ZZZUSDT", {}), 3)
-
-    def test_the_result_is_never_below_one(self):
-        for bad in (0, -5, ""):
-            with self.subTest(bad=bad):
-                self.assertGreaterEqual(
-                    sfl._resolve_trade_leverage("ZZZUSDT", {"ZZZUSDT": bad}), 1)
-
-
 # ───────────────────── 截断判定（批C） ─────────────────────
 class HistoryTruncatedInScopeTests(unittest.TestCase):
     def test_a_complete_fetch_is_never_truncated(self):
@@ -356,242 +305,6 @@ class HistoryTruncatedInScopeTests(unittest.TestCase):
             True, 10 ** 300, "2026-09-11 00:00:00", TZ_BJ))
 
 
-# ───────────────────── 外所活动持仓（批E·最大缺口） ─────────────────────
-class _FakeAdapter:
-    def __init__(self, positions=None, exc=None):
-        self._positions = positions
-        self._exc = exc
-
-    def positions(self):
-        if self._exc is not None:
-            raise self._exc
-        return self._positions
-
-
-class OtherVenueLivePositionsTests(unittest.TestCase):
-    def _run(self, adapters, *, import_ok=True):
-        def _get_adapter(name, environment=None):
-            got = adapters.get(name)
-            if isinstance(got, Exception):
-                raise got
-            return got
-        mods = {} if import_ok else {"astra_backend.exchanges": None}
-        with patch.dict(sys.modules, mods), \
-             patch("astra_backend.exchanges.get_adapter", side_effect=_get_adapter):
-            return sfl._other_venue_live_positions("demo")
-
-    def test_an_unimportable_exchanges_package_yields_nothing(self):
-        # ★ 第 553/554 行
-        items, ok = self._run({}, import_ok=False)
-        self.assertEqual((items, ok), ([], set()))
-
-    def test_a_failing_venue_is_not_marked_ok(self):
-        # ★ 第 559–561 行 —— 「不知道」绝不能渲染成「已平仓」
-        items, ok = self._run({"binance": RuntimeError("no net"), "gate": _FakeAdapter([])})
-        self.assertNotIn("binance", ok)
-        self.assertIn("gate", ok)
-
-    def test_an_adapter_without_positions_yields_nothing(self):
-        # ★ 第 558 行 —— `hasattr` 判据
-        class _Bare:
-            pass
-        items, ok = self._run({"binance": _Bare(), "gate": _Bare()})
-        self.assertEqual(items, [])
-        self.assertEqual(ok, {"binance", "gate"})
-
-    def test_a_long_position_is_normalised(self):
-        # ★ 第 563–590 行 —— 整个归一化块
-        ad = _FakeAdapter([{"size_signed": 2.5, "base": "ARB", "side": "long",
-                            "entry_price": 1.1, "mark_price": 1.2,
-                            "unrealized_pnl": 3.0, "leverage": 5,
-                            "open_time": 123, "notional": 300.0, "margin": 60.0}])
-        items, ok = self._run({"binance": ad, "gate": _FakeAdapter([])})
-        self.assertEqual(ok, {"binance", "gate"})
-        self.assertEqual(len(items), 1)
-        row = items[0]
-        self.assertEqual(row["venue"], "binance")
-        self.assertEqual(row["instId"], "ARB-USDT-SWAP")
-        self.assertEqual(row["posSide"], "long")
-        self.assertEqual(row["pos"], 2.5)
-        self.assertEqual(row["avgPx"], 1.1)
-        self.assertEqual(row["markPx"], 1.2)
-        self.assertEqual(row["lever"], 5)
-        self.assertEqual(row["notional"], 300.0)
-        self.assertEqual(row["margin"], 60.0)
-
-    def test_a_short_position_keeps_its_sign_in_pos_but_not_in_side(self):
-        ad = _FakeAdapter([{"size_signed": -2416.7, "base": "ARB"}])
-        items, _ = self._run({"binance": ad, "gate": _FakeAdapter([])})
-        self.assertEqual(items[0]["pos"], 2416.7)
-        self.assertEqual(items[0]["posSide"], "short")
-
-    def test_the_side_defaults_from_the_sign_when_absent(self):
-        ad = _FakeAdapter([{"size_signed": -1, "base": "X"}])
-        items, _ = self._run({"gate": ad, "binance": _FakeAdapter([])})
-        self.assertEqual(items[0]["posSide"], "short")
-
-    def test_a_non_numeric_size_is_skipped(self):
-        # ★ 第 566/567 行
-        ad = _FakeAdapter([{"size_signed": "abc", "base": "X"}])
-        items, _ = self._run({"binance": ad, "gate": _FakeAdapter([])})
-        self.assertEqual(items, [])
-
-    def test_a_zero_size_is_skipped(self):
-        # ★ 第 568/569 行 —— 空仓不是持仓
-        ad = _FakeAdapter([{"size_signed": 0, "base": "X"},
-                           {"size_signed": 1e-15, "base": "Y"}])
-        items, _ = self._run({"binance": ad, "gate": _FakeAdapter([])})
-        self.assertEqual(items, [])
-
-    def test_a_blank_base_is_skipped(self):
-        # ★ 第 571/572 行
-        ad = _FakeAdapter([{"size_signed": 1, "base": "", "symbol": ""}])
-        items, _ = self._run({"binance": ad, "gate": _FakeAdapter([])})
-        self.assertEqual(items, [])
-
-    def test_the_symbol_field_is_used_when_base_is_absent(self):
-        # ⚠️ 实测行为（本刀仅记录，**未改**）：第 570 行的清洗顺序是
-        #   `.replace("USDT", "").replace("_USDT", "")` —— 前一步已经把 `USDT`
-        #   摘掉了，于是 `_USDT` 再也匹配不上，残留一个下划线：
-        #   `"SOL_USDT"` → `"SOL_"` → `"SOL_"` ⇒ instId = `"SOL_-USDT-SWAP"`。
-        #   正确的顺序应当先摘 `_USDT` 再摘 `USDT`（下游拿这个 id 去查准入集合
-        #   会查不到 ⇒ 该持仓会被当成"不在准入清单"而拒进台账）。
-        ad = _FakeAdapter([{"size_signed": 1, "symbol": "SOL_USDT"}])
-        items, _ = self._run({"binance": ad, "gate": _FakeAdapter([])})
-        self.assertEqual(items[0]["instId"], "SOL_-USDT-SWAP",
-                         "残留下划线 —— 见本用例 docstring")
-
-    def test_a_bare_usdt_symbol_is_still_cleaned(self):
-        # 对照：不带宽度的写法正常（说明只有 `_USDT` 分支受影响）
-        ad = _FakeAdapter([{"size_signed": 1, "symbol": "SOLUSDT"}])
-        items, _ = self._run({"binance": ad, "gate": _FakeAdapter([])})
-        self.assertEqual(items[0]["instId"], "SOL-USDT-SWAP")
-
-    def test_the_raw_dict_backfills_notional_and_margin(self):
-        # ★ 第 574–576 行
-        ad = _FakeAdapter([{"size_signed": 1, "base": "X",
-                            "raw": {"notional": 111.0, "initial_margin": 22.0}}])
-        items, _ = self._run({"binance": ad, "gate": _FakeAdapter([])})
-        self.assertEqual((items[0]["notional"], items[0]["margin"]), (111.0, 22.0))
-
-    def test_the_raw_value_key_also_backfills_notional(self):
-        ad = _FakeAdapter([{"size_signed": 1, "base": "X", "raw": {"value": 55.0}}])
-        items, _ = self._run({"binance": ad, "gate": _FakeAdapter([])})
-        self.assertEqual(items[0]["notional"], 55.0)
-
-    def test_a_non_dict_raw_is_ignored(self):
-        ad = _FakeAdapter([{"size_signed": 1, "base": "X", "raw": "junk"}])
-        items, _ = self._run({"binance": ad, "gate": _FakeAdapter([])})
-        self.assertEqual(items[0]["notional"], 0.0)
-
-    def test_mark_price_falls_back_to_the_entry_price(self):
-        ad = _FakeAdapter([{"size_signed": 1, "base": "X", "entry_price": 9.0}])
-        items, _ = self._run({"binance": ad, "gate": _FakeAdapter([])})
-        self.assertEqual(items[0]["markPx"], 9.0)
-
-    def test_the_leverage_defaults_to_three(self):
-        ad = _FakeAdapter([{"size_signed": 1, "base": "X"}])
-        items, _ = self._run({"binance": ad, "gate": _FakeAdapter([])})
-        self.assertEqual(items[0]["lever"], 3)
-
-    def test_a_falsy_leverage_also_defaults_to_three(self):
-        ad = _FakeAdapter([{"size_signed": 1, "base": "X", "leverage": 0}])
-        items, _ = self._run({"binance": ad, "gate": _FakeAdapter([])})
-        self.assertEqual(items[0]["lever"], 3)
-
-    def test_an_empty_positions_response_still_marks_the_venue_ok(self):
-        # 「确无持仓」与「取数失败」含义相反：成功取到空列表 ⇒ 该所可信
-        items, ok = self._run({"binance": _FakeAdapter([]), "gate": _FakeAdapter(None)})
-        self.assertEqual(items, [])
-        self.assertEqual(ok, {"binance", "gate"})
-
-    def test_both_venues_are_aggregated(self):
-        bn = _FakeAdapter([{"size_signed": 1, "base": "AAA"}])
-        gt = _FakeAdapter([{"size_signed": 2, "base": "BBB"}])
-        items, ok = self._run({"binance": bn, "gate": gt})
-        self.assertEqual(sorted(i["instId"] for i in items),
-                         ["AAA-USDT-SWAP", "BBB-USDT-SWAP"])
-        self.assertEqual(ok, {"binance", "gate"})
-
-
-# ───────────────────── 币安在仓生命周期富化 ─────────────────────
-class BinancePositionLifecycleTests(unittest.TestCase):
-    """`_binance_position_lifecycle` —— positionRisk 无费用字段，故回放 userTrades。
-
-    用户报「台账里看不见资金费/手续费」（2026-09-28）：币安 `/fapi/v2/positionRisk`
-    **不返回任何佣金或资金费字段**，且其 `updateTime` 是"最后变更"时刻而非开仓时刻，
-    于是所有币安在仓行的 fee / funding_fee 恒为 0、持仓时长也算错。
-    """
-
-    def _ad(self, trades, funding=None, *, trades_exc=None):
-        routes = {"/fapi/v1/userTrades": trades,
-                  "/fapi/v1/income": funding if funding is not None else []}
-        if trades_exc is not None:
-            routes["/fapi/v1/userTrades"] = trades_exc
-        return _FakeSigned(routes)
-
-    def test_a_single_opening_trade_supplies_its_time_and_commission(self):
-        ad = self._ad([{"id": 1, "side": "SELL", "qty": "46", "commission": "0.0934",
-                        "time": 1000}])
-        self.assertEqual(sfl._binance_position_lifecycle(ad, "UNIUSDT", -46.0),
-                         (1000, 0.0934, 0.0))
-
-    def test_a_multi_trade_build_up_walks_back_to_the_first_trade(self):
-        # 自最新向前累加：2 → 4 → 13，want=13 ⇒ 开仓笔是第一笔（time=100）
-        ad = self._ad([
-            {"side": "BUY", "qty": "2", "commission": "0.01", "time": 100},
-            {"side": "BUY", "qty": "2", "commission": "0.01", "time": 200},
-            {"side": "BUY", "qty": "9", "commission": "0.03", "time": 300},
-        ])
-        ms, fee, _ = sfl._binance_position_lifecycle(ad, "BTCUSDT", 13.0)
-        self.assertEqual(ms, 100)
-        self.assertAlmostEqual(fee, 0.05, places=6)
-
-    def test_a_short_build_up_uses_the_sell_side(self):
-        ad = self._ad([
-            {"side": "SELL", "qty": "5", "commission": "0.01", "time": 100},
-            {"side": "SELL", "qty": "5", "commission": "0.02", "time": 200},
-        ])
-        ms, fee, _ = sfl._binance_position_lifecycle(ad, "XRPUSDT", -10.0)
-        self.assertEqual(ms, 100)
-        self.assertAlmostEqual(fee, 0.03, places=6)
-
-    def test_a_mismatched_history_reports_unknown_rather_than_guessing(self):
-        # ★ 实测：币安测试网存在持仓量与成交史不一致的账户。对不上必须**如实说不知道**
-        # ——退回"最早一笔"会把同标的历史已平仓位的佣金一起算进来。
-        ad = self._ad([{"side": "BUY", "qty": "2", "commission": "9.99", "time": 100}])
-        self.assertEqual(sfl._binance_position_lifecycle(ad, "XRPUSDT", -733.4),
-                         (0, 0.0, 0.0))
-
-    def test_funding_is_queried_from_the_open_time_and_summed(self):
-        trades = [{"side": "SELL", "qty": "46", "commission": "0.09", "time": 1000}]
-        ad = self._ad(trades, [{"income": "0.5", "time": 2000},
-                               {"income": "-0.1", "time": 3000}])
-        ms, fee, funding = sfl._binance_position_lifecycle(ad, "UNIUSDT", -46.0)
-        self.assertEqual(ms, 1000)
-        self.assertAlmostEqual(funding, 0.4, places=6)
-        # 资金费必须以**开仓时刻**为窗口起点查询（否则会算进历史仓位）
-        income_calls = [c for c in ad.calls if c[1] == "/fapi/v1/income"]
-        self.assertEqual(income_calls[0][2]["startTime"], 1000)
-
-    def test_a_failing_user_trades_call_yields_unknown(self):
-        ad = self._ad([], trades_exc=RuntimeError("no net"))
-        self.assertEqual(sfl._binance_position_lifecycle(ad, "XRPUSDT", -1.0),
-                         (0, 0.0, 0.0))
-
-    def test_a_failing_funding_call_keeps_the_time_and_fee(self):
-        trades = [{"side": "SELL", "qty": "46", "commission": "0.09", "time": 1000}]
-        ad = _FakeSigned({"/fapi/v1/userTrades": trades,
-                          "/fapi/v1/income": RuntimeError("no net")})
-        self.assertEqual(sfl._binance_position_lifecycle(ad, "UNIUSDT", -46.0),
-                         (1000, 0.09, 0.0))
-
-    def test_an_empty_trade_history_yields_unknown(self):
-        ad = self._ad([])
-        self.assertEqual(sfl._binance_position_lifecycle(ad, "XRPUSDT", -1.0),
-                         (0, 0.0, 0.0))
-
-
 # ───────────────────── 台账行构造器 ─────────────────────
 class HoldingRowTests(unittest.TestCase):
     def _row(self, p, *, venue="okx", allowed=None, unmanaged=None, trackers=None):
@@ -613,10 +326,10 @@ class HoldingRowTests(unittest.TestCase):
         # ★ 第 611–614 行 —— 不许再无声（2026-09-20 ARB 事故）
         sink: list = []
         row = self._row({"instId": "ARB-USDT-SWAP", "pos": -2416.7, "posSide": "short"},
-                        venue="binance", allowed={"BTC-USDT-SWAP"}, unmanaged=sink)
+                        venue="okx", allowed={"BTC-USDT-SWAP"}, unmanaged=sink)
         self.assertIsNone(row, "仍然不写进台账（那会改变风险界面语义）")
         self.assertEqual(sink[0]["instId"], "ARB-USDT-SWAP")
-        self.assertEqual(sink[0]["venue"], "binance")
+        self.assertEqual(sink[0]["venue"], "okx")
 
     def test_an_out_of_pool_position_without_a_sink_is_still_dropped(self):
         self.assertIsNone(self._row({"instId": "ARB-USDT-SWAP", "pos": 1},
@@ -642,9 +355,10 @@ class HoldingRowTests(unittest.TestCase):
         self.assertEqual(row["open_time"], "2026-09-01 12:00:00")
 
     def test_the_id_carries_the_venue(self):
-        # 多所同时持有同一标的即撞键（后写覆盖先写）
-        row = self._row({"instId": "BTC-USDT-SWAP", "pos": 1}, venue="binance")
-        self.assertTrue(row["id"].startswith("holding_binance_"))
+        # OKX-only 后仍带场所前缀：id 形如 `holding_{venue}_{inst}_{side}`，
+        # 是持仓行的稳定身份（venue 变更/多策略同标的不撞键）。
+        row = self._row({"instId": "BTC-USDT-SWAP", "pos": 1}, venue="okx")
+        self.assertTrue(row["id"].startswith("holding_okx_"))
 
     def test_the_margin_is_derived_from_the_notional_when_absent(self):
         row = self._row({"instId": "BTC-USDT-SWAP", "pos": 1, "notional": 300.0,
@@ -687,338 +401,14 @@ class HoldingRowTests(unittest.TestCase):
                                council_by_inst={"BTC": council})
         self.assertIs(row["council"], council)
 
-
-# ───────────────────── 外所平仓单 ─────────────────────
-class _FakeSigned:
-    """按 (path) 分派的签名请求桩。"""
-
-    def __init__(self, routes):
-        self.routes = routes
-        self.calls: list = []
-
-    def signed_request(self, method, path, params=None):
-        self.calls.append((method, path, params))
-        got = self.routes.get(path, [])
-        if isinstance(got, Exception):
-            raise got
-        return got
-
-
-class FetchBinanceClosedTradesTests(unittest.TestCase):
-    def _run(self, adapter, credentials=("key", "secret"), data_dir=None):
-        with patch("astra_backend.exchanges.get_adapter", return_value=adapter), \
-             patch("astra_backend.exchanges.venue_credentials", return_value=credentials), \
-             patch.object(sfl, "DATA_DIR", data_dir or "/nonexistent-astra-tmp"):
-            return sfl.fetch_binance_closed_trades("demo", tz_bj=TZ_BJ)
-
-    def test_missing_private_credentials_skip_safely(self):
-        # ★ 第 279/280 行 —— 只有公共行情不算「账户没有交易」
-        out = self._run(_FakeSigned({}), credentials=("", ""))
-        self.assertEqual(out, [])
-
-    def test_a_non_list_income_response_is_skipped(self):
-        # ★ 第 283/284 行
-        ad = _FakeSigned({"/fapi/v1/income": "junk"})
-        self.assertEqual(self._run(ad), [])
-
-    def test_an_empty_income_response_is_skipped(self):
-        self.assertEqual(self._run(_FakeSigned({"/fapi/v1/income": []})), [])
-
-    def test_a_real_income_row_becomes_a_ledger_trade(self):
-        ms = int(_bj("2026-09-01 12:00:00").timestamp() * 1000)
-        ad = _FakeSigned({
-            "/fapi/v1/income": [{"tradeId": "T1", "time": ms, "income": "10.5",
-                                 "symbol": "BTCUSDT"}],
-            "/fapi/v2/positionRisk": [{"symbol": "BTCUSDT", "leverage": "5"}],
-            "/fapi/v1/userTrades": [{"id": "T1", "side": "SELL", "price": "100",
-                                     "qty": "1", "commission": "0.5"}],
-        })
-        out = self._run(ad)
-        self.assertEqual(len(out), 1)
-        row = out[0]
-        self.assertEqual(row["venue"], "binance")
-        self.assertEqual(row["inst"], "BTC")
-        self.assertEqual(row["side"], "多", "SELL 平多")
-        self.assertEqual(row["lever"], "5x")
-        self.assertEqual(row["gross_pnl"], 10.5)
-        self.assertEqual(row["fee"], 0.5)
-        self.assertEqual(row["net_pnl"], 10.0)
-        self.assertEqual(row["status"], "closed")
-        self.assertIn("止盈", row["exit_reason"])
-
-    def test_a_buy_side_means_a_closed_short(self):
-        ms = int(_bj("2026-09-01 12:00:00").timestamp() * 1000)
-        ad = _FakeSigned({
-            "/fapi/v1/income": [{"tradeId": "T1", "time": ms, "income": "-3",
-                                 "symbol": "ETHUSDT"}],
-            "/fapi/v2/positionRisk": [],
-            "/fapi/v1/userTrades": [{"id": "T1", "side": "BUY", "price": "10",
-                                     "qty": "1", "commission": "0"}],
-        })
-        out = self._run(ad)
-        self.assertEqual(out[0]["side"], "空")
-        self.assertIn("止损", out[0]["exit_reason"])
-
-    def test_a_missing_user_trade_defaults_to_long_and_a_fifty_margin(self):
-        ms = int(_bj("2026-09-01 12:00:00").timestamp() * 1000)
-        ad = _FakeSigned({"/fapi/v1/income": [{"tradeId": "T9", "time": ms,
-                                               "income": "1", "symbol": "BTCUSDT"}]})
-        out = self._run(ad)
-        self.assertEqual(out[0]["side"], "多")
-        self.assertEqual(out[0]["margin"], 50.0)
-
-    def test_a_position_risk_non_list_is_tolerated(self):
-        pay = _FakeSigned({"/fapi/v1/income": [{"tradeId": "T", "time": 1, "income": 0,
-                                                "symbol": "BTCUSDT"}],
-                           "/fapi/v2/positionRisk": "junk"})
-        self.assertEqual(len(self._run(pay)), 1)
-
-    def test_a_non_numeric_leverage_in_position_risk_is_skipped(self):
-        # ★ 第 299/300 行
-        pay = _FakeSigned({"/fapi/v1/income": [{"tradeId": "T", "time": 1, "income": 0,
-                                                "symbol": "BTCUSDT"}],
-                           "/fapi/v2/positionRisk": [{"symbol": "BTCUSDT",
-                                                      "leverage": "abc"}]})
-        self.assertEqual(len(self._run(pay)), 1)
-
-    def test_a_failing_position_risk_call_is_swallowed(self):
-        # ★ 第 301/302 行
-        pay = _FakeSigned({"/fapi/v1/income": [{"tradeId": "T", "time": 1, "income": 0,
-                                                "symbol": "BTCUSDT"}],
-                           "/fapi/v2/positionRisk": RuntimeError("no net")})
-        self.assertEqual(len(self._run(pay)), 1)
-
-    def test_a_corrupt_decisions_cache_is_swallowed(self):
-        # ★ 第 310/311 行
-        with tempfile.TemporaryDirectory() as tmp:
-            (Path(tmp) / "ai_brain_decisions.json").write_text("{ broken", encoding="utf-8")
-            ad = _FakeSigned({"/fapi/v1/income": [{"tradeId": "T", "time": 1,
-                                                  "income": 0, "symbol": "BTCUSDT"}]})
-            out = self._run(ad, data_dir=tmp)
-        self.assertEqual(len(out), 1)
-
-    def test_a_failing_user_trades_call_is_swallowed(self):
-        # ★ 第 320/321 行
-        pay = _FakeSigned({"/fapi/v1/income": [{"tradeId": "T", "time": 1, "income": 0,
-                                                "symbol": "BTCUSDT"}],
-                           "/fapi/v1/userTrades": RuntimeError("no net")})
-        self.assertEqual(len(self._run(pay)), 1)
-
-
-class FetchGateClosedTradesTests(unittest.TestCase):
-    def _run(self, adapter, credentials=("key", "secret"), data_dir=None):
-        with patch("astra_backend.exchanges.get_adapter", return_value=adapter), \
-             patch("astra_backend.exchanges.venue_credentials", return_value=credentials), \
-             patch.object(sfl, "DATA_DIR", data_dir or "/nonexistent-astra-tmp"):
-            return sfl.fetch_gate_closed_trades("sandbox", tz_bj=TZ_BJ)
-
-    def test_missing_private_credentials_skip_safely(self):
-        # ★ 第 405/406 行
-        self.assertEqual(self._run(_FakeSigned({}), credentials=("", "")), [])
-
-    def test_a_non_list_close_response_is_skipped(self):
-        # ★ 第 409/410 行
-        self.assertEqual(self._run(_FakeSigned({"/api/v4/futures/usdt/position_close": {}})), [])
-
-    def test_a_real_close_row_becomes_a_ledger_trade(self):
-        ad = _FakeSigned({
-            "/api/v4/futures/usdt/position_close": [{
-                "id": "G1", "contract": "BTC_USDT", "pnl": "8", "fee": "0.2",
-                "pnl_pnl": "8", "time": int(_bj("2026-09-01 12:00:00").timestamp()),
-                "first_open_time": int(_bj("2026-09-01 10:00:00").timestamp()),
-                "long_price": "100", "short_price": "108", "accum_size": "2"}],
-            "/api/v4/futures/usdt/positions": [{"contract": "BTC_USDT", "leverage": "4"}],
-        })
-        out = self._run(ad)
-        self.assertEqual(len(out), 1)
-        row = out[0]
-        self.assertEqual(row["venue"], "gate")
-        self.assertEqual(row["inst"], "BTC")
-        self.assertEqual(row["side"], "多")
-        self.assertEqual(row["lever"], "4x")
-        self.assertEqual(row["close_px"], 108.0)
-        self.assertEqual(row["open_time"], "2026-09-01 10:00:00")
-        self.assertEqual(row["environment"], "demo")
-        self.assertEqual(row["account_mode"], "DEMO")
-
-    def test_the_live_environment_is_labelled_live(self):
-        ad = _FakeSigned({
-            "/api/v4/futures/usdt/position_close": [{"id": "G", "contract": "X_USDT",
-                                                     "pnl": "1", "time": 1}],
-            "/api/v4/futures/usdt/positions": [],
-        })
-        with patch("astra_backend.exchanges.get_adapter", return_value=ad), \
-             patch("astra_backend.exchanges.venue_credentials", return_value=("k", "s")), \
-             patch.object(sfl, "DATA_DIR", "/nonexistent-astra-tmp"):
-            out = sfl.fetch_gate_closed_trades("live", tz_bj=TZ_BJ)
-        self.assertEqual((out[0]["account_mode"], out[0]["environment"]), ("LIVE", "live"))
-
-    def test_a_zero_long_price_means_a_short(self):
-        ad = _FakeSigned({
-            "/api/v4/futures/usdt/position_close": [{"id": "G", "contract": "X_USDT",
-                                                     "pnl": "1", "time": 1,
-                                                     "long_price": "0",
-                                                     "short_price": "5"}],
-            "/api/v4/futures/usdt/positions": [],
-        })
-        self.assertEqual(self._run(ad)[0]["side"], "空")
-
-    def test_a_zero_size_still_yields_a_fifty_margin(self):
-        ad = _FakeSigned({
-            "/api/v4/futures/usdt/position_close": [{"id": "G", "contract": "X_USDT",
-                                                     "pnl": "1", "time": 1,
-                                                     "accum_size": "0"}],
-            "/api/v4/futures/usdt/positions": [],
-        })
-        self.assertEqual(self._run(ad)[0]["margin"], 50.0)
-
-    def test_a_non_list_positions_response_is_tolerated(self):
-        # ★ 第 416 行判据
-        ad = _FakeSigned({
-            "/api/v4/futures/usdt/position_close": [{"id": "G", "contract": "X_USDT",
-                                                     "pnl": "1", "time": 1}],
-            "/api/v4/futures/usdt/positions": "junk",
-        })
-        self.assertEqual(len(self._run(ad)), 1)
-
-    def test_a_non_numeric_leverage_is_skipped(self):
-        # ★ 第 425/426 行
-        ad = _FakeSigned({
-            "/api/v4/futures/usdt/position_close": [{"id": "G", "contract": "X_USDT",
-                                                     "pnl": "1", "time": 1}],
-            "/api/v4/futures/usdt/positions": [{"contract": "X_USDT",
-                                                "leverage": "abc"}],
-        })
-        self.assertEqual(len(self._run(ad)), 1)
-
-    def test_a_corrupt_decisions_cache_is_swallowed(self):
-        # ★ 第 436/437 行
-        with tempfile.TemporaryDirectory() as tmp:
-            (Path(tmp) / "ai_brain_decisions.json").write_text("{ broken", encoding="utf-8")
-            ad = _FakeSigned({
-                "/api/v4/futures/usdt/position_close": [{"id": "G", "contract": "X_USDT",
-                                                         "pnl": "1", "time": 1}],
-                "/api/v4/futures/usdt/positions": [],
-            })
-            out = self._run(ad, data_dir=tmp)
-        self.assertEqual(len(out), 1)
-
-    def test_a_failing_positions_call_is_swallowed(self):
-        # ★ 第 427/428 行
-        ad = _FakeSigned({
-            "/api/v4/futures/usdt/position_close": [{"id": "G", "contract": "X_USDT",
-                                                     "pnl": "1", "time": 1}],
-            "/api/v4/futures/usdt/positions": RuntimeError("no net"),
-        })
-        self.assertEqual(len(self._run(ad)), 1)
-
-
-# ───────────────────── 数理快照附加 ─────────────────────
-class CalculusSnapshotAttachmentTests(unittest.TestCase):
-    """两个 fetch 都会尝试附加开仓数理快照（第 342–362 / 459–479 行）。"""
-
-    def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(self.tmp.cleanup)
-        self.root = Path(self.tmp.name)
-
-    def _calc_file(self, base="BTC"):
-        (self.root / "calculus_snapshot.json").write_text(
-            json.dumps({"instruments": [{"name": base, "calculus": {"rsi": 55}}]}),
-            encoding="utf-8")
-
-    def test_a_matching_calculus_row_attaches_a_snapshot(self):
-        self._calc_file()
-        ms = int(_bj("2026-09-01 12:00:00").timestamp() * 1000)
-        ad = _FakeSigned({
-            "/fapi/v1/income": [{"tradeId": "T1", "time": ms, "income": "1",
-                                 "symbol": "BTCUSDT"}],
-            "/fapi/v2/positionRisk": [],
-            "/fapi/v1/userTrades": [{"id": "T1", "side": "SELL", "price": "100",
-                                     "qty": "1", "commission": "0"}],
-        })
-        with patch("astra_backend.exchanges.get_adapter", return_value=ad), \
-             patch("astra_backend.exchanges.venue_credentials", return_value=("k", "s")), \
-             patch.object(sfl, "DATA_DIR", str(self.root)):
-            out = sfl.fetch_binance_closed_trades("demo", tz_bj=TZ_BJ)
-        self.assertIsNotNone(out[0]["signal_snapshot"])
-
-    def test_a_snapshot_build_failure_is_swallowed(self):
-        # ★ 第 361/362 行
-        self._calc_file()
-        ms = int(_bj("2026-09-01 12:00:00").timestamp() * 1000)
-        ad = _FakeSigned({
-            "/fapi/v1/income": [{"tradeId": "T1", "time": ms, "income": "1",
-                                 "symbol": "BTCUSDT"}],
-            "/fapi/v2/positionRisk": [],
-            "/fapi/v1/userTrades": [{"id": "T1", "side": "SELL", "price": "100",
-                                     "qty": "1", "commission": "0"}],
-        })
-        with patch("astra_backend.exchanges.get_adapter", return_value=ad), \
-             patch("astra_backend.exchanges.venue_credentials", return_value=("k", "s")), \
-             patch.object(sfl, "DATA_DIR", str(self.root)), \
-             patch("scripts.trader.signal_snapshot.build_signal_snapshot",
-                   side_effect=RuntimeError("boom")):
-            out = sfl.fetch_binance_closed_trades("demo", tz_bj=TZ_BJ)
-        self.assertIsNone(out[0]["signal_snapshot"])
-        self.assertEqual(out[0]["net_pnl"], 1.0, "附加失败不许影响台账行本身")
-
-    def test_a_corrupt_calculus_file_is_swallowed(self):
-        (self.root / "calculus_snapshot.json").write_text("{ broken", encoding="utf-8")
-        ms = int(_bj("2026-09-01 12:00:00").timestamp() * 1000)
-        ad = _FakeSigned({
-            "/fapi/v1/income": [{"tradeId": "T1", "time": ms, "income": "1",
-                                 "symbol": "BTCUSDT"}],
-            "/fapi/v2/positionRisk": [],
-            "/fapi/v1/userTrades": [],
-        })
-        with patch("astra_backend.exchanges.get_adapter", return_value=ad), \
-             patch("astra_backend.exchanges.venue_credentials", return_value=("k", "s")), \
-             patch.object(sfl, "DATA_DIR", str(self.root)):
-            out = sfl.fetch_binance_closed_trades("demo", tz_bj=TZ_BJ)
-        self.assertIsNone(out[0]["signal_snapshot"])
-
-    def test_the_gate_path_attaches_snapshots_too(self):
-        self._calc_file()
-        ad = _FakeSigned({
-            "/api/v4/futures/usdt/position_close": [{"id": "G", "contract": "BTC_USDT",
-                                                     "pnl": "1", "time": 1,
-                                                     "long_price": "100",
-                                                     "short_price": "101",
-                                                     "accum_size": "1"}],
-            "/api/v4/futures/usdt/positions": [],
-        })
-        with patch("astra_backend.exchanges.get_adapter", return_value=ad), \
-             patch("astra_backend.exchanges.venue_credentials", return_value=("k", "s")), \
-             patch.object(sfl, "DATA_DIR", str(self.root)):
-            out = sfl.fetch_gate_closed_trades("sandbox", tz_bj=TZ_BJ)
-        self.assertIsNotNone(out[0]["signal_snapshot"])
-
-    def test_a_gate_snapshot_build_failure_is_swallowed(self):
-        # ★ 第 478/479 行
-        self._calc_file()
-        ad = _FakeSigned({
-            "/api/v4/futures/usdt/position_close": [{"id": "G", "contract": "BTC_USDT",
-                                                     "pnl": "1", "time": 1,
-                                                     "long_price": "100",
-                                                     "short_price": "101",
-                                                     "accum_size": "1"}],
-            "/api/v4/futures/usdt/positions": [],
-        })
-        with patch("astra_backend.exchanges.get_adapter", return_value=ad), \
-             patch("astra_backend.exchanges.venue_credentials", return_value=("k", "s")), \
-             patch.object(sfl, "DATA_DIR", str(self.root)), \
-             patch("scripts.trader.signal_snapshot.build_signal_snapshot",
-                   side_effect=RuntimeError("boom")):
-            out = sfl.fetch_gate_closed_trades("sandbox", tz_bj=TZ_BJ)
-        self.assertIsNone(out[0]["signal_snapshot"])
-
-    def test_fetch_failures_are_marked_failed_on_the_sidecar_status(self):
-        with patch("astra_backend.exchanges.get_adapter", side_effect=RuntimeError("no net")), \
-             patch("astra_backend.exchanges.venue_credentials", return_value=("k", "s")), \
-             patch.object(sfl, "_FETCH_STATUS", {}):
-            self.assertEqual(sfl.fetch_binance_closed_trades("demo", tz_bj=TZ_BJ), [])
-            self.assertEqual(sfl._FETCH_STATUS["binance"]["status"], "failed")
+    def test_the_tracker_snapshot_is_passed_through(self):
+        # 开仓数理快照由追踪器落盘，holding 行只做透传（附加逻辑本身已随
+        # 两个外所 fetch 一起退场）
+        snap = {"rsi": 55}
+        trackers = {"BTC-USDT-SWAP_long": {"signal_snapshot": snap}}
+        row = self._row({"instId": "BTC-USDT-SWAP", "pos": 1, "posSide": "long"},
+                        trackers=trackers)
+        self.assertIs(row["signal_snapshot"], snap)
 
 
 # ───────────────────── builder 的容错读取 ─────────────────────
@@ -1030,9 +420,6 @@ class BuildLifecycleReadTests(_Sandbox, unittest.TestCase):
             patch.object(sfl.okx_rest, "positions_history", lambda **k: []),
             patch.object(sfl.okx_rest, "orders_history", lambda **k: []),
             patch.object(sfl.okx_rest, "positions", lambda: []),
-            patch.object(sfl, "_other_venue_live_positions", lambda axis: ([], set())),
-            patch.object(sfl, "fetch_binance_closed_trades", lambda *a, **k: []),
-            patch.object(sfl, "fetch_gate_closed_trades", lambda *a, **k: []),
             patch.object(sfl, "notify_newly_closed_trades", lambda **k: None),
             patch.object(sfl, "_write_sync_status", lambda env: None),
             patch.object(sfl, "allowed_inst_ids", lambda *a, **k: {"BTC-USDT-SWAP"}),
@@ -1052,30 +439,6 @@ class BuildLifecycleReadTests(_Sandbox, unittest.TestCase):
         self.assertEqual(json.loads(self.ledger.read_text(encoding="utf-8")),
                          [{"id": "keep"}], "fail-closed：既有台账保持不动")
 
-    def test_unconfigured_okx_allows_alt_only_sync_when_flag_enabled(self):
-        """当开启 ASTRA_ALLOW_ALT_ONLY_SYNC 且外所凭证就绪时，允许未配置 OKX 也能同步外所台账。"""
-        self.ledger.write_text('[{"id": "keep"}]', encoding="utf-8")
-        with patch.dict(os.environ, {"ASTRA_ALLOW_ALT_ONLY_SYNC": "1"}), \
-             patch("astra_backend.exchanges.venue_credentials", lambda v, e: ("key", "sec")):
-            trades = self._build(extra=[
-                patch.object(sfl.okx_runtime, "current_environment", lambda: self._env(configured=False)),
-                patch.object(sfl, "fetch_binance_closed_trades", lambda *a, **k: [{"id": "bn1", "status": "closed"}])
-            ])
-            self.assertEqual(sfl._FETCH_STATUS.get("okx", {}).get("status"), "skipped")
-            self.assertTrue(any(t.get("id") == "bn1" for t in trades))
-
-    def test_unconfigured_okx_allows_alt_only_sync_when_preferred_alt(self):
-        """当选所路由 preferred_venue 明确指定外所且凭证就绪时，自动放行外所台账同步。"""
-        self.ledger.write_text('[{"id": "keep"}]', encoding="utf-8")
-        with patch("astra_backend.exchanges.routing_policy.load_preferred_venue", lambda: "binance"), \
-             patch("astra_backend.exchanges.venue_credentials", lambda v, e: ("key", "sec")):
-            trades = self._build(extra=[
-                patch.object(sfl.okx_runtime, "current_environment", lambda: self._env(configured=False)),
-                patch.object(sfl, "fetch_binance_closed_trades", lambda *a, **k: [{"id": "bn2", "status": "closed"}])
-            ])
-            self.assertEqual(sfl._FETCH_STATUS.get("okx", {}).get("status"), "skipped")
-            self.assertTrue(any(t.get("id") == "bn2" for t in trades))
-
     def test_a_corrupt_initial_state_falls_back_to_the_epoch(self):
         # ★ 第 698–703 行
         self.initial.write_text("{ broken", encoding="utf-8")
@@ -1094,6 +457,20 @@ class BuildLifecycleReadTests(_Sandbox, unittest.TestCase):
         self.ledger.write_text("{ broken", encoding="utf-8")
         self._build()
         self.assertEqual(json.loads(self.ledger.read_text(encoding="utf-8")), [])
+
+    def test_a_historical_foreign_venue_row_is_carried_read_only(self):
+        """迁移后 OKX-only：旧台账里残留的 binance/gate 行既不许让重建崩溃，
+        也不许被幽灵持仓清理误删（`_queried_venues` 只含真正取到数的 okx）。"""
+        self.ledger.write_text(json.dumps([
+            {"id": "closed_binance_1", "venue": "binance", "inst": "ARB",
+             "status": "closed", "close_time": "2026-09-01 10:00:00"},
+            {"id": "holding_gate_1", "venue": "gate", "inst": "XRP",
+             "status": "holding", "close_time": "持仓中..."},
+        ]), encoding="utf-8")
+        out = self._build()
+        ids = {t["id"] for t in out}
+        self.assertIn("closed_binance_1", ids, "历史外所平仓行不许因迁移蒸发")
+        self.assertIn("holding_gate_1", ids, "取数范围外的旧持仓行不许被清理")
 
     def test_a_corrupt_tracker_file_is_tolerated(self):
         # ★ 第 723/724 行
@@ -1133,9 +510,6 @@ class BuildLifecycleReadTests(_Sandbox, unittest.TestCase):
                                              "cTime": 1, "uTime": 2}]),
                   patch.object(sfl.okx_rest, "orders_history", lambda **k: []),
                   patch.object(sfl.okx_rest, "positions", lambda: []),
-                  patch.object(sfl, "_other_venue_live_positions", lambda axis: ([], set())),
-                  patch.object(sfl, "fetch_binance_closed_trades", lambda *a, **k: []),
-                  patch.object(sfl, "fetch_gate_closed_trades", lambda *a, **k: []),
                   patch.object(sfl, "notify_newly_closed_trades", lambda **k: None),
                   patch.object(sfl, "_write_sync_status", lambda e: None),
                   patch.object(sfl, "build_okx_trade", lambda **k: None),
@@ -1149,30 +523,27 @@ class BuildLifecycleReadTests(_Sandbox, unittest.TestCase):
         self._build()
         self.assertEqual([p.name for p in self.root.glob(".ledger-*")], [])
 
-    def test_the_summary_line_separates_the_venues(self):
-        # 批E：口径不许把 binance 持仓算进 OKX 业绩
+    def test_the_summary_line_is_okx_only(self):
+        # 批E + 迁移：口径只报 OKX 平仓与活动持仓，不许把已移除的场所算进来
         self._build()
-        line = next((x for x in self.printed if "Authentic Multi-Venue Ledger" in x), None)
+        line = next((x for x in self.printed if "Authentic OKX Ledger" in x), None)
         self.assertIsNotNone(line, self.printed)
         self.assertIn("OKX 平仓:", line)
         self.assertIn("活动持仓:", line)
-        self.assertIn("Binance 平仓:", line)
+        self.assertNotIn("Binance", line)
+        self.assertNotIn("Gate", line)
 
 
 class UnmanagedWarningTests(_Sandbox, unittest.TestCase):
     def test_an_out_of_pool_live_position_is_warned_about(self):
         # ★ 第 810–818 行 —— 不许静默
-        other = [{"venue": "binance", "instId": "ARB-USDT-SWAP", "pos": -2416.7,
-                  "posSide": "short"}]
         env = self._env()
         for p in (patch.object(sfl.okx_runtime, "current_environment", lambda: env),
                   patch.object(sfl.okx_rest, "positions_history", lambda **k: []),
                   patch.object(sfl.okx_rest, "orders_history", lambda **k: []),
-                  patch.object(sfl.okx_rest, "positions", lambda: []),
-                  patch.object(sfl, "_other_venue_live_positions",
-                               lambda axis: (other, {"binance"})),
-                  patch.object(sfl, "fetch_binance_closed_trades", lambda *a, **k: []),
-                  patch.object(sfl, "fetch_gate_closed_trades", lambda *a, **k: []),
+                  patch.object(sfl.okx_rest, "positions",
+                               lambda: [{"instId": "ARB-USDT-SWAP", "pos": -2416.7,
+                                         "posSide": "short"}]),
                   patch.object(sfl, "notify_newly_closed_trades", lambda **k: None),
                   patch.object(sfl, "_write_sync_status", lambda e: None),
                   patch.object(sfl, "allowed_inst_ids", lambda *a, **k: {"BTC-USDT-SWAP"})):

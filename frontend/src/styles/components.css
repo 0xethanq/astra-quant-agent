@@ -482,12 +482,12 @@ textarea.input {
    | `.ag-kv-row`（AgentsPage，11 个） | 10px 16px | 40px |
    | `.ab-comp`（AboutPage，3 个） | 10px 16px | 40px |
    | `.bk-kv-row`（BackupPage，2 个） | **12px** 16px | **44px** ← 离群 |
-   | `.vc-env`（VenueCredentialCard，3 个） | **8px** 12px | **36px** |
+   | ~~`.vc-env`（凭证卡，已随「全站收口 OKX」删除）~~ | 8px 12px | 36px |
    | `.ps-history-row`（PromptStudioPage，v-for） | **10px 0** | — |
 
    同一个组件在四个页面渲染出 **36 / 40 / 44** 三种行高。
    取值取多数决（10px / 16px，16 个可见元素中 14 个已是此值），
-   两个真正的形态差异留作 delta（见 `.vc-env` / `.ps-history-row` 的注释）。 */
+   唯一的形态差异留作 delta（见 `.ps-history-row` 的注释）。 */
 .kv-row {
   display: flex;
   align-items: center;

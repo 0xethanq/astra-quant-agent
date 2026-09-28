@@ -281,9 +281,9 @@ def execute_entry_scan(*,
                     limit_px, tp_px, sl_px = submitted_bracket(
                         _venue_ctx, limit_px, tp_px, sl_px)
                     # ⚠️ 仓位大小一律用**钱**口径（保证金 + 杠杆），不再说张数：
-                    # 三所数量单位不同、各币种合约面值算法也不同（见
-                    # `notifications.money_size_text`）。优先用 router 回写的**实提交**
-                    # 保证金；取不到（OKX 直签链）回落保证金闸门结果 `_order_margin`。
+                    # 各币种合约面值算法不同（见 `notifications.money_size_text`）。
+                    # 优先用执行层回写的**实提交**保证金；取不到则回落保证金闸门
+                    # 结果 `_order_margin`。
                     _exe_margin, _exe_notional = venue_executed_facts(_venue_ctx)
                     _exe_margin = _exe_margin or _order_margin
                     _exe_notional = _exe_notional or round(

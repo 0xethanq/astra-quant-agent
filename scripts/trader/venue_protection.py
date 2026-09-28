@@ -1,32 +1,28 @@
-"""跨所（Gate/Binance）云端保护单的**覆盖核验与临期续期**（roadmap G8）。
+"""保护腿的**解析 / 覆盖核验 / 归属**共用工具（OKX 与看板共用）。
 
-## 为什么需要它（现状缺口，实测）
+## 这个模块今天是什么
 
-- 机械退出主流程 `position_exit.manage_position_tp_and_trailing` 只核验 **OKX** 云端
-  OCO（`ensure_cloud_position_protection` 走 `okx_rest.pending_algo_orders`）；
-- 因子快照的 `f["position"]` 只按 OKX 形态 `instId` 匹配，而跨所持仓汇入时用的是
-  `instId = "GATE:BTC_USDT"`（见 `position_universe.merge_cross_venue_positions`），
-  **永远匹配不上** ⇒ 外所仓位在每周期链路上**没有任何覆盖核验**；
-- Gate 触发单带 `trigger.expiration`（默认 `604800` 秒 = 7 天，且是**相对创建时间**
-  的秒数；`0` = 永不过期）。到期后触发单离开交易所 open 列表 ⇒ **仓位裸奔**，
-  而系统不会发现（roadmap G8：`COORDINATION_GAPS` 里"蒸发窗"那条）。
+多所执行面拆除后，本模块**不再是"跨所看门狗"**，而是一组被主链与看板共用的
+保护腿工具（纯函数为主，IO 全部由调用方注入）：
 
-## 两层结构（判定与动作分离）
+| 函数 | 用途 |
+|---|---|
+| `scan_protective_orders` | 覆盖核验：**纯函数**，无 IO、时间由 `now_s` 入参 |
+| `attribute_protective_orders` | 逐腿归属（本方标签 / 台账证据 / 人工腿不触碰） |
+| `select_legs_to_cancel_after_close` | 平仓后该撤哪些本方腿的判定 |
+| `read_ledger_rows` | 台账取证（只读；结构认不出 ⇒ None，绝不降级成"没有记录"） |
+| `leg_base` / `_row_text` / `trigger_px_type` / `protection_trigger_type_fields` | 腿字段解析（OKX 棘轮 `cloud_protection` 依赖 `_row_text`） |
+| `cancel_protective_leg` / `watchdog_debounce_step` | 撤腿能力探针 / 跨周期防抖纯函数 |
 
-| 层 | 函数 | 性质 |
-|---|---|---|
-| 判定 | `scan_protective_orders` | **纯函数**：无 IO、无副作用、时间由 `now_s` 入参 |
-| 动作 | `ensure_venue_protection` | 按判定结果修复/续期，IO 全部由 `ad` 注入 |
+已随多所拆除一并删除：`ensure_venue_protection`、`audit_cross_venue_protection`、
+`cancel_orphan_attributed_legs`、`watchdog_gap_key`（它们只服务外所看门狗）。
 
-## 三条安全铁律（照抄本仓云端棘轮的既有语义）
+## 三条安全铁律（沿用自云端棘轮的既有语义）
 
-1. **先挂新、后撤旧**：临期续期绝不"先撤再挂" —— 那中间有一个裸仓窗口。
-   新腿挂失败时**保留旧腿**（旧腿到期前仍在保护；宁可少续一次，不可裸奔）；
-2. **宁可双、不可裸**：旧腿撤失败只告警，不回滚新腿（两腿都是 reduce_only，
-   后触发者无仓自动无效）；
-3. **不可判定 ≠ 安全**：覆盖范围算不出来（例如 Gate `size=0 + close=true` 之外的
-   模糊形态）时返回 `None` 而不是 `True`，并且**绝不**把自己不认识的腿当成自己的
-   （人工挂的保护单不属于本系统，只登记不触碰）。
+1. **不可判定 ≠ 安全**：覆盖范围算不出来时返回 `None` 而不是 `True`，并且**绝不**
+   把自己不认识的腿当成自己的（人工挂的保护单不属于本系统，只登记不触碰）；
+2. **归属不可判定 ⇒ 不碰**：撤错不可逆，只有可证明是本方的腿才允许进入清理候选；
+3. **读不到 ≠ 没有**：读腿/读台账失败一律如实上报，不渲染成"干净"。
 
 > 本模块不读配置、不发请求、不写文件：所有 IO 由调用方（或测试）注入 ——
 > 与 `scripts/trader/` 其余模块同一纪律（子模块不得在 import 期绑定门面名字）。
@@ -34,9 +30,8 @@
 from __future__ import annotations
 
 import json
-import time
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence
 
 try:
     from scripts.tag_markers import normalize_legacy_markers
@@ -47,13 +42,9 @@ __all__ = [
     "DEFAULT_RENEW_WITHIN_S",
     "attribute_protective_orders",
     "select_legs_to_cancel_after_close",
-    "audit_cross_venue_protection",
-    "cancel_orphan_attributed_legs",
     "read_ledger_rows",
-    "ensure_venue_protection",
     "scan_protective_orders",
     "DEFAULT_WATCHDOG_DEBOUNCE_S",
-    "watchdog_gap_key",
     "watchdog_debounce_step",
 ]
 
@@ -554,120 +545,6 @@ def scan_protective_orders(rows: Optional[Sequence[Dict[str, Any]]], *,
     }
 
 
-def ensure_venue_protection(ad: Any, *, symbol: str, pos_side: str, position_size: float,
-                            sl_px: Optional[float] = None,
-                            tp_px: Optional[float] = None,
-                            now_s: float,
-                            expiration_s: int = 604800,
-                            renew_within_s: float = DEFAULT_RENEW_WITHIN_S,
-                            tolerance_ratio: float = DEFAULT_TOLERANCE_RATIO,
-                            log: Any = print) -> Dict[str, Any]:
-    """按判定结果**安全**修复缺口 / 续期临期腿（先挂新、后撤旧）。
-
-    `sl_px` / `tp_px` 可省略：省略时**复用现有腿的触发价**（续期的常见场景 ——
-    保护价位是既定策略，续期只该延长时间，不该重新定价）。若既没传、现有腿上
-    也拿不到价格，**绝不去猜一个价位**，直接返回 `stage="no_price"`。
-
-    返回 `{ok, protected_now, stage, detail, placed, cancelled, kept_old, scan}`：
-
-    - `ok`：**本次操作是否达成目标**。只要"该修/该续"而没做完就是 `False`，
-      哪怕旧腿此刻还在保护（否则一次失败的续期会被调用方当成"没事"而静默过去）；
-    - `protected_now`：**当下**这个仓位是否确实有覆盖（旧腿还在时可以为 True，
-      但 `ok=False` 提醒调用方"续期没成，得重试或告警"）；
-    - 任何一步失败都**不回滚**已生效的保护（宁可双、不可裸），把事实写进 detail。
-    """
-    try:
-        rows = ad.list_protective_orders(symbol) or []
-    except Exception as exc:
-        # 读不到 ≠ 没有：不可判定时绝不去写单（可能重复挂），如实上报。
-        return {"ok": False, "protected_now": None, "stage": "list",
-                "detail": f"保护单列表读取失败: {exc}",
-                "placed": {}, "cancelled": [], "kept_old": [], "scan": None}
-
-    # 第一百八十刀：**双保险** —— 本处虽已按合约取腿（`list_protective_orders(symbol)`），
-    # 但那是"信任适配器尊重参数"。开启 `require_symbol_match` 后，即使某所适配器忽略参数
-    # 返回全量腿，别的币的腿也不会被算进这个仓位的覆盖（`symbol` 常是合成 id，见 `_base_of`）。
-    scan = scan_protective_orders(rows, symbol=symbol, pos_side=pos_side,
-                                  position_size=position_size, now_s=now_s,
-                                  renew_within_s=renew_within_s,
-                                  tolerance_ratio=tolerance_ratio,
-                                  require_symbol_match=True)
-    protected_now = bool(scan["has_live_sl"]) and scan["coverage_ok"] is not False
-    result = {"ok": True, "protected_now": protected_now, "stage": "noop",
-              "detail": "保护覆盖正常", "placed": {}, "cancelled": [], "kept_old": [],
-              "scan": scan}
-
-    need_place = bool(scan["needs_repair"] or scan["needs_renew"])
-    if not need_place:
-        if scan["needs_verify"]:
-            result.update(ok=False, stage="verify",
-                          detail="覆盖/到期不可判定，需人工或后续复验（不擅自写单）")
-        return result
-
-    # 价格：入参优先；否则复用现有腿的触发价（续期=只延时间、不改价位）。
-    resolved_sl = sl_px
-    if resolved_sl is None:
-        resolved_sl = next((leg["trigger_price"] for leg in scan["ours"]
-                            if leg["kind"] == "sl" and leg["trigger_price"]), None)
-    resolved_tp = tp_px
-    if resolved_tp is None:
-        resolved_tp = next((leg["trigger_price"] for leg in scan["ours"]
-                            if leg["kind"] == "tp" and leg["trigger_price"]), None)
-    if resolved_sl is None:
-        result.update(ok=False, stage="no_price",
-                      detail="既未传入止损价、现有腿上也没有触发价 —— 不猜价位，"
-                             "留给上层（需人工或用既定策略价位重挂）",
-                      protected_now=protected_now)
-        return result
-
-    # ① 先挂新（repair 时补缺口；renew 时用新腿替换临期腿）
-    contracts = scan["missing_size"]
-    if contracts is None or contracts <= 0:
-        contracts = position_size
-    try:
-        placed = ad.attach_protective_orders(symbol, pos_side, tp_px=resolved_tp,
-                                             sl_px=float(resolved_sl),
-                                             expiration=int(expiration_s),
-                                             contracts=float(contracts)) or {}
-    except Exception as exc:
-        # 旧腿仍在（若本来有）——保留它们，绝不在没有新腿的情况下撤旧腿。
-        result.update(ok=False, stage="attach",
-                      detail=f"新保护腿挂载失败（旧腿保留，但目标未达成）: {exc}",
-                      protected_now=protected_now,
-                      kept_old=[leg["id"] for leg in scan["ours"] if leg["id"]])
-        return result
-
-    result["placed"] = placed
-    result["stage"] = "placed"
-    result["protected_now"] = True
-
-    # ② 再撤旧（只撤**我们自己的**临期/已过期腿；人工腿永不触碰）
-    stale_ids = [leg["id"] for leg in (scan["expired"] + scan["expiring"]) if leg["id"]]
-    new_ids = {str(v) for v in (placed or {}).values() if v}
-    cancelled: List[str] = []
-    kept_old: List[str] = []
-    for oid in stale_ids:
-        if oid in new_ids:
-            continue
-        try:
-            if not cancel_protective_leg(ad, oid, symbol=symbol):
-                raise RuntimeError("该所适配器没有可用的撤腿方法")
-            cancelled.append(oid)
-        except Exception as exc:
-            # 宁可双、不可裸：撤旧失败不回滚新腿，只登记。
-            kept_old.append(oid)
-            log(f"[跨所保护续期] warn {symbol} 撤旧腿失败 {oid}: {exc}")
-
-    result["cancelled"] = cancelled
-    result["kept_old"] = kept_old
-    action = "续期" if scan["needs_renew"] else "补挂"
-    detail = f"{action}完成：新腿 {placed}，撤旧 {len(cancelled)}/{len(stale_ids)}"
-    if kept_old:
-        detail += f"，{len(kept_old)} 条旧腿未撤（新腿已生效，宁可双不可裸）"
-    result["detail"] = detail
-    return result
-
-
 def attribute_protective_orders(positions: Optional[Sequence[Dict[str, Any]]],
                                legs: Optional[Sequence[Dict[str, Any]]],
                                ledger_rows: Optional[Sequence[Dict[str, Any]]] = None,
@@ -939,248 +816,6 @@ def cancel_protective_leg(ad: Any, leg_id: Any, *, symbol: Any = None) -> bool:
     return False
 
 
-def cancel_orphan_attributed_legs(ad: Any, *,
-                                  positions: Optional[Sequence[Dict[str, Any]]],
-                                  symbols: Sequence[str],
-                                  ledger_rows: Optional[Sequence[Dict[str, Any]]] = None,
-                                  dry_run: bool = True,
-                                  log: Any = print) -> Dict[str, Any]:
-    """撤销"**归属明确、但已无对应持仓**"的保护腿（逐腿、按 id）。
-
-    ## 为什么需要这个函数（而 G8 巡检不替你做）
-
-    `audit_cross_venue_protection` 明确"**只报告不撤销**"：孤儿腿该不该撤是**运营决定**。
-    但"运营决定"不等于"手动乱撤" —— 本函数把那次决定变成**有护栏的动作**：
-
-    | 护栏 | 为什么 |
-    |---|---|
-    | 只撤 `attribute_protective_orders` 的 `orphan_attributed` 桶 | 该桶的证据是 `tag`（本方标签）或 `ledger`（台账同向同量已平）——**可证明/高度可能**是本方的腿 |
-    | `orphan_unattributed` / `side_mismatch` / `size_mismatch` **一律不碰** | 归属不可判定 ⇒ 可能是用户手单（doctrine：绝不自动撤） |
-    | 该合约**仍有活动持仓** ⇒ 整合约跳过 | 此时"孤儿"判定可能只是持仓取数缺失；宁可留腿，不可裸奔 |
-    | 逐腿走 `ad.cancel_price_order(id)`，**不用** `cancel_protective_orders(symbol)` | 后者会撤掉该合约**全部**触发单——包括仍在保护活动仓的那些 |
-
-    返回 `{"dry_run", "cancelled", "would_cancel", "skipped", "not_touched", "errors", "attribution"}`。
-    `dry_run=True`（默认）**只回报告不写单**。
-    """
-    report: Dict[str, Any] = {"dry_run": bool(dry_run), "cancelled": [], "would_cancel": [],
-                              "skipped": [], "not_touched": [], "errors": [],
-                              "attribution": {}}
-    pos_by_base: Dict[str, List[Dict[str, Any]]] = {}
-    for row in (positions or []):
-        if not isinstance(row, dict):
-            continue
-        base = str(row.get("base") or row.get("symbol") or "").split("_")[0].split("-")[0].upper()
-        if base:
-            pos_by_base.setdefault(base, []).append(row)
-
-    for symbol in symbols:
-        base = str(symbol or "").split("_")[0].split("-")[0].upper()
-        if not base:
-            report["skipped"].append({"symbol": symbol, "why": "币种解析不出"})
-            continue
-        live_pos = [p for p in pos_by_base.get(base, [])
-                    if abs(_as_float(p.get("size_signed") or p.get("pos")) or 0.0) > 0]
-        if live_pos:
-            report["not_touched"].append(
-                {"symbol": base, "why": "该合约仍有活动持仓 ⇒ 整合约跳过（宁可留腿，不可裸奔）"})
-            continue
-        try:
-            legs = list(ad.list_protective_orders(symbol) or [])
-        except Exception as exc:
-            report["errors"].append({"symbol": base, "stage": "list",
-                                     "detail": f"{type(exc).__name__}: {exc}"})
-            continue
-        att = attribute_protective_orders([], legs, ledger_rows)
-        # 归属层自己给了 counts（且含 cleanup_candidates/needs_human 等派生键）⇒ 直接用，不重算
-        report["attribution"][base] = {"counts": att.get("counts") or {}}
-        for leg in att.get("orphan_attributed", []):
-            leg_id = str(leg.get("id") or "")
-            item = {"symbol": base, "id": leg_id, "kind": leg.get("kind"),
-                    "trigger_price": leg.get("trigger_price"),
-                    "evidence": leg.get("evidence")}
-            if not leg_id:
-                report["skipped"].append(dict(item, why="腿没有 id ⇒ 无法逐腿撤（不用按合约全撤）"))
-                continue
-            if dry_run:
-                report["would_cancel"].append(item)
-                continue
-            try:
-                if not cancel_protective_leg(ad, leg_id, symbol=symbol):
-                    raise RuntimeError("该所适配器没有可用的撤腿方法"
-                                       "（cancel_price_order/cancel_algo_order/cancel_order 均无）")
-                report["cancelled"].append(item)
-                log(f"[跨所保护清理] 已撤销孤儿腿 {base} {item['kind']} id={leg_id}")
-            except Exception as exc:
-                report["errors"].append(dict(item, stage="cancel",
-                                             detail=f"{type(exc).__name__}: {exc}"))
-        for bucket in ("orphan_unattributed", "side_mismatch", "size_mismatch"):
-            for leg in att.get(bucket, []):
-                report["not_touched"].append({"symbol": base, "id": leg.get("id"),
-                                              "bucket": bucket,
-                                              "why": "归属不可判定/不匹配 ⇒ 按 doctrine 不碰"})
-    return report
-
-
-def audit_cross_venue_protection(xv_positions_by_venue: Optional[Dict[str, Any]], *,
-                                 venue_registry: Any,
-                                 environment: str,
-                                 now_s: Optional[float] = None,
-                                 venues: Sequence[str] = ("gate", "binance"),
-                                 renew_within_s: float = DEFAULT_RENEW_WITHIN_S,
-                                 expiration_s: int = 604800,
-                                 dry_run: bool = False,
-                                 ledger_rows: Optional[Sequence[Dict[str, Any]]] = None,
-                                 log: Any = print) -> Dict[str, Any]:
-    """对**已冻结的**跨所持仓快照做一遍保护巡检（每周期调用一次）。
-
-    `dry_run=True` 时**只判定、不写单**：回答"如果开闸，这一轮会做哪些动作"
-    —— 这是运营在打开 `ASTRA_VENUE_PROTECTION_WATCHDOG` 之前的预演视图，
-    也是线上排障时唯一安全的取证方式。
-
-    返回 `{venues, actions, critical, errors, skipped, would, dry_run}`：
-
-    - `actions`：本次真的动了单的仓位（续期/补挂），供 `executed_actions` 展示；
-    - `would`：dry-run 下"**本来会做**"的动作（`stage` 为 `renew`/`repair`/`verify`/
-      `no_price`），开闸前先看它，能避免把一次误判变成一串真实订单；
-    - `critical`：**完全没有止损腿**的仓位 —— 这是必须吼出来的（本函数**不**替它
-      定价补挂，因为那种价位是策略决定，不该由巡检层臆造）；
-    - `errors`：逐所隔离的失败（一个所挂了不影响另一个所）；
-    - `skipped`：所不可用/行缺字段等未处理项（如实登记，不装作巡检过）；
-    - `attribution`：逐所**逐腿归属**（matched / size_mismatch / orphan_attributed /
-      orphan_unattributed）——只报告不撤销；`ledger_rows` 传入本方台账行用于归因，
-      不传则该所腿多为"归属不可判定"（如实，不猜）。
-
-    读的是**调用方传入的快照**（`fetch_other_venue_positions` 的返回值），
-    故本函数不额外出网取持仓；每仓一次 `list_protective_orders` 是必要的核验成本。
-    """
-    now = float(now_s if now_s is not None else time.time())
-    report: Dict[str, Any] = {"venues": {}, "actions": [], "critical": [],
-                              "errors": [], "skipped": [], "would": [],
-                              "attribution": {}, "dry_run": bool(dry_run)}
-    snapshot = xv_positions_by_venue or {}
-    for venue in venues:
-        rows = snapshot.get(venue)
-        if rows is None:
-            report["skipped"].append({"venue": venue, "why": "本周期快照无该所（未开闸或取数失败）"})
-            continue
-        try:
-            ad = venue_registry.get_adapter(venue, environment=environment)
-        except Exception as exc:
-            report["errors"].append({"venue": venue, "stage": "adapter",
-                                     "detail": f"{type(exc).__name__}: {exc}"})
-            continue
-        venue_stat = {"checked": 0, "renewed": 0, "repaired": 0, "missing": 0, "errors": 0}
-        for row in (rows or []):
-            if not isinstance(row, dict):
-                continue
-            symbol = str(row.get("inst_id") or row.get("base") or "")
-            pos_side = str(row.get("side") or "").lower()
-            size = abs(_as_float(row.get("size_signed")) or 0.0)
-            if not symbol or pos_side not in {"long", "short"} or size <= 0:
-                report["skipped"].append({"venue": venue, "why": f"行字段不足: {row!r}"[:160]})
-                continue
-            venue_stat["checked"] += 1
-            if dry_run:
-                try:
-                    prows = ad.list_protective_orders(symbol) or []
-                except Exception as exc:
-                    venue_stat["errors"] += 1
-                    report["errors"].append({"venue": venue, "inst": symbol, "stage": "list",
-                                             "detail": f"{type(exc).__name__}: {exc}"})
-                    continue
-                # 第一百八十刀：同 ensure 的双保险（本处 symbol 是合成 id `GATE:BTC_USDT`）。
-                scan = scan_protective_orders(prows, symbol=symbol, pos_side=pos_side,
-                                              position_size=size, now_s=now,
-                                              renew_within_s=renew_within_s,
-                                              require_symbol_match=True)
-                would = "noop"
-                # 第一百八十刀：判据用 `needs_repair`（= 没有活止损 **或** 覆盖不足），
-                # 而不是只看 `has_live_sl`。此前"有活止损但量不够"（覆盖率 40% 这种）
-                # 会落成 `noop` ⇒ **既不进 critical 也不进 would**，运营完全看不到缺口
-                # （本刀的新用例当场把它抓出来）。
-                if scan["needs_repair"]:
-                    would = "repair"
-                elif scan["needs_renew"]:
-                    would = "renew"
-                elif scan["needs_verify"]:
-                    would = "verify"
-                item = {"venue": venue, "inst": symbol, "side": pos_side, "would": would,
-                        "covered_size": scan["covered_size"],
-                        "missing_size": scan["missing_size"],
-                        "coverage_ok": scan["coverage_ok"],
-                        "expiring": [leg["id"] for leg in scan["expiring"]],
-                        "expired": [leg["id"] for leg in scan["expired"]],
-                        "expiry_unknown": [leg["id"] for leg in scan["expiry_unknown"]],
-                        "foreign_count": scan["foreign_count"]}
-                if would == "repair":
-                    venue_stat["missing"] += 1
-                    if scan["has_live_sl"]:
-                        # 有活止损、只是**量不够/方向不覆盖** ⇒ 需要补量。
-                        # 这不改 `critical` 的语义（docstring：critical = **完全没有**止损腿）。
-                        item["why"] = ("覆盖不足：有活止损但量不够（covered="
-                                       f"{scan.get('covered_size')}, missing={scan.get('missing_size')}）")
-                        report["would"].append(item)
-                    else:
-                        report["critical"].append(item)
-                elif would in ("renew", "verify"):
-                    report["would"].append(item)
-                if would == "renew":
-                    venue_stat["renewed"] += 1
-                elif would == "repair":
-                    venue_stat["repaired"] += 1
-                continue
-            try:
-                res = ensure_venue_protection(ad, symbol=symbol, pos_side=pos_side,
-                                              position_size=size, now_s=now,
-                                              renew_within_s=renew_within_s,
-                                              expiration_s=expiration_s, log=log)
-            except Exception as exc:      # 巡检自身异常绝不上抛（它只是加固层）
-                venue_stat["errors"] += 1
-                report["errors"].append({"venue": venue, "inst": symbol, "stage": "ensure",
-                                         "detail": f"{type(exc).__name__}: {exc}"})
-                continue
-            item = {"venue": venue, "inst": symbol, "side": pos_side,
-                    "stage": res.get("stage"), "detail": res.get("detail")}
-            if res.get("scan") and res["scan"].get("needs_repair") and not res["scan"].get("has_live_sl"):
-                venue_stat["missing"] += 1
-                report["critical"].append(item)
-            elif res.get("ok"):
-                if res.get("stage") == "placed":
-                    if res.get("scan", {}).get("needs_renew"):
-                        venue_stat["renewed"] += 1
-                    else:
-                        venue_stat["repaired"] += 1
-                    report["actions"].append(item)
-            else:
-                venue_stat["errors"] += 1
-                report["errors"].append(item)
-        # 逐腿归属（只读）：回答"这些腿是给当前哪个仓的"。实测 Binance 13 张腿里
-        # 只有 2 张对得上唯一活动仓，其余是历史遗留 ⇒ 必须让运营看得见
-        # （旧量腿会**虚假满足**覆盖判定，且是 reduceOnly 有量条件单，日后可能减到新仓）。
-        # ⚠️ 本段**只报告不撤销**：归属不可判定的腿可能是用户手单，撤错不可逆；
-        # 真要清理必须由调用方显式发起，且只处理 `cleanup_candidates`。
-        try:
-            all_legs = ad.list_protective_orders(None) or []
-            report["attribution"][venue] = attribute_protective_orders(
-                rows, all_legs, ledger_rows,
-                tolerance_ratio=DEFAULT_TOLERANCE_RATIO)
-        except Exception as exc:
-            report["errors"].append({"venue": venue, "stage": "attribution",
-                                     "detail": f"{type(exc).__name__}: {str(exc)[:120]}"})
-        report["venues"][venue] = venue_stat
-    return report
-
-def watchdog_gap_key(item: Dict[str, Any]) -> str:
-    """缺口的**稳定身份**：`venue|inst|stage`。
-
-    ⚠️ `detail` 是逐周期措辞（含"距到期 1.2 天"这类会变的数字），**不能进键** ——
-    否则同一个缺口每周期都算"新缺口"，防抖永不成立（等于没防抖）。
-    """
-    return "|".join((str(item.get("venue") or "").lower(),
-                     str(item.get("inst") or ""),
-                     str(item.get("stage") or "")))
-
-
 def watchdog_debounce_step(state: Optional[Dict[str, Any]],
                            report: Optional[Dict[str, Any]], *,
                            now_s: float, debounce_s: float):
@@ -1189,7 +824,9 @@ def watchdog_debounce_step(state: Optional[Dict[str, Any]],
     观察项 = 审计层"本来会做"的动作（`would`）。真模式下 `actions` 与 `would` **同源**
     （同一套判定，只是 `dry_run` 决定写不写），故用 `would` 做观察不需要额外取数。
 
-    - `state`：`{gap_key: first_seen_ts}`；
+    `state`：`{gap_key: first_seen_ts}`；`gap_key` = `venue|inst|stage`（稳定身份：
+    `detail` 是逐周期措辞（含"距到期 1.2 天"这类会变的数字），**不能进键** ——
+    否则同一个缺口每周期都算"新缺口"，防抖永不成立）。
     - 新缺口：记 `now_s`；本周期**未再出现**的缺口：丢弃（缺口愈合 ⇒ 状态自清，不攒垃圾）；
     - 返回 `(new_state, observed_keys, qualified_keys)`：`qualified_keys` 只含
       "已持续 ≥ `debounce_s`" 的缺口 —— **只有它们**允许触发真实写单那一轮。
@@ -1202,7 +839,9 @@ def watchdog_debounce_step(state: Optional[Dict[str, Any]],
     for item in (report or {}).get("would") or []:
         if not isinstance(item, dict):
             continue
-        key = watchdog_gap_key(item)
+        key = "|".join((str(item.get("venue") or "").lower(),
+                        str(item.get("inst") or ""),
+                        str(item.get("stage") or "")))
         if key in observed:
             continue
         observed.append(key)

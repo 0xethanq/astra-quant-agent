@@ -70,8 +70,6 @@ DETERMINISTIC_DEFAULTS_EMPTY: "dict[str, str]" = {
     "council_config.json": "投委会席位配置。为空 ⇒ 内置席位；不随线上调参漂移。",
     "backup_methods.json": "备份作业清单。为空 ⇒ 内置默认作业；不随你的存储目标漂移。",
     "interceptor_plugins.json": "拦截器插件清单。为空 ⇒ 无自定义拦截器。",
-    "venue_env_profile.json": "场所×环境档位映射。为空 ⇒ 内置映射；不随你在线上"
-                                   "给各所配的环境档位漂移。",
 }
 
 #: ── 桶 C：**可再生记录**型 —— 缓存 / 记忆 / 报告，空了只表示"还没有历史" ──

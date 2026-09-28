@@ -6,9 +6,9 @@
 |---|---|---|
 | `query_positions` | 7 | OKX 直签查持仓（三态返回：ok/rows/error） |
 | `venue_execution_ready` | 26 | 该所当前是否可执行（登记 + 闸开 + 未在坏所名单） |
-| `fetch_other_venue_positions` | 38 | 外所持仓全景（逐所 fail-soft，坏所单列） |
-| `_venue_health_stamp` | 19 | 跨所健康观测文件的时间戳/内容读取 |
-| `close_position_confirmed` | 73 | 平仓后**在交易所侧确认**再改本地状态（三所平权） |
+| `fetch_other_venue_positions` | 38 | 非 OKX 且已开闸场所的持仓全景（今天恒为空快照） |
+| `_venue_health_stamp` | 19 | 场所健康观测文件的时间戳/内容读取 |
+| `close_position_confirmed` | 73 | 平仓后**在交易所侧确认**再改本地状态（OKX 专用） |
 
 ## 同名注入（沿第八十二～八十五刀）
 
@@ -16,15 +16,17 @@
 `VENUE_HEALTH_FILE` / `query_positions` / `fetch_other_venue_positions` /
 `venue_execution_ready` 同名注入 ⇒ 函数体 AST **零例外全等**。
 
-⚠️ 三个**跨模块注入项**（本刀最容易静默失效处）：
+⚠️ 两个**跨模块注入项**（本刀最容易静默失效处）：
 - `position_mgmt.execute_ai_position_management` 收 `close_position_confirmed`；
-- `reservation_reconcile.reconcile_reservation_ledger` 收 `fetch_other_venue_positions`；
-- `venue_evidence.build_venue_candidates` 收 `venue_health_stamp`(=`_venue_health_stamp`)。
-三处均由门面**调用期**解析门面全局 ⇒ 搬为壳后自动拿到壳，`patch.object(trader, …)`
+- `reservation_reconcile.reconcile_reservation_ledger` 收 `fetch_other_venue_positions`。
+两处均由门面**调用期**解析门面全局 ⇒ 搬为壳后自动拿到壳，`patch.object(trader, …)`
 的既有 patch 面（test_venue_wiring / test_reservation_reconcile）不断。
 
 ⚠️ `_BROKEN_VENUES` 按**引用**注入（§99.2 引用语义）：`venue_execution_ready`
 读它、`clean_stale_open_orders` 写它，必须同一个集合对象。
+
+⚠️ **OKX 专用化**：`close_position_confirmed` 的外所平仓分支（原挂在统一执行路由上）
+已随多所执行面删除；非 OKX 场所一律**只读容错**拒绝（绝不拿 OKX 接口去平外所仓）。
 """
 from __future__ import annotations
 
@@ -54,8 +56,9 @@ def venue_execution_ready(venue: str, environment: str,
 
     - OKX：实盘/模拟盘执行走本 trader 的 V5 直签链路（不经适配器），就绪条件 =
       当前冻结环境凭证齐备且档位一致；
-    - binance/gate：能力表 adapter_execution_flag AND 环境双轴开闸旗标
-      （registry.execution_open 单源判定）——开闸即自动成为真候选，无需改这里。
+    - 其余场所：登记表里已经没有它们（本系统为 OKX 专用），`is_registered` 直接
+      否决；这段按 registry 判定的通用逻辑保留给将来重新登记的新所
+      （`registry.execution_open` 单源判定——开闸即自动成为真候选，无需改这里）。
     """
     key = str(venue or "").strip().lower()
     try:
@@ -64,11 +67,11 @@ def venue_execution_ready(venue: str, environment: str,
         if key == "okx":
             env = current_environment()
             return bool(env.configured) and str(env.mode) == str(environment)
-        # 审计(2026-09-13)·坏键所自动摘除：execution_open 只看旗标——gate 旗开着
-        # 但密钥已死时仍会以最低费率赢下评分，信号派过去死在下单阶段白白烧掉
-        # （且外所回收侧只能吼 CRITICAL 跳过）。回收枚举在周期开头已实测凭证生死，
-        # 认证类失败当场记入 _BROKEN_VENUES（进程级=每轮重探，密钥修好自动恢复），
-        # 此处一并否决，让路由把单留给真实可执行的场。
+        # 审计(2026-09-13)·坏键所自动摘除：execution_open 只看旗标——旗开着
+        # 但密钥已死时仍会以最低费率赢下评分，信号派过去死在下单阶段白白烧掉。
+        # 回收枚举在周期开头已实测凭证生死，认证类失败当场记入 _BROKEN_VENUES
+        # （进程级=每轮重探，密钥修好自动恢复），此处一并否决，让路由把单留给
+        # 真实可执行的场。
         if key in _BROKEN_VENUES:
             return False
         return bool(venue_registry.execution_open(key, environment))
@@ -84,8 +87,9 @@ def fetch_other_venue_positions(environment: str,
                               venue_execution_ready) -> Tuple[bool, Dict[str, List[Dict[str, Any]]], str]:
     """跨所持仓快照（多所封顶用）：非 OKX 且已开闸场所的活跃持仓。
 
-    三所平权开单后，仓位/同向上限必须把 Gate/Binance 的在管仓位算进来——
-    否则每所各顶满上限，全系统实际敞口 = 上限 × 场所数（风控口径失真）。
+    登记场所集今天已经收敛为 `{"okx"}` ⇒ 本函数结构性返回 `(True, {}, "")`：
+    OKX 自身的仓位走直签链路单独计数，不重复计入这里。保留本函数是为了守住
+    "多所"这一层的接口形状（将来重新登记新所即自动生效）。
 
     语义（fail-closed）：
     - 返回 (ok, {venue: [normalized_pos...]}, error)。任一开闸所读取失败 →
@@ -106,9 +110,9 @@ def fetch_other_venue_positions(environment: str,
         if not venue_execution_ready(name, environment):
             continue
         try:
-            # 审计 C3：档位轴必须经 ADAPTER_ENV 唯一映射（execution_router/manual
-            # close 同源）——无档 get_adapter 走 legacy 布尔→未钉死域，generic LIVE
-            # 键被打进错误沙盒域正是「跨所封顶每周期 INVALID_KEY 禁开仓」的根因。
+            # 审计 C3：档位轴必须经 ADAPTER_ENV 唯一映射（与手工 close 同源）——
+            # 无档 get_adapter 走 legacy 布尔→未钉死域，generic LIVE 键被打进
+            # 错误沙盒域正是「跨所封顶每周期 INVALID_KEY 禁开仓」的根因。
             from astra_backend.close_intent import adapter_environment as _adapter_env
             ad = venue_registry.get_adapter(name, environment=_adapter_env(name, environment or ""))
             rows = ad.positions() or []
@@ -152,44 +156,14 @@ def close_position_confirmed(inst_id: str, pos_side: str, before_size: float, ve
                               current_environment,
                               query_positions,
                               fetch_other_venue_positions) -> Tuple[bool, str]:
-    """Close a position and verify at the exchange before changing local state (Three-Venue Capable)."""
+    """Close a position and verify at the exchange before changing local state."""
     target_venue = str(venue or "okx").lower()
     if target_venue != "okx":
-        try:
-            from astra_backend import execution_router
-            # 审计 C2：周期内冻结环境（okx_rest 按 current_environment 签名，读
-            # selected 会在 demo↔live 中途切换时产生跨环境混合决策）
-            env = current_environment()
-            res = execution_router.close_position(inst_id, venue=target_venue, environment=str(env.mode), pos_side=pos_side)
-            if not res.get("ok"):
-                return False, f"{target_venue.upper()} close failed: {res.get('detail')}"
-            # 审计 B1：受理≠平掉——与 OKX 分支同一把尺做归零回读，核验通过前
-            # 禁改本地状态（tracker 保留、下周期重试；假成功会让孤儿仓脱管）
-            want_base = str(inst_id).split("-")[0].upper()
-            want_side = str(pos_side or "").strip().lower()
-            saw_successful_query = False
-            for _ in range(6):
-                time.sleep(0.6)
-                xv_ok, xv_snap, _xv_err = fetch_other_venue_positions(str(env.mode))
-                if not xv_ok:
-                    continue
-                saw_successful_query = True
-                remaining = 0.0
-                for row in (xv_snap.get(target_venue) or []):
-                    base = str(row.get("base") or "").upper()
-                    if base != want_base:
-                        continue
-                    row_side = "long" if float(row.get("size_signed") or 0) > 0 else "short"
-                    if want_side in ("long", "short") and row_side != want_side:
-                        continue
-                    remaining = max(remaining, abs(float(row.get("size_signed") or 0)))
-                if remaining < max(1e-12, abs(float(before_size)) * 0.001):
-                    return True, f"{target_venue.upper()} position closed (verified flat)"
-            if not saw_successful_query:
-                return False, f"{target_venue.upper()} close accepted but readback unavailable; state unchanged"
-            return False, f"{target_venue.upper()} still reports open position after close (before={before_size}); state unchanged"
-        except Exception as exc:
-            return False, f"{target_venue.upper()} close error: {exc}"
+        # 已移除场所（历史追踪器/台账里的外所行）：本系统不再持有其执行链路。
+        # 只读容错——显式拒绝并留痕，绝不拿 OKX 的接口去平一个外所的仓
+        # （同一 instId 在 OKX 上也存在，误平就是"平了别人的仓"）。
+        return False, (f"{target_venue.upper()} 场所已移除，跳过平仓确认"
+                       f"（只读容错：本系统为 OKX 专用）")
 
     # Pre-cancel any conflicting pending/reduce-only orders for this instrument to release available size
     try:

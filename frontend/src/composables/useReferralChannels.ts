@@ -3,14 +3,18 @@
  *
  * ## 为什么要有这个 composable
  *
- * 这三条链接原先**硬编码在 `AboutModal.vue` 里**，与后端 `astra_backend/config.py`
- * 的 `okx_invite_url` / `gate_invite_url` 是两份各说各话的字面量 —— 于是
+ * 这条 OKX 开户链接原先**硬编码在 `AboutModal.vue` 里**，与后端
+ * `astra_backend/config.py` 的 `okx_invite_url` 是两份各说各话的字面量 —— 于是
  * "用环境变量把通道换成自己的"这个能力，**在用户唯一看得见的那一处完全失效**：
- * 后端改了，前端照旧显示旧链接（Binance 更是压根没出现在界面上）。
+ * 后端改了，前端照旧显示旧链接。
  *
  * 现在后端 `GET /api/v1/referral-channels`（**公开只读、无需鉴权**）是唯一事实源，
  * 前端只负责渲染。取不到时**退化成"不显示这一块"**，绝不回落到写死的旧链接 ——
  * 那正是本次要消灭的东西。
+ *
+ * 系统已收敛为 **OKX 单交易所**，故这里只透出 OKX 通道；后端 payload 若仍夹带
+ * 已下线交易所的旧条目，一律按白名单**静默过滤**而不是抛错 ——
+ * 后端契约收敛期间前端必须容错。
  *
  * ⚠️ 与订单上的经纪商 `tag` 是两件事：`tag` 随每笔订单发出、负责把成交归属到
  * 经纪商（这才是返佣机制，与用户是否点过这里的链接无关）；本链接是给用户
@@ -33,14 +37,25 @@ const channels: Ref<ReferralChannel[]> = ref([]);
 const loaded = ref(false);
 let inflight: Promise<ReferralChannel[]> | null = null;
 
+/** OKX-only 白名单：后端 payload 可能仍带着已下线交易所的旧条目，
+ *  此处按 key / name 双判归一（大小写与空白容错），非 OKX 的一律丢弃。 */
+function isOkxChannel(c: ReferralChannel | null | undefined): boolean {
+  if (!c) return false;
+  const key = String(c.key || '').trim().toLowerCase();
+  const name = String(c.name || '').trim().toLowerCase();
+  return key === 'okx' || name === 'okx';
+}
+
 export function useReferralChannels() {
   async function load(): Promise<ReferralChannel[]> {
     if (loaded.value) return channels.value;
     if (inflight) return inflight;
     inflight = http<{ channels?: ReferralChannel[] }>('/api/v1/referral-channels')
       .then((res) => {
-        // 只保留真的有地址的项：后端没配的通道不渲染空卡片
-        channels.value = (res?.channels || []).filter((c) => !!c?.invite_url);
+        // 只保留「真的有地址」的 OKX 通道：其余条目既不渲染也不报错
+        channels.value = (res?.channels || []).filter(
+          (c) => !!c?.invite_url && isOkxChannel(c),
+        );
         loaded.value = true;
         return channels.value;
       })

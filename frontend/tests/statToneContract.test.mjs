@@ -187,9 +187,11 @@ test('delta-tone 必须伴随 delta —— 否则颜色完全不生效（死属�
 });
 
 test('顶部权益不得同时使用 $ 前缀与 U 后缀（币种记号冗余）', () => {
-  const tpl = TPL(readFileSync(path.join(SRC, 'components/dashboard/KpiRibbon.vue'), 'utf8'));
-  assert.doesNotMatch(tpl, /\$\s*\{\{\s*totalAggregatedEquity/, '顶部权益又出现 `$ {{ … }}`');
-  assert.match(tpl, /\{\{\s*totalAggregatedEquity\s*\}\}\s*U/, '顶部权益应保留后缀 ` U`');
+  const src = readFileSync(path.join(SRC, 'components/dashboard/KpiRibbon.vue'), 'utf8');
+  // 2026-10：顶部权益不再是"聚合多所"的字符串插值，改为 BaseStat 的 :value 绑定；
+  // 判据保留原意 —— **不得用 `$` 前缀**，**必须带 ` U` 后缀**。
+  assert.doesNotMatch(src, /\$\s*\{\{/, '顶部权益又出现 `$ {{ … }}`');
+  assert.match(src, /\$\{fmtNum\(totalEquityNum\.value, 2\)\} U/, '顶部权益应保留后缀 ` U`');
 });
 
 test('useHotkeys 不得再有"两支相同"的三元，且须兜底 e.key', () => {

@@ -9,13 +9,11 @@ from __future__ import annotations
 
 
 def merge_lifecycle_trades(*,
-        binance_trades,
-        gate_trades,
         old_trades,
         trades_lifecycle):
-    """把旧台账与三所新成交**合并去重**（纯计算，无 IO）。
+    """把旧台账与本轮新成交**合并去重**（纯计算，无 IO）。
 
-    合并顺序与原实现一致：旧台账 → （D8 迁移清理）→ 本轮生命周期 + Binance + Gate，
+    合并顺序与原实现一致：旧台账 → （D8 迁移清理）→ 本轮生命周期，
     后来的同 id 覆盖先前的。
 
     ## D8 迁移去重（原注释照录）
@@ -43,7 +41,7 @@ def merge_lifecycle_trades(*,
                  if str(k).startswith("pos_hist_") and isinstance(v, dict) and _sig(v) in _new_sigs]:
         trades_map.pop(_oid)
 
-    for t in (trades_lifecycle + binance_trades + gate_trades):
+    for t in trades_lifecycle:
         if t.get("id"):
             trades_map[t["id"]] = t
     return trades_map

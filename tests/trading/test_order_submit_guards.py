@@ -196,55 +196,6 @@ class PriceAnchorGateTest(unittest.TestCase):
         self.assertTrue(ok, f"回踩方向的远挂单是合法策略，不该被闸掉：{why}")
 
 
-class MultiVenueRouteTest(unittest.TestCase):
-    def _run(self, router, venue="binance"):
-        rig = Rig(venue=venue, routing={"ok": True, "reservation": "res-9", "venue": venue})
-        # ⚠️ 必须 patch **真模块的属性**：代码写的是 `from astra_backend import execution_router`
-        # ⇒ 一旦该模块被别处导入过，`from … import …` 走的是**包属性**，
-        # `patch.dict(sys.modules, {...})` 塞的假模块**不会被用到**（单跑本文件时恰好没导入过，
-        # 于是"单跑绿、全量红"）。这正是隔离类缺陷的典型形态。
-        import astra_backend.execution_router as real_router
-        with patch.object(real_router, "open_protected_position", side_effect=router), \
-             patch("astra_backend.exchanges.listing.ensure_contract_listed",
-                   return_value=SimpleNamespace(ok=True, reason="")), \
-             patch("scripts.order_risk.validate_quote_geometry_and_rr",
-                   return_value=(True, "", 1.0)):
-            return rig, rig.run(venue_ctx={"notional_usdt": 100, "margin_usdt": 50,
-                                           "leverage": 5, "confidence": 90})
-
-    def test_router_success_records_intent_and_confirms(self):
-        calls = []
-
-        def router(payload, **kw):
-            calls.append((payload, kw))
-            return {"ok": True, "order_id": "bn-1"}
-
-        rig, (ok, order_id) = self._run(router)
-        self.assertTrue(ok)
-        self.assertEqual(order_id, "bn-1")
-        self.assertEqual(calls[0][0]["venue"], "binance")
-        self.assertEqual(calls[0][0]["asset"], "BTC")
-        self.assertEqual(calls[0][0]["leverage"], 5.0)
-        self.assertEqual(calls[0][0]["confidence"], 90.0, "per-venue 置信度门禁要用原始 AI 置信度")
-        self.assertEqual(rig.recorded, [(INST, "buy")])
-        self.assertEqual(rig.confirmed, ["res-9"])
-
-    def test_router_refusal_releases_the_reservation(self):
-        rig, (ok, why) = self._run(lambda payload, **kw: {"ok": False, "detail": "深度不足"})
-        self.assertFalse(ok)
-        self.assertIn("BINANCE 下单失败", why)
-        self.assertEqual(rig.released, [("res-9", "深度不足")])
-        self.assertEqual(rig.confirmed, [])
-
-    def test_router_exception_releases_and_reports(self):
-        def boom(payload, **kw):
-            raise RuntimeError("路由器炸了")
-        rig, (ok, why) = self._run(boom)
-        self.assertFalse(ok)
-        self.assertIn("执行异常", why)
-        self.assertEqual(rig.released, [("res-9", "多所执行异常: 路由器炸了")])
-
-
 class OkxDirectTest(unittest.TestCase):
     def test_leverage_alignment_is_attempted_before_order(self):
         rig = Rig()

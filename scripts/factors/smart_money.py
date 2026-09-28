@@ -1,9 +1,8 @@
 """聪明钱与大户多空明细数据采集模块（Pillar 5）。
 
-为解决 OKX 内部 CLI 移除后聪明钱数据缺失（US-014 遗留）的问题，本模块提供双源容灾采集：
-1. 主源：Binance Futures 官方免密公开端点（顶级大户持仓比例 + 主动吃单量）；
-2. 备源：OKX Rubik 官方公开统计端点（合约多空账户数/持仓比 + 深度成交量）；
-3. 容灾：双源均不可用时优雅返回 None，保留显式缺失语义，绝不伪造虚假中性信号。
+为解决 OKX 内部 CLI 移除后聪明钱数据缺失（US-014 遗留）的问题，本模块提供单源采集：
+1. 数据源：OKX Rubik 官方公开统计端点（合约多空账户数/持仓比 + 深度成交量）；
+2. 容灾：数据源不可用时优雅返回 None，保留显式缺失语义，绝不伪造虚假中性信号。
 """
 from __future__ import annotations
 
@@ -21,78 +20,16 @@ def fetch_smart_money_for_symbol(
     *,
     timeout: float = 3.5,
 ) -> Optional[Dict[str, Any]]:
-    """采集单标的顶级大户持仓多空比与主动资金流（Binance 主源 + OKX 备源）。"""
+    """采集单标的顶级大户持仓多空比与主动资金流（OKX Rubik 公开统计端点）。"""
     base_ccy = str(ccy or "").upper().strip()
     if not base_ccy:
         return None
 
-    # 1. 尝试 Binance Futures 官方公开大户指标
-    res = _fetch_from_binance(base_ccy, price=price, timeout=timeout)
-    if res and res.get("longShortRatio"):
-        return res
-
-    # 2. 备选尝试 OKX Rubik 官方公开统计指标
     res_okx = _fetch_from_okx_rubik(base_ccy, price=price, timeout=timeout)
     if res_okx and res_okx.get("longShortRatio"):
         return res_okx
 
     return None
-
-
-def _fetch_from_binance(ccy: str, price: float = 0.0, timeout: float = 3.5) -> Optional[Dict[str, Any]]:
-    sym = f"{ccy}USDT"
-    w_long: Optional[float] = None
-    ls_ratio: Optional[float] = None
-    net_notional_usd = 0.0
-    taker_str = "--"
-
-    # A. 顶级大户持仓量多空比 topLongShortPositionRatio
-    try:
-        url = f"https://fapi.binance.com/futures/data/topLongShortPositionRatio?symbol={sym}&period=5m&limit=1"
-        req = urllib.request.Request(url, headers=_HEADERS)
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            if isinstance(data, list) and data:
-                w_long = float(data[0].get("longAccount", 0.5))
-                ls_ratio = float(data[0].get("longShortRatio", 1.0))
-    except Exception:
-        pass
-
-    if w_long is None:
-        return None
-
-    # B. 主动买卖成交量净额 takerlongshortRatio
-    try:
-        url_t = f"https://fapi.binance.com/futures/data/takerlongshortRatio?symbol={sym}&period=5m&limit=1"
-        req_t = urllib.request.Request(url_t, headers=_HEADERS)
-        with urllib.request.urlopen(req_t, timeout=timeout) as resp:
-            data_t = json.loads(resp.read().decode("utf-8"))
-            if isinstance(data_t, list) and data_t:
-                b_vol = float(data_t[0].get("buyVol", 0))
-                s_vol = float(data_t[0].get("sellVol", 0))
-                diff = b_vol - s_vol
-                net_notional_usd = diff * price if price > 0 else diff
-                taker_str = (
-                    f"{round(net_notional_usd / 1e4, 1)}万 U"
-                    if abs(net_notional_usd) >= 1e4
-                    else f"{round(net_notional_usd, 0)} U"
-                )
-    except Exception:
-        pass
-
-    return {
-        "longShortRatio": {
-            "weightedLongRatio": w_long,
-            "longShortRatio": ls_ratio or round(w_long / max(0.0001, (1.0 - w_long)), 2),
-        },
-        "notional": {
-            "netNotionalUsdt": net_notional_usd,
-        },
-        "winRate": {},
-        "takerNetUsd": taker_str,
-        "lsRatio": ls_ratio,
-        "weighted_long_pct": round(w_long * 100, 1),
-    }
 
 
 def _fetch_from_okx_rubik(ccy: str, price: float = 0.0, timeout: float = 3.5) -> Optional[Dict[str, Any]]:

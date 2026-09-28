@@ -10,7 +10,7 @@
     signed_size  supports_attached_tp_sl  trigger_price_default
 
 这本身**不一定**是缺陷——`protection_semantics`/`rate_limit_note` 就是给人读的说明，
-`order_id_type` 的真实执行在**各所适配器内部**（`gate.py` 的 id_string 铁律 + 既有门）。
+`order_id_type` 的真实执行在**适配器内部**（读取一律经字符串归一）。
 危险的是**没人分类**：一个未来的读者完全可能以为"声明了就等于执行了"
 （本仓 doctrine：**声明≠执行**）。所以本门要求每个字段**二选一**：
 
@@ -19,8 +19,8 @@
 
 ## 判据的边界（如实）
 
-- 只把"声明处"排除：`exchanges/base.py`（数据类本体）与三所适配器/沙盒（它们**声明**这些值）。
-  ⇒ 若某字段的行为是**各所自己实现**的，它在本门里就是"零读者"，**必须**走登记（附出处）。
+- 只把"声明处"排除：`exchanges/base.py`（数据类本体）与具体适配器/沙盒（它们**声明**这些值）。
+  ⇒ 若某字段的行为是**适配器自己实现**的，它在本门里就是"零读者"，**必须**走登记（附出处）。
 - 门不判断登记理由写得好不好，只要求"非空理由"（防腐靠人读，不靠机器）。
 """
 
@@ -35,27 +35,39 @@ SCAN_DIRS = ("scripts", "astra_backend", "astra_gateway", "plugins")
 #: 零生产读者、但**行为另有出处**（或本就是人读说明）的字段 —— 每条都写明真正的落点。
 UNREAD_ALLOWLIST = {
     "bar_case": "K 线周期大小写由唯一归一函数承担：`scripts/market_data_service.py::normalize_bar`"
-                "（各所 `to_bar`/`_interval` 只做映射），故声明无需在运行时再被读",
-    "conditional_family": "条件单族由**各所适配器自己实现**（OKX 附加腿 / Gate 独立 price_orders / "
-                          "Binance 独立 algoOrder 资源族）—— 声明是给人与调研读的分类标签，非执行开关",
-    "has_taker_ratio": "数据可用性说明（该所有无 taker 比值接口）：消费方直接调对应行情端点，"
-                       "不做能力判断，故无运行时读者",
-    "has_top_trader_ratio": "同上：数据可用性说明（该所有无大户多空比接口），非执行开关",
-    "mainland_ip_restricted": "部署环境说明（Binance 受限）：落地在部署选址与文档，不在运行时判断",
-    "order_id_type": "订单 id 字符串化由**各所适配器内部**强制执行：`gate.py` 的 id_string 铁律"
-                     "（int/float → str）、`binance.py::list_protective_orders` 的 `str(algoId)`、"
-                     "`binance.py::place_order` 回包同一处理；另有门 "
-                     "`tests/venues/test_venue_capability_semantics.py` 钉住声明本身",
-    "protection_semantics": "给人读的保护语义说明（各所声明注释，含「非受理即原子保护」这类纠正），"
-                            "不是执行开关 —— 执行在各所 attach/verify 实现里",
+                "（适配器 `to_bar` 只做映射），故声明无需在运行时再被读",
+    "conditional_family": "条件单族分类标签（OKX = attached，走 attachAlgoOrds）："
+                          "行为由**适配器自己实现** —— 声明是给人与调研读的分类，非执行开关",
+    "has_taker_ratio": "数据可用性说明（该所有无 taker 比值接口）：唯一读取点在"
+                       "`astra_backend/exchanges/base.py`（本门刻意排除的「声明处」），"
+                       "其余生产代码直接调对应行情端点、不做能力判断",
+    "has_top_trader_ratio": "同上：数据可用性说明（该所有无大户多空比接口）；"
+                            "唯一读取点在 `base.py::fetch_top_trader_ratio`（被本门排除）",
+    "mainland_ip_restricted": "部署环境说明（该所的大陆 IP 政策）：落地在部署选址与文档，"
+                              "不在运行时判断",
+    "order_id_type": "订单 id 类型由**适配器内部**强制执行字符串化（OKX 原生即字符串 "
+                     "ordId/algoId，读取一律经 `str()` 归一）；另有门钉住声明本身",
+    "protection_semantics": "给人读的保护语义说明（含「非受理即原子保护」这类纠正），"
+                            "不是执行开关 —— 执行在各适配器 attach/verify 实现里",
     "rate_limit_note": "给人读的限频说明；真正的退避在适配器与 `market_data_service` 内部实现",
-    "signed_size": "带符号张数是 **Gate 独有的载荷语义**，由 `gate.py::_normalize_order_item` 归一成 "
-                   "`size_signed`（其余两所无符号张数 + side），故声明本身无运行时读者",
-    "supports_attached_tp_sl": "dataclass 注明「Phase 3 用，先声明后实现」：当前不支持附带腿的所"
-                               "（Gate/Binance）各自走独立资源族，行为在适配器内实现",
-    "trigger_price_default": "触发价类型由**各所适配器显式传参**实现（Binance `workingType` 必传、"
-                             "Gate `price_type` 必传）—— 门 `test_working_type_required_not_default` "
-                             "钉住「不依赖交易所默认值」这一点",
+    "signed_size": "带符号张数是**载荷语义**，由适配器归一成 `size_signed`"
+                   "（OKX 原生无符号张数 + side），故声明本身无运行时读者",
+    "supports_attached_tp_sl": "dataclass 注明「先声明后实现」：附带腿的实现落在适配器内部"
+                               "（OKX `attachAlgoOrds`），声明不产生行为",
+    "trigger_price_default": "触发价类型由**适配器显式传参**实现（不依赖交易所默认值）"
+                             "—— 相关门钉住「必须显式传参」这一点",
+    # ---- 多所拆除后新增的四条登记（此前它们的读者在外所适配器里）----
+    "quantity_unit": "数量语义（张/币本位）的唯一读者在 `astra_backend/exchanges/base.py`"
+                     "（`quote_qty_to_native`）—— 那是本门刻意排除的「声明处」；"
+                     "换算由基类单一实现承担，其它文件不需要再读它",
+    "native_amend": "声明「该所有无原生改单端点」。多所拆除后唯一的声明者 `okx.py` 声明 "
+                    "`False`（无原生改单），而改单切面本身**未实装** ⇒ 没有分支可读；"
+                    "字段保留为能力声明（未来实装改单时才会产生读者）",
+    "decimal_amount": "声明「是否支持十进制 `amount`」。那是已移除场所的订单模型语义；"
+                      "唯一声明者 `okx.py` 声明 `False`（张数语义）⇒ 无分支可读",
+    "supports_account": "账户面能力声明。本门排除的 `base.py` 用 `_unsupported()` 统一拒绝"
+                        "未实装切面，而 OKX 的账户面走 `okx_trade_service` / `okx_rest` 直签"
+                        "（不经适配器）⇒ 扫到的文件里没有读者",
 }
 
 

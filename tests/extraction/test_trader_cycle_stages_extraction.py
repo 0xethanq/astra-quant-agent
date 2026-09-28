@@ -188,53 +188,18 @@ SEGMENT_DELTAS = {
 }
 
 
-class ReconcileCallContractTest(unittest.TestCase):
-    def test_release_requires_both_position_and_order_sides_verified(self):
-        """跨所实况的**持仓侧与挂单侧都核验成功**，才允许对账器释放预留。
+class FailureSemanticsTableTest(unittest.TestCase):
+    """输入失败语义表必须随 `fetch_positions_and_reconcile` 走。
 
-        只核验持仓时，一笔**未成交**的入场单（尚无持仓）会被判"无仓无挂"而误释放；
-        释放不可逆 ⇒ 预算台账少算在场活单。本断言把这条语义钉在**调用点**上，
-        防止有人改回只传 `xv_ok`。
-        """
-        fn = _func("fetch_positions_and_reconcile")
-        calls = [n for n in ast.walk(fn) if isinstance(n, ast.Call)
-                 and getattr(n.func, "id", None) == "reconcile_reservation_ledger"]
-        self.assertEqual(len(calls), 1, "对账调用点应恰 1 处")
-        kw = {k.arg: ast.unparse(k.value) for k in calls[0].keywords}
-        self.assertIn("venue_snapshot_verified", kw)
-        self.assertIn("xv_ok", kw["venue_snapshot_verified"], "持仓侧核验必须参与")
-        self.assertIn("_pending_enum_errors", kw["venue_snapshot_verified"],
-                      "挂单枚举失败也必须挡住释放（否则在场活单的预留会被误释放）")
-
-
-class QuotaUnderCountIsDisclosedTest(unittest.TestCase):
-    """槽位计数**少算**时必须如实告知，且"输入失败语义表"必须留在 docstring 里。
-
-    背景（第一百二十八刀逐项实测）：外所挂单枚举失败时，`reserved_slot_count` /
-    `reserved_long_count` / `reserved_short_count` **少算**该所的在场单，而执行层的
-    开仓闸用的正是它们（`reserved_slot_count < MAX_CONCURRENT_POSITIONS`）⇒ 可能超发槽位。
-    持仓侧失败会 `entries_blocked=True`，**挂单侧目前不拦**（唯一残留缺口，待人工拍板）。
-
-    本门钉两件事：① 少算的那一刻有明确告知（不许静默）；② 审计表随代码走
-    （谁改了语义就必须更新表，否则门会指向这里）。
+    OKX 专用化后该函数只剩 OKX 直签链：持仓 / 挂单 / 余额读取失败都**整周期
+    abort**，preflight 的挂单对账失败则 `entries_blocked=True`（禁本轮新开仓）。
+    谁改了语义就必须更新表，否则本门会指向这里。
     """
-
-    def test_under_count_is_disclosed_at_the_quota_computation(self):
-        fn = _func("fetch_positions_and_reconcile")
-        hits = []
-        for node in ast.walk(fn):
-            if isinstance(node, ast.If) and "_pending_enum_errors" in ast.unparse(node.test):
-                body_src = "\n".join(ast.unparse(s) for s in node.body)
-                if "print" in body_src:
-                    hits.append(body_src)
-        self.assertTrue(hits, "挂单枚举失败时必须在计数处给出告知（零行为变更但不得静默）")
-        self.assertTrue(any("少算" in h for h in hits),
-                        "告知文案必须讲明'少算'及其口径（仓位数，不涉及 USDT 预算）")
 
     def test_failure_semantics_table_is_kept(self):
         doc = ast.get_docstring(_func("fetch_positions_and_reconcile")) or ""
         self.assertIn("输入失败语义表", doc, "逐项失败语义表必须随函数走")
-        for must in ("整周期 abort", "entries_blocked=True", "残留缺口"):
+        for must in ("整周期 abort", "entries_blocked=True"):
             self.assertIn(must, doc, f"审计表缺少关键结论：{must}")
 
 
@@ -325,7 +290,6 @@ class CycleStagesVerbatimTest(unittest.TestCase):
         written = []
         with tempfile.TemporaryDirectory() as td:
             cs.persist_state_and_sync_ledger(
-                _xv_total=0, xv_positions_by_venue={},
                 venue_position_span=venue_position_span,
                 active_pos_count=0, all_factors=[], cb_active=False,
                 cb_reason="", executed_actions=[],
@@ -348,87 +312,38 @@ class CycleStagesVerbatimTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             got = cs.fetch_positions_and_reconcile(
                 entries_blocked=False,
-                _BROKEN_VENUES=set(), collect_pending_inst_ids=lambda **k: (set(), 0, 0),
                 current_environment=lambda: types.SimpleNamespace(mode="demo", simulated=False),
-                fetch_other_venue_positions=lambda env: (True, {}, ""),
-                load_instruments=lambda: [], okx_rest=types.SimpleNamespace(),
+                okx_rest=types.SimpleNamespace(),
                 query_positions=lambda: (False, [], "no creds"),
-                reconcile_reservation_ledger=lambda *a, **k: None,
-                venue_execution_ready=lambda v, e: False,
-                broken_execution_venues=lambda *a, **k: [],
-                venue_registry=types.SimpleNamespace())
+                reconcile_reservation_ledger=lambda *a, **k: None)
         self.assertIsNone(got, "查持仓失败必须中止（返回 None）")
 
-    def test_dead_credential_venue_is_disclosed_as_excluded(self):
-        """凭证已死的所必须**每周期明说"未计入"**（第一百三十一刀）。
-
-        该所被 `venue_execution_ready` 否决 ⇒ 跨所取数也跳过它，且返回 `ok=True`
-        无任何错误 ⇒ 它的持仓/挂单不进配额与敞口，而"跨所笔数"看起来完整。
-        方向纪律：它**读不出来**（不是没有仓），所以只能说"未计入"，绝不装作干净。
-        本用例用**真的** `broken_execution_venues`（不是桩），把判据也一并跑到。
-        """
-        import contextlib
-        import io
-        from scripts.trader import cycle_stages as cs
-        from scripts.trader.cycle_snapshot import broken_execution_venues as real_broken
-        okx = types.SimpleNamespace(balances=lambda: None, positions=lambda: None,
-                                    pending_orders=lambda *a: [])
-        reg = types.SimpleNamespace(execution_open=lambda v, e: True,     # 闸开着…
-                                    get_adapter=lambda v, environment=None: None,
-                                    is_registered=lambda k: True)
-        buf = io.StringIO()
-        with contextlib.redirect_stdout(buf):
-            got = cs.fetch_positions_and_reconcile(
-                entries_blocked=False,
-                _BROKEN_VENUES={"binance"}, collect_pending_inst_ids=lambda **k: (set(), 0, 0),
-                current_environment=lambda: types.SimpleNamespace(mode="demo", simulated=False),
-                fetch_other_venue_positions=lambda env: (True, {}, ""),
-                load_instruments=lambda: [], okx_rest=okx,
-                query_positions=lambda: (True, [], ""),
-                reconcile_reservation_ledger=lambda *a, **k: None,
-                venue_execution_ready=lambda v, e: v != "binance",   # …却不可就绪
-                broken_execution_venues=real_broken, venue_registry=reg)
-        out = buf.getvalue()
-        self.assertIsNotNone(got, "坏所不得中断周期（跳过 + 明说即可）")
-        self.assertEqual(len(got), 13)
-        self.assertIn("binance 凭证已死", out)
-        self.assertIn("未计入", out)
-        self.assertNotIn("gate 凭证已死", out, "就绪的所不得被误报")
-
-    def test_positions_empty_world_returns_thirteen_outputs(self):
-        """空世界 smoke：10 项注入全活 ⇒ 必须产出 13 项输出（含持仓/额度/预留计数）。"""
+    def test_positions_empty_world_returns_eleven_outputs(self):
+        """空世界 smoke：OKX 直签链全活 ⇒ 必须产出 11 项输出（持仓/额度/预留计数）。"""
         from scripts.trader import cycle_stages as cs
         okx = types.SimpleNamespace(balances=lambda: None, positions=lambda: None,
                                     pending_orders=lambda *a: [])
-        reg = types.SimpleNamespace(execution_open=lambda v, e: False,
-                                    get_adapter=lambda v, environment=None: None,
-                                    is_registered=lambda k: False)
         got = cs.fetch_positions_and_reconcile(
             entries_blocked=False,
-            _BROKEN_VENUES=set(), collect_pending_inst_ids=lambda **k: (set(), 0, 0),
             current_environment=lambda: types.SimpleNamespace(mode="demo", simulated=False),
-            fetch_other_venue_positions=lambda env: (True, {}, ""),
-            load_instruments=lambda: [], okx_rest=okx,
+            okx_rest=okx,
             query_positions=lambda: (True, [], ""),
-            reconcile_reservation_ledger=lambda *a, **k: None,
-            venue_execution_ready=lambda v, e: False,
-            broken_execution_venues=lambda *a, **k: [], venue_registry=reg)
+            reconcile_reservation_ledger=lambda *a, **k: None)
         self.assertIsNotNone(got)
-        self.assertEqual(len(got), 13, "13 项输出必须齐（调用点按序解包）")
-        self.assertEqual(got[2], [], "all_positions 应为空")
-        self.assertFalse(got[3], "entries_blocked 应为 False（对账成功）")
+        self.assertEqual(len(got), 11, "11 项输出必须齐（调用点按序解包）")
+        self.assertEqual(got[1], [], "all_positions 应为空")
+        self.assertFalse(got[2], "entries_blocked 应为 False（对账成功）")
 
     def _scan_kwargs(self, **over):
         """相位 4 前段的替身集合（照实现体调用形状抄，§104.2）。"""
         from scripts.trader import cycle_stages as _cs  # noqa: F401
         base = dict(
-            _xv_total=0, active_pos_count=0, all_factors=[], executed_actions=[],
+            active_pos_count=0, all_factors=[], executed_actions=[],
             long_count=0, short_count=0, timestamp_full="2026-09-15 09:00:00",
-            trackers={}, usdt_available=1000.0, xv_positions_by_venue={},
+            trackers={}, usdt_available=1000.0,
             venue_position_span=venue_position_span,
             MAX_CONCURRENT_POSITIONS=6,
             _collect_okx_position_payloads=lambda *a, **k: [],
-            _merge_cross_venue_positions=lambda *a, **k: [],
             effective_single_asset_margin=lambda u: 123.0,
             execute_ai_position_management=lambda *a, **k: None,
             execute_batch_ai_brain_cycle=None,

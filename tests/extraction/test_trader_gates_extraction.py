@@ -30,7 +30,7 @@ SUBMODULE = ROOT / "scripts" / "trader" / "gates.py"
 ENTRY = ROOT / "scripts" / "trader" / "entry_execution.py"   # 第九十刀：开多/开空两支现住此
 
 _IMPL_ONLY_MARKERS = (
-    "多所（gate/binance）下单保证金闸门",
+    "OKX 下单保证金闸门",
     "Strict US Regular Trading Window",
 )
 

@@ -1,120 +1,106 @@
-# 交易所支持矩阵（Exchange Support Matrix）
+# OKX 接入说明（Exchange Support）
 
-> ASTRA 多交易所适配层（`astra_backend/exchanges/`）能力差异的单一事实文档。
-> 代码级能力表见各适配器 `ExchangeCapabilities`，本文档与其保持同步。
+> **单一事实文档**：本系统是 **OKX 专用**系统，只对接 **OKX V5 永续**
+> （适配器 `astra_backend/exchanges/okx.py`；直签链路 `scripts/okx_rest.py`）。
+> Binance 与 Gate 的适配器、场所路由、跨所保护加固层与平行试验田
+> 已在「OKX 专用化」迁移中**整体移除**，本文档不再描述它们。
+>
+> 代码级能力表见 `astra_backend/exchanges/okx.py` 的 `ExchangeCapabilities`，
+> 本文档与其保持同步；口径差异以代码为准。
 
-## 当前支持状态
+## 1. 当前支持状态
 
-| 场所 | 只读行情 | 断流备源 | 决策证据 | 凭证配置 | 实盘执行 |
-|---|---|---|---|---|---|
-| **OKX V5**（默认主战场） | ✅ | 主源 | ✅ 全因子 | ✅ V5 直签 REST（API Key 唯一） | ✅ 生产链路（`ai_factor_trader`） |
-| **Binance USDT-M** | ✅ 免登录 | ✅（OKX 全断时补 ticker/K线/费率） | ✅ 基差/大户多空比 | ✅ 后台预留 | ⏸ 适配器未实装（独立条件单双轨待建） |
-| **Gate.io V4 永续** | ✅ 免登录 | ✅ | ✅ 基差/费率 | ✅ 后台已收口 | 🔓 已实装：`ASTRA_GATE_EXECUTION=1`（后台第5节开关+确认短语）+ `data/venue_routing.json` 配池；**平行试验田** `scripts/gate_lab_trader.py`（dry_run 默认演算） |
-
-## Gate 试验田（平行、隔离、四道闸）
-
-主链（OKX 15 分钟循环）与试验田**零共享写状态**：试验田只读 brain 决策缓存，
-独立台账 `data/gate_lab_trackers.json`。开闸四道：
-
-1. `venue_routing.json` 的 `gate.assets` 非空（币名池）；
-2. 执行开关 `ASTRA_GATE_EXECUTION=1`（后台第 5 节，需确认短语 `OPEN GATE EXECUTION`）；
-3. 池内 `dry_run: false`；
-4. Gate 凭证就绪。任一缺失自动 fail-safe 降为演算或不动作。
-
-预算护栏：`margin_per_trade_usdt`（每笔上限）+ `max_open`（并发笔数）+ 置信度
-门禁（默认 80，与主链同尺）；物理风控（几何/R:R/双腿保护单回读+缺口补挂+
-棘轮先挂新再撤旧）全部走与主链同一套尺子。
-
-「Gate 开闸」三重保险：`ASTRA_GATE_EXECUTION=1`（env 显式）+ 后台凭证就绪（缺失即
-`ExchangeCapabilityError`）+ 路由内物理校验（几何/R:R 底线/100% 保护单回读，任一
-缺口撤单回滚）。沙盒 `fx-api-testnet` 连续实测 502，暂以实盘最小单验证。
-「Binance ⏸」：无附属 TP/SL 需双轨 OCO + 触发价默认 MARK_PRICE 反转，独立工程另做。
-
-## 三所入场闸门平权（2026-09-28）
-
-审计发现入场闸门被**实现了两遍**、而只有一遍接了 OKX：池门禁、跨所同向敞口、
-持仓模式体检原本内联在 `astra_backend/execution_router.py` 里，
-而 OKX 直签路径（`okx_rest.place_order`，不经 router）**一个都没有**。
-最要命的是敞口：`check_total_exposure` 的统计口径**明确把 OKX 的仓算进去**，
-于是出现「**OKX 的仓占着上限、OKX 的下单却不查上限**」，
-而提示词还告诉主脑「超出执行层拒开」——走到 OKX 时是空头支票。
-
-现已把三类判据收进 **`astra_backend/execution/venue_gate.py::venue_entry_gate`**
-（纯函数，IO 全注入），两条执行路径共用同一个函数：
-
-| 路径 | 覆盖场所 | 调用点 |
-|---|---|---|
-| `execution_router.open_protected_position` | gate / binance | 原内联块已删除，改为委托 |
-| `scripts/trader/order_submit.py` | **其余所（今天 = OKX 直签）** | 多所分发**之前**补跑（`_ROUTER_DISPATCHED_VENUES` 之外） |
-
-`tests/audit/test_three_venue_gate_parity.py` 钉住「策略只实现一次、两条路径都调用」，
-并对三所逐个断言每个阶段的判定一致；其中一条就是 OKX 直签单真的会被敞口闸门拦下。
-
-### 各所池配置（`data/venue_routing.json`）
-
-| 键 | 含义 |
-|---|---|
-| `assets` | **未配置（键缺失）= 不设限**；**显式空数组 = 该所停发**。两种形态此前混用同一个值，导致"空池"在执行层是"停发"、在选所层是"不设限" |
-| `dry_run` | `true` = 本地演算不发单（三所均可用来临时停发） |
-| `max_open` | 该所并发持仓笔数上限 |
-| `min_confidence` | 该所入场置信度门禁（与全局 `ASTRA_MIN_ENTRY_CONFIDENCE` 取严） |
-| `margin_per_trade_usdt` | 该所每笔保证金上限（`0` = 不设） |
-
-> ⚠️ `data/venue_routing.json` **不入库**（`.gitignore`）。文件缺失时各所走代码内默认值
-> （`global_risk_defaults()`，`assets` = "未配置 ⇒ 不设限"）。想停发某所：
-> 显式写 `"dry_run": true`，或把 `assets` 写成**空数组**。
-
-## 关键差异（照搬会踩的坑）
-
-| 维度 | OKX | Binance | Gate |
-|---|---|---|---|
-| 标的命名 | `BTC-USDT-SWAP` | `BTCUSDT` | `BTC_USDT` |
-| 下单数量单位 | 张（`ctVal` 折算） | **币本位数量**（按 stepSize 截断） | **带符号张数**（正多负空） |
-| 止盈止损 | 单单附带 `attachAlgoOrds` 云端 OCO | ❌ 无附属 TP/SL，须独立 `STOP_MARKET`/`TAKE_PROFIT_MARKET` 并自补「一单触发撤另一单」 | 独立 `/price_orders` 条件单资源族 |
-| 触发价默认 | 最新价 | ⚠️ **标记价格 MARK_PRICE** | 最新价（可选 index/mark） |
-| 签名 | HMAC-SHA256 + Passphrase | HMAC-SHA256/Ed25519 | HMAC-**SHA512** |
-| 限频惩罚 | 429 退避 | 429 后不停手 → **418 封 IP 最长 3 天** | 最宽松（~100-200 req/s） |
-| 大陆网络 | ✅ 可用 | ❌ 明文封锁（KYC+IP） | ⚠️ 无明文封锁，实测最宽松 |
-| 大户数据 | rubik 多空比（免费） | `topLongShortPositionRatio`（免费） | `contract_stats` 四所最全（免费，含清算史） |
-| 官方沙盒 | `x-simulated-trading` 模拟盘 | `demo-fapi.binance.com`（旧 testnet.binancefuture.com 已过时） | `fx-api-testnet.gateio.ws`（实测偶发 502） |
-
-## 沙盒档位
-
-后台「交易所与标的池 → 5. 多交易所数据源与凭证」勾选即热切换
-（对应环境变量 `ASTRA_BINANCE_TESTNET` / `ASTRA_GATE_TESTNET`）；
-开启后该所的行情与未来执行全部指向官方测试网。
-
-## 数据健康度
-
-每 15 分钟决策周期自动落盘三所取数健康（成功币数/失败原因/延迟）：
-后台同一卡片实时展示，原始数据在 `data/venue_health.json`。
-备源容灾顺序是**健康感知**的（失败多者后置、延迟差 >5x 才翻转防抖；
-健康文件缺失/损坏回退静态序）。
-
-## 跨所数据能力矩阵
-
-> 消费点状态为 2026-09-09 代码实测（mission/binance-gate-coordination 合入后）；
-> 「未消费」= 端点已接通但无下游，均有排期（维护者本地 plan_local/ASTRA_VENUE_VALUE_ROADMAP.md，
-> 不入库；社区用户可视为 backlog）。
-
-| 数据项 | Binance | Gate | ASTRA 消费点 | 健康度接入 |
+| 场所 | 只读行情 | 决策证据 | 凭证配置 | 实盘执行 |
 |---|---|---|---|---|
-| ticker/基差 | ✅ 免费（本机出口 bookTicker 被 WAF 拦→depth 自动回退） | ✅ 免费 | 决策 Prompt 跨所证据行 + OKX 全断备源 | ✅ |
-| K线 | ✅ 免费 ≤1500 根 | ✅ 免费 ≤2000 根 | 备源容灾（形状对齐 OKX 契约） | ✅ |
-| 资金费率（现值） | ✅ premiumIndex | ✅ ticker.funding_rate | 证据行双所费率 + 背离标注 | ✅ |
-| 资金费率（历史） | ✅ /fapi/v1/fundingRate | ✅ contract_stats 序列 | 未消费（W1 三所背离统计） | — |
-| 大户多空比 | ✅ topLongShortPositionRatio | ✅ contract_stats top_lsr_* | 证据行双所大户比 + 分歧标注 | ✅ |
-| Taker 主动比 | ✅ takerlongshortRatio | ✅ lsr_taker | 未消费（W4 候选，OKX 同项已在主链） | — |
-| 清算数据 | ❌ 合约端点无免费等价 | ✅ liq_*（contract_stats 聚合） | 未消费（W2 清算放量雷达；逐笔流需签名——评估为不做） | — |
-| OI（现值/历史） | ✅ openInterest / openInterestHist | ✅ open_interest(_value) | 未消费（主链 OI 用 OKX rubik；W4 多源互证候选） | — |
-| 新币上线公告 | ✅ CMS bapi（实测 2253 篇，免费） | ❌ 网页 403（不做抓取） | 未消费（W3 先做人工读小工具） | — |
+| **OKX V5 永续**（唯一场所） | ✅ 公共 REST（无需凭证） | ✅ 全因子（资金费率 / 持仓 OI / 多空比 / Taker） | ✅ 三件套（API Key + Secret Key + Passphrase） | ✅ 生产链路（`scripts/ai_factor_trader.py` 直签） |
 
-三所中位数 oracle（防插针）：所需三所现价端点全部免费可用，门禁改造在 W2 排期。
+能力要点（与 `ExchangeCapabilities` 对齐）：
 
-## 扩展一个新场所
+| 维度 | OKX V5 |
+|---|---|
+| 标的命名 | `{base}-USDT-SWAP`（如 `BTC-USDT-SWAP`） |
+| 下单数量单位 | **张**（`contracts`），按合约面值 `ctVal` 折算名义额 |
+| 订单号类型 | 字符串 |
+| 附带止盈止损 | ✅ `attachAlgoOrds`（同一订单原子附带 TP/SL） |
+| 触发价默认 | 最新价；保护腿**显式**发 `mark`（标记价） |
+| 持仓模式 | `net` / `long_short`；**入场准入只认 `long_short`**（`entry_ready_position_modes`，净持仓载荷未核验） |
+| K 线上限 | 300 根 |
+| 限频 | 公共行情约 20 req/2s，429 常见需退避 |
+| 公开数据 | 有 Top Trader 多空比、Taker 主动比 |
+| 大陆网络 | ✅ 可用 |
 
-1. 在 `astra_backend/exchanges/` 新建子类：声明 `ExchangeCapabilities`
-   （数量语义/触发价默认/限频/网络政策全部显式写进能力表）+ 实现公共行情切面；
-2. 未实装的私有切面**保持基类显式抛错**（fail-closed），不要写假实现；
-3. `registry._ADAPTERS` 注册；开闸执行前不动 `ADAPTER_EXECUTION_ENABLED`；
-4. 单测按 `tests/venues/test_exchanges_adapter.py` 模式全 mock + 真机只读冒烟。
+## 2. 凭证与档位（demo / live）
+
+- **档位开关**：`ASTRA_OKX_ENV=demo|live`（缺省按兼容键 `OKX_IS_SIMULATED` 推导，
+  未配置时兜底 `demo`）。档位决定读哪一组档位键。
+- **档位键是原子三元组**：`OKX_DEMO_API_KEY` / `OKX_DEMO_SECRET_KEY` /
+  `OKX_DEMO_PASSPHRASE` 与对应的 `OKX_LIVE_*`。**部分填入不得借用另一档的单个字段**
+  —— 未配齐即视为该档未配置。
+- **兼容旧写法**：`OKX_API_KEY` / `OKX_SECRET_KEY` / `OKX_PASSPHRASE` + `OKX_IS_SIMULATED`。
+- **后台录入（推荐）**：`/admin` →「账户接入」按 DEMO / LIVE 分别录入三件套，
+  本地 **Fernet 加密**存储（`data/astra_secrets.enc` + 匹配的 `data/.astra_secret_key`），
+  **留空不改**已有值；只授予必要读取/交易权限，禁用提款权限。
+- **就绪探针**：`GET /api/v1/admin/okx/runtime` 报告 `environment` / `mode_configured` /
+  `live_configured` / `demo_configured` / `fingerprint` / `base_url` / `status`。
+  ⚠️ `READY` **只表示本地配置齐全**，不代表交易所鉴权已通过 —— 恢复交易前先用只读账户快照核对。
+- 单一事实源：`scripts/okx_runtime.py`（`selected_environment()`）。
+
+## 3. 开闸（下单开关）
+
+OKX 下单**不走**「适配器执行开关」那一族环境旗标：
+
+1. 主链下单在 `scripts/ai_factor_trader.py` 的 **OKX 直签链路**（`scripts/okx_rest.py` +
+   `scripts/okx_runtime.py`）上完成；
+2. 该链路的档位与凭证由 `ASTRA_OKX_ENV` + 上节的凭证三元组共同把关，**未配齐即 NOT READY**，
+   私有调用与交易 **fail-closed**；公共行情不受影响，仍可免凭证读取；
+3. `astra_backend/exchanges/registry.py` 的 `execution_open("okx")` **结构性恒为 False**
+   （OKX 未声明 `adapter_execution_flag`）——也就是说**不存在** `ASTRA_OKX_EXECUTION`
+   这类开关，经适配器下单的路径不开闸；不要把「没有开关」误读成「默认放行」。
+
+## 4. 沙盒 / 实盘档案
+
+- **demo 档不是独立域名**：仍是 `https://www.okx.com`，靠请求头
+  `x-simulated-trading: 1` 表示模拟盘（`astra_backend/exchanges/env_profiles.py` 的
+  `simulated_trading` 位）。因此**不要**用「换域名」的思路理解 OKX 沙盒。
+- **demo 与 live 必须各自创建 API Key**（两个独立三元组），不能共用一个 Key 切档位。
+- 初始验证固定用 `ASTRA_OKX_ENV=demo`，确认只读快照与小额链路正常后再切 `live`。
+- 公共行情的主备域名在适配器内部（`www.okx.com` → `aws.okx.com`），属只读面。
+
+## 5. 最小下单单位与取整方向
+
+- 数量以**张**为单位；名义额 = 张数 × `ctVal` × 价格。
+- 价格与数量按交易所规格 `tickSz` / `lotSz` **向下取整**，换算名义额**永不超出**目标；
+  取整的代价是可能更常低于最小张数而被拒 —— **少下单，不超买**。
+- 推不出合法张数（含低于 `minSz`）⇒ **拒单/跳过并说明原因**，绝不静默改成 1 张放大仓位。
+- 语义与门禁锚点见 `docs/FAILURE_SEMANTICS.md` 的「下单量换算的方向」「杠杆夹取与张数推导的顺序契约」两条。
+
+## 6. 保护腿（止盈 / 止损）
+
+- 入场腿用 `attachAlgoOrds` **原子附带** TP/SL；云端棘轮改单走 OKX 算法单接口。
+- ⚠️ **HTTP 200 ≠ 受保护**：附带算法单在普通订单完全成交后才提交，回执里的
+  `failCode` / `failReason` 必须回读核验（账户 / 合约 / 方向 / 数量 / 触发值），
+  核验 helper 为 `astra_backend/okx_trade_service.py` 的 `verify_attached_protection`。
+- 触发价类型**显式发送 `mark`**（标记价触发），不依赖交易所默认值；`last` / `index`
+  可显式覆盖。展示口径分四态：`mark` / `last` / `index` / `unknown`，**读不到就报「未上报」**。
+- 门禁：`tests/venues/test_okx_trigger_price_type_semantics.py`。
+
+## 7. 数据健康度
+
+每 15 分钟决策周期自动落盘取数健康（成功币数 / 失败原因 / 延迟），
+后台同一卡片实时展示，原始数据在 `data/venue_health.json`。
+健康文件缺失或损坏时回退静态顺序，**不把「读不到」当成「很健康」**。
+
+## 8. 历史台账与已移除交易所的遗留行
+
+`data/trading_ledger.json` 里**仍然存在**来自已移除交易所（`binance` / `gate`）的
+**历史成交行** —— 它们是真实发生过的成交记录，属于历史事实：
+
+- **只读保留、不重写、不删除、不伪造**；不得因为交易所已移除就把这些行藏起来；
+- 统计与展示必须**按历史行如实计入**，并让口径（本所 vs 含历史外所行）**随载荷自曝**，
+  否则用户会看到「数字和台账对不上」却查不出原因；
+- 历史行的必要字段缺失时按「不可判定」处理，而不是当 0 —— 读不到 ≠ 没有。
+
+## 9. 失败语义
+
+所有「读不到 / 不可判定 / 部分失败」时的倒向（保留 / 不做 / 披露 / 吼 / 防）见
+`docs/FAILURE_SEMANTICS.md`：本页只讲**接什么、怎么接**，那页讲**接不上时往哪边倒**。

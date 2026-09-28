@@ -1,5 +1,9 @@
 # `astra_backend/` 分层与归档约定
 
+> **2026-09 OKX 专用化**：Binance / Gate 适配器与场所路由、跨所保护层已从本仓移除；
+> 下列分层与模块清单已同步：根层不再保留跨所执行路由与选所路由门面，
+> `dashboard_payload/` 不再有跨所保护腿/孤儿腿相关的组合视图。
+>
 > 本文是**约定文档，不是目录搬迁计划**。结构优化研究（`plan_local/records/structure-01.md`
 > §2 B7 / §10.5）得出的结论是：**不为目录整齐去搬已上线的启动路径模块**，
 > 而是把"哪个模块属于哪一层、新文件该进哪个子包"固化成文字约定。
@@ -7,10 +11,10 @@
 
 ## 1. 为什么这里不是"一个包一个域"的整齐目录
 
-根层 35 个模块 + 9 个子包**看起来**扁平，但那是**有代价的取舍**，不是没整理：
+根层约 40 个模块 + 9 个子包**看起来**扁平，但那是**有代价的取舍**，不是没整理：
 
 1. **路径锚点会被踩。** 仓里有一批审计测试按**文件路径**钉死读取
-   （`astra_backend/execution_router.py` 5 处、`policy_snapshot.py` 3 处、
+   （`policy_snapshot.py` 3 处、
    `qq_gateway_daemon.py` 2 处、`llm_manager.py` 2 处、`council_manager.py` 2 处、
    `app.py` 2 处、`scheduler.py` 1 处）。为目录整齐去改 17 处锚点，
    正是研究文档 §4 明确反对的方向（"先设计抽取边界去迁就锚点，而不是反过来"）。
@@ -36,7 +40,7 @@
 | `llm_manager.py` | ~281 | `llm/`（util / capabilities / providers / transport / policy / store / failover / call） |
 | `council_manager.py` | ~416 | `council/`（debate / policy / roster / presets） |
 | `policy_snapshot.py` | ~295 | `policy/`（paths / schema / fingerprints / io / capture / restore / archive） |
-| `dashboard_cache.py` | 536 | `dashboard_payload/`（12 模块）；**0 条路由**（纯库，路由在 `routers/dashboard.py`） |
+| `dashboard_cache.py` | 536 | `dashboard_payload/`（载荷按域模块化）；**0 条路由**（纯库，路由在 `routers/dashboard.py`） |
 
 **判据**：一个模块如果"只剩转发/薄壳"，它就是门面，新逻辑一律进它对应的子包。
 
@@ -73,7 +77,7 @@
 
 | 域 | 模块 |
 |---|---|
-| 交易执行 | `execution_router.py`、`okx_trade_service.py`、`okx_client.py`、`close_intent.py`、`risk_reservation.py`、`venue_router.py`、`exchanges/`、`execution/`、`sandbox/` |
+| 交易执行 | `okx_trade_service.py`、`okx_client.py`、`close_intent.py`、`risk_reservation.py`、`exchanges/`、`execution/`、`sandbox/` |
 | 风控与安全 | `risk_config.py`、`net_security.py`、`login_guard.py`、`client_ip.py`、`admin_auth.py`、`interceptor_manager.py`、`redact.py` |
 | 通知与外部通道 | `notifications.py`、`qq_bind.py`、`qq_gateway_daemon.py` |
 | 审计与备份 | `audit.py`、`backup_store.py`、`backup_secrets.py`、`file_locks.py` |
@@ -111,7 +115,6 @@
 | `collect.py` | `collect_core_account_state` —— `update_cache_cycle` **相位 1**：余额/持仓/挂单三路并发抓取 + 单项失败降级 + 「三项同时 NOT_READY ⇒ 连接方式缺失」判定 + USDT 余额解析 + 追踪器/持仓行/挂单行装配（B2 第九十四刀；段体 AST 逐字、11 项同名注入、14 项输出） |
 | `algo_protection.py` | 算法保护单视图 |
 | `ledger_view.py` | 台账视图 |
-| `multi_venue.py` | 三所组合视图 |
 | `integrity_sidecars.py` | 完整性旁车并入 `source_errors`（台账同步状态 / AI 连败） |
 | `reset_state.py` | 状态重置 |
 
@@ -162,7 +165,7 @@
 ## 6. 每次拆分后必须过的两道闸
 
 ```bash
-# 1) 全量套件（当前基线：10370 例 OK, skipped=1）
+# 1) 全量套件（当前基线：8680 例 OK, skipped=1）
 #    ⚠️ 这个数字由 tests/core/test_readme_baseline_numbers.py 钉住：
 #    它用 AST 数出仓里 test_* 方法数，再要求本行数字与之同量级。
 #    超过 ±10% 就会翻红 —— 忘了更新这里会当场被抓住，不会静默漂移。

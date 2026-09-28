@@ -74,12 +74,11 @@ class EpochUnitConverterTest(unittest.TestCase):
                          "唯一实现里应当**恰好**一个分界常量")
 
     def test_former_spellings_delegate(self):
-        """两处**消费方**必须 import 唯一实现（唯一实现自己不 import 自己）。"""
-        for rel in ("scripts/trader/venue_protection.py",
-                    "astra_backend/dashboard_payload/multi_venue.py"):
+        """消费方必须 import 唯一实现（唯一实现自己不 import 自己）。"""
+        for rel in ("scripts/trader/venue_protection.py",):
             src = (ROOT / rel).read_text(encoding="utf-8")
             self.assertIn("time_utils", src, f"{rel} 没有委派给唯一实现（又写了一份分界）")
-            self.assertIn("to_seconds" if "venue_protection" in rel else "to_millis", src,
+            self.assertIn("to_seconds", src,
                           f"{rel} 虽然出现 time_utils 字样，但没用换算函数")
 
     def test_conversion_behaviour_both_units(self):

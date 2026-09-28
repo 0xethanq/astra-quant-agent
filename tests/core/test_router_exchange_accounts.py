@@ -45,10 +45,8 @@ class VenueAccountUnknownTest(unittest.TestCase):
                          "输出只多出状态、原因与同步时间三个元字段")
 
     def test_listing_env_map_knows_the_venue_specific_naming(self):
-        """沙箱档位**各所叫法不同**（gate 是 sandbox，另两所是 demo）—— 混用会把实盘当沙箱。"""
-        self.assertEqual(R._LISTING_ENV_MAP["gate"]["demo"], "sandbox")
         self.assertEqual(R._LISTING_ENV_MAP["okx"]["demo"], "demo")
-        self.assertEqual(R._LISTING_ENV_MAP["binance"]["live"], "live")
+        self.assertEqual(R._LISTING_ENV_MAP["okx"]["live"], "live")
 
 
 class PositionsRouteTest(unittest.TestCase):

@@ -146,7 +146,7 @@ def generate_daily_briefing_and_backup():
             lines.append(f"  • ... 另有 {len(positions) - 4} 笔持仓监控中")
 
     lines.append(f"• 市场舆情环境：{macro_env}")
-    lines.append("• 策略状态：三所平权对等撮合已就绪，多周期趋势共振滤网与黑天鹅熔断哨兵全天候巡检中。")
+    lines.append("• 策略状态：OKX 原生受保护撮合已就绪，多周期趋势共振滤网与黑天鹅熔断哨兵全天候巡检中。")
 
     briefing_text = "\n".join(lines)
 

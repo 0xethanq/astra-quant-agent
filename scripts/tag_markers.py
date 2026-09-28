@@ -4,8 +4,7 @@
 
 2026-09-27 把内部代号 `r20` 全量改名为 `astra`。归属标记的物理位置是：
 
-- **OKX / Gate**：原生条件单的 `initial.text`（形如 `t-<marker>sl…` / `t-<marker>tp…`）；
-- **Binance**：`type` / `raw.orderType` 里的类型名。
+- **OKX**：原生条件单的 `initial.text`（形如 `t-<marker>sl…` / `t-<marker>tp…`）。
 
 改名那一刻，交易所上可能仍挂着**改名前创建**的保护腿，它们的 text 是 `t-r20sl…`。
 若只认新标记，这些腿会被判成"不是我们的"，后果是**静默削弱已有仓位的保护**：

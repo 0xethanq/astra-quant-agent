@@ -95,7 +95,6 @@ class _Rig:
             record_trade=lambda payload: self.trades.append(payload),
             sync_cloud_algo_stop=lambda *a, **k: self.synced.append((a, k)),
             venue_registry=_RigRegistry(),
-            amend_venue_stop_loss=lambda *a, **k: (True, "venue sl amended"),
             ASSET_CLASS_PROFILES=PROFILES,
             TAKER_FEE_RATE=0.0005,
             TIME_STOP_ATR_BAND=0.5,
@@ -374,36 +373,20 @@ class CrossVenueExitRoutingTest(unittest.TestCase):
             f, rig._pos, trackers, "2026-09-21 12:00:00", rig.actions, **rig.kwargs())
         return ok, detail, trackers, key
 
-    def test_a_binance_close_is_issued_to_binance_not_to_okx(self):
+    def test_a_non_okx_position_is_safely_skipped_without_issuing_orders(self):
         rig = _Rig(hard_stop=True)
         rig._pos = _pos(venue="binance")
-        self._run(rig)
-        self.assertTrue(rig.close_calls, "硬止损必须发起平仓")
-        _a, kw = rig.close_calls[0]
-        self.assertEqual(kw.get("venue"), "binance",
-                         "平仓必须打到该仓真实所在的场所（默认 okx 会平错场所）")
-
-    def test_the_okx_only_cloud_oco_probe_is_skipped_for_a_foreign_venue(self):
-        rig = _Rig(protection=(True, "ok"))
-        rig._pos = _pos(venue="gate")
-        self._run(rig)
-        self.assertEqual(rig.protect_calls, [],
-                         "云 OCO 核验是 OKX 直签链专属：对外所用它必然失败，"
-                         "并会把 fail-closed 平仓指向错误的场所")
-
-    def test_a_foreign_venue_ratchet_uses_the_venue_stop_not_the_okx_one(self):
-        rig = _Rig(floor=72000.0, old_sl=69000.0, high_water=73000.0)
-        rig._pos = _pos(venue="binance", avgPx=70000.0)
-        self._run(rig)
-        self.assertEqual(rig.synced, [],
-                         "外所不许调用 OKX 直签链的 sync_cloud_algo_stop"
-                         "（tracker 会谎报止损已上移，而交易所上其实没动）")
+        ok, why, _, _ = self._run(rig)
+        self.assertFalse(ok)
+        self.assertIn("非 OKX 场所", why)
+        self.assertEqual(rig.close_calls, [], "已下架场所绝对不下发平仓指令")
 
     def test_an_okx_position_still_uses_the_okx_paths(self):
-        """OKX 路径逐位不变 —— 分流不得把自家所也改道。"""
+        """OKX 路径逐位不变。"""
         rig = _Rig(hard_stop=True)
         rig._pos = _pos(venue="okx")
         self._run(rig)
+        self.assertTrue(rig.close_calls)
         _a, kw = rig.close_calls[0]
         self.assertEqual(kw.get("venue"), "okx")
 

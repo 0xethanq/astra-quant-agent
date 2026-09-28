@@ -18,7 +18,7 @@ export const enAbout = {
     linuxdo: 'LINUX DO',
     // 2026-09: the channel list is served by the backend
     // (`/api/v1/referral-channels`, public read-only); only the label stays here.
-    channel: '{venue} channel',
+    channel: '{channel} channel',
     open: 'Open sign-up',
     copyHint: 'Click to copy',
   },

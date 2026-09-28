@@ -1,8 +1,12 @@
-"""Binance/Gate 后台一次性平仓意图（三所平权；OKX 意图走 okx_trade_service 自有存储）。
+"""一次性平仓意图登记（本仓已收口为 OKX 专用）。
 
-与 OKX 平仓契约同构：服务端随机令牌登记 · 90 秒时效 · 环境绑定 · 口令短语全等 ·
-消费前仓位数量二次校验 · 平仓后回读归零核验。ASTRA-BUGFIX 2026-09-13：修复合并快照
-伪造 `token-venue-...` 假令牌导致非 OKX 仓位平仓必然「令牌无效或已使用」的回归。
+OKX 的平仓意图走 `okx_trade_service` 自有存储；本模块历史上服务于已下架的外所
+适配器直连路径。外所分支删除后，本模块保留为**fail-closed 收敛点**：档位轴映射
+（`ADAPTER_ENV`）恒空，任何外所场所都会在 `venue_fast_close` 处被拒，
+绝不会打到不存在的适配器上。
+
+契约（与 OKX 平仓同构，供调用方沿用）：服务端随机令牌登记 · 90 秒时效 · 环境绑定 ·
+口令短语全等 · 消费前仓位数量二次校验 · 平仓后回读归零核验。
 """
 from __future__ import annotations
 import secrets
@@ -15,14 +19,18 @@ _LOCK = threading.Lock()
 INTENT_TTL_SECONDS = 90
 
 
-# 三所档位轴：OKX env.mode(demo/live) 为全站唯一档位；gate demo→sandbox，binance 同名。
-# 唯一定义点（审计 C3：ai_factor_trader/ exchanges 等所有非 OKX 适配器路径都应引用本表）。
-ADAPTER_ENV = {"binance": {"demo": "demo", "live": "live"}, "gate": {"demo": "sandbox", "live": "live"}}
+# 档位轴映射：外所全部下架后已无外所档位可言 ⇒ 本表恒空。
+# 唯一定义点（审计 C3：所有调用方都应引用本表）。恒空是**有意**的 fail-closed：
+# `adapter_environment()` 退化为原样透传，`venue_fast_close()` 对任何场所直接拒单。
+ADAPTER_ENV: dict[str, dict[str, str]] = {}
 _ADAPTER_ENV = ADAPTER_ENV
 
 
 def adapter_environment(venue: str, mode: str) -> str:
-    """OKX 档位轴 → 该所适配器档位（未知轴值原样透传给适配器自校验）。"""
+    """OKX 档位轴 → 该所适配器档位（未知轴值原样透传给适配器自校验）。
+
+    外所档位轴已随外所移除（`ADAPTER_ENV` 恒空）⇒ 本函数对任何场所都原样透传。
+    """
     return ADAPTER_ENV.get(str(venue or "").lower(), {}).get(str(mode or "").lower(), str(mode or ""))
 
 
@@ -81,7 +89,7 @@ def _pos_side(size_signed: float) -> str:
 
 
 def venue_fast_close(venue: str, environment: str, token: str, confirmation: str) -> dict[str, Any]:
-    """Binance/Gate 市价全平：口令预检→一次性消费→数量回验→平仓→归零核验。
+    """外所市价全平入口（已随外所移除 ⇒ 恒 fail-closed 拒单）。
 
     返回与 OKX ``fast_close_confirmed`` 同构，供审计与前端复用；任一核验失败均
     fail-closed 抛异常（ValueError→409，其余→502），绝不静默半平。
@@ -127,14 +135,19 @@ def venue_fast_close(venue: str, environment: str, token: str, confirmation: str
     tolerance = max(1e-12, current * 1e-6)
     if abs(current - expected) > tolerance:
         raise ValueError(f"仓位数量已从 {expected:g} 变化为 {current:g}，请刷新")
+    # ⚠️ 能力探针（判据见 `tests/audit/test_venue_capability_calls.py`）：
+    # `fast_close_position` 是**基类契约之外**的能力，调用方不得假定任何适配器都有它。
+    fast_close = getattr(ad, "fast_close_position", None)
+    if not callable(fast_close):
+        raise RuntimeError(f"{venue.upper()} 适配器未实装快平（fast_close_position 缺失）")
     import inspect
     kwargs: dict[str, Any] = {}
     try:
-        if "pos_side" in inspect.signature(ad.fast_close_position).parameters:
+        if "pos_side" in inspect.signature(fast_close).parameters:
             kwargs["pos_side"] = want_side
     except (TypeError, ValueError):
         pass
-    raw = ad.fast_close_position(sym, **kwargs)
+    raw = fast_close(sym, **kwargs)
     if isinstance(raw, dict) and raw.get("closed") is False:
         raise RuntimeError(f"平仓未受理：{raw.get('reason') or raw}")
     remaining = current

@@ -73,54 +73,6 @@ class RealFrameParseTest(unittest.TestCase):
         self.assertEqual(tick["exchange_ms"], 1789893848451)
         self.assertEqual(tick["latency_ms"], 0, "同刻时间戳 ⇒ 延迟 0，不是 None")
 
-    def test_gate_subscribe_ack_is_not_a_parse_error(self):
-        """回归钉（本机实跑抓到的假错误）：应答帧若落进行解析会多一条假解析错误。"""
-        out = ms.parse_frame("gate", GATE_ACK)
-        self.assertIsNone(out["error"], "订阅应答不是 tick，不该报解析错误")
-        self.assertEqual(out["ticks"], [])
-        self.assertIn("subscribe success", out["control"])
-
-    def test_gate_update_frame_yields_tick_with_mark_price(self):
-        out = ms.parse_frame("gate", GATE_TICK, now_ms=1789893869795)
-        self.assertEqual(len(out["ticks"]), 1)
-        tick = out["ticks"][0]
-        self.assertEqual((tick["symbol"], tick["kind"]), ("BTC_USDT", "ticker"))
-        self.assertAlmostEqual(tick["price"], 80236.0)
-        self.assertAlmostEqual(tick["mark_price"], 80237.1)
-
-    def test_gate_rejected_subscribe_is_an_error(self):
-        """真帧：往现货域发 futures.tickers 会"连上但订阅被拒"。"""
-        out = ms.parse_frame("gate", GATE_REJECTED)
-        self.assertEqual(out["ticks"], [])
-        self.assertIn("订阅被拒", out["error"])
-        self.assertIn("2", out["error"])
-
-    def test_binance_ack_and_trade_frames(self):
-        ack = ms.parse_frame("binance", BINANCE_ACK)
-        self.assertEqual(ack["ticks"], [])
-        self.assertIn("ack", ack["control"])
-        trade = ms.parse_frame("binance", BINANCE_TRADE, now_ms=1789893896920)
-        self.assertEqual(trade["ticks"][0]["kind"], "trade")
-        self.assertAlmostEqual(trade["ticks"][0]["price"], 80227.0)
-        self.assertAlmostEqual(trade["ticks"][0]["qty"], 0.010)
-
-    def test_binance_mark_and_24h_variants(self):
-        mark = ms.parse_frame("binance", BINANCE_MARK)
-        self.assertEqual(mark["ticks"][0]["kind"], "mark")
-        day = ms.parse_frame("binance", BINANCE_24H)
-        self.assertEqual(day["ticks"][0]["kind"], "ticker")
-        self.assertAlmostEqual(day["ticks"][0]["price"], 80230.5)
-
-    def test_binance_combined_stream_is_unwrapped(self):
-        out = ms.parse_frame("binance", BINANCE_COMBINED)
-        self.assertEqual(len(out["ticks"]), 1)
-        self.assertEqual(out["ticks"][0]["kind"], "trade")
-
-    def test_unknown_event_is_control_not_tick(self):
-        out = ms.parse_frame("binance", '{"e":"listenKeyExpired","E":1}')
-        self.assertEqual(out["ticks"], [])
-        self.assertIn("listenKeyExpired", out["control"])
-
     def test_garbage_never_raises_but_is_recorded(self):
         for bad in ("{not json", "[1,2,3]", b"\xff\xfe", "", "null"):
             with self.subTest(bad=bad):
@@ -140,38 +92,22 @@ class RealFrameParseTest(unittest.TestCase):
 
 
 class SymbolMappingTest(unittest.TestCase):
-    """实测两连击：Gate `BTC_USDT_SWAP` 被拒；Binance `btcusdtswap` 静默零数据。"""
-
     def test_canonical_symbol_maps_per_venue(self):
-        for venue, want in (("okx", "BTC-USDT-SWAP"), ("gate", "BTC_USDT"),
-                            ("binance", "BTCUSDT")):
-            with self.subTest(venue=venue):
-                self.assertEqual(ms.venue_symbol(venue, "BTC-USDT-SWAP"), want)
+        self.assertEqual(ms.venue_symbol("okx", "BTC-USDT-SWAP"), "BTC-USDT-SWAP")
 
     def test_various_input_spellings_normalise(self):
-        self.assertEqual(ms.venue_symbol("gate", "eth_usdt"), "ETH_USDT")
-        self.assertEqual(ms.venue_symbol("binance", "ETH/USDT"), "ETHUSDT")
         self.assertEqual(ms.venue_symbol("okx", "ETH-USDT"), "ETH-USDT-SWAP")
+        self.assertEqual(ms.venue_symbol("okx", "ETH_USDT"), "ETH-USDT-SWAP")
+        self.assertEqual(ms.venue_symbol("okx", "ETH/USDT"), "ETH-USDT-SWAP")
 
     def test_unknown_venue_raises_loudly(self):
         with self.assertRaises(KeyError):
             ms.venue_symbol("kraken", "BTC-USDT-SWAP")
 
-    def test_binance_uses_path_subscription(self):
-        url = ms.stream_url("binance", ms.venue_symbol("binance", "BTC-USDT-SWAP"))
-        self.assertTrue(url.endswith("/btcusdt@trade"), url)
-        self.assertIsNone(ms.subscribe_payload("binance", "BTCUSDT"),
-                          "路径式订阅不该再发 JSON 订阅帧")
-
     def test_json_venues_send_subscribe_frames(self):
         okx = ms.subscribe_payload("okx", "BTC-USDT-SWAP")
         self.assertEqual(okx["op"], "subscribe")
         self.assertEqual(okx["args"][0]["channel"], "tickers")
-        gate = ms.subscribe_payload("gate", "BTC_USDT")
-        self.assertEqual(gate["channel"], "futures.tickers")
-        self.assertEqual(gate["payload"], ["BTC_USDT"])
-        self.assertIn("fx-ws.gateio.ws", ms.stream_url("gate", "BTC_USDT"),
-                      "Gate 期货流必须走专用域（现货域不接受 futures.tickers）")
 
 
 class TickBufferTest(unittest.TestCase):
@@ -207,39 +143,31 @@ class StreamHealthTest(unittest.TestCase):
                           "从未收到 tick ⇒ None（不可判定，不是健康）")
         h.note_frame("okx", ticks=2, now_ms=1_000)
         h.note_frame("okx", ticks=0, error="bad frame", now_ms=2_000)
-        h.note_error("gate", "connect reset", now_ms=2_000)
         snap = h.snapshot(now_ms=6_000)
         okx = snap["venues"]["okx"]
         self.assertEqual((okx["frames"], okx["ticks"], okx["parse_errors"]), (2, 2, 1))
         self.assertEqual(okx["last_msg_ms"], 2_000)
         self.assertEqual(okx["last_tick_ms"], 1_000)
         self.assertAlmostEqual(okx["tick_age_s"], 5.0)
-        self.assertEqual(snap["venues"]["gate"]["errors"], 1)
         self.assertEqual(h.staleness_s("okx", now_ms=6_000), 5.0)
         self.assertEqual(snap["schema_version"], ms.SCHEMA_VERSION)
 
     def test_silence_after_ack_shows_as_stale(self):
-        """Binance 实测形态：收到应答、没有 tick ⇒ 绝不能表现成"健康"。
-
-        ⚠️ 这里必须是 `None` 而**不是** 0：0 会被下游读成"刚刚还有数据"。
-        可判据是"有帧但零 tick"—— 这条组合就是"订阅被静默"的指纹，
-        与"刚连上还没来得及收"（frames=0）也区分得开。
-        """
         h = ms.StreamHealth()
-        h.note_frame("binance", ticks=0, now_ms=1_000)     # ack
+        h.note_frame("okx", ticks=0, now_ms=1_000)     # ack
         snap = h.snapshot(now_ms=61_000)
-        bnb = snap["venues"]["binance"]
-        self.assertEqual(bnb["frames"], 1)
-        self.assertEqual(bnb["ticks"], 0)
-        self.assertIsNone(bnb["tick_age_s"], "从未收到 tick ⇒ None（0 会被误读成刚有数据）")
-        self.assertEqual(h.staleness_s("binance", now_ms=61_000), None)
+        okx = snap["venues"]["okx"]
+        self.assertEqual(okx["frames"], 1)
+        self.assertEqual(okx["ticks"], 0)
+        self.assertIsNone(okx["tick_age_s"], "从未收到 tick ⇒ None（0 会被误读成刚有数据）")
+        self.assertEqual(h.staleness_s("okx", now_ms=61_000), None)
 
     def test_healthy_venue_is_distinguishable_from_silent_one(self):
         silent, healthy = ms.StreamHealth(), ms.StreamHealth()
-        silent.note_frame("binance", ticks=0, now_ms=1_000)
-        healthy.note_frame("binance", ticks=5, now_ms=1_000)
-        s = silent.snapshot(now_ms=61_000)["venues"]["binance"]
-        h = healthy.snapshot(now_ms=61_000)["venues"]["binance"]
+        silent.note_frame("okx", ticks=0, now_ms=1_000)
+        healthy.note_frame("okx", ticks=5, now_ms=1_000)
+        s = silent.snapshot(now_ms=61_000)["venues"]["okx"]
+        h = healthy.snapshot(now_ms=61_000)["venues"]["okx"]
         self.assertNotEqual((s["frames"], s["ticks"], s["tick_age_s"]),
                             (h["frames"], h["ticks"], h["tick_age_s"]),
                             "沉默所的指纹必须与健康所可区分")
@@ -283,46 +211,29 @@ class FakeTransportTest(unittest.TestCase):
     def test_probe_collects_ticks_from_every_venue(self):
         snap = ms.probe(seconds=0.5, connect_factory=self._factory({
             "okx": [OKX_ACK, OKX_TICK],
-            "gate": [GATE_ACK, GATE_TICK],
-            "binance": [BINANCE_TRADE, BINANCE_TRADE],
         }))
         self.assertEqual(snap["venues"]["okx"]["ticks"], 1)
-        self.assertEqual(snap["venues"]["gate"]["ticks"], 1)
-        self.assertEqual(snap["venues"]["binance"]["ticks"], 2)
-        self.assertEqual(snap["buffers"]["binance:BTCUSDT"], 2)
-
-    def test_each_venue_gets_its_own_window(self):
-        """回归钉：第一版全场共享一个 deadline，OKX 收满后 Gate/Binance 一轮都没跑。"""
-        log = []
-        ms.probe(seconds=0.5, connect_factory=self._factory({
-            "okx": [OKX_TICK], "gate": [GATE_TICK], "binance": [BINANCE_TRADE]}, connect_log=log))
-        self.assertEqual([v for v, _ in log], ["okx", "gate", "binance"],
-                         "三所都必须真的被连上（共享 deadline 会让后面的所连都不连）")
 
     def test_silent_venue_is_recorded_not_treated_as_healthy(self):
         snap = ms.probe(seconds=0.5, connect_factory=self._factory({
-            "okx": [OKX_TICK], "gate": [], "binance": []}))
-        for venue in ("gate", "binance"):
-            with self.subTest(venue=venue):
-                self.assertEqual(snap["venues"][venue]["ticks"], 0)
-                self.assertEqual(snap["venues"][venue]["errors"], 1)
-                self.assertIn("零数据帧", snap["venues"][venue]["last_error"])
-                self.assertIsNone(snap["venues"][venue]["tick_age_s"])
+            "okx": []}))
+        self.assertEqual(snap["venues"]["okx"]["ticks"], 0)
+        self.assertEqual(snap["venues"]["okx"]["errors"], 1)
+        self.assertIn("零数据帧", snap["venues"]["okx"]["last_error"])
+        self.assertIsNone(snap["venues"]["okx"]["tick_age_s"])
 
     def test_one_venue_failure_does_not_stop_the_others(self):
         snap = ms.probe(seconds=0.5, connect_factory=self._factory({
-            "okx": RuntimeError("dns down"), "gate": [GATE_TICK], "binance": [BINANCE_TRADE]}))
+            "okx": RuntimeError("dns down")}))
         self.assertIn("dns down", snap["venues"]["okx"]["last_error"])
         self.assertEqual(snap["venues"]["okx"]["ticks"], 0)
-        self.assertEqual(snap["venues"]["gate"]["ticks"], 1, "一个所挂了不该影响其他所")
-        self.assertEqual(snap["venues"]["binance"]["ticks"], 1)
 
     def test_probe_writes_snapshot_when_asked(self):
         import tempfile
         with tempfile.TemporaryDirectory() as d:
             path = Path(d) / "sub" / "market_stream_health.json"
             ms.probe(seconds=0.5, snapshot_path=str(path),
-                     connect_factory=self._factory({"okx": [OKX_TICK], "gate": [], "binance": []}))
+                     connect_factory=self._factory({"okx": [OKX_TICK]}))
             loaded = ms.load_snapshot(str(path))
             self.assertEqual(loaded["venues"]["okx"]["ticks"], 1)
 

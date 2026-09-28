@@ -124,8 +124,7 @@ class EnvKeysAreDocumentedTest(unittest.TestCase):
         template = (ROOT / "env.example").read_text(encoding="utf-8")
         self.assertGreaterEqual(len(re.findall(r"^[A-Za-z_][A-Za-z0-9_]*\s*=", template, re.M)), 60,
                                 "模板赋值行太少 ⇒ 可能读错了文件")
-        for must in ("ASTRA_OKX_ENV", "ASTRA_VENUE_PROTECTION_WATCHDOG",
-                     "ASTRA_VENUE_PROTECTION_WATCHDOG_DRY_RUN", "ASTRA_MAX_PRICE_CROSS_PCT"):
+        for must in ("ASTRA_OKX_ENV", "ASTRA_MAX_PRICE_CROSS_PCT"):
             self.assertIn(must, template, f"安全相关键 {must} 必须出现在模板里")
 
     def test_allowlist_entries_have_reasons(self):
@@ -170,8 +169,7 @@ class EnvKeysAreDocumentedTest(unittest.TestCase):
     def test_safety_switches_document_their_safe_tier(self):
         """安全开关必须在模板里**讲清档位**（只说"有这个键"不够）。"""
         template = (ROOT / "env.example").read_text(encoding="utf-8")
-        for needle in ("ASTRA_VENUE_PROTECTION_WATCHDOG_DRY_RUN",
-                       "只报", "绝不下单"):
+        for needle in ("ASTRA_MAX_PRICE_CROSS_PCT", "拒单"):
             self.assertIn(needle, template, f"模板缺少 {needle!r} ⇒ 档位语义没写清")
 
 

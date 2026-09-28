@@ -15,12 +15,13 @@
 - 本模块：**无 LLM 参与**的机械退出规则（TP/棘轮/时间止损）。
 命名刻意避开 `position_*` 混淆：本模块叫 `position_exit`。
 
-## 同名注入（18 项，本仓最宽之一）
+## 同名注入（本仓最宽之一）
 
 ⇒ 函数体 AST **零例外全等**。`time` 由本模块自 import。
 `_close_fee` / `_close_trade_payload` / `notify_trade_close` /
 `protection_signals` / `ratcheted_trailing_stop` 是门面从其它子包 import 进来的
 名字，同样按门面全局**同名注入**（保持 patch 面与调用期解析语义不变）。
+多所路径的原生云端棘轮注入已随场所下线移除。
 """
 from __future__ import annotations
 
@@ -40,7 +41,6 @@ def manage_position_tp_and_trailing(f, curr_pos, trackers, timestamp_full, execu
     record_trade,
     sync_cloud_algo_stop,
     venue_registry,
-    amend_venue_stop_loss,
     ASSET_CLASS_PROFILES,
     TAKER_FEE_RATE,
     TIME_STOP_ATR_BAND,
@@ -67,6 +67,15 @@ def manage_position_tp_and_trailing(f, curr_pos, trackers, timestamp_full, execu
     entry_px = float(curr_pos["avgPx"])
     pos_key = f"{inst_id}_{curr_pos['side']}"
     pos_venue = str(curr_pos.get("venue") or curr_pos.get("exchange") or "okx").lower()
+    # ⚠️ 只读守卫：已移除场所的历史持仓可能仍留在台账里。它的
+    # instId 与 OKX 同名，**绝不能**把它交给任何 OKX 直签接口 ——
+    # `close_position_confirmed` 不传 venue 就默认 okx，会把同名标的在 OKX 的仓
+    # 平掉（平的是别人的仓，2026-09-28 实盘事故）。故非 OKX 一律留痕跳过，
+    # 不撤台账行、不下发任何交易所指令、更不抛异常。
+    if pos_venue != "okx":
+        executed_actions.append(
+            f"[{f['name']}] 非 OKX 场所({pos_venue})历史持仓，只读跳过机械退出（不下发任何交易所指令）")
+        return False, f"非 OKX 场所({pos_venue})，只读跳过"
 
     now_ts = int(time.time())
     if pos_key not in trackers:
@@ -152,38 +161,34 @@ def manage_position_tp_and_trailing(f, curr_pos, trackers, timestamp_full, execu
         t["takeProfitPx"] = round(entry_px + default_tp_dist if is_long else entry_px - default_tp_dist, prec)
     _pos_side = "long" if is_long else "short"
     # ⚠️ 云 OCO 核验（`okx_rest.pending_algo_orders` / `place_algo_oco`）是
-    # **OKX 直签链专属**。三所持仓接管（2026-09-28）后外所仓也会走到这里：
-    # 对币安/Gate 调用它必然失败（实测日志 `OKX 51001: Instrument ID doesn't exist`
-    # —— 它拿币安的标的去问 OKX），随后落进 fail-closed「安全退出」分支去平仓。
-    # 而那一刀真正的危险在这里：`close_position_confirmed` **不传 venue 就默认 okx**，
-    # 于是"保护失效退出"会把同名标的在 OKX 的仓平掉 —— 平的是别人的仓。
-    # 外所的保护腿由 `venue_protection` 场所看门狗独立核验与补挂，这里不重复。
-    if pos_venue == "okx":
-        protected, protection_detail = ensure_cloud_position_protection(
-            inst_id, _pos_side, pos_sz, float(t["takeProfitPx"]), hard_stop_px
-        )
-        if not protected:
-            closed, close_detail = close_position_confirmed(
-                inst_id, _pos_side, pos_sz, venue=pos_venue)
-            if not closed:
-                executed_actions.append(f"[{name}] 🚨 云端 OCO 缺失且安全退出失败: {protection_detail}; {close_detail}")
-                return False, "保护与退出均失败"
-            pnl_val = curr_pos["upl"]
-            executed_actions.append(f"[{name}] 🧯 云端 OCO 无法确认，已安全平仓: {protection_detail}")
-            record_trade(_close_trade_payload(
-                is_long=is_long, timestamp_full=timestamp_full, name=name,
-                action_type="保护失效退出", side_suffix="保护失效退出",
-                pos_sz=pos_sz, cur_px=cur_px,
-                fee=_close_fee(pos_sz, ct_val, cur_px, TAKER_FEE_RATE), pnl=pnl_val,
-                remark=f"云端 OCO 无法达到全仓覆盖，交易所确认安全平仓：{protection_detail}",
-            ))
-            add_stop_cooldown(inst_id, _pos_side, "云端保护失效")
-            if notify_trade_close:
-                notify_trade_close(inst=name, pnl=pnl_val, stage="云端保护失效退出", exit_px=cur_px, venue=pos_venue)
-            trackers.pop(pos_key, None)
-            return True, "保护失效安全退出"
-    else:
-        protection_detail = f"{pos_venue.upper()} 保护腿由场所看门狗核验（云 OCO 核验为 OKX 直签链专属）"
+    # **OKX 直签链专属**，本模块只对 OKX 持仓调用（非 OKX 持仓已在上方只读守卫处
+    # 留痕返回，永不把外所 instId 交给 OKX 接口）。
+    # 危险点：`close_position_confirmed` **不传 venue 就默认 okx**，
+    # 若把外所持仓的 instId 交给它，"保护失效退出"会把同名标的在 OKX 的仓平掉
+    # —— 平的是别人的仓（2026-09-28 实盘事故）。
+    protected, protection_detail = ensure_cloud_position_protection(
+        inst_id, _pos_side, pos_sz, float(t["takeProfitPx"]), hard_stop_px
+    )
+    if not protected:
+        closed, close_detail = close_position_confirmed(
+            inst_id, _pos_side, pos_sz, venue=pos_venue)
+        if not closed:
+            executed_actions.append(f"[{name}] 🚨 云端 OCO 缺失且安全退出失败: {protection_detail}; {close_detail}")
+            return False, "保护与退出均失败"
+        pnl_val = curr_pos["upl"]
+        executed_actions.append(f"[{name}] 🧯 云端 OCO 无法确认，已安全平仓: {protection_detail}")
+        record_trade(_close_trade_payload(
+            is_long=is_long, timestamp_full=timestamp_full, name=name,
+            action_type="保护失效退出", side_suffix="保护失效退出",
+            pos_sz=pos_sz, cur_px=cur_px,
+            fee=_close_fee(pos_sz, ct_val, cur_px, TAKER_FEE_RATE), pnl=pnl_val,
+            remark=f"云端 OCO 无法达到全仓覆盖，交易所确认安全平仓：{protection_detail}",
+        ))
+        add_stop_cooldown(inst_id, _pos_side, "云端保护失效")
+        if notify_trade_close:
+            notify_trade_close(inst=name, pnl=pnl_val, stage="云端保护失效退出", exit_px=cur_px, venue=pos_venue)
+        trackers.pop(pos_key, None)
+        return True, "保护失效安全退出"
     t["cloudProtection"] = {"verifiedAt": timestamp_full, "detail": protection_detail}
 
     # 2. Volatility Time-Stop Exit (持仓超最长持仓时间且缩量横盘 → 时间止损，参数见后台风控管理页)
@@ -231,23 +236,7 @@ def manage_position_tp_and_trailing(f, curr_pos, trackers, timestamp_full, execu
         # If dynamic floor stop ratcheted up, commit and sync to cloud OCO
         if dynamic_floor_sl > old_sl and old_sl > 0:
             t["trailingStopPx"] = dynamic_floor_sl
-            if pos_venue == "okx":
-                sync_cloud_algo_stop(inst_id, "long", dynamic_floor_sl, reason=t["stage_desc"])
-            else:
-                # 外所：`sync_cloud_algo_stop` 走 OKX 直签链，对外所仓必然失败
-                # ——而 tracker 的 `trailingStopPx` 已经改成"已上移"⇒ **账实不符**
-                # （台账说止损抬了、交易所上其实没抬）。改用场所原生棘轮，与 AI
-                # 移损路径共用同一条 `amend_venue_stop_loss`。
-                try:
-                    _oil_ad = venue_registry.get_adapter(pos_venue)
-                    _oil_ok, _oil_note = amend_venue_stop_loss(
-                        _oil_ad, name, "long", dynamic_floor_sl, pos_sz)
-                    if not _oil_ok:
-                        executed_actions.append(
-                            f"[{name}] {pos_venue.upper()} 云端止损上移失败: {_oil_note}")
-                except Exception as _oil_exc:
-                    executed_actions.append(
-                        f"[{name}] {pos_venue.upper()} 云端止损上移异常: {_oil_exc}")
+            sync_cloud_algo_stop(inst_id, "long", dynamic_floor_sl, reason=t["stage_desc"])
         else:
             t["trailingStopPx"] = dynamic_floor_sl
 
@@ -306,20 +295,7 @@ def manage_position_tp_and_trailing(f, curr_pos, trackers, timestamp_full, execu
         # If dynamic floor stop ratcheted down (tightened for short), commit and sync to cloud OCO
         if dynamic_floor_sl < old_sl and old_sl > 0:
             t["trailingStopPx"] = dynamic_floor_sl
-            if pos_venue == "okx":
-                sync_cloud_algo_stop(inst_id, "short", dynamic_floor_sl, reason=t["stage_desc"])
-            else:
-                # 同多头分支：外所走场所原生棘轮，避免 tracker 谎报止损已上移。
-                try:
-                    _ois_ad = venue_registry.get_adapter(pos_venue)
-                    _ois_ok, _ois_note = amend_venue_stop_loss(
-                        _ois_ad, name, "short", dynamic_floor_sl, pos_sz)
-                    if not _ois_ok:
-                        executed_actions.append(
-                            f"[{name}] {pos_venue.upper()} 云端止损上移失败: {_ois_note}")
-                except Exception as _ois_exc:
-                    executed_actions.append(
-                        f"[{name}] {pos_venue.upper()} 云端止损上移异常: {_ois_exc}")
+            sync_cloud_algo_stop(inst_id, "short", dynamic_floor_sl, reason=t["stage_desc"])
         else:
             t["trailingStopPx"] = dynamic_floor_sl
 

@@ -1,10 +1,10 @@
 """交易所适配器注册表（`astra_backend/exchanges/registry.py`）残余分支收口测试 —— 第 353 刀。
 
-本模块 264 行，是交易所适配器统一注册、执行开闸校验、凭据原子档位解析与合约符号纯映射核心：
+本模块是 OKX-only 适配器注册、执行开闸校验、凭据原子档位解析与合约符号纯映射核心：
 - 凭证解析容错（`venue_credentials`）：密钥库读取异常自愈、半配档位（仅有 Key 或仅有 Secret）跳过并降级至下一档位；
 - 通行密钥读取（`venue_passphrase`）：非 OKX 场所直接返回空串、密钥库异常自愈、未指定环境时直读主通行密码；
 - 执行开闸保护（`require_execution`）：开闸后适配器 `supports_orders=False` 时的防御性拦截报错；
-- 符号纯解析（`native_symbol_pure`）：未知场所无模板时平滑回退标准资产基准码（canonical_base）。
+- 符号纯解析（`native_symbol_pure`）：未登记场所无模板时平滑回退标准资产基准码（canonical_base）。
 """
 from __future__ import annotations
 
@@ -27,17 +27,17 @@ class ExchangeRegistryTailsTests(unittest.TestCase):
     def test_venue_credentials_secrets_load_exception_returns_empty(self):
         # 密钥加载异常时捕获并返回 ("", "") (lines 158-159)
         with patch("astra_gateway.secrets.load_secrets", side_effect=RuntimeError("secrets vault locked")):
-            self.assertEqual(venue_credentials("gate", "sandbox"), ("", ""))
+            self.assertEqual(venue_credentials("okx", "sandbox"), ("", ""))
 
     def test_venue_credentials_half_configured_tier_skipped(self):
         # 某档位半配（只有 key 或只有 secret）时不能跨档拼配，跳过该档继续向下回退 (lines 176-178)
         secrets = {
-            "GATE_DEMO_API_KEY": "demo_key_only",  # 缺少 GATE_DEMO_SECRET_KEY
-            "GATE_API_KEY": "fallback_key",
-            "GATE_SECRET_KEY": "fallback_secret",
+            "OKX_DEMO_API_KEY": "demo_key_only",  # 缺少 OKX_DEMO_SECRET_KEY
+            "OKX_API_KEY": "fallback_key",
+            "OKX_SECRET_KEY": "fallback_secret",
         }
         with patch("astra_gateway.secrets.load_secrets", return_value=secrets):
-            creds = venue_credentials("gate", "sandbox")
+            creds = venue_credentials("okx", "sandbox")
             self.assertEqual(creds, ("fallback_key", "fallback_secret"))
 
     # -------------------------------------------------------------------------

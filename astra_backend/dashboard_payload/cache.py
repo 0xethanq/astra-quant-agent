@@ -61,7 +61,7 @@ def _inject_local_data_into_stale(load_factor_lib: Callable[..., Any], load_cros
     # smart_money_derivatives, probability_theory, microstructure, etc.
     stale["factor_library"] = load_factor_lib()
 
-    # US-007：跨所快照同为本地文件（venue_health + decisions xvenue），STALE 下保持新鲜
+    # US-007：行情/健康快照同为本地文件（venue_health + decisions），STALE 下保持新鲜
     stale["cross_venue"] = load_cross_venue()
     stale["portfolio_risk"] = load_portfolio_risk()
 

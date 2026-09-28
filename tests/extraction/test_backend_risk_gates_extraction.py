@@ -2,14 +2,10 @@
 
 ## 抽了什么
 
-`astra_backend/execution_router.py::open_protected_position` 的 L108–173（67 行）
-—— 该函数 293 行里最大的一块内聚逻辑，三道**发送前风控闸门**：
-
-| | 之前 | 之后 |
-|---|---|---|
-| `open_protected_position()` | 293 行 | **243 行** |
-| `execution_router.py` | 388 行 | **343 行** |
-| 新模块 | — | `risk_gates.py` 164 行 |
+三道**发送前风控闸门**原本内联在统一执行入口的 `open_protected_position`
+L108–173（67 行）里 —— 该入口已随外所下架整体移除，闸门本身留在
+`risk_gates.py`，由**存活的 OKX 执行路径**调用
+（`scripts/trader/order_submit.py::_shared_venue_entry_gate`）。
 
 ## ⚠️ 本刀**发现并修复了一个真实 bug**（抽取时才暴露）
 
@@ -26,12 +22,12 @@
 `UnboundLocalError`，被裸 `except Exception` 吞掉、返回 `_fail("exposure", ...)`。
 
 两个缺陷**互相掩盖**：既有测试断言 `ok is False` + `stage == "exposure"`，
-恰好被异常兜底满足 —— 断言全中，闸门却是死的。见
-`tests/audit/test_audit_config_p4_cleanup.py::ExposureCapTests::test_router_refuses_when_projected_exposure_exceeds_cap`
-现已被改写为真正走闸门并断言理由文案。
+恰好被异常兜底满足 —— 断言全中，闸门却是死的。
 
-**实盘影响**：生产 `ASTRA_MAX_TOTAL_EXPOSURE_USDT` 未配置 → `TOTAL_EXPOSURE_CAP = 0.0`
-→ 闸门仍**停用**，故本次修复**不改变当前实盘行为**（由 `ProductionCapStillDisabledTest` 守住）。
+**OKX 专用化后的接线**：闸门由 `scripts/trader/order_submit.py::_shared_venue_entry_gate`
+调用（唯一存活的执行路径）；统计集合随单所化退化为 OKX 一所，但判据逻辑未动。
+`ProductionCapStillDisabledTest` 直接读线上 `.env`，要求「生产配置了上限 ⇒ 存活路径
+必须真的接上闸门」。
 """
 
 from __future__ import annotations
@@ -42,7 +38,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 MODULE = ROOT / "astra_backend" / "execution" / "risk_gates.py"
-FACADE = ROOT / "astra_backend" / "execution_router.py"
+#: OKX 专用化后唯一存活的执行路径 —— 敞口闸门必须挂在这里（旧统一执行入口已移除）。
+LIVE_GATE_CALLER = ROOT / "scripts" / "trader" / "order_submit.py"
 
 from astra_backend.execution.risk_gates import (  # noqa: E402
     check_total_exposure,
@@ -75,7 +72,7 @@ def tearDownModule():
         _READ_SCOPE = None
 
 
-def _fail(stage, detail, venue="gate", **extra):
+def _fail(stage, detail, venue="okx", **extra):
     return {"ok": False, "stage": stage, "detail": detail, "venue": venue, **extra}
 
 
@@ -84,7 +81,7 @@ def _fail(stage, detail, venue="gate", **extra):
 
 class ClampLeverageTest(unittest.TestCase):
     def _run(self, leverage, decision=None, lo=1.0, hi=10.0):
-        return clamp_leverage(venue="gate", asset="BTC",
+        return clamp_leverage(venue="okx", asset="BTC",
                               decision=decision if decision is not None else {},
                               leverage=leverage, min_leverage=lo,
                               max_leverage=hi)
@@ -177,7 +174,7 @@ class ClampLeverageTest(unittest.TestCase):
 
 class ClampMarginTest(unittest.TestCase):
     def _run(self, margin, *, caller=None, absolute=None, pool=None):
-        return clamp_margin(venue="gate", asset="BTC", decision={}, margin=margin,
+        return clamp_margin(venue="okx", asset="BTC", decision={}, margin=margin,
                             max_margin_usdt=caller, max_single_asset_margin=absolute,
                             max_margin_equity_ratio=0.20, pool=pool)
 
@@ -213,7 +210,7 @@ class ClampMarginTest(unittest.TestCase):
         self.assertEqual(m, 600.0)
 
     def test_decision_max_margin_used_when_caller_absent(self):
-        m, _, _ = clamp_margin(venue="gate", asset="BTC",
+        m, _, _ = clamp_margin(venue="okx", asset="BTC",
                                decision={"max_margin_usdt": 250.0}, margin=5000.0,
                                max_margin_usdt=None, max_single_asset_margin=600.0,
                                max_margin_equity_ratio=0.20, pool=None)
@@ -253,7 +250,7 @@ class CheckTotalExposureTest(unittest.TestCase):
             return [{"base": "BTC", "side": "long", "size_signed": 1.0,
                      "mark_price": 100000.0}]
         return check_total_exposure(
-            venue="gate", asset="BTC", action=action, margin=margin, leverage=leverage,
+            venue="okx", asset="BTC", action=action, margin=margin, leverage=leverage,
             total_exposure_cap=cap, all_positions=positions,
             positions_reader=reader or default_reader, fail_factory=_fail)
 
@@ -270,7 +267,7 @@ class CheckTotalExposureTest(unittest.TestCase):
 
     def test_sell_short_matches_a_short_position(self):
         r = check_total_exposure(
-            venue="gate", asset="BTC", action="SELL_SHORT", margin=200.0, leverage=5.0,
+            venue="okx", asset="BTC", action="SELL_SHORT", margin=200.0, leverage=5.0,
             total_exposure_cap=50000.0, all_positions=None,
             positions_reader=lambda: [{"base": "BTC", "side": "short",
                                        "size_signed": -1.0, "mark_price": 100000.0}],
@@ -353,7 +350,7 @@ class CheckTotalExposureTest(unittest.TestCase):
             return []
 
         r = check_total_exposure(
-            venue="gate", asset="BTC", action="BUY_LONG", margin=200.0, leverage=5.0,
+            venue="okx", asset="BTC", action="BUY_LONG", margin=200.0, leverage=5.0,
             total_exposure_cap=50000.0,
             all_positions=[{"base": "BTC", "side": "long", "size_signed": 1.0,
                             "mark_price": 100000.0}],
@@ -368,29 +365,28 @@ class CheckTotalExposureTest(unittest.TestCase):
         self.assertIsNotNone(r, "mark_price 缺失时应退回 entry_price")
 
 
-# ------------------------------------------------------- 门面接线与实盘性
+# ------------------------------------------------- 接线（存活路径）与实盘性
 
 
-class FacadeWiringTest(unittest.TestCase):
-    def test_facade_calls_all_three_gates(self):
-        src = FACADE.read_text(encoding="utf-8")
-        for name in ("_clamp_leverage(", "_clamp_margin(", "_check_total_exposure("):
-            self.assertIn(name, src, f"门面丢了 {name}")
+class LiveCallerWiringTest(unittest.TestCase):
+    """闸门必须挂在**唯一存活的 OKX 执行路径**上。
 
-    def test_facade_imports_are_aliased_to_avoid_shadowing(self):
-        src = FACADE.read_text(encoding="utf-8")
-        self.assertIn("from .execution.risk_gates import (", src)
+    旧统一执行入口（`execution_router.py`）已随外所下架移除；原门面接线断言
+    随之改写为对存活调用点的断言 —— 断言集合缩小，但没有一条被放宽。
+    """
 
-    def test_facade_no_longer_inlines_the_gate_bodies(self):
-        src = FACADE.read_text(encoding="utf-8")
-        self.assertNotIn("_margin_caps = [c for c in _caps", src,
-                         "门面仍内联着保证金夹取")
-        self.assertNotIn("same_side = 0.0", src, "门面仍内联着敞口核算")
+    def test_live_caller_uses_the_moved_exposure_gate(self):
+        src = LIVE_GATE_CALLER.read_text(encoding="utf-8")
+        self.assertIn("from astra_backend.execution import check_total_exposure "
+                      "as _check_exposure", src)
+        self.assertIn("_check_exposure(", src, "存活执行路径未调用敞口闸门")
+        self.assertIn("venue_entry_gate(", src, "存活执行路径未调用入场闸门")
 
-    def test_facade_still_reads_the_venue_pool(self):
-        """池配置在夹取与准入判定之间共用，搬走后必须在门面留一次读取。"""
-        src = FACADE.read_text(encoding="utf-8")
-        self.assertIn("pool = _load_venue_pool_soft(venue)", src)
+    def test_live_caller_injects_positions_reader_and_fail_factory(self):
+        """IO（持仓读取）与 `_fail` 工厂必须在调用点注入 —— 模块保持零 IO。"""
+        src = LIVE_GATE_CALLER.read_text(encoding="utf-8")
+        self.assertIn("positions_reader=_positions_reader", src)
+        self.assertIn("fail_factory=_fail_factory", src)
 
     def test_module_has_no_module_level_side_effects(self):
         tree = ast.parse(MODULE.read_text(encoding="utf-8"))
@@ -404,11 +400,12 @@ class ProductionCapStillDisabledTest(unittest.TestCase):
 
     旧版断言 `scripts.risk_constants.MAX_TOTAL_EXPOSURE_USDT == 0.0`，并自称
     "若有人将来配置了它，这条会翻红"。但 pytest 做了**环境隔离**（`tests/__init__.py`），
-    于是它读到的永远是 0.0 —— **看不见生产 `.env`**，而生产 `.env` 里
-    `ASTRA_MAX_TOTAL_EXPOSURE_USDT=3000.0`（`scripts/risk_constants.py` 在 cron/手动路径
-    显式加载 `.env`，本机实测 `TOTAL_EXPOSURE_CAP == 3000.0`）。护栏"安全通过"，
-    闸门却早已生效——而且是**只算一所的"跨所"闸门**（已由
-    `tests/audit/test_cross_venue_exposure_gate.py` 修正语义并钉住）。
+    于是它读到的永远是 0.0 —— **看不见生产 `.env`**。护栏"安全通过"，
+    闸门却早已生效。
+
+    OKX 专用化后，"闸门生效"的判据不再是"跨所口径"（统计集合已退化为 OKX 一所），
+    而是：**生产配置了上限 ⇒ 唯一存活的执行路径真的接上了这道闸门**
+    （`scripts/trader/order_submit.py`）。
     """
 
     def test_isolated_env_still_reads_zero_here(self):
@@ -417,7 +414,7 @@ class ProductionCapStillDisabledTest(unittest.TestCase):
         self.assertEqual(float(getattr(rc, "MAX_TOTAL_EXPOSURE_USDT", 0.0) or 0.0), 0.0)
 
     def test_production_env_cap_is_read_from_the_file_not_the_isolated_env(self):
-        """诚实护栏：**直接读 `.env`** 才能看到生产真值，并要求闸门语义与之匹配。"""
+        """诚实护栏：**直接读 `.env`** 才能看到生产真值，并要求闸门真的接在存活路径上。"""
         from pathlib import Path
         env_file = Path(__file__).resolve().parents[2] / ".env"
         if not env_file.exists():
@@ -431,10 +428,9 @@ class ProductionCapStillDisabledTest(unittest.TestCase):
                 except ValueError:
                     cap = 0.0
         if cap:
-            src = (Path(__file__).resolve().parents[2] / "astra_backend" /
-                   "execution_router.py").read_text(encoding="utf-8")
-            self.assertIn("_exposure_venues(", src,
-                          f"生产已配置上限 {cap}U ⇒ 闸门生效，必须跨所口径")
+            src = LIVE_GATE_CALLER.read_text(encoding="utf-8")
+            self.assertIn("_check_exposure(", src,
+                          f"生产已配置上限 {cap}U ⇒ 闸门生效，存活执行路径必须调用敞口闸门")
 
 
 if __name__ == "__main__":

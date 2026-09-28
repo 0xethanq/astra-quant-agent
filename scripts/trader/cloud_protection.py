@@ -1,13 +1,15 @@
 """交易所侧云端保护单（OCO / 动态止损棘轮）（B3 抽取·trader 瘦身第六刀，第八十五刀）。
 
-从 `scripts/ai_factor_trader.py` **纯搬家**四函数（133 行）：
+从 `scripts/ai_factor_trader.py` **纯搬家**三函数：
 
-| 函数 | 行数 | 职责 |
-|---|---|---|
-| `amend_venue_stop_loss` | 60 | 跨所云端 SL 棘轮：有旧单且该所支持 amend → 原生改单；否则先挂新再撤旧 |
-| `_live_oco_coverage` | 18 | 统计 reduce-only OCO 单覆盖的合约张数 |
-| `ensure_cloud_position_protection` | 31 | 校验 100% 云端 OCO 覆盖，补缺口并复验 |
-| `sync_cloud_algo_stop` | 24 | 把棘轮动态止损同步到 OKX 云端条件单 |
+| 函数 | 职责 |
+|---|---|
+| `_live_oco_coverage` | 统计 reduce-only OCO 单覆盖的合约张数 |
+| `ensure_cloud_position_protection` | 校验 100% 云端 OCO 覆盖，补缺口并复验 |
+| `sync_cloud_algo_stop` | 把棘轮动态止损同步到 OKX 云端条件单 |
+
+本模块是 **OKX 直签链专属**：三者都直接吃门面注入的 `okx_rest`
+（`pending_algo_orders` / `place_algo_oco` / `amend_algo_sl`）。
 
 ## 同名注入（沿第八十二～八十四刀）
 
@@ -16,11 +18,8 @@
 patch 面（batch5_d_tails / batch6 / three_tier_ratchet_and_cloud_sync）
 经门面壳调用期传参保真。
 
-⚠️ `position_mgmt.execute_ai_position_management` 收到的
-`amend_venue_stop_loss` 注入项由门面**调用期**解析 —— 本刀搬家后它自动
-拿到门面壳，跨模块 patch 面不断。
 ⚠️ `close_position_confirmed`（平仓确认，73 行）**不在本域** —— 它依赖
-`query_positions`/`fetch_other_venue_positions`，属后续"平仓确认/场所查询"域。
+`query_positions`，属后续"平仓确认/场所查询"域。
 """
 from __future__ import annotations
 
@@ -31,84 +30,6 @@ try:
     from scripts.tag_markers import normalize_legacy_markers
 except ImportError:      # scripts/ 在 sys.path 上（双拼写铁律）
     from tag_markers import normalize_legacy_markers
-
-
-def amend_venue_stop_loss(ad, symbol: str, pos_side: str, new_sl: float,
-                          contracts: float) -> Tuple[bool, str]:
-    """审计 C3（后半）：跨所云端 SL 棘轮——旧实现每轮只 attach 新单、不撤不改旧单，
-    云端止损随棘轮轮次堆积（宽松旧单可能先于新单触发/占额度）。
-    策略：先枚举现存 SL 触发单（Gate 腿带 text=t-astrasl* 标签、Binance 腿 type 含
-    STOP）；有旧单且该所支持 amend_stop_loss → 原生改单（同单改触发价，天然无裸仓
-    缝隙），残余旧单一律撤掉；否则安全序列：先挂新 SL（收紧即刻生效、更新无裸仓
-    窗口）→ 再撤全部旧 SL。旧单撤失败只 warn——新单已生效，旧 reduce_only 双单
-    竞发时后触发者无仓自动无效，绝不回滚收紧（宁可双、不可裸）。"""
-    old_ids: List[str] = []
-    list_error = ""
-    try:
-        from scripts.trader.venue_protection import _row_text as _leg_row_text
-    except ImportError:                      # scripts/ 在 sys.path 上（双拼写铁律）
-        from venue_protection import _row_text as _leg_row_text
-    try:
-        for row in (ad.list_protective_orders(symbol) or []):
-            if not isinstance(row, dict):
-                continue
-            # ⚠️ **不得**在这里另写一份字段清单（2026-09-28 实盘事故）。
-            #
-            # 本函数此前自己拼 `order.text` / `initial.text` / `row.text` / `row.type`，
-            # 而 Binance 的 `row.type` 是算法单**类别** `CONDITIONAL`，
-            # 真正的 `STOP_MARKET` 在 `raw.orderType` 里 ⇒ 判据
-            # `"STOP" in "CONDITIONAL".upper()` **恒为假** ⇒ 旧 SL **一条都枚举不到** ⇒
-            # 棘轮每轮"先挂新"之后**没有任何旧单可撤**，云端止损无限堆积。
-            # 实测：UNI 一张 23 张的空仓挂了 **9 条** STOP_MARKET（触发价 9.998→9.31，
-            # 正是 9 次移损的轨迹），另有所属仓早已平掉的 ETH/SOL/ARB 共 10 条孤儿腿。
-            #
-            # 统一走 `venue_protection._row_text` —— 那是**全部**腿归属判定
-            # （`_leg_kind` / 棘轮 / 孤儿清理）唯一的文本来源，它自己的 docstring 写明
-            # "改一处即可让改名前后落在交易所上的腿都被认出来"。这里再拼一份就是漏字段的温床。
-            text = _leg_row_text(row)        # 已归一旧标记且已小写
-            rid = str(row.get("id") or row.get("algo_id") or row.get("order_id") or "")
-            if rid and ("astrasl" in text or "stop" in text):
-                old_ids.append(rid)
-    except Exception as exc:
-        list_error = str(exc)[:160]
-
-    def _cancel(oid: str):
-        if hasattr(ad, "cancel_price_order"):
-            ad.cancel_price_order(oid)
-        elif hasattr(ad, "cancel_algo_order"):
-            ad.cancel_algo_order(algo_id=oid)
-        else:
-            ad.cancel_order(symbol, oid)
-
-    if old_ids and hasattr(ad, "amend_stop_loss"):
-        try:
-            eff = ad.amend_stop_loss(symbol, pos_side, old_ids[0], float(new_sl))
-            for _oid in old_ids[1:]:
-                if str(_oid) != str(eff):
-                    try:
-                        _cancel(_oid)
-                    except Exception as exc:
-                        print(f"[SL-Ratchet] warn {symbol} 清理残余旧SL失败 {_oid}: {exc}")
-            return True, f"原生改单生效（{old_ids[0]}→{eff}），旧单 {len(old_ids)} 笔已处理"
-        except Exception as exc:
-            print(f"[SL-Ratchet] {symbol} amend 不可用（{str(exc)[:120]}），回退先挂新再撤旧")
-
-    placed = ad.attach_protective_orders(symbol, pos_side, sl_px=float(new_sl), contracts=contracts)
-    new_id = str((placed or {}).get("sl") or "")
-    cancelled = 0
-    for _oid in old_ids:
-        if _oid == new_id:
-            continue
-        try:
-            _cancel(_oid)
-            cancelled += 1
-        except Exception as exc:
-            print(f"[SL-Ratchet] warn {symbol} 撤旧SL失败 {_oid}: {exc}")
-    note = f"先挂新再撤旧（新单 {new_id or '?'}，撤旧 {cancelled}/{len(old_ids)}）"
-    if list_error:
-        note += f" [旧单未能枚举: {list_error}]"
-    return True, note
-
 
 
 def _live_oco_coverage(orders: List[Dict[str, Any]], pos_side: str,

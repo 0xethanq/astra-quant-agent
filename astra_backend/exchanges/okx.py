@@ -203,7 +203,7 @@ class OKXAdapter(OKXPublicAdapter):
 
         第一百九十三刀补此洞：此前 OKX 是全仓**唯一没有该探测**的所，而
         `execution_router` 的模式闸写成"声明了模式**且**有探测方法才体检" ⇒ 对 OKX
-        **整段跳过**——偏偏 OKX 是持仓最多的那个所。现在与 Gate/Binance 同尺。
+        **整段跳过**——偏偏 OKX 是持仓最多的那个所。现已与其他实现同尺。
         """
         try:
             from scripts import okx_rest
@@ -290,7 +290,7 @@ class OKXAdapter(OKXPublicAdapter):
         # 旧默认写死 `order_type="limit"`：`execution_router` 的市价路径是
         # `ad.place_order(asset, side, contracts, price=None)` —— 只传价、不传单型，
         # 于是发出 `ordType=limit` 且 **无 `px`** 的非法请求，被 OKX 直接拒单。
-        # 与 Binance/Gate 适配器的口径对齐（两者都是"无价即市价"），
+        # 与适配层既有口径对齐（无价即市价），
         # 使"只给 price"的调用方在三所行为一致。
         # 显式传 `order_type` 的调用方（OKX 直下路径恒传）行为逐位不变。
         try:
@@ -325,7 +325,7 @@ class OKXAdapter(OKXPublicAdapter):
 
     def set_leverage(self, symbol: str, leverage: float, margin_mode: str = "cross",
                      pos_side: Optional[str] = None) -> Any:
-        """审计④5(2026-09-13)：补齐三所契约对称（Binance/Gate 早有）。OKX 杠杆是
+        """审计④5(2026-09-13)：补齐适配器契约对称。OKX 杠杆是
         账户级、按 instId+mgnMode（双向另分 posSide）的持久档位——AI 裁决的杠杆
         必须落档，否则保证金/强平价按账户旧档算。net 模式省略 posSide（该 instId
         全模式生效，官方语义）。"""

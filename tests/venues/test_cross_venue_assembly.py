@@ -48,82 +48,52 @@ class CrossVenueAssemblyTests(unittest.TestCase):
     def test_full_both_sources_symbols_precedence(self):
         self._write(self.vh, {
             "updated_utc": "2026-09-09 19:00:00", "writer_pid": 1, "package_count": 10,
-            "venues": {"okx": {"ok": ["BTC"]}, "binance": {"ok": ["BTC"], "avg_ms": 349},
-                       "gate": {"ok": ["BTC"], "avg_ms": 206}},
-            "symbols": {"BTC": {
-                "okx": 79000.0, "bin_last": 79020.0, "bin_basis_pct": 0.025,
-                "gate_last": 78990.0, "gate_basis_pct": -0.013,
-                "bin_ls": 2.12, "bin_funding_pct": 0.0074,
-                # 注意：symbols 缺 gate_ls / gate_funding_pct → 应由 xvenue 补
-            }},
+            "venues": {"okx": {"ok": ["BTC"]}},
+            "symbols": {"BTC": {"okx": 79000.0}},
         })
         self._write(self.dec, {
-            "BTC-USDT-SWAP": _dec_entry("BTC", "BTC-USDT-SWAP", 79000.0, {
-                "bin_last": 79020.0, "gate_last": 78990.0,
-                "bin_ls": 9.99,  # 与 symbols 值故意不同 → 断言 symbols 优先
-                "gate_ls": 1.10, "gate_funding_pct": 0.0482,
-                "bin_funding_pct": 0.0074,
-            }),
+            "BTC-USDT-SWAP": _dec_entry("BTC", "BTC-USDT-SWAP", 79000.0, None),
         })
         out = self._load()
         self.assertEqual(out["updated_utc"], "2026-09-09 19:00:00")
         self.assertEqual(out["package_count"], 10)
-        self.assertIn("binance", out["venues"])
+        self.assertIn("okx", out["venues"])
         self.assertIn("BTC", out["symbols"])
         row = out["by_asset"]["BTC"]
-        # AC 键位齐全
-        for k in ("bin_last", "gate_last", "bin_ls", "gate_ls",
-                  "bin_funding_pct", "gate_funding_pct"):
-            self.assertIn(k, row)
-        self.assertEqual(row["bin_ls"], 2.12)        # symbols 优先
-        self.assertEqual(row["gate_ls"], 1.10)       # symbols 缺 → xvenue 补
-        self.assertEqual(row["bin_basis_pct"], 0.025)  # brain 预计算基差直传
-        self.assertEqual(row["gate_basis_pct"], -0.013)
-        self.assertEqual(row["gate_funding_pct"], 0.0482)
         self.assertEqual(row["okx_last"], 79000.0)
 
-    # ---- ② 仅决策缓存 xvenue（venue_health 无 symbols）→ 基差现算 ----
+    # ---- ② 仅决策缓存 ----
     def test_xvenue_only_basis_computed(self):
         self._write(self.vh, {"updated_utc": "x", "package_count": 1,
-                              "venues": {"gate": {"ok": []}}})
+                              "venues": {}})
         self._write(self.dec, {
-            "ETH-USDT-SWAP": _dec_entry("ETH", "ETH-USDT-SWAP", 2500.0, {
-                "bin_last": 2502.5, "gate_last": 2495.0,
-                "bin_ls": 1.5, "gate_ls": 1.2,
-                "bin_funding_pct": 0.01, "gate_funding_pct": -0.02,
-            }),
+            "ETH-USDT-SWAP": _dec_entry("ETH", "ETH-USDT-SWAP", 2500.0, None),
         })
         out = self._load()
         row = out["by_asset"]["ETH"]
-        self.assertEqual(row["bin_basis_pct"], 0.1)        # (2502.5-2500)/2500*100
-        self.assertEqual(row["gate_basis_pct"], -0.2)
         self.assertEqual(row["okx_last"], 2500.0)
         self.assertEqual(out["symbols"], {})
 
-    # ---- ③ US-009 前置容错：决策缓存无 xvenue 键 / 只有半成品 xvenue ----
+    # ---- ③ 容错：脏条目被跳过 ----
     def test_decisions_missing_or_partial_xvenue(self):
         self._write(self.dec, {
-            "BTC-USDT-SWAP": _dec_entry("BTC", "BTC-USDT-SWAP", 100.0, None),   # 整键缺失
-            "SOL-USDT-SWAP": _dec_entry("SOL", "SOL-USDT-SWAP", 200.0, {"bin_last": 201.0}),  # 半成品
+            "BTC-USDT-SWAP": _dec_entry("BTC", "BTC-USDT-SWAP", 100.0, None),
+            "SOL-USDT-SWAP": _dec_entry("SOL", "SOL-USDT-SWAP", 200.0, None),
             "junk": "not-a-dict",                                               # 脏条目
         })
         out = self._load()
         self.assertEqual(out["updated_utc"], "")
-        self.assertEqual(out["by_asset"]["BTC"]["bin_last"], "")
-        self.assertEqual(out["by_asset"]["BTC"]["bin_basis_pct"], "")
-        self.assertEqual(out["by_asset"]["SOL"]["gate_ls"], "")
-        self.assertEqual(out["by_asset"]["SOL"]["bin_basis_pct"], 0.5)  # 有价才算
+        self.assertEqual(out["by_asset"]["BTC"]["okx_last"], 100.0)
+        self.assertEqual(out["by_asset"]["SOL"]["okx_last"], 200.0)
         self.assertNotIn("JUNK", out["by_asset"])
 
     # ---- ④ symbols 独有资产（决策缓存没这个币）也要出现 ----
     def test_symbols_only_asset_included(self):
         self._write(self.vh, {"updated_utc": "u", "package_count": 2, "venues": {},
-                              "symbols": {"PEPE": {"okx": 0.00001, "bin_last": 0.0000102,
-                                                   "bin_basis_pct": 0.2}}})
+                              "symbols": {"PEPE": {"okx": 0.00001}}})
         self._write(self.dec, {})
         out = self._load()
-        self.assertEqual(out["by_asset"]["PEPE"]["bin_basis_pct"], 0.2)
-        self.assertEqual(out["by_asset"]["PEPE"]["gate_last"], "")
+        self.assertEqual(out["by_asset"]["PEPE"]["okx_last"], 0.00001)
 
     # ---- ⑤ 损坏：两路全烂 → 空态且不抛（整体 fail-soft 不影响响应其余部分） ----
     def test_both_corrupt_degrade_to_empty(self):

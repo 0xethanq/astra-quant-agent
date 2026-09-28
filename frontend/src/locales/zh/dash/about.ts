@@ -18,8 +18,8 @@ export const zhAbout = {
     qqPersonal: '作者 QQ',
     linuxdo: 'LINUX DO 社区',
     // 2026-09：通道列表改为**后端出值**（`/api/v1/referral-channels`，公开只读），
-    // 前端不再写死链接 ⇒ 这里只留"每种所叫什么"的展示文案。
-    channel: '{venue} 专属通道',
+    // 前端不再写死链接 ⇒ 每个渠道的展示文案：这里只留"每种所叫什么"的展示文案。
+    channel: '{channel} 专属通道',
     open: '打开注册页',
     copyHint: '点击复制',
   },

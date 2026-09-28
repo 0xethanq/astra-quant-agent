@@ -171,9 +171,9 @@ def ledger_daily_closed_pnl(ledger, environment_mode: str, today_str: str) -> fl
 
 
 def ledger_today_stats(ledger, environment_mode: str, today_str: str) -> Dict[str, Any]:
-    """审计批7(2026-09-13)·前台「今日已实现」三所口径：前台 KPI 曾从 OKX bills 单所
-    聚合，而台账/熔断早已是三所合并——用户实锤「今日已实现和台账对不上」（binance
-    SUI +27.63 前台不可见，且彼时台账又吞过一条腿）。单一事实源：KPI 与熔断共用
+    """审计批7(2026-09-13)·前台「今日已实现」台账口径：前台 KPI 曾从 OKX bills 单所
+    聚合，而台账/熔断早已是各所合并——用户实锤「今日已实现和台账对不上」（当时某外所
+    当日的已实现盈亏前台不可见，且彼时台账又吞过一条腿）。单一事实源：KPI 与熔断共用
     本函数——net_realized=Σ行pnl 与 ledger_daily_closed_pnl **逐字同式**（fees 已含
     于行内，funding 单列展示不混入净值，两数从此不可能打架）。行筛选规则与熔断逐字
     同款（环境轴保守计入、status=closed、北京日）；win/loss 计数沿仪表盘旧口径

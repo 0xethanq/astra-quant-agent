@@ -593,14 +593,11 @@ class ManualCloseTests(_Base):
         self.assertEqual(out["instId"], "BTC-USDT-SWAP")
         self.assertEqual(self._rec()[1], "confirmed_closed")
 
-    def test_non_okx_venue_delegates_to_the_venue_router(self):
-        delegated = mock.Mock(return_value={"instId": "ETH-USDT-SWAP", "venue": "gate",
-                                            "environment": "live"})
-        with mock.patch("astra_backend.close_intent.venue_fast_close", delegated):
+    def test_non_okx_venue_is_rejected(self):
+        with self.assertRaises(HTTPException) as ctx:
             A.manual_close_position(self._payload(venue="gate"))
-        delegated.assert_called_once_with("gate", self.env.mode, "tok-" + "x" * 20,
-                                          "CLOSE BTC-USDT-SWAP")
-        self.assertEqual(self._rec()[2]["venue"], "gate")
+        self.assertEqual(ctx.exception.status_code, 400)
+        self.assertIn("不支持的平仓场所", str(ctx.exception.detail))
 
     def test_close_failures_map_to_distinct_statuses_and_audits(self):
         from scripts.okx_rest import OKXNotConfigured

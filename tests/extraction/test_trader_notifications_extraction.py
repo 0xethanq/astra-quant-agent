@@ -400,8 +400,8 @@ class WiringTest(unittest.TestCase):
         # 「门面主执行路径」（门面本体 ∪ 它的阶段函数），不得藏进 notifications 域。
         facade_eff = side_effect_names(FACADE) | side_effect_names(CYCLE_STAGES)
         sub_eff = side_effect_names(SUBMODULE)
-        for name in ("save_trackers", "add", "reserved_slot_count",
-                     "reserved_long_count", "reserved_short_count"):
+        for name in ("save_trackers", "add",
+                     "pending_long_count", "pending_short_count"):
             self.assertIn(name, facade_eff,
                           f"门面主执行路径应保留副作用 {name!r}（门面或 cycle_stages）")
             self.assertNotIn(name, sub_eff, f"子模块不得包含副作用 {name!r}（AST 判定）")

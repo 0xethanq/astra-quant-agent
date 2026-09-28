@@ -41,43 +41,25 @@ class PortfolioAggregatorTests(unittest.TestCase):
                 "positions_count": 2,
                 "open_orders_count": 1,
             },
-            "binance": {
-                "status": "ready",
-                "equity": 2000.0,
-                "available": 1400.0,
-                "positions_count": 3,
-                "open_orders_count": 2,
-            },
-            "gate": {
-                "status": "ready",
-                "equity": 1000.0,
-                "available": 600.0,
-                "positions_count": 1,
-                "open_orders_count": 1,
-            },
         }
 
         res = aggregate_venue_accounts(venues, "demo")
-        # 1000 + 2000 + 1000 = 4000.0
-        self.assertEqual(res["total_equity"], 4000.0)
-        # 800 + 1400 + 600 = 2800.0
-        self.assertEqual(res["total_available"], 2800.0)
-        self.assertEqual(res["positions_count"], 6)
-        self.assertEqual(res["open_orders_count"], 4)
-        self.assertEqual(res["active_venues_count"], 3)
-        self.assertEqual(set(res["reporting_venues"]), {"okx", "binance", "gate"})
+        self.assertEqual(res["total_equity"], 1000.0)
+        self.assertEqual(res["total_available"], 800.0)
+        self.assertEqual(res["positions_count"], 2)
+        self.assertEqual(res["open_orders_count"], 1)
+        self.assertEqual(res["active_venues_count"], 1)
+        self.assertEqual(res["reporting_venues"], ["okx"])
 
-        # 保证金占用: 4000 - 2800 = 1200.0
-        self.assertEqual(res["margin_used"], 1200.0)
-        # 利用率: 1200 / 4000 = 30.0% -> LOW
-        self.assertEqual(res["utilization_pct"], 30.0)
+        # 保证金占用: 1000 - 800 = 200.0
+        self.assertEqual(res["margin_used"], 200.0)
+        # 利用率: 200 / 1000 = 20.0% -> LOW
+        self.assertEqual(res["utilization_pct"], 20.0)
         self.assertEqual(res["risk_level"], "LOW")
 
         # 资产分布:
         dist = res["asset_distribution"]
-        self.assertAlmostEqual(dist["okx"]["share_pct"], 25.0)
-        self.assertAlmostEqual(dist["binance"]["share_pct"], 50.0)
-        self.assertAlmostEqual(dist["gate"]["share_pct"], 25.0)
+        self.assertAlmostEqual(dist["okx"]["share_pct"], 100.0)
 
     def test_partial_ready_aggregation(self):
         venues = {
@@ -87,15 +69,6 @@ class PortfolioAggregatorTests(unittest.TestCase):
                 "available": 1000.0,
                 "positions_count": 1,
                 "open_orders_count": 0,
-            },
-            "binance": {
-                "status": "degraded",
-                "equity": None,
-                "available": None,
-            },
-            "gate": {
-                "status": "unavailable",
-                "equity": None,
             },
         }
 
@@ -107,14 +80,10 @@ class PortfolioAggregatorTests(unittest.TestCase):
 
         dist = res["asset_distribution"]
         self.assertEqual(dist["okx"]["share_pct"], 100.0)
-        self.assertEqual(dist["binance"]["share_pct"], 0.0)
-        self.assertEqual(dist["gate"]["share_pct"], 0.0)
 
     def test_zero_division_guard(self):
         venues = {
             "okx": {"status": "ready", "equity": 0.0, "available": 0.0},
-            "binance": {"status": "unavailable", "equity": None},
-            "gate": {"status": "unavailable", "equity": None},
         }
         res = aggregate_venue_accounts(venues, "demo")
         self.assertEqual(res["total_equity"], 0.0)

@@ -147,7 +147,12 @@ def _load_portfolio_risk_data() -> dict:
 
 
 def _load_multi_venue_portfolio(total_eq: float, avail_eq: float, positions: list, orders: list) -> dict:
-    """US-006/US-007：dashboard /api/all 组合多所资产与权益快照（OKX + Gate + Binance 全量对账）。"""
+    """US-006/US-007：dashboard /api/all 组合资产与权益快照（已收口为 OKX 专用）。
+
+    载荷键名保持 `multi_venue_portfolio` 不变（前端契约），但参与聚合的场所只剩 OKX
+    —— 外所账户面已随外所下架一并移除。聚合公式与「未知≠0」纪律仍由
+    `portfolio_aggregator.aggregate_venue_accounts` 单点实现，逐字未动。
+    """
     try:
         from astra_backend.portfolio_aggregator import aggregate_venue_accounts
         env = _global_env_axis()
@@ -160,23 +165,6 @@ def _load_multi_venue_portfolio(total_eq: float, avail_eq: float, positions: lis
                 "open_orders_count": len(orders) if isinstance(orders, list) else 0,
             },
         }
-        try:
-            # 审计 A1：33cc95d 拆分把两函数移入 routers/exchanges.py，此处旧引用
-            # ImportError 被吞 → gate/binance 永远伪报 unavailable。改指真源。
-            from astra_backend.routers.exchanges import _venue_accounts_gate, _venue_accounts_binance
-        except Exception as exc:
-            venues_map["gate"] = {"status": "unavailable", "equity": None, "reason": f"账户模块缺失: {exc}"}
-            venues_map["binance"] = {"status": "unavailable", "equity": None, "reason": f"账户模块缺失: {exc}"}
-        else:
-            try:
-                venues_map["gate"] = _venue_accounts_gate(env)
-            except Exception as exc:
-                venues_map["gate"] = {"status": "unavailable", "equity": None, "reason": f"Gate 账户面异常: {str(exc)[:180]}"}
-            try:
-                venues_map["binance"] = _venue_accounts_binance(env)
-            except Exception as exc:
-                venues_map["binance"] = {"status": "unavailable", "equity": None, "reason": f"Binance 账户面异常: {str(exc)[:180]}"}
-
         return aggregate_venue_accounts(venues_map, env)
     except Exception as exc:      # noqa: BLE001 - 面板侧不得因一处异常炸掉整个载荷
         # 第 52 刀：原先静默 `return {}` ⇒ 面板把"多所组合读取失败"渲染成**空组合**

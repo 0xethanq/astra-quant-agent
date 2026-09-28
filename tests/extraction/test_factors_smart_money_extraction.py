@@ -7,7 +7,6 @@ from unittest.mock import MagicMock, patch
 from scripts.factors.smart_money import (
     fetch_smart_money_for_symbol,
     fetch_smart_money_pool,
-    _fetch_from_binance,
     _fetch_from_okx_rubik,
 )
 
@@ -17,30 +16,8 @@ class TestSmartMoneyExtraction(unittest.TestCase):
         self.assertIsNone(fetch_smart_money_for_symbol(""))
         self.assertIsNone(fetch_smart_money_for_symbol(None))  # type: ignore
 
-    @patch("urllib.request.urlopen")
-    def test_binance_success(self, mock_urlopen):
-        # Mock topLongShortPositionRatio and takerlongshortRatio
-        resp_ratio = MagicMock()
-        resp_ratio.read.return_value = b'[{"symbol":"SOLUSDT","longAccount":"0.6850","shortAccount":"0.3150","longShortRatio":"2.1746"}]'
-        resp_ratio.__enter__.return_value = resp_ratio
-
-        resp_taker = MagicMock()
-        resp_taker.read.return_value = b'[{"buyVol":"10000","sellVol":"5000","buySellRatio":"2.0"}]'
-        resp_taker.__enter__.return_value = resp_taker
-
-        mock_urlopen.side_effect = [resp_ratio, resp_taker]
-
-        res = _fetch_from_binance("SOL", price=100.0)
-        self.assertIsNotNone(res)
-        self.assertAlmostEqual(res["longShortRatio"]["weightedLongRatio"], 0.6850)
-        self.assertAlmostEqual(res["longShortRatio"]["longShortRatio"], 2.1746)
-        self.assertEqual(res["weighted_long_pct"], 68.5)
-        self.assertIn("万 U", res["takerNetUsd"])
-        self.assertAlmostEqual(res["notional"]["netNotionalUsdt"], 500000.0)
-
-    @patch("scripts.factors.smart_money._fetch_from_binance", return_value=None)
     @patch("scripts.factors.smart_money._fetch_from_okx_rubik")
-    def test_fallback_to_okx_when_binance_fails(self, mock_okx, mock_bin):
+    def test_okx_success(self, mock_okx):
         mock_okx.return_value = {
             "longShortRatio": {"weightedLongRatio": 0.60, "longShortRatio": 1.5},
             "notional": {"netNotionalUsdt": 12000.0},
@@ -54,9 +31,8 @@ class TestSmartMoneyExtraction(unittest.TestCase):
         self.assertEqual(res["weighted_long_pct"], 60.0)
         self.assertEqual(res["takerNetUsd"], "1.2万 U")
 
-    @patch("scripts.factors.smart_money._fetch_from_binance", return_value=None)
     @patch("scripts.factors.smart_money._fetch_from_okx_rubik", return_value=None)
-    def test_graceful_none_when_both_fail(self, mock_okx, mock_bin):
+    def test_graceful_none_when_okx_fails(self, mock_okx):
         res = fetch_smart_money_for_symbol("SOL")
         self.assertIsNone(res)
 

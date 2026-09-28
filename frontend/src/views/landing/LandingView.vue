@@ -221,30 +221,18 @@ onMounted(() => {
         </div>
       </section>
 
-      <!-- 3. 三所原生平权直连遥测带 -->
-      <section id="venues" class="w-full border-y border-white/[0.04] bg-[#090b10]/60 py-4 px-4 sm:px-6">
+      <!-- 3. OKX 原生直连遥测带（单一交易所执行通道） -->
+      <section id="execution" class="w-full border-y border-white/[0.04] bg-[#090b10]/60 py-4 px-4 sm:px-6">
         <div class="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-3xs font-mono">
           <div class="text-zinc-400 uppercase tracking-wider">
-            {{ t('landing.venuesBar.title') }}
+            {{ t('landing.executionBar.title') }}
           </div>
 
           <div class="flex flex-wrap items-center justify-center gap-6 sm:gap-8 text-zinc-300">
             <div class="flex items-center gap-1.5">
               <span class="h-1.5 w-1.5 rounded-full bg-emerald-400" aria-hidden="true" />
-              <span>{{ t('landing.venuesBar.okx') }}</span>
-              <span class="text-emerald-400 text-4xs ms-0.5">({{ t('landing.venuesBar.latencyOkx') }})</span>
-            </div>
-
-            <div class="flex items-center gap-1.5">
-              <span class="h-1.5 w-1.5 rounded-full bg-emerald-400" aria-hidden="true" />
-              <span>{{ t('landing.venuesBar.binance') }}</span>
-              <span class="text-emerald-400 text-4xs ms-0.5">({{ t('landing.venuesBar.latencyBinance') }})</span>
-            </div>
-
-            <div class="flex items-center gap-1.5">
-              <span class="h-1.5 w-1.5 rounded-full bg-emerald-400" aria-hidden="true" />
-              <span>{{ t('landing.venuesBar.gate') }}</span>
-              <span class="text-emerald-400 text-4xs ms-0.5">({{ t('landing.venuesBar.latencyGate') }})</span>
+              <span>{{ t('landing.executionBar.okx') }}</span>
+              <span class="text-emerald-400 text-4xs ms-0.5">({{ t('landing.executionBar.latencyOkx') }})</span>
             </div>
           </div>
         </div>
@@ -292,7 +280,7 @@ onMounted(() => {
             <p class="mt-2 text-xs text-zinc-400 leading-relaxed">{{ t('landing.features.f3Desc') }}</p>
           </div>
 
-          <!-- 特性 4: 主流交易所直连 -->
+          <!-- 特性 4: OKX 原生深度直连与统一账户 -->
           <div class="rounded-2xl border border-white/[0.06] bg-[#0c0e15] p-6 hover:border-emerald-500/20 transition-colors">
             <div class="h-9 w-9 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 mb-4">
               <Globe class="h-4.5 w-4.5" />
@@ -321,7 +309,7 @@ onMounted(() => {
         </div>
       </section>
 
-      <!-- 5. 专属交易所开户与手续费返现通道 (REFERRAL PROMO) -->
+      <!-- 5. OKX 专属开户与手续费返现通道 (REFERRAL PROMO) -->
       <section id="referral" class="w-full max-w-4xl px-4 sm:px-6 py-20 border-t border-white/[0.04]">
         <div class="text-center max-w-2xl mx-auto mb-12">
           <span class="rounded-full border border-emerald-500/20 bg-emerald-500/5 px-3 py-1 text-3xs font-mono text-emerald-400 uppercase tracking-wider font-semibold">
@@ -335,8 +323,12 @@ onMounted(() => {
           </p>
         </div>
 
-        <!-- 3 所专属返佣卡片网格 -->
-        <div v-if="channels.length" class="grid grid-cols-1 md:grid-cols-3 gap-5 text-left">
+        <!-- OKX 专属返佣卡片网格（单通道时居中收窄） -->
+        <div
+          v-if="channels.length"
+          class="grid grid-cols-1 gap-5 text-left"
+          :class="channels.length === 1 ? 'max-w-md mx-auto' : 'md:grid-cols-3'"
+        >
           <div
             v-for="ch in channels"
             :key="ch.key"

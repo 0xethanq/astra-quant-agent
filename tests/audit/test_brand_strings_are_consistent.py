@@ -104,8 +104,6 @@ LEGACY_ALLOWED: "dict[str, str]" = {
         "搬到 astra）；登记它是为了让人搜得到迁移入口，而不是把它改名藏起来。",
     "tests/extraction/test_gateway_pidfile_extraction.py":
         "注释在说明白名单为什么必须放行一次性迁移工具（它要按新旧两个名字搬迁 pid 文件）。",
-    "tests/trading/test_venue_protection.py":
-        "注释在记录本类原来写死的行号被改名打红这件事，以及为什么改为由 AST 现求。",
     "tests/ops/test_migrate_r20_to_astra.py":
         "迁移工具自身的门禁：它必须写出旧名与旧记号，才能验证「搬迁」这件事真的发生"
         "（`RUNTIME_FILE_NAMES`、`CONFIG_TEXT_TOKENS`、退出码 3 等）。",

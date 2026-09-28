@@ -42,6 +42,28 @@ def _find_node(pred):
     raise AssertionError("未找到目标 AST 节点")
 
 
+#: 三处兜底块各自的**内容标记**（在块内唯一出现，改行号不会失效）。
+_TRY_STANDALONE = "astra_backend.config"
+_TRY_VERSION = "astra_backend.version"
+_TRY_CANONICAL = "from exchanges.base import"
+
+
+def _try_with(marker: str) -> ast.Try:
+    """按**内容标记**定位模块级 `try` 兜底块，不按绝对行号。
+
+    2026-09-28 教训（同 `test_ai_factor_trader`）：这里原钉 `lineno == 186`，
+    顶部增删一行 import 就整体移位 ⇒ `_find_node` 抛错、本组用例**静默失效**。
+    行号不是契约，块里那段代码才是。跨所符号归一兜底已随 OKX 专用化收敛为
+    `from exchanges.base import canonical_base`（旧路径 `astra_backend.exchanges.base`
+    仅作标记锚点），故按标记而非行号定位。
+    """
+    hits = [n for n in _TREE.body
+            if isinstance(n, ast.Try) and marker in ast.unparse(n)]
+    if len(hits) != 1:
+        raise AssertionError(f"标记 {marker!r} 命中 {len(hits)} 个模块级 try（应为恰好 1 个）")
+    return hits[0]
+
+
 def _exec_node(node):
     """按**真实文件路径**编译执行单个 AST 节点，使命中行号归属到本模块。"""
     module = ast.Module(body=[node], type_ignores=[])
@@ -55,22 +77,19 @@ class ImportFallbackTests(unittest.TestCase):
     """三处模块级导入兜底：兜底分支必须真的产出可用对象。"""
 
     def test_standalone_settings_is_none_when_config_import_fails(self):
-        node = _find_node(lambda n: isinstance(n, ast.Try) and n.lineno == 57)
         with patch.dict(sys.modules, {"astra_backend.config": None}):
-            ns = _exec_node(node)
+            ns = _exec_node(_try_with(_TRY_STANDALONE))
         self.assertIn("standalone_settings", ns)
         self.assertIsNone(ns["standalone_settings"])
 
     def test_version_falls_back_when_version_import_raises(self):
-        node = _find_node(lambda n: isinstance(n, ast.Try) and n.lineno == 62)
         with patch.dict(sys.modules, {"astra_backend.version": None}):
-            ns = _exec_node(node)
+            ns = _exec_node(_try_with(_TRY_VERSION))
         self.assertEqual(ns["__version__"], "7.6.0")
 
     def test_canonical_base_fallback_chain_strips_usdt_markers(self):
-        node = _find_node(lambda n: isinstance(n, ast.Try) and n.lineno == 186)
         with patch.dict(sys.modules, {"astra_backend.exchanges.base": None}):
-            ns = _exec_node(node)
+            ns = _exec_node(_try_with(_TRY_CANONICAL))
         fn = ns["_canonical_base_name"]
         # 每个 marker 都要能被剥掉（含 break 早退），且分隔符被清掉
         self.assertEqual(fn("BTC-USDT-SWAP"), "BTC")
@@ -139,25 +158,6 @@ class ThinShellInjectionTests(unittest.TestCase):
         self.assertEqual(seen["item"], {"instId": "X"})
         self.assertIs(seen["candles"], abt.fetch_candles)
         self.assertIs(seen["indicator"], abt.fetch_single_indicator)
-
-    def test_get_xvenue_adapter_delegates_to_impl(self):
-        with patch.object(abt, "_get_xvenue_adapter_impl", lambda v: f"adapter:{v}"):
-            self.assertEqual(abt._get_xvenue_adapter("binance"), "adapter:binance")
-
-    def test_xv_gate_snapshot_injects_adapter_and_record_seams(self):
-        seen = {}
-
-        def fake(base, *, get_adapter, record):
-            seen["base"] = base
-            seen["get_adapter"] = get_adapter
-            seen["record"] = record
-            return {"gate": base}
-
-        with patch.object(abt, "_xv_gate_snapshot_impl", fake):
-            self.assertEqual(abt._xv_gate_snapshot("BTC"), {"gate": "BTC"})
-        self.assertEqual(seen["base"], "BTC")
-        self.assertIs(seen["get_adapter"], abt._get_xvenue_adapter)
-        self.assertIsNotNone(seen["record"])
 
 
 class PromptOverrideTests(unittest.TestCase):
@@ -230,6 +230,15 @@ class CanonicalPositionInstIdTests(unittest.TestCase):
             # 币本位/日期合约**不许**被映射到池内 USDT 永续（换标的 = 违约）
             self.assertEqual(abt.canonical_position_inst_id("BTC-USD-SWAP"), "BTC-USD-SWAP")
             self.assertEqual(abt.canonical_position_inst_id("BTC-USDT-250101"), "BTC-USDT-250101")
+
+    def test_unknown_venue_prefix_is_tolerated_read_only(self):
+        # 历史台账（data/trading_ledger.json）里可能残留未知场所前缀的行：
+        # 归一器只剥前缀、映射到 OKX 形态，**绝不抛异常**（只读容错）。
+        with patch.object(abt, "TARGET_INSTRUMENTS", [{"instId": "BTC-USDT-SWAP"}]):
+            self.assertEqual(abt.canonical_position_inst_id("UNKNOWNVENUE:BTCUSDT"),
+                             "BTC-USDT-SWAP")
+            self.assertEqual(abt.canonical_position_inst_id("UNKNOWNVENUE:BTC-USD-SWAP"),
+                             "UNKNOWNVENUE:BTC-USD-SWAP")
 
 
 class SlAtrMultTests(unittest.TestCase):
@@ -318,9 +327,6 @@ class ExecuteBatchCycleTests(unittest.TestCase):
         # setdefault 返回的是刚存进去的那个（非空）值，恒为真，`or X` 永不生效，
         # 于是桩会把它自己的 kwargs 当成返回值交出去。这类"真值陷阱"只会让
         # 断言以莫名其妙的方式失败（或更糟：静默通过）。
-        def _xv(pkgs):
-            self.calls["xv"] = pkgs
-
         def _fl(**kw):
             self.calls["fl"] = kw
 
@@ -351,7 +357,6 @@ class ExecuteBatchCycleTests(unittest.TestCase):
         self._patch("capture_policy_snapshot",
                     lambda **kw: ("HASH", {"snap": 1}, "SUMMARY", "VERSION"))
         self._patch("fetch_single_instrument_package", lambda item: dict(packages[0]))
-        self._patch("fetch_cross_venue_matrix", _xv)
         self._patch("update_factor_library_snapshot", _fl)
         self._patch("fetch_pending_orders_list", lambda: [{"ordId": "7"}])
         self._patch("write_calculus_snapshot", _calc)
@@ -408,8 +413,8 @@ class ExecuteBatchCycleTests(unittest.TestCase):
         # 在途持仓 id 已归一后下传
         self.assertEqual(dispatch["active_inst_ids"], {"BTC-USDT-SWAP"})
         self.assertEqual(dispatch["active_position_sides"], {"BTC-USDT-SWAP": "long"})
-        # 各快照步骤都被调用过
-        for key in ("xv", "fl", "calc", "snap"):
+        # 各快照步骤都被调用过（跨所矩阵快照已随多所执行面移除）
+        for key in ("fl", "calc", "snap"):
             self.assertIn(key, self.calls)
 
     def test_smart_money_fills_only_na_placeholders(self):

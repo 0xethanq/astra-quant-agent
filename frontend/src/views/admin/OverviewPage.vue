@@ -4,7 +4,7 @@
  * ---------------------------------------------------------------------------
  * 架构重构（推倒旧版模板）：
  *   - 顶部：实时心跳指示器与工作台状态栏
- *   - 模块 1：四维全景指标矩阵（执行核心 / AI决策主脑 / 撮合路由网关 / 物理安全防线）
+ *   - 模块 1：四维全景指标矩阵（执行核心 / AI决策主脑 / OKX 连接环境 / 物理安全防线）
  *   - 模块 2：双栏指挥工位
  *       · 左侧（62%）：AI 实时决策流（指令周期动作、置信度量规、推理时间与核心研判）
  *       · 右侧（38%）：数据管道实时时效监控 + 核心管控通道直达
@@ -81,7 +81,9 @@ const uptime = computed(() => {
 
 const llm = computed(() => runtime.value?.llm_runtime || {});
 const conf = computed<Record<string, string>>(() => runtime.value?.configuration || {});
-const venueEnv = computed(() => conf.value['交易场所与路由'] || conf.value['OKX 当前环境'] || 'DEMO');
+// OKX-only：优先取 OKX 专用环境键（值形如「模拟盘 DEMO」/「实盘 LIVE」），
+// 仅在缺失时回落到通用键。通用键的值里可能仍带「选所模式」等路由串，故不作首选。
+const venueEnv = computed(() => conf.value['OKX 当前环境'] || conf.value['交易场所与路由'] || 'DEMO');
 const isDemo = computed(() => venueEnv.value.includes('DEMO') || venueEnv.value.includes('模拟'));
 const health = computed(() => runtime.value?.data_health || {});
 const healthFiles = computed<any[]>(() => health.value.files || []);
@@ -212,11 +214,11 @@ function parseAuditContext(action: string, detail: any): { label: string; tag: s
         </div>
       </RouterLink>
 
-      <!-- 指标 3：撮合路由 -->
+      <!-- 指标 3：OKX 连接环境 -->
       <RouterLink to="/admin/security" class="ov-hud-card is-interactive">
         <div class="ov-hud-head">
           <span class="ov-hud-icon"><Wallet :size="14" /></span>
-          <span class="ov-hud-label">{{ t('admin.overview.quickVenues') }}</span>
+          <span class="ov-hud-label">{{ t('admin.overview.okxEnv') }}</span>
           <span class="ov-hud-link-arrow"><ChevronRight :size="13" /></span>
         </div>
         <div class="ov-hud-body">
@@ -226,7 +228,7 @@ function parseAuditContext(action: string, detail: any): { label: string; tag: s
           <div class="ov-hud-sub">{{ t('admin.overview.hudVenueRoute') }}</div>
         </div>
         <div class="ov-hud-foot">
-          <span class="ov-hud-pill">{{ t('admin.overview.hudAutoRoute') }}</span>
+          <span class="ov-hud-pill">{{ t('admin.overview.okxEnvHint') }}</span>
         </div>
       </RouterLink>
 

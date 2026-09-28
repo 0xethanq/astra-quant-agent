@@ -222,7 +222,7 @@ class TimestampUnitConventionTest(unittest.TestCase):
                     for k_node, v_node in zip(node.keys, node.values):
                         if isinstance(k_node, ast.Constant) and k_node.value == "last_sync_ms":
                             found.append((name, ast.unparse(v_node)))
-        self.assertGreaterEqual(len(found), 4, f"只扫到 {len(found)} 个 last_sync_ms 写入点，扫描可能失效")
+        self.assertGreaterEqual(len(found), 2, f"只扫到 {len(found)} 个 last_sync_ms 写入点，扫描可能失效")
         for name, code in found:
             self.assertTrue(MS.search(code) or code == "None",
                             f"{name} 的 last_sync_ms 写入点单位可疑: {code[:60]}")

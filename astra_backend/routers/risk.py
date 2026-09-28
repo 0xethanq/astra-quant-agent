@@ -325,9 +325,11 @@ def manual_close_position(payload: ManualCloseRequest) -> dict[str, Any]:
     from scripts.okx_runtime import current_environment
     _close_env = current_environment()
     _close_venue = str(getattr(payload, "venue", "") or "okx").strip().lower()
-    if _close_venue not in ("okx", "binance", "gate"):
+    # 本仓已收口为 OKX 专用：外所平仓分支（`close_intent.venue_fast_close`）
+    # 随外所下架一并移除，非 OKX 场所一律 fail-closed 拒绝。
+    if _close_venue != "okx":
         raise HTTPException(status_code=400, detail=f"不支持的平仓场所：{_close_venue}")
-    if _close_venue == "okx" and not _close_env.configured:
+    if not _close_env.configured:
         raise HTTPException(status_code=503, detail=f"OKX {_close_env.mode.upper()} 静态 API Key 未配置（系统 NOT READY）：V5 直签是唯一私有通道，禁止后台手动平仓；请先在「账户接入」补齐完整三件套")
     if not settings.manual_close_enabled:
         raise HTTPException(status_code=403, detail="后台手动平仓功能未启用")
@@ -344,11 +346,7 @@ def manual_close_position(payload: ManualCloseRequest) -> dict[str, Any]:
         except BlockingIOError:
             raise HTTPException(status_code=409, detail="交易主循环正在执行，暂不允许后台快速平仓；请等待本周期结束")
         try:
-            if _close_venue == "okx":
-                result = fast_close_confirmed(payload.close_token, payload.confirmation)
-            else:
-                from astra_backend.close_intent import venue_fast_close
-                result = venue_fast_close(_close_venue, _close_env.mode, payload.close_token, payload.confirmation)
+            result = fast_close_confirmed(payload.close_token, payload.confirmation)
             audit_record("position.close", "confirmed_closed", {"instId": result.get("instId"), "side": result.get("posSide"), "venue": _close_venue, "environment": result.get("environment"), "size": result.get("closed_size"), "actor": actor.get("username", "admin")})
             return result
         except OKXNotConfigured as exc:

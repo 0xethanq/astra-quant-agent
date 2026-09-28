@@ -466,14 +466,11 @@ def admin_about(
         "repository": {"url": "https://github.com/0xethanq/astra-quant-agent", "branch": app_attr("git", git)(["branch", "--show-current"]), "commit": app_attr("git", git)(["rev-parse", "--short", "HEAD"])},
         "update": app_attr("update_status", update_status)(),
         # 注册/返佣通道（后台「关于」页渲染成可复制入口）。
-        # ⚠️ 三条 URL 走 settings（可被 OKX_INVITE_URL / GATE_INVITE_URL /
-        # BINANCE_INVITE_URL 覆盖，便于分发副本替换）。
+        # ⚠️ URL 走 settings（可被 OKX_INVITE_URL 覆盖，便于分发副本替换）。
         # **刻意不含经纪商 code**（2026-09 仓库所有者拍板）：它是随订单发出去的归属
         # 标识，不出现在任何用户看得到的界面上 —— 摆出来等于邀请别人照着改。
         "channels": {
             "okx": {"name": "OKX", "invite_url": settings.okx_invite_url},
-            "gate": {"name": "Gate", "invite_url": settings.gate_invite_url},
-            "binance": {"name": "Binance", "invite_url": settings.binance_invite_url},
         },
         "security": {"authentication": "PBKDF2-SHA256 + server-side sessions", "session_hours": 12, "plugin_policy": "builtin-only", "prompt_transport": "python-direct"},
     }
@@ -537,26 +534,24 @@ def update_application(
 # 注册/返佣通道（**公开只读**，2026-09）
 # =====================================================================
 #
-# 为什么单独开一个**无鉴权**的端点：这三条地址是要给**跑这套程序的人**看的
-# （`dashboard/AboutModal` 与首次启动引导），而它们此前是**前端硬编码**的
-# （`AboutModal.vue` 里两份字面量），与 `config.py` 的 `*_invite_url` 各说各话 ——
+# 为什么单独开一个**无鉴权**的端点：这条地址是要给**跑这套程序的人**看的
+# （`dashboard/AboutModal` 与首次启动引导），而它此前是**前端硬编码**的
+# （`AboutModal.vue` 里的字面量），与 `config.py` 的 `*_invite_url` 各说各话 ——
 # 于是"用环境变量换成自己的通道"这个能力**对用户可见的那一处完全失效**
 # （改了后端，前端照旧显示旧链接）。现收敛成单一事实源：后端出值，前端只渲染。
 #
-# 公开是安全的：这三条本就是给人点的邀请链接，不含任何凭证。
+# 公开是安全的：这本就是给人点的邀请链接，不含任何凭证。
 
 CHANNEL_SPECS = (
     ("okx", "OKX", "okx_invite_url"),
-    ("gate", "Gate", "gate_invite_url"),
-    ("binance", "Binance", "binance_invite_url"),
 )
 
 
 def _invite_code(url: str) -> str:
     """从邀请链接里取「给人看的短码」（纯展示用，不是鉴权值）。
 
-    优先取查询串里的 `ref`/`code`/`invite`（币安那种把码放在 `?ref=` 的形态），
-    否则取路径末段（OKX `/join/48039151`、Gate `/share/MCHDBKYF`）。
+    优先取查询串里的 `ref`/`code`/`invite`（把码放在 `?ref=` 的形态），
+    否则取路径末段（OKX `/join/48039151`）。
     取不到就返回空串 —— 前端据此退化成"只显示整条链接"，不编造。
     """
     parts = urlparse(str(url or "").strip())
@@ -592,7 +587,7 @@ def _channel_payload() -> list[dict[str, Any]]:
 
 @router.get("/api/v1/referral-channels")
 def referral_channels() -> dict[str, Any]:
-    """公开只读：三条注册/返佣通道（用户可见；**不需要任何鉴权**）。
+    """公开只读：注册/返佣通道（用户可见；**不需要任何鉴权**）。
 
     ⚠️ 与 `scripts/okx_rest.py` 的经纪商 tag 是两件事，别混：
     - **tag** 随每一笔订单发出，负责把成交**归属**到经纪商 —— 这才是返佣的机制，

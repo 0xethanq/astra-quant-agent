@@ -6,7 +6,6 @@
  * 1. **局部内容展开折叠 Disclosure 模式规范**：
  *    - `CouncilPage.vue`（推理思考过程展开）：按钮声明 `:aria-expanded` 与 `:aria-controls`，受控 `<pre>` 具备匹配 `:id`；
  *    - `PromptStudioPage.vue`（变量快捷条展开）：按钮声明 `:aria-expanded` 与 `:aria-controls="ps-var-ribbon"`，受控 `<section>` 具备 `id="ps-var-ribbon"`；
- *    - `VenueAccountsPanel.vue`（移动端三所卡片展开）：按钮声明 `:aria-expanded` 与 `:aria-controls="venue-accounts-grid"`，受控网格具备 `id="venue-accounts-grid"`；
  *    - `AdminLayout.vue`（桌面侧边栏展开/收起）：折叠与展开按钮声明 `:aria-expanded` 与 `:aria-controls="admin-desktop-sidebar"`，侧边栏具备 `id="admin-desktop-sidebar"`；
  *    - `DashboardLayout.vue`（工作台底栏展开按钮）：声明 `:aria-expanded` 与 `:aria-controls="dashboard-sidebar"`。
  *
@@ -33,11 +32,6 @@ test('CouncilPage、PromptStudio、VenueAccounts 等局部展开触发器与受�
       file: 'views/admin/PromptStudioPage.vue',
       trigger: /:aria-controls="[^"]*'ps-var-ribbon'[^"]*"/,
       target: /id="ps-var-ribbon"/,
-    },
-    {
-      file: 'components/dashboard/VenueAccountsPanel.vue',
-      trigger: /:aria-controls="'venue-accounts-grid'/,
-      target: /id="venue-accounts-grid"/,
     },
     {
       file: 'layouts/AdminLayout.vue',

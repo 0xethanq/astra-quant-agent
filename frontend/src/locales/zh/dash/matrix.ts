@@ -5,18 +5,14 @@ export const zhMatrix = {
 
   kpi: {
     equity: '账户总权益',
-    multiEquity: '多所资产分布',
-    venuesConnected: '{n} 所接入',
-    comboEquity: '组合总权益 (U)',
-    comboEquityTip: '多所聚合权益',
-    // 所选档位一所都读不到时（例：切到实盘但只配了模拟盘 key）不显示别档的钱
-    comboEquityEmpty: '当前档位没有可读账户，不计入任何其他档位的余额',
+    // OKX 当前档位读不到账户时显示「--」，绝不以 0 冒充未知
+    equityEmpty: '当前档位没有可读的 OKX 账户读数',
     todayPnl: '今日已实现',
     floatPnl: '持仓浮动盈亏',
     ls: '多空持仓比',
     margin: '保证金占用',
     oco: '止损保护',
-    equityTip: '钱包余额 + 全部持仓未实现盈亏',
+    equityTip: 'OKX 钱包余额 + 全部持仓未实现盈亏',
     todayTip: '今日 00:00（UTC+8）以来平仓实现的净盈亏',
     floatTip: '在途持仓按标记价计算的未实现盈亏',
     marginTip: '已用保证金 / 账户总权益',
@@ -55,9 +51,7 @@ export const zhMatrix = {
     triggerLast: '最新成交价触发',
     triggerIndex: '指数价触发',
     triggerUnknown: '触发价类型未上报',
-    triggerMarkPrice: '标记价触发',
-    triggerContractPrice: '最新价触发',
-    triggerRawCodeHint: '交易所上报的原始码；本仓未核实其官方映射，故不解释含义（点开交易所核对）',
+    triggerRawCodeHint: 'OKX 上报的原始码；本仓未核实其官方映射，故不解释含义（点开 OKX 核对）',
     triggerMarkHint: '该保护腿按标记价触发（抗插针）',
     triggerLastHint: '该保护腿按最新成交价触发：一根插针即可提前打掉保护',
     triggerIndexHint: '该保护腿按指数价触发',
@@ -65,18 +59,18 @@ export const zhMatrix = {
     ocoMiss: '未挂',
     ocoMissHint: '交易所侧无止盈止损保护',
     orphanPill: '遗留保护单',
-    orphanHint: '该所存在已平仓但未撤销的历史保护单（证据：本方标签或台账同向同量已平记录）。'
+    orphanHint: 'OKX 存在已平仓但未撤销的历史保护单（证据：本方标签或台账同向同量已平记录）。'
       + '这些单会在同币再开仓时**减掉新仓**，应由运营核对后显式撤销（系统绝不自动撤）。',
     unclassifiedPill: '未知保护单',
-    unclassifiedHint: '该所存在**读到了但认不出**的保护单（无本方标签、类型名也不认识，'
+    unclassifiedHint: 'OKX 存在**读到了但认不出**的保护单（无本方标签、类型名也不认识，'
       + '或行本身解析不了）。它们**不计入覆盖** ⇒ 若其实是保护腿，覆盖会被**低估**'
       + '（可能触发重复挂腿），须人工核对。',
     mismatchPill: '保护单不符',
-    mismatchHint: '该所存在方向或量与任何持仓都对不上的保护单：方向不符的**不计入覆盖**'
+    mismatchHint: 'OKX 存在方向或量与任何持仓都对不上的保护单：方向不符的**不计入覆盖**'
       + '（反向腿保护不了本仓）；量不符的**仍被计入覆盖**但需核实，可能是旧仓遗留'
       + '（价格触及仍会减仓），须人工核对。',
     orphanUnknownPill: '未判定挂单',
-    orphanUnknownHint: '该所存在**归属不可判定**的保护单（无标签、台账也无同向同量记录）——'
+    orphanUnknownHint: 'OKX 存在**归属不可判定**的保护单（无标签、台账也无同向同量记录）——'
       + '可能是用户手单，按纪律一律不碰。',
     orphanReadFailHint: '保护腿读取失败 ⇒ 孤儿腿情况**不可判定**（读不到 ≠ 没有）',
     aiManaged: '持仓由 AI 管理',
@@ -205,25 +199,6 @@ export const zhMatrix = {
     noDecision: '本周期该标的无动作',
     updated: '快照 {t}',
   },
-  venue: {
-    title: '选所决策 · venue_decision',
-    beijing: '北京',
-    selectedPrefix: '中选',
-    notSelected: '未选中',
-    reasonCodeFallback: '原因码 --',
-    manualPrefix: '手选优先',
-    hysteresis: '滞回保留现任',
-    allocPrefix: '分配',
-    rejectedTitle: '被淘汰候选 · {n} 所',
-    thVenue: '交易所',
-    thStage: '淘汰阶段',
-    thReason: '原因',
-    noEvidence: '暂无选所决策证据——该信号本周期未走选所路由链路（接线周期生成后自动展示）。',
-    crossTitle: '跨所 · Binance / Gate',
-    crossLs: 'L/S 币安/Gate',
-    crossFund: 'Fund% 币安/Gate',
-    crossEmpty: '该币暂无跨所快照——等待下一个 15 分钟决策周期生成。',
-  },
 
   // ── 批 29：大盘页此前有 6 处中文写死在模板里（多空过滤标签、工位操作表头、
   //    两个 title 提示），英文模式下仍是中文。 ──
@@ -239,14 +214,6 @@ export const zhMatrix = {
   hudProdDynamics: '15M 周期',
   focusEnter: '沉浸模式',
   focusExit: '退出沉浸',
-  // ── 批 41：本地化写死文案（FactorDrawer 预算行 / FactorMatrix 搜索框）──
+  // ── 批 41：本地化写死文案（FactorMatrix 搜索框）──
   searchPlaceholder: '搜索标的 (BTC/ETH)...',
-  budget: {
-    limit: '上限 {v}',
-    before: '预留前占 {v}',
-    this: '本次预留 {v}',
-    state: '态 {v}',
-  },
-  // ── 批 44：场所过滤分段组名 ──
-  pop: { venueLabel: '按交易场所筛选' },
 };

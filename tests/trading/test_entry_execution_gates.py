@@ -365,23 +365,12 @@ class SubmittedBracketTest(unittest.TestCase):
         from pathlib import Path
         src = Path("scripts/trader/order_submit.py").read_text(encoding="utf-8")
         written = set(re.findall(r"venue_ctx\[\"([a-z_]+)\"\]", src))
-        self.assertEqual(written, {"submitted_px", "submitted_tp", "submitted_sl",
-                                   "venue_exec_sz", "venue_exec_margin",
-                                   "venue_exec_notional"},
+        self.assertEqual(written, {"submitted_px", "submitted_tp", "submitted_sl"},
                          "下单路径回写的字段名变了 ⇒ 通知会静默退回计划值")
-        # 三价由 entry_execution 直接读；实提交的**钱**口径由 notifications 的
-        # `venue_executed_facts` 读（两处都必须与写入侧同名）。
+        # 三价由 entry_execution 直接读
         entry_src = Path("scripts/trader/entry_execution.py").read_text(encoding="utf-8")
-        facts_src = Path("scripts/trader/notifications.py").read_text(encoding="utf-8")
-        audit_only = {"venue_exec_sz"}
-        read_anywhere = entry_src + facts_src
         for field in written:
-            if field in audit_only:
-                self.assertIn(f'"{field}"', src,
-                              f"审计字段 {field} 连写入侧都没有了")
-                continue
-            where = entry_src if field.startswith("submitted_") else facts_src
-            self.assertIn(f'"{field}"', where,
+            self.assertIn(f'"{field}"', entry_src,
                           f"读取侧没有取 {field} ⇒ 通知仍是计划值")
 
     def test_display_layer_never_reads_the_contract_count(self):

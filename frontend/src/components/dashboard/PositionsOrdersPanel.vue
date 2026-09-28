@@ -1,14 +1,12 @@
 <script setup lang="ts">
 /**
  * PositionsOrdersPanel.vue · DeepSeek Harness 开发者工作台持仓与挂单面板
- * 侧栏/工位双向联动，低饱和黑白/深灰主题，高密度表格与清晰订单状态
+ * 侧栏/工位双向联动，低饱和黑白/深灰主题，高密度表格与清晰订单状态（OKX 专用）
  */
 import { computed, ref } from 'vue';
 import { useDashboardStore } from '../../stores/dashboard';
 import { useI18n } from '../../composables/useI18n';
-import { useRovingTabs } from '../../composables/useRovingTabs';
 import { fmtNum, fmtSigned, fmtPct, fmtPrice, arrow } from '../../utils/format';
-import { venueToneCls } from '../../utils/venueMeta';
 import { ShieldCheck, ShieldAlert } from 'lucide-vue-next';
 import BaseSegmented from '../base/BaseSegmented.vue';
 import BaseEmpty from '../base/BaseEmpty.vue';
@@ -23,42 +21,8 @@ const { t } = useI18n();
 
 const tab = ref<'positions' | 'orders'>('positions');
 
-type VenueFilter = 'all' | 'okx' | 'binance' | 'gate';
-const selectedVenue = ref<VenueFilter>('all');
-
-/** 批 66：场所过滤胶囊的选项表（原为模板内联字面量，无法索引，故上提为 computed）。 */
-const venueTabs = computed<{ key: VenueFilter; label: string }[]>(() => [
-  { key: 'all', label: t('common.all') },
-  { key: 'okx', label: 'OKX' },
-  { key: 'binance', label: 'Binance' },
-  { key: 'gate', label: 'Gate' },
-]);
-
-// 漫游 tabindex + ←/→/Home/End：此前一组 4 个 role="tab" 全在 Tab 键顺序里且方向键无响应。
-const { setRef: setVenueRef, onKeydown: onVenueKey, roving: venueRoving } = useRovingTabs(
-  () => venueTabs.value.length,
-  (i) => { selectedVenue.value = venueTabs.value[i].key; },
-);
-
 const positions = computed(() => store.positions);
 const orders = computed(() => store.pendingOrders);
-
-function getVenueOf(item: any): string {
-  const v = String(item?.venue || item?.exchange || '').toLowerCase();
-  if (v.includes('binance')) return 'binance';
-  if (v.includes('gate')) return 'gate';
-  return 'okx';
-}
-
-const filteredPositions = computed(() => {
-  if (selectedVenue.value === 'all') return positions.value;
-  return positions.value.filter((p) => getVenueOf(p) === selectedVenue.value);
-});
-
-const filteredOrders = computed(() => {
-  if (selectedVenue.value === 'all') return orders.value;
-  return orders.value.filter((o) => getVenueOf(o) === selectedVenue.value);
-});
 
 function posPnl(p: any): number {
   return Number(p.upl ?? 0);
@@ -107,13 +71,7 @@ function slTriggerType(p: any): string {
   if (v === 'mark') return t('dash.matrix.positions.triggerMark');
   if (v === 'last') return t('dash.matrix.positions.triggerLast');
   if (v === 'index') return t('dash.matrix.positions.triggerIndex');
-  // Binance 的自描述字面量（MARK_PRICE / CONTRACT_PRICE）
-  if (v === 'mark_price') return t('dash.matrix.positions.triggerMarkPrice');
-  if (v === 'contract_price') return t('dash.matrix.positions.triggerContractPrice');
-  // Gate 的数字码翻译（0=最新成交价，1=标记价，2=指数价）
-  if (v === 'price_type:0' || v === '0') return t('dash.matrix.positions.triggerLast');
-  if (v === 'price_type:1' || v === '1') return t('dash.matrix.positions.triggerMark');
-  if (v === 'price_type:2' || v === '2') return t('dash.matrix.positions.triggerIndex');
+  // 认不出的原始码一律原样透传（历史台账遗留的旧场所字面量也在内）——本仓不猜其映射
   if (v.startsWith('price_type:')) return v;
   if (v === 'unknown') return t('dash.matrix.positions.triggerUnknown');
   return '';
@@ -124,11 +82,6 @@ function slTriggerTypeHint(p: any): string {
   if (v === 'mark') return t('dash.matrix.positions.triggerMarkHint');
   if (v === 'last') return t('dash.matrix.positions.triggerLastHint');
   if (v === 'index') return t('dash.matrix.positions.triggerIndexHint');
-  if (v === 'mark_price') return t('dash.matrix.positions.triggerMarkHint');
-  if (v === 'contract_price') return t('dash.matrix.positions.triggerLastHint');
-  if (v === 'price_type:0' || v === '0') return t('dash.matrix.positions.triggerLastHint');
-  if (v === 'price_type:1' || v === '1') return t('dash.matrix.positions.triggerMarkHint');
-  if (v === 'price_type:2' || v === '2') return t('dash.matrix.positions.triggerIndexHint');
   if (v.startsWith('price_type:')) return t('dash.matrix.positions.triggerRawCodeHint');
   if (v === 'unknown') return t('dash.matrix.positions.triggerUnknownHint');
   return '';
@@ -149,13 +102,13 @@ function getTp1(p: any): string | null {
 /**
  * 挂单规模一律用**保证金**（USDT），后端是唯一权威。
  *
- * 后端按各所合约面值与杠杆算好后放进 `margin_usdt`（见
- * `dashboard_payload/order_view.py` 与 `multi_venue.py`）。前端**绝不**自己维护
+ * 后端按 OKX 合约面值与杠杆算好后放进 `margin_usdt`（见
+ * `dashboard_payload/order_view.py`）。前端**绝不**自己维护
  * 面值表：那种表一旦与池子漂移，屏幕上就会出现凭空捏造的保证金数字。
  *
- * 2026-09-28 用户拍板：全系统不再用「张」——三所数量单位不同（OKX 张 / 币安币数 /
- * Gate 张），且各币种的合约面值算法都不一样（BTC 一张 0.01 币、XRP 一张 100 币），
- * 原生数量既不能跨场所比也不能跨币种比。故**取不到就显示 `--`，不再回落原生数量**
+ * 2026-09-28 用户拍板：全系统不再用「张」——各币种的合约面值算法都不一样
+ * （BTC 一张 0.01 币、XRP 一张 100 币），原生数量既不能跨币种比，量纲也不统一。
+ * 故**取不到就显示 `--`，不再回落原生数量**
  * （回落会让同一个面板上不同币种显示不同量纲，正是本次要根治的混乱）。
  */
 function orderMargin(o: any): number {
@@ -182,49 +135,32 @@ function orderTooltipText(o: any): string {
 
 <template>
   <div class="dsh-card pop-panel flex h-full max-h-[58dvh] flex-col overflow-hidden xl:max-h-none">
-    <!-- 面板头部：选项卡与场所过滤条 -->
+    <!-- 面板头部：持仓 / 挂单选项卡 -->
     <header class="dsh-card-header flex flex-col sm:flex-row sm:items-center justify-between gap-2">
       <div class="flex items-center gap-2">
         <BaseSegmented
           v-model="tab"
           :label="t('dash.matrix.positionsOrders.tabsAria')"
           :options="[
-            { value: 'positions', label: `${t('dash.matrix.positions.tab')} ${filteredPositions.length}` },
-            { value: 'orders', label: `${t('dash.matrix.orders.tab')} ${filteredOrders.length}` },
+            { value: 'positions', label: `${t('dash.matrix.positions.tab')} ${positions.length}` },
+            { value: 'orders', label: `${t('dash.matrix.orders.tab')} ${orders.length}` },
           ]"
         />
-        <span v-if="tab === 'positions' && !filteredPositions.length" class="text-3xs text-[var(--ink-3)] hidden sm:block">
+        <span v-if="tab === 'positions' && !positions.length" class="text-3xs text-[var(--ink-3)] hidden sm:block">
           {{ t('dash.matrix.positions.aiManaged') }}
         </span>
       </div>
 
-      <!-- 交易所过滤小胶囊 -->
-      <div class="seg w-full sm:w-auto" role="tablist" :aria-label="t('dash.matrix.pop.venueLabel')">
-        <button
-          v-for="(v, vi) in venueTabs"
-          :key="v.key"
-          :ref="setVenueRef(vi)"
-          type="button"
-          role="tab"
-          :aria-selected="selectedVenue === v.key"
-          :tabindex="venueRoving(selectedVenue === v.key)"
-          :class="{ 'seg-on': selectedVenue === v.key }"
-          @click="selectedVenue = v.key"
-          @keydown="onVenueKey($event, vi)"
-        >
-          {{ v.label }}
-        </button>
-      </div>
     </header>
 
     <!-- 持仓列表 -->
     <div v-if="tab === 'positions'" class="scroll-y flex-1 min-h-0 overflow-x-auto">
-      <BaseEmpty v-if="!filteredPositions.length" :text="t('dash.matrix.positions.empty')" />
+      <BaseEmpty v-if="!positions.length" :text="t('dash.matrix.positions.empty')" />
       <div v-else>
         <!-- 窄容器流式卡片（容器 <660px 时启用；永不横向切边，信息层级分明） -->
         <div class="pop-narrow space-y-2 p-2">
           <div
-            v-for="p in filteredPositions"
+            v-for="p in positions"
             :key="'m-' + p.instId + p.side"
             class="clickable rounded-xl border border-[var(--line-2)] bg-[var(--surface-1)] p-3.5 transition-all hover:bg-[var(--surface-2)]/60 hover:border-[var(--line-1)] flex flex-col gap-2.5 shadow-xs"
             :title="t('dash.matrix.chart.pickHint')"
@@ -240,12 +176,6 @@ function orderTooltipText(o: any): string {
                 <span class="num font-mono font-bold text-sm text-[var(--ink-strong)]">{{ symOf(p) }}</span>
                 <DirTag :dir="p.side" />
                 <span class="font-mono text-xs font-semibold text-[var(--ink-2)]">{{ p.lever }}x</span>
-                <span
-                  class="rounded px-1.5 py-0.5 text-3xs font-mono font-medium uppercase border"
-                  :class="venueToneCls(getVenueOf(p))"
-                >
-                  {{ getVenueOf(p).toUpperCase() }}
-                </span>
               </div>
               <div class="text-right shrink-0">
                 <span class="text-sm font-bold font-mono tracking-tight block" :class="posPnl(p) >= 0 ? 'text-[var(--up)]' : 'text-[var(--down)]'">
@@ -321,7 +251,7 @@ function orderTooltipText(o: any): string {
         </thead>
         <tbody>
           <tr
-            v-for="p in filteredPositions"
+            v-for="p in positions"
             :key="p.instId + p.side"
             class="clickable transition-colors hover:bg-[var(--surface-2)]"
             :title="t('dash.matrix.chart.pickHint')"
@@ -335,12 +265,6 @@ function orderTooltipText(o: any): string {
                 <CryptoLogo :symbol="symOf(p)" :size="16" />
                 <span class="num font-mono font-semibold text-xs text-[var(--ink-strong)]">{{ symOf(p) }}</span>
                 <DirTag :dir="p.side" />
-                <span
-                  class="rounded-full px-1.5 py-0.5 text-3xs font-mono font-semibold uppercase border"
-                  :class="venueToneCls(getVenueOf(p))"
-                >
-                  {{ getVenueOf(p).toUpperCase() }}
-                </span>
                 <span
                   v-if="(p.scaleOutPhase ?? 0) >= 1"
                   class="rounded-full px-1.5 py-0.5 text-3xs font-mono font-semibold border text-[var(--up)] border-[var(--up-line)] bg-[var(--up-bg)]"
@@ -433,12 +357,12 @@ function orderTooltipText(o: any): string {
 
     <!-- 挂单列表 -->
     <div v-else class="scroll-y flex-1 min-h-0 overflow-x-auto">
-      <BaseEmpty v-if="!filteredOrders.length" :text="t('dash.matrix.orders.empty')" />
+      <BaseEmpty v-if="!orders.length" :text="t('dash.matrix.orders.empty')" />
       <div v-else>
         <!-- 窄容器流式挂单卡片（容器 <660px 时启用） -->
         <div class="pop-narrow space-y-2 p-2">
           <div
-            v-for="o in filteredOrders"
+            v-for="o in orders"
             :key="'mo-' + o.ordId"
             class="clickable rounded-lg border border-[var(--line-2)] bg-[var(--surface-1)] p-3 transition-colors hover:bg-[var(--surface-2)] hover:border-[var(--line-1)] flex flex-col gap-2"
             :title="t('dash.matrix.chart.pickHint')"
@@ -453,12 +377,6 @@ function orderTooltipText(o: any): string {
                 <span class="num font-mono font-bold text-sm text-[var(--ink-strong)]">{{ symOf(o) }}</span>
                 <DirTag :dir="orderDir(o)" />
                 <span class="font-mono text-xs font-bold text-[var(--ink-strong)]">{{ o.lever || '3x' }}</span>
-                <span
-                  class="rounded-full px-1.5 py-0.5 text-3xs font-mono font-semibold uppercase border"
-                  :class="venueToneCls(getVenueOf(o))"
-                >
-                  {{ getVenueOf(o).toUpperCase() }}
-                </span>
               </div>
               <span class="inline-block whitespace-nowrap rounded px-1.5 py-0.5 text-3xs border border-[var(--line-1)] bg-[var(--surface-2)] text-[var(--ink-2)]">
                 {{ o.state === 'live' ? t('status.waiting') : o.state }}
@@ -502,7 +420,7 @@ function orderTooltipText(o: any): string {
         </thead>
         <tbody>
           <tr
-            v-for="o in filteredOrders"
+            v-for="o in orders"
             :key="o.ordId"
             class="clickable transition-colors hover:bg-[var(--surface-2)]"
             :title="t('dash.matrix.chart.pickHint')"
@@ -516,12 +434,6 @@ function orderTooltipText(o: any): string {
                 <CryptoLogo :symbol="symOf(o)" :size="16" />
                 <span class="num font-mono font-semibold text-xs text-[var(--ink-strong)]">{{ symOf(o) }}</span>
                 <DirTag :dir="orderDir(o)" />
-                <span
-                  class="rounded-full px-1.5 py-0.5 text-3xs font-mono font-semibold uppercase border"
-                  :class="venueToneCls(getVenueOf(o))"
-                >
-                  {{ getVenueOf(o).toUpperCase() }}
-                </span>
               </div>
             </td>
             <td class="col-num font-mono text-xs font-semibold text-[var(--ink-strong)]">
@@ -550,7 +462,7 @@ function orderTooltipText(o: any): string {
       </table>
         </div>
       </div>
-      <p v-if="filteredOrders.length" class="text-3xs text-[var(--ink-3)] border-t px-3.5 py-2" style="border-color: var(--line-1)">
+      <p v-if="orders.length" class="text-3xs text-[var(--ink-3)] border-t px-3.5 py-2" style="border-color: var(--line-1)">
         {{ t('dash.matrix.orders.aiManaged') }}
       </p>
     </div>

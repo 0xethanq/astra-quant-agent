@@ -408,8 +408,6 @@ class UpdateCycleLiveTests(_Base):
         self._start(mock.patch.object(DC, "collect_core_account_state",
                                       return_value=_account_state()))
         self.algo = self._start(mock.patch.object(DC, "_core_collect_algo_protection"))
-        self.cross = self._start(mock.patch.object(DC, "_core_collect_cross_venue_positions",
-                                                   return_value=(2, 1, 7.5)))
         self.reset = self._start(mock.patch.object(DC, "_core_read_reset_initial_state",
                                                    return_value=("2026-01-01", 1000.0)))
         self.bills = self._start(mock.patch.object(DC.okx_rest, "bills",
@@ -552,23 +550,6 @@ class UpdateCycleLiveTests(_Base):
         self._patch_llm({})
         DC.update_cache_cycle()
         self.assertEqual(stats.call_args[0][1], "")
-
-    def test_ledger_rows_lookup_is_optional(self):
-        from scripts.trader import venue_protection
-        reader = self._start(mock.patch.object(venue_protection, "read_ledger_rows",
-                                               return_value=[{"r": 1}]))
-        self._patch_llm({})
-        DC.update_cache_cycle()
-        self.assertEqual(self.cross.call_args[1]["ledger_rows"], [{"r": 1}])
-        reader.assert_called_once_with(DC.LEDGER_JSON_FILE)
-
-    def test_ledger_rows_lookup_failure_yields_none(self):
-        from scripts.trader import venue_protection
-        self._start(mock.patch.object(venue_protection, "read_ledger_rows",
-                                      side_effect=RuntimeError("读不到台账")))
-        self._patch_llm({})
-        DC.update_cache_cycle()
-        self.assertIsNone(self.cross.call_args[1]["ledger_rows"])
 
     def test_integrity_sidecars_run_after_the_local_reads(self):
         order = []

@@ -88,11 +88,11 @@ class ReadmeClaimTest(unittest.TestCase):
                       "README 应保留对原错误结论的更正说明（便于接手人理解历史）")
 
     def test_the_ten_components_all_have_real_consumers(self):
-        """那 10 个组件**全部**有消费者 —— 逐个实测。"""
-        ten = ["BaseSwitch", "BaseSparkline", "BaseDrawer", "BaseDialog",
-               "BaseTabs", "CopyButton",
-               "VenueAccountCard", "DataStatus", "SettingsPopover", "FactorDrawer"]
-        for name in ten:
+        """现存组件全部有消费者 —— 逐个实测。"""
+        components = ["BaseSwitch", "BaseSparkline", "BaseDrawer", "BaseDialog",
+                      "BaseTabs", "CopyButton",
+                      "DataStatus", "SettingsPopover", "FactorDrawer"]
+        for name in components:
             with self.subTest(component=name):
                 got = consumers_of(name)
                 self.assertTrue(got, f"{name} 实测 0 个消费者 —— README 的更正表需更新")
@@ -126,10 +126,10 @@ class ReadmeClaimTest(unittest.TestCase):
 
     def test_correction_table_counts_match_reality(self):
         """README 更正表里写的消费者数必须与实测一致（**从文档解析**）。"""
-        ten = ["BaseSwitch", "BaseSparkline", "BaseDrawer", "BaseDialog",
-               "BaseTabs", "CopyButton",
-               "VenueAccountCard", "DataStatus", "SettingsPopover", "FactorDrawer"]
-        for name in ten:
+        components = ["BaseSwitch", "BaseSparkline", "BaseDrawer", "BaseDialog",
+                      "BaseTabs", "CopyButton",
+                      "DataStatus", "SettingsPopover", "FactorDrawer"]
+        for name in components:
             with self.subTest(component=name):
                 got = len(consumers_of(name))
                 for label in (f"base/{name}", f"dashboard/{name}", name):

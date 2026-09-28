@@ -15,7 +15,7 @@ DEFAULT_BASE_VERSION = f"v{__version__}"
 
 
 _PACKAGE_UNITS = ("prompt_config", "evolution_memory", "interceptor_config",
-                  "council_config", "risk_config", "venue_routing")
+                  "council_config", "risk_config")
 
 
 _TEMPLATE_KEYS = ("trading_system", "trading_user", "evolution_system", "evolution_user")

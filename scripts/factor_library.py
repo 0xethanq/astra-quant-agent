@@ -274,8 +274,8 @@ def compute_instrument_factors(item: Dict[str, Any], smart_money_pool: Dict[str,
 
 def update_factor_library() -> Dict[str, Any]:
     """Fetch and calculate multi-pillar factor library snapshot for 6 instruments."""
-    # 1. Smart Money Pool：通过 Binance 公开大户指标 + OKX Rubik 备选双源容灾采集
-    #    双源均不可用时保持空池 → 优雅缺失化 available=False
+    # 1. Smart Money Pool：通过 OKX Rubik 官方公开统计端点采集
+    #    取数不可用时保持空池 → 优雅缺失化 available=False
     try:
         try:
             from scripts.factors.smart_money import fetch_smart_money_pool

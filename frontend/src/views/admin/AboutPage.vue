@@ -104,8 +104,9 @@ const { run: executeUpdate, busy: updateRunning } = useAsyncAction(async () => {
 const phaseOk = computed(() => confirmPhrase.value.trim().toUpperCase() === 'UPDATE ASTRA');
 
 /** 注册通道：后端 `/api/v1/admin/about` 的 `channels`（链接与 OKX 经纪商 code 都来自接口）。
- *  顺序固定为 OKX → Gate → Binance，缺失项由后端省略时优雅跳过。 */
-const CHANNEL_ORDER = ['okx', 'gate', 'binance'] as const;
+ *  系统已收敛为 OKX 单交易所：这里只渲染 OKX 通道；后端 payload 若仍夹带已下线
+ *  交易所的旧条目，按白名单过滤后静默跳过，不抛错。 */
+const CHANNEL_ORDER = ['okx'] as const;
 const channelRows = computed(() => {
   const ch = about.value?.channels || {};
   return CHANNEL_ORDER
@@ -491,8 +492,10 @@ const bandFacts = computed(() => {
   gap: var(--ds-space-3);
 }
 @media (min-width: 760px) {
+  /* OKX-only：现在只有一条通道，用 auto-fit 让卡片按可用宽度铺开，
+     不再固定三列、白白留下两条空位。 */
   .ab-channels-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   }
 }
 .ab-channel {

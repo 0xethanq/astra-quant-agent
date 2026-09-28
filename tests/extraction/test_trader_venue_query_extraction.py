@@ -109,20 +109,6 @@ class VenueQueryVerbatimTest(unittest.TestCase):
             ok2, msg2 = aft.close_position_confirmed("BTC-USDT-SWAP", "long", 1.0)
         self.assertFalse(ok2, "query_positions 注入断了（读不到凭证却判成功）")
 
-    def test_close_confirm_uses_patched_facade_other_venues(self):
-        """外所分支：patch 门面 fetch_other_venue_positions 必须改变经壳行为。"""
-        import astra_backend.execution_router as router
-        import scripts.ai_factor_trader as aft
-        with patch.object(router, "close_position",
-                          lambda *a, **k: {"ok": True, "detail": ""}), \
-             patch.object(aft, "current_environment",
-                          lambda: types.SimpleNamespace(mode="demo")), \
-             patch.object(aft, "fetch_other_venue_positions",
-                          lambda env: (True, {"gate": []}, "")):
-            ok, msg = aft.close_position_confirmed("BTC-USDT-SWAP", "long", 1.0, venue="gate")
-        self.assertTrue(ok, msg)
-        self.assertIn("verified flat", msg)
-
     def test_exec_ready_reads_patched_broken_venues(self):
         """读侧引用语义：坏所名单被 patch 后必须影响就绪判定。"""
         import scripts.ai_factor_trader as aft

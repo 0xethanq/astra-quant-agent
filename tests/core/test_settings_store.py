@@ -336,8 +336,8 @@ class UpdateEnvTests(_Base):
 
     def test_booleans_become_python_text(self):
         self._write("")
-        SS.update_env({"ASTRA_GATE_EXECUTION": True})
-        self.assertIn("ASTRA_GATE_EXECUTION=True", self._read())
+        SS.update_env({"ASTRA_MANUAL_CLOSE_ENABLED": True})
+        self.assertIn("ASTRA_MANUAL_CLOSE_ENABLED=True", self._read())
 
     def test_an_injection_attempt_is_rejected_before_any_write(self):
         self._write("LLM_MODEL=gpt\n")
@@ -458,13 +458,11 @@ class RiskEnvKeysFallbackTests(unittest.TestCase):
 class ManagedKeysTests(unittest.TestCase):
     def test_the_execution_toggles_are_managed(self):
         """真实下单权限的开关必须在白名单里，否则后台改不动（也不该能改）。"""
-        for key in ("ASTRA_GATE_EXECUTION", "ASTRA_GATE_DEMO_EXECUTION",
-                    "ASTRA_BINANCE_EXECUTION", "ASTRA_BINANCE_DEMO_EXECUTION",
-                    "ASTRA_MAX_TOTAL_EXPOSURE_USDT", "ASTRA_MANUAL_CLOSE_ENABLED"):
+        for key in ("ASTRA_MAX_TOTAL_EXPOSURE_USDT", "ASTRA_MANUAL_CLOSE_ENABLED"):
             self.assertIn(key, SS.MANAGED_KEYS)
 
-    def test_the_six_account_credential_families_are_managed(self):
-        for venue in ("OKX", "BINANCE", "GATE"):
+    def test_the_okx_account_credential_families_are_managed(self):
+        for venue in ("OKX",):
             for env in ("LIVE", "DEMO"):
                 self.assertIn(f"{venue}_{env}_API_KEY", SS.MANAGED_KEYS)
                 self.assertIn(f"{venue}_{env}_SECRET_KEY", SS.MANAGED_KEYS)

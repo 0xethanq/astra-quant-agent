@@ -181,15 +181,6 @@ def restore_archived_policy(resolve_archive_file: Callable[..., Path], root: Pat
                 from astra_backend.settings_store import update_env
                 env_updates = risk_config.normalize(payload["risk_config"])
                 update_env(env_updates)
-
-            # 6. Restore Venue Routing（同 5：不再吞异常）
-            if (
-                "venue_routing" in payload
-                and isinstance(payload["venue_routing"], dict)
-                and payload["venue_routing"]
-            ):
-                from astra_backend.exchanges.routing_policy import ROUTING_FILE
-                _atomic_write_json(ROUTING_FILE, payload["venue_routing"])
         finally:
             if sys_path_added and scripts_dir in sys.path:
                 try:

@@ -119,9 +119,6 @@ class TestPosIdReuseRoundtrips(unittest.TestCase):
         with patch.object(okx_rest, "urlopen", _transport(_table(hist_rows))), \
              patch.multiple(sfl, **self.paths), \
              patch.object(sfl, "get_ct_val", lambda inst: 1.0), \
-             patch.object(sfl, "fetch_binance_closed_trades", lambda *a, **k: []), \
-             patch.object(sfl, "fetch_gate_closed_trades", lambda *a, **k: []), \
-             patch.object(sfl, "_other_venue_live_positions", lambda axis: ([], set())), \
              redirect_stdout(io.StringIO()):
             sfl.build_lifecycle_ledger()
         with open(self.paths["LEDGER_JSON_FILE"], "r", encoding="utf-8") as f:

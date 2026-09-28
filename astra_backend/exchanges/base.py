@@ -1,21 +1,20 @@
-"""多交易所统一适配层（Phase 1 · 2026-09-09 立项）。
+"""交易所统一适配层（OKX 专用）。
 
 设计原则（源自 plan_local/ASTRA_DEEP_ROADMAP_2026-09.md，对齐 freqtrade/nautilus 模式）：
 
-1. **能力表驱动**：每个交易所子类 = 一张差异声明字典（ExchangeCapabilities），
+1. **能力表驱动**：适配器子类 = 一张差异声明字典（ExchangeCapabilities），
    标的命名、数量语义、触发价默认、限频、附属 TP/SL、大陆 IP 政策全部显式声明。
 2. **显式不支持，永不静默模拟**：未实装的私有切面（下单/账户/保护单）一律抛
    ``ExchangeCapabilityError`` fail-closed——绝不返回假数据骗过上层。
 3. **对外统一币本位，进 venue 前换算**：上层决策契约只谈「保证金 USDT / 杠杆 /
    现价」，``quote_qty_to_native()`` 按场所规格折算，且**两条分支都向下取整**：
-   币数语义截断到 step、张数语义 `floor` —— 换算出的名义**永不超出**目标
-   （张数分支曾用四舍五入，最坏向上多买半张即 +33%，第一百五十三刀按用户拍板改为 floor；
-   与实盘路径 `execution.sizing.quantize_size` 方向一致）。
-4. **行情与执行分离**（nautilus 模式）：本阶段 Binance/Gate 仅实装公共只读行情；
-   执行路由留到 Phase 3（单所 ≥100 笔样本门槛前不接第二所实盘）。
+   币数语义截断到 step、张数语义 `floor` —— 换算出的名义**永不超出**目标。
+4. **行情与执行分离**（nautilus 模式）：本阶段 OKX 执行走自有直签链路
+   （`okx_rest` / `okx_trade_service`），适配器面提供只读行情与能力声明。
+   ⚠️ 2026-10：Binance / Gate 适配器已随多所拆除**整体移除**，本层只剩 OKX。
 
 符号规范：全系统内部 canonical 资产名 = 裸币种（"BTC"）；venue 原生 instId 只在
-适配器边界内存在（OKX "BTC-USDT-SWAP" / Binance "BTCUSDT" / Gate "BTC_USDT"）。
+适配器边界内存在（OKX "BTC-USDT-SWAP"）。
 """
 from __future__ import annotations
 
@@ -41,47 +40,43 @@ class ExchangeCapabilityError(RuntimeError):
 
 @dataclass(frozen=True)
 class ExchangeCapabilities:
-    venue: str                       # "okx" | "binance" | "gate"
+    venue: str                       # "okx"（本层只剩 OKX）
     display_name: str
     symbol_template: str             # e.g. "{base}-USDT-SWAP"
     quote: str = "USDT"
     # ---- 数量语义 ----
     quantity_unit: str = "contracts"  # "contracts"(张) | "base_asset"(币本位数量)
-    signed_size: bool = False         # Gate: 正多负空带符号张数
-    # ---- 条件单/OCO 语义（Phase 3 用，先声明后实现）----
-    supports_attached_tp_sl: bool = False   # OKX attachAlgoOrds / Bybit tpslMode
+    signed_size: bool = False         # 载荷是否用「正多负空」的带符号张数
+    # ---- 条件单/OCO 语义（先声明后实现）----
+    supports_attached_tp_sl: bool = False   # OKX attachAlgoOrds 附带 TP/SL
+    # ⚠️ 实现必须**显式传入**触发价格类型，不依赖任何交易所默认值（官方默认值会变，
+    # 旧调研里「默认就是 MARK_PRICE」的断言已作废）。本字段只是本系统的语义标注。
     trigger_price_default: str = "last"     # 本系统内部语义标注（last/mark/index）
-    # ⚠️ US-004 纠偏（审计 2026-09-10 §2 Binance，替代旧「默认 MARK_PRICE」误断言）：
-    # Binance Algo API 的 workingType 官方默认是 CONTRACT_PRICE——实现必须显式传入
-    # 触发价格类型，不依赖任何默认值；旧调研把默认写成 MARK_PRICE 已作废。
-    # ---- US-004 真实语义字段（审计 §2 出处逐所声明，勿再挤在 supports_orders 一栏）----
-    # 订单 ID 类型（审计 §2 Gate id_string 防 JS int64 精度损失 / Binance orderId int64）：
-    #   "string"             — 原生即字符串（OKX ordId/algoId）
-    #   "int64_id_string"    — int64 且响应带 id_string，读取一律用 id_string 字符串（Gate）
-    #   "int64_precision_risk" — int64 无 id_string，跨 JSON Number 链路必须 str 归一（Binance）
+    # ---- 真实语义字段（审批出处逐所声明，勿再挤在 supports_orders 一栏）----
+    # 订单 ID 类型（防 JS int64 精度损失）：
+    #   "string"               — 原生即字符串（OKX ordId/algoId）
+    #   "int64_id_string"      — int64 且响应带 id_string，读取一律用 id_string 字符串
+    #   "int64_precision_risk" — int64 无 id_string，跨 JSON Number 链路必须 str 归一
     order_id_type: str = "string"
-    native_amend: bool = False        # 原生改单端点（Gate price_orders/amend=True）
-    decimal_amount: bool = False      # 十进制张数 amount 字符串（Gate 模型支持，账户实况未验）
+    native_amend: bool = False        # 原生改单端点（本仓 OKX 未实装 ⇒ False）
+    decimal_amount: bool = False      # 十进制张数 amount 字符串（本仓 OKX 用整数张 ⇒ False）
     # 持仓模式族（仅声明支持域，永不自动切换用户账户；未支持档=禁新开仓并显示原因）
-    # gate: ("single","dual","dual_plus")——dual_plus 拆仓不得折叠成净仓/双向（审计 §2）
-    #        binance: ("net","long_short")——两所**词汇不同**，判定必须按所各表（实测）
+    # okx: ("net","long_short")——判定必须按本所自己的**词汇**，不得跨所套用
     position_modes: tuple = ()
     # 其中**载荷已验证、允许新开仓**的模式子集（宽于它的模式=检测得到但禁开，
     # 因为本系统没有在真实账户上核验过那种模式的下单/保护腿载荷）：
-    #   gate: single/dual（dual 走 auto_size，single 走 close=true，均有单测+真帧）
-    #         dual_plus 拆仓不折叠 ⇒ 不在子集内
-    #   binance: net（positionSide=BOTH）。long_short（hedge）**未核验** ⇒ 不在子集内；
-    #         其 place_order/attach 虽有 position_side 入参，但缺真实对冲账户验证
-    # 空 = 不体检（不认识模式的场所维持原行为，绝不因"没实现"就停掉一个所）
+    #   okx: long_short（显式 posSide、平仓按腿方向，已在真实双向账户核验）
+    #         net（净持仓）未核验 ⇒ 不在子集内
+    # 空 = 不体检（不认识模式的实现维持原行为，绝不因"没实现"就停掉一个所）
     entry_ready_position_modes: tuple = ()
     conditional_family: str = "none"  # attached | independent_resource | algo_service
     protection_semantics: str = ""    # 保护生效条件的人读语义（见各所声明与 §0 设计纠正）
     # ---- 公共行情 ----
     max_candle_limit: int = 300
-    bar_case: str = "upper"                 # OKX 混合大小写 vs binance/gate 全小写
+    bar_case: str = "upper"                 # "upper" 保留内部写法 / "lower" 转小写
     has_top_trader_ratio: bool = False
     has_taker_ratio: bool = False
-    # ---- 私有面能力（本阶段三家除 OKX 现状外均为 False）----
+    # ---- 私有面能力（除 OKX 现状外均为 False）----
     supports_account: bool = False
     supports_orders: bool = False
     # ---- G9 统一开闸判定（US-009 后收口）：适配器执行的 env 旗标单源声明 ----
@@ -96,7 +91,7 @@ class ExchangeCapabilities:
 
 @dataclass(frozen=True)
 class InstrumentSpec:
-    """合约规格——三家原生字段归一后的统一形态。"""
+    """合约规格——原生字段归一后的统一形态。"""
     venue: str
     inst_id: str
     base: str
@@ -156,8 +151,7 @@ class BaseExchangeAdapter:
         """端点解析（US-001 起）：(venue, environment) → env_profiles 单一入口。
 
         environment=None → 按旧 ``ASTRA_{VENUE}_TESTNET`` 布尔兼容映射
-        （binance→demo 逐字节同旧 URL；gate→sandbox 双候选择优探测；
-        未声明档的场所维持旧 live/test_url 行为）。
+        （未声明档的场所维持旧 live/test_url 行为；OKX 无旧沙盒档 ⇒ 恒 live）。
         """
         from . import env_profiles
         venue_key = str(getattr(self.capabilities, "venue", "") or "").lower()
@@ -256,8 +250,8 @@ class BaseExchangeAdapter:
                             spec: InstrumentSpec) -> float:
         """名义价值 USDT + 现价 + 规格 → 该场所原生下单量（正数）。
 
-        - base_asset 语义（Binance）：币数，向下截断到 step_size；
-        - contracts 语义（OKX/Gate）：整数张，**四舍五入**后校验最小张数。
+        - base_asset 语义：币数，向下截断到 step_size；
+        - contracts 语义（OKX）：整数张，`floor` 后校验最小张数。
 
         ⚠️ **两条分支一律向下取整**，故换算出的名义**永不超出**目标（第一百五十三刀）：
 
@@ -266,14 +260,12 @@ class BaseExchangeAdapter:
           1.5 张 ⇒ 2 张 = 600U，**+33%**，直接顶破按笔保证金上限；用户拍板改为 floor）。
 
         代价方向相反且可接受：向下取整可能让单子更常低于最小张数而被拒（少下单，不超买）。
-        需要更细粒度时，Gate 等支持十进制 amount 的场所可走 Decimal 通道。
-
         换算失败/低于最小名义价值 → 0.0（调用方据此拒单，fail-closed）。
 
-        US-004 注：本函数是「按名义额估整数张」的便利换算，不是数量类型禁令——
-        Gate 等支持十进制 amount 的场所（capabilities.decimal_amount=True 且环境合约
+        注：本函数是「按名义额估整数张」的便利换算，不是数量类型禁令 ——
+        支持十进制 `amount` 的实现（`capabilities.decimal_amount=True` 且环境合约
         规格许可）可在下单入口显式传 Decimal/十进制字符串 amount 绕过本整数换算，
-        不得再把「所有合约必须 int 张数」当硬编码事实（审计 §2 Gate decimal amount）。
+        不得把「所有合约必须 int 张数」当硬编码事实（本仓 OKX 用整数张，故该位为 False）。
         """
         if notional_usdt <= 0 or price <= 0:
             return 0.0
@@ -306,7 +298,7 @@ class BaseExchangeAdapter:
     def _unsupported(self, facet: str) -> ExchangeCapabilityError:
         return ExchangeCapabilityError(
             f"{self.capabilities.display_name}: {facet} 未实装"
-            f"（多所执行属 Phase 3 范围，单所 ≥100 笔 DEMO 样本门槛前显式拒绝）"
+            f"（私有切面未实装；本层只提供只读行情与能力声明，显式拒绝而非伪造）"
         )
 
     def account_snapshot(self) -> Dict[str, Any]:

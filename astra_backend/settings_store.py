@@ -19,21 +19,7 @@ MANAGED_KEYS = {
     "OKX_LIVE_API_KEY", "OKX_LIVE_SECRET_KEY", "OKX_LIVE_PASSPHRASE",
     "OKX_DEMO_API_KEY", "OKX_DEMO_SECRET_KEY", "OKX_DEMO_PASSPHRASE",
     "OKX_IS_SIMULATED",
-    # 多交易所网络档位与 6 账户独立凭证（US-003）
-    "ASTRA_BINANCE_TESTNET", "ASTRA_GATE_TESTNET",
-    "BINANCE_API_KEY", "BINANCE_SECRET_KEY",
-    "BINANCE_LIVE_API_KEY", "BINANCE_LIVE_SECRET_KEY",
-    "BINANCE_DEMO_API_KEY", "BINANCE_DEMO_SECRET_KEY",
-    "BINANCE_TESTNET_API_KEY", "BINANCE_TESTNET_SECRET_KEY",
-    "GATE_API_KEY", "GATE_SECRET_KEY",
-    "GATE_LIVE_API_KEY", "GATE_LIVE_SECRET_KEY",
-    "GATE_DEMO_API_KEY", "GATE_DEMO_SECRET_KEY",
-    "GATE_TESTNET_API_KEY", "GATE_TESTNET_SECRET_KEY",
-    "GATE_SANDBOX_API_KEY", "GATE_SANDBOX_SECRET_KEY",
-    # Gate/Binance 执行路由总闸（真实下单权限，默认关）
-    "ASTRA_GATE_EXECUTION", "ASTRA_GATE_DEMO_EXECUTION",
-    "ASTRA_BINANCE_EXECUTION", "ASTRA_BINANCE_DEMO_EXECUTION",
-    # 跨所同向合并敞口上限（US-005 拒开阈值，单位 USDT）
+    # 跨所同向合并敞口上限（US-005 拒开阈值，单位 USDT；已随单所化退化为单所同向）
     "ASTRA_MAX_TOTAL_EXPOSURE_USDT",
     "LLM_BASE_URL",
     "LLM_API_KEY",
@@ -111,7 +97,7 @@ class EnvValueError(ValueError):
 
 def sanitize_env_value(key: str, value: Any) -> str:
     """审计 P2-7(2026-09-13)：.env 是"每行一个 KEY=VALUE"的格式，值里出现换行就等于
-    追加新键（密钥页/通知页/LLM 页任一输入框都能伪造 `ASTRA_BINANCE_EXECUTION=1` 这类
+    追加新键（密钥页/通知页/LLM 页任一输入框都能伪造 `ASTRA_OKX_EXECUTION=1` 这类
     执行开闸键）。这里统一拒绝换行/NUL，并顺带拒绝控制字符与首尾空白污染。"""
     text = "" if value is None else str(value)
     if any(ch in text for ch in ("\n", "\r", "\0")):

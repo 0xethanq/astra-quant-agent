@@ -10,15 +10,15 @@
 | `risk_gates.py` | **发送前三道风控闸门**：杠杆区间夹取 / 单笔保证金夹取 / 跨所同向敞口拒开 | 无（纯计算；常量与 `_fail` 由调用方注入） |
 | `own_records.py` | **己仓对账**：交易所实况 × 本方台账 holding 行 → 逐仓归属判定（`own` / `stale_closed` 账实不符 / `mismatch` / `untracked` / `ledger_unavailable`）。**`untracked` 与 `ledger_unavailable` 是『不可判定』，绝不是『外部仓』** | 无（台账路径可注入；纯计算） |
 | `cooldowns.py` | **止损冷却单一事实源**：读冷却状态（损坏≠缺失）/ 是否仍在冷却 / 只读展示面 | 无（路径与时长由调用方传入） |
-| `venue_gate.py` | **三所共用的入场闸门**：跨所同向敞口拒开 / 池门禁（`dry_run`·准入币种·`min_confidence`·`max_open`）/ 持仓模式只读体检 | 无（纯计算；池、持仓、模式探针由调用方注入，探针可为惰性可调用） |
+| `venue_gate.py` | **OKX 入场闸门**：同向敞口拒开 / 持仓模式只读体检 | 无（纯计算；持仓、模式探针由调用方注入，探针可为惰性可调用） |
 
-> `venue_gate.py`（2026-09-28 三所平权）解决的是**同一套闸门被实现两遍、只有一遍接了 OKX**：
-> 池门禁与跨所敞口原本内联在 `execution_router.open_protected_position` 里，
-> 而 OKX 直签路径（`okx_rest.place_order`）**一个都没有** ——
-> 而敞口统计却又**明确把 OKX 的仓算进去**（`_exposure_venues`），
+> `venue_gate.py`（2026-09-28 三所平权，现已收口为 OKX 专用）解决的是
+> **同一套闸门被实现两遍、只有一遍接了 OKX**：敞口判据与持仓模式体检原本内联在
+> 多所执行入口里，而 OKX 直签路径（`okx_rest.place_order`）**一个都没有** ——
+> 而敞口统计却又**明确把 OKX 的仓算进去**，
 > 于是最坏的一种不对称出现了：**OKX 的仓占着上限，OKX 的下单却不查上限**。
 > 提示词对主脑写「跨所同向敞口上限 … 超出执行层拒开」，走到 OKX 时是**空头支票**。
-> 现在两条执行路径共用本模块的同一个函数，新增闸门自动覆盖三所。
+> 现在两条执行路径共用本模块的同一个函数（统计集合已退化为 OKX 一所）。
 
 > `cooldowns.py`（结构优化阶段 4·B3 第五十刀）原为
 > `scripts/ai_factor_trader.py` 与 `astra_backend/execution/circuit_breaker.py`
@@ -28,18 +28,18 @@
 > 交易侧与风控面判断不一致。**冷却文件路径与冷却时长一律由调用方在调用时传入**
 > （两侧的 `STOP_COOLDOWN_FILE` 都可被测试 patch；`aft` 用 str、`cb` 用 Path）。
 
-> `risk_gates.py`（结构优化阶段 4·B3 第三十八刀）原为
-> `astra_backend/execution_router.py::open_protected_position` 的 L108–173，
+> `risk_gates.py`（结构优化阶段 4·B3 第三十八刀）原为多所执行入口的
+> `open_protected_position` L108–173（该入口已随外所下架移除），
 > 是该函数最大的一块内聚逻辑。抽取时发现并修复了一个真实 bug：
 > 敞口闸门的大小写比较永不相等（详见该模块文档串）。
 
 ## 铁律
 
 1. **子模块不得在 import 期绑定调用方的名字**（`MAX_*` 常量会被
-   `patch.object(execution_router, "MAX_SINGLE_ASSET_MARGIN", …)` 这类测试缝改写）。
+   `patch.object(app, "MAX_SINGLE_ASSET_MARGIN", …)` 这类测试缝改写）。
    一律**调用期注入** —— 见 `risk_gates` 的 `min_leverage` / `max_leverage` /
    `max_single_asset_margin` / `total_exposure_cap` / `fail_factory` 形参。
-2. `risk_gates` **不得** import `execution_router`（会成环）：`_fail` 由调用方注入。
+2. `risk_gates` **不得** import 执行入口（会成环）：`_fail` 由调用方注入。
 """
 from __future__ import annotations
 
@@ -70,8 +70,8 @@ from .risk_gates import (
     clamp_margin,
     check_total_exposure,
 )
-# 2026-09-28 三所平权：入场闸门（跨所敞口 / 池 / 持仓模式）的**单一策略源**。
-# 此前这些判据只长在 `execution_router` 里 ⇒ OKX 直签路径一个都没有，
+# 2026-09-28 三所平权（现已收口为 OKX 专用）：入场闸门（同向敞口 / 持仓模式）的
+# **单一策略源**。此前这些判据只长在多所执行入口里 ⇒ OKX 直签路径一个都没有，
 # 而敞口统计却又把 OKX 的仓算进去（"OKX 占着上限、却不查上限"）。
 from .venue_gate import (
     venue_entry_gate,

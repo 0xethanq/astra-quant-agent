@@ -13,7 +13,7 @@
  *
  * 同时项目里**另有**一套 spinner：Tailwind 的 `animate-spin`
  * （`--animate-spin: spin 1s linear infinite`），已被共享组件
- * `DataTable` / `ChartWorkstation` / `VenueAccountsPanel` 使用。
+ * `DataTable` / `ChartWorkstation` 使用。
  * 于是同一个"加载中"有两种转速（0.9s / 1s）。
  *
  * 收口到 Tailwind 的 `animate-spin` + `shrink-0`（后者补回原来那条
