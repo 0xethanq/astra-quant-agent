@@ -46,6 +46,7 @@ INCLUDE_ORDER = ("council", "interceptors", "policy", "prompts")
 POST_SPLIT_ADDITIONS = (
     ("/api/v1/admin/evolution/config", "GET", "get_evolution_config"),
     ("/api/v1/admin/evolution/config", "PUT", "update_evolution_config"),
+    ("/api/v1/admin/evolution/test-model", "POST", "test_evolution_model"),
 )
 
 
