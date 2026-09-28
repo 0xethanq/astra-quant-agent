@@ -132,9 +132,27 @@ class TestRoutingPolicySingleSource(unittest.TestCase):
         import scripts.risk_constants as rc
         from astra_backend.exchanges.routing_policy import global_risk_defaults
         d = global_risk_defaults()
-        self.assertAlmostEqual(d["margin_per_trade_usdt"], float(rc.MAX_SINGLE_ASSET_MARGIN or 50.0))
+        # ⚠️ 这里**不得**写成 `rc.MAX_SINGLE_ASSET_MARGIN or 50.0`：`.env` 里该项的
+        # 0 语义是"不限单标的封顶"，而 0.0 是 falsy ⇒ 那样写会把"不限"断言成 50，
+        # 于是「每笔硬夹 50U」这个缺陷在门禁里变成"预期行为"。
+        self.assertAlmostEqual(d["margin_per_trade_usdt"], float(rc.MAX_SINGLE_ASSET_MARGIN))
         self.assertAlmostEqual(d["min_confidence"], float(rc.MIN_ENTRY_CONFIDENCE or 72.0))
         self.assertGreaterEqual(d["max_open"], 1)
+
+    def test_zero_means_unlimited_and_must_not_be_read_as_fifty(self):
+        """`.env` 置 0 = 不限单标的；绝不能被 `or 50.0` 反转成每笔 50U 硬顶。
+
+        实测 2026-09-28：币安账户 4739U、Gate 1302U，每单却只占 ~50U 保证金 ——
+        正是这条 falsy 兜底把"不限"变成了"50"。
+        """
+        import scripts.risk_constants as rc
+        from astra_backend.exchanges.routing_policy import global_risk_defaults
+        # `global_risk_defaults` 在**调用期**从 `scripts.risk_constants` 取该名字，
+        # 故补丁要打在源模块上（routing_policy 里没有这个模块级名字）。
+        with patch.object(rc, "MAX_SINGLE_ASSET_MARGIN", 0.0):
+            self.assertEqual(global_risk_defaults()["margin_per_trade_usdt"], 0.0)
+        with patch.object(rc, "MAX_SINGLE_ASSET_MARGIN", 250.0):
+            self.assertEqual(global_risk_defaults()["margin_per_trade_usdt"], 250.0)
 
     def test_no_import_error_swallowing(self):
         import warnings

@@ -241,6 +241,19 @@ def submit_protected_limit_order(inst_id: str, side: str, pos_side: str, size: f
                 return False, f"{target_venue.upper()} 下单失败: {detail}"
 
             order_id = str(res.get("order_id") or res.get("tp_id") or f"{target_venue}-ok")
+            # ⚠️ 通知/巡检文案必须说**实提交**的量与保证金。多所路径按
+            # 「保证金 × 杠杆 ÷ 现价」反推该所**原生**数量（币安=币数、Gate=张），
+            # 与 OKX 的"张"完全不是一个口径；而调用方手里只有 OKX 张数
+            # （`actual_sz`）。实测 2026-09-28 XRP：文案写「26.87 张｜预估保证金
+            # ~6.72 U」，交易所实际成交 **199.9 XRP**、占用保证金 **49.9 U** ——
+            # 两个数都对不上，且"预估"二字会把 49.9 U 的权益占用说成 6.72 U。
+            if isinstance(venue_ctx, dict):
+                try:
+                    venue_ctx["venue_exec_sz"] = float(res.get("contracts") or 0.0)
+                    venue_ctx["venue_exec_margin"] = float(res.get("margin_usdt") or 0.0)
+                    venue_ctx["venue_exec_notional"] = float(res.get("notional_usdt") or 0.0)
+                except (TypeError, ValueError):
+                    pass
             record_open_intent(inst_id, side)
             confirm_signal_reservation(_reservation)
             return True, order_id

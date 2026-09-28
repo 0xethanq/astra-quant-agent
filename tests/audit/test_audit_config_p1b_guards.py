@@ -702,5 +702,56 @@ class CouncilTestDebateContextTests(_Base):
             self.assertNotIn(fabricated, prompt, f"缺失场景仍在编造 {fabricated}")
 
 
+class VenueEquityCeilingTests(unittest.TestCase):
+    """单笔保证金的**权益顶**必须按该所**自己**的可用余额算。
+
+    2026-09-28 实测缺陷：调用方传进来的 `max_margin_usdt` 是按 **OKX** 可用余额算的
+    （引擎的资金读取历史上只覆盖 OKX 直签链）。三所平权后钱在各自的账户里 ——
+    币安 4739U、Gate 1302U，而下单仍按 OKX 的顶夹取；叠加池预算那道**假 50U 上限**
+    （`.env` 置 0 = 不限，被 `or 50.0` 反转成 50），最终每单只占 ~50U 保证金。
+    用户报「币安模拟账户总资金差不多 5000U，开出一个几十 u 的仓位肯定不对」正是此因。
+    """
+
+    class _Ad:
+        def __init__(self, snap=None, boom=False):
+            self._snap, self._boom = snap, boom
+
+        def account_snapshot(self):
+            if self._boom:
+                raise RuntimeError("账户接口读不到")
+            return self._snap
+
+    def setUp(self):
+        from astra_backend import execution_router
+        self.router = execution_router
+
+    def test_uses_the_target_venues_own_available_balance(self):
+        ad = self._Ad({"available_usdt": 4545.85})       # 币安实况
+        got = self.router._venue_equity_ceiling(
+            ad, "binance", equity_ratio=0.40, fallback=1887.6)
+        self.assertAlmostEqual(got, 1818.34, places=2,
+                               msg="币安的权益顶必须由币安自己的可余额决定")
+
+    def test_read_failure_and_degenerate_snapshots_fall_back(self):
+        """读失败/非正数一律退回调用方的顶 —— 不臆造更松的上限。"""
+        boom = self._Ad(boom=True)
+        self.assertEqual(self.router._venue_equity_ceiling(
+            boom, "gate", equity_ratio=0.40, fallback=1887.6), 1887.6)
+        for snap in ({}, {"available_usdt": 0}, {"available_usdt": "x"},
+                     {"available_usdt": None}, None):
+            self.assertEqual(
+                self.router._venue_equity_ceiling(
+                    self._Ad(snap), "gate", equity_ratio=0.40, fallback=123.0),
+                123.0, snap)
+
+    def test_okx_without_account_snapshot_keeps_the_callers_ceiling(self):
+        """OKX 适配器未实装 `account_snapshot`（基类抛异常）⇒ 逐位回落，行为不变。"""
+        from astra_backend.exchanges import get_adapter
+        ad = get_adapter("okx", environment="demo")
+        self.assertEqual(
+            self.router._venue_equity_ceiling(ad, "okx", equity_ratio=0.40, fallback=777.0),
+            777.0)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -415,5 +415,54 @@ class WiringTest(unittest.TestCase):
                          f"应有 4+2+4=10 处 helper 调用，实际 {checked}")
 
 
+class VenueExecutedFactsTest(unittest.TestCase):
+    """三所"数量"**不是同一个单位**，通知必须说该所实提交口径。
+
+    2026-09-28 实测缺陷：通知与巡检文案一律用调用方手里的 OKX 张数
+    （`actual_sz`）去报，并用 `sz × px ÷ leverage` 反推"预估保证金"。
+    XRP 那一单：
+
+    | | 文案（旧） | 交易所实况 |
+    |---|---|---|
+    | 数量 | `26.87 张` | `199.9 XRP` |
+    | 保证金 | `预估 ~6.72 U` | `49.9 U` |
+
+    两个数都对不上，还把真实占用 49.9 U 说成 6.72 U。
+    """
+
+    def test_binance_reports_base_coins_and_the_real_margin(self):
+        ctx = {"venue": "binance", "venue_exec_sz": 199.9,
+               "venue_exec_margin": 49.9, "venue_exec_notional": 299.4}
+        self.assertEqual(
+            notifications.venue_executed_facts(ctx, sz=26.87, asset="XRP"),
+            (199.9, 49.9, 299.4, "XRP"))
+
+    def test_gate_stays_in_contracts(self):
+        """Gate 也按"张"成交（1 张 DOGE = 10 币）⇒ 单位不得写成币名。"""
+        ctx = {"venue": "gate", "venue_exec_sz": 861.0,
+               "venue_exec_margin": 138.43, "venue_exec_notional": 818.12}
+        self.assertEqual(
+            notifications.venue_executed_facts(ctx, sz=86.1, asset="DOGE"),
+            (861.0, 138.43, 818.12, "张"))
+
+    def test_okx_and_missing_context_fall_back_verbatim(self):
+        """OKX 直签链没有 `venue_exec_*` ⇒ 逐位回落原口径，既有门禁不变。"""
+        self.assertEqual(
+            notifications.venue_executed_facts({"venue": "okx"}, sz=26.87, asset="XRP"),
+            (26.87, None, None, "张"))
+        self.assertEqual(
+            notifications.venue_executed_facts(None, sz=26.87), (26.87, None, None, "张"))
+
+    def test_zero_or_garbage_size_falls_back_instead_of_reporting_zero(self):
+        """读不到就回落，绝不能让文案报"0 张"（那比报旧值更误导）。"""
+        for bad in ({"venue": "binance", "venue_exec_sz": 0},
+                    {"venue": "binance", "venue_exec_sz": "x"},
+                    {"venue": "binance", "venue_exec_sz": None},
+                    "not-a-dict"):
+            got = notifications.venue_executed_facts(bad, sz=5.0, asset="XRP")
+            self.assertEqual(got[0], 5.0, f"{bad!r} 未回落")
+            self.assertIsNone(got[1])
+
+
 if __name__ == "__main__":
     unittest.main()

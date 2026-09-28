@@ -128,6 +128,7 @@ from scripts.trader.notifications import (
     entry_action_message,
     entry_failure_message,
     trade_open_kwargs,
+    venue_executed_facts,
 )
 from scripts.trader.order_intent import (
     build_order_intent,
@@ -1257,6 +1258,7 @@ def execute_portfolio():
             size_for_decision=size_for_decision,
             submit_protected_limit_order=submit_protected_limit_order,
             trade_open_kwargs=trade_open_kwargs,
+            venue_executed_facts=venue_executed_facts,
         )
 
     # 4b. 跨所云端保护单巡检（roadmap G8）：Gate/Binance 的触发单带 expiration，

@@ -69,6 +69,7 @@ def notify_trade_open(
     market_regime: str | None = None,
     council_role: str | None = None,
     policy_version: str | None = None,
+    qty_unit: str = "张",
     **kwargs: Any,
 ) -> bool:
     """Triggered when an order is placed and accepted by exchange gateway with OCO & scale-out protection."""
@@ -97,7 +98,9 @@ def notify_trade_open(
         header_lines.append(f"👥 投委会协同：{' · '.join(c_parts)}")
 
     # Position & Execution details
-    pos_details = [f"{direction_emoji}（{sz} 张 | {leverage}x 杠杆）"]
+    # `qty_unit`：OKX 是"张"，币安/Gate 的成交单位是该所**基础币**（币安按币数成交）。
+    # 一律写"张"会把 199.9 XRP 说成 26.87 张 —— 见 notifications.venue_executed_facts。
+    pos_details = [f"{direction_emoji}（{sz} {qty_unit} | {leverage}x 杠杆）"]
     if margin_usdt and margin_usdt > 0:
         pos_details.append(f"保证金 {margin_usdt:.2f} U")
     elif sz and px > 0:

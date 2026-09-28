@@ -140,6 +140,34 @@ def _load_venue_pool_soft(venue: str) -> Dict[str, Any]:
         return {}
 
 
+def _venue_equity_ceiling(ad: Any, venue: str, *, equity_ratio: Any,
+                          fallback: Optional[float]) -> Optional[float]:
+    """按**该所自己**的可用余额算单笔保证金权益顶；读不到则退回调用方给的顶。
+
+    调用方传进来的 `max_margin_usdt` 是按 **OKX** 可用余额算的 —— 引擎的资金读取
+    历史上只覆盖 OKX 直签链。三所平权后这不再成立：币安/Gate 的仓花的是**它们自己**
+    账户里的钱。实测 2026-09-28：币安账户 4739U、Gate 1302U，而下单仍按 OKX 的权益顶
+    夹取；叠加池预算那道**假 50U 上限**，最终每单只占 ~50U 保证金 —— 账户里近 5000U
+    却开出几十 U 的仓。
+
+    读失败/非正数一律**退回调用方的顶**（不臆造更松的上限）。OKX 适配器未实装
+    `account_snapshot`（基类抛 `ExchangeCapabilityError`）⇒ 自动回落，OKX 行为逐位不变。
+    """
+    try:
+        snap = ad.account_snapshot()
+    except Exception as exc:
+        print(f"[权益顶] warn {str(venue).upper()} 账户快照读取失败，沿用调用方权益顶: {exc}")
+        return fallback
+    try:
+        avail = float((snap or {}).get("available_usdt") or 0.0)
+    except (TypeError, ValueError):
+        return fallback
+    if not math.isfinite(avail) or avail <= 0:
+        return fallback
+    ceiling = round(avail * float(equity_ratio or 0.0), 4)
+    return ceiling if ceiling > 0 else fallback
+
+
 def open_protected_position(decision: Dict[str, Any], *,
                             price_ref: Optional[float] = None,
                             trigger_expiration: int = 604800,
@@ -202,6 +230,10 @@ def open_protected_position(decision: Dict[str, Any], *,
         min_leverage=_cur_min_lev, max_leverage=_cur_max_lev)
 
     _margin_unclamped = margin
+    # 权益顶改用**该所自己**的可用余额（见 `_venue_equity_ceiling`）：调用方按 OKX
+    # 权益算出的顶对币安/Gate 没有意义——钱在它们各自的账户里。
+    max_margin_usdt = _venue_equity_ceiling(
+        ad, venue, equity_ratio=MAX_MARGIN_EQUITY_RATIO, fallback=max_margin_usdt)
     margin, decision, margin_clamped_from = _clamp_margin(
         venue=venue, asset=asset, decision=decision, margin=margin,
         max_margin_usdt=max_margin_usdt,

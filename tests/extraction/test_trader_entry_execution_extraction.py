@@ -193,7 +193,9 @@ class EntryExecutionVerbatimTest(unittest.TestCase):
 
     def test_facade_call_passes_every_parameter_once_same_name(self):
         params = [a.arg for a in _impl_fn().args.kwonlyargs]
-        self.assertEqual(len(params), 41, "参数个数变了？")
+        # 42 = 41 + `venue_executed_facts`（2026-09-28 三所实提交口径：通知里的
+        # 数量/保证金此前一律按 OKX 张数报，实测与交易所实况对不上）。
+        self.assertEqual(len(params), 42, "参数个数变了？")
         call = _facade_call()
         self.assertEqual(call.args, [], "应全部按关键字传参")
         kws = [k.arg for k in call.keywords]

@@ -86,6 +86,48 @@ def entry_action_message(*, is_long, is_scale_in, name, sz, px, order_ref, tp_px
             f"{sz}张@{px} (order={order_ref}, TP={tp_px}, SL={sl_px})")
 
 
+def venue_executed_facts(venue_ctx, *, sz, asset=""):
+    """下单**实提交**的 `(数量, 保证金U, 名义额U, 单位)`。
+
+    ### 为什么必须单独算（2026-09-28 实测缺陷）
+
+    三所平权后，"数量"在三所**不是同一个单位**：OKX 是张（1 张 XRP = 100 XRP），
+    币安是**币数**，Gate 是自家张（1 张 XRP = 10 XRP）。`execution_router` 按
+    「保证金 × 杠杆 ÷ 现价」反推该所原生数量，并把它写在 `RouteResult` 上；
+    `order_submit` 回写到 `venue_ctx["venue_exec_*"]`。
+
+    而通知与巡检文案此前一律用调用方手里的 **OKX 张数**（`actual_sz`）去报，
+    并用 `sz × px ÷ leverage` 反推"预估保证金" —— 实测 XRP 那一单：
+
+    | | 文案（旧） | 交易所实况 |
+    |---|---|---|
+    | 数量 | `26.87 张` | `199.9 XRP` |
+    | 保证金 | `预估 ~6.72 U` | `49.9 U` |
+
+    两个数都对不上，且把真实占用 49.9 U 说成 6.72 U（占权益约 2% vs 20%）。
+
+    取不到 `venue_exec_*`（OKX 直签链、或老调用方）时**逐位回落**原口径，
+    OKX 路径与既有门禁完全不变。
+    """
+    ctx = venue_ctx if isinstance(venue_ctx, dict) else {}
+
+    def _f(key):
+        try:
+            return float(ctx.get(key) or 0.0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    _sz = _f("venue_exec_sz")
+    if _sz <= 0:
+        return sz, None, None, "张"
+    _venue = str(ctx.get("venue") or "okx").lower()
+    # 单位按所内**实际成交口径**：币安按基础币数成交（199.9 XRP），
+    # OKX 与 Gate 都按"张"成交（Gate XRP/DOGE 每张 10 币）。写错单位
+    # 等于把 199.9 XRP 说成 199.9 张 —— 差 100 倍。
+    _unit = str(asset or "").upper() if _venue == "binance" else "张"
+    return _sz, (_f("venue_exec_margin") or None), (_f("venue_exec_notional") or None), (_unit or "张")
+
+
 def entry_failure_message(*, is_long, name, order_ref):
     """下单被拒后的 `executed_actions` 文案。"""
     return f"[{name}] AI{_order_word()}{'多' if is_long else '空'}单提交失败: {order_ref}"

@@ -58,7 +58,14 @@ def global_risk_defaults() -> Dict[str, Any]:
             MIN_ENTRY_CONFIDENCE,
         )
         return {
-            "margin_per_trade_usdt": float(MAX_SINGLE_ASSET_MARGIN or 50.0),
+            # ⚠️ **不得**写成 `MAX_SINGLE_ASSET_MARGIN or 50.0`：`.env` 里
+            # `ASTRA_MAX_SINGLE_ASSET_MARGIN_USDT=0.0` 的语义是"不限单标的封顶"，
+            # 而 `0.0` 是 falsy ⇒ 会被这里悄悄兜底成 **50**，再经
+            # `load_venue_pool` 变成每所池预算，最后被 `clamp_margin` 当上限执行
+            # （50 > 0 参与求最小）——「不限」被反转成「每笔硬夹 50U」。
+            # 实测 2026-09-28：币安账户 4739U、Gate 1302U，每单却只占 ~50U 保证金。
+            # 0 一路保持 0（`clamp_margin` 的既定语义：0 = 该上限不可用）。
+            "margin_per_trade_usdt": float(MAX_SINGLE_ASSET_MARGIN),
             "max_open": int(MAX_CONCURRENT_POSITIONS_CAP or 5),
             "min_confidence": float(MIN_ENTRY_CONFIDENCE or 72.0),
         }
