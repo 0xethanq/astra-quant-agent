@@ -45,17 +45,29 @@ def amend_venue_stop_loss(ad, symbol: str, pos_side: str, new_sl: float,
     old_ids: List[str] = []
     list_error = ""
     try:
+        from scripts.trader.venue_protection import _row_text as _leg_row_text
+    except ImportError:                      # scripts/ 在 sys.path 上（双拼写铁律）
+        from venue_protection import _row_text as _leg_row_text
+    try:
         for row in (ad.list_protective_orders(symbol) or []):
             if not isinstance(row, dict):
                 continue
-            _order = row.get("order")
-            _init = row.get("initial")
-            text = normalize_legacy_markers(
-                (str(_order.get("text") or "") if isinstance(_order, dict) else "")
-                + (str(_init.get("text") or "") if isinstance(_init, dict) else "")
-                + str(row.get("text") or "") + str(row.get("type") or ""))
+            # ⚠️ **不得**在这里另写一份字段清单（2026-09-28 实盘事故）。
+            #
+            # 本函数此前自己拼 `order.text` / `initial.text` / `row.text` / `row.type`，
+            # 而 Binance 的 `row.type` 是算法单**类别** `CONDITIONAL`，
+            # 真正的 `STOP_MARKET` 在 `raw.orderType` 里 ⇒ 判据
+            # `"STOP" in "CONDITIONAL".upper()` **恒为假** ⇒ 旧 SL **一条都枚举不到** ⇒
+            # 棘轮每轮"先挂新"之后**没有任何旧单可撤**，云端止损无限堆积。
+            # 实测：UNI 一张 23 张的空仓挂了 **9 条** STOP_MARKET（触发价 9.998→9.31，
+            # 正是 9 次移损的轨迹），另有所属仓早已平掉的 ETH/SOL/ARB 共 10 条孤儿腿。
+            #
+            # 统一走 `venue_protection._row_text` —— 那是**全部**腿归属判定
+            # （`_leg_kind` / 棘轮 / 孤儿清理）唯一的文本来源，它自己的 docstring 写明
+            # "改一处即可让改名前后落在交易所上的腿都被认出来"。这里再拼一份就是漏字段的温床。
+            text = _leg_row_text(row)        # 已归一旧标记且已小写
             rid = str(row.get("id") or row.get("algo_id") or row.get("order_id") or "")
-            if rid and ("astrasl" in text.lower() or "STOP" in text.upper()):
+            if rid and ("astrasl" in text or "stop" in text):
                 old_ids.append(rid)
     except Exception as exc:
         list_error = str(exc)[:160]

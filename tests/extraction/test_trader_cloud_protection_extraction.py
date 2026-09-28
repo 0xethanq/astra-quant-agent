@@ -109,10 +109,22 @@ class CloudProtectionVerbatimTest(unittest.TestCase):
         旧 SL 单不被识别 ⇒ 棘轮既不 amend 也不撤 ⇒ 云端止损单逐轮堆积。
         """
         moved = MOVED.read_text(encoding="utf-8")
-        self.assertIn('_init = row.get("initial")', moved,
+        # ⚠️ 2026-09-28 实盘事故后改为**传递式**断言：本模块不再自己拼字段清单，
+        # 而是复用 `venue_protection._row_text`（全部腿归属判定唯一的文本来源）。
+        #
+        # 病因正是"自己拼一份"：旧清单只有 `order.text`/`initial.text`/`row.text`/
+        # `row.type`，而 Binance 的 `row.type` 是算法单**类别** `CONDITIONAL`，
+        # 真正的 `STOP_MARKET` 在 `raw.orderType` ⇒ `"STOP" in "CONDITIONAL"` 恒假
+        # ⇒ 旧 SL 一条都枚举不到 ⇒ 棘轮只挂新不撤旧（实测 UNI 一仓挂 9 条止损）。
+        self.assertIn("_row_text", moved,
+                      "棘轮没有复用统一的腿文本提取器 ⇒ 又会漏字段")
+        # 契约仍是原来的契约，只是现在由 `_row_text` 保证：Gate 的 `initial.text`
+        # 必须被读到，否则 `t-astrasl*` 标签扫不到、旧 SL 不被识别。
+        vp = (ROOT / "scripts/trader/venue_protection.py").read_text(encoding="utf-8")
+        self.assertIn('initial.get("text")', vp,
                       "Gate initial 层读取丢失 ⇒ 白名单块在掩盖删除")
-        self.assertIn('if isinstance(_init, dict)', moved,
-                      "initial 层的类型守卫丢失（非 dict 时会 AttributeError）")
+        self.assertIn('row.get("orderType")', vp,
+                      "Binance 的 orderType 层丢了 ⇒ STOP_MARKET 会被当成 CONDITIONAL 漏掉")
 
         import scripts.trader.cloud_protection as cp
         listed = []
