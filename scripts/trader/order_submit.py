@@ -231,6 +231,7 @@ def submit_protected_limit_order(inst_id: str, side: str, pos_side: str, size: f
                 "take_profit_price": effective_tp,
                 "stop_loss_price": effective_sl,
                 "environment": str(env.mode),
+                "order_mode": order_mode,
                 # 审计 P1-7：per-venue min_confidence 生效所需的原始 AI 置信度（缺失=不做该检查）
                 "confidence": float(venue_ctx.get("confidence") or 0.0) if isinstance(venue_ctx, dict) else 0.0,
             }, environment=str(env.mode))

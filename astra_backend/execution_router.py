@@ -476,7 +476,7 @@ def open_protected_position(decision: Dict[str, Any], *,
         return _fail("leverage", f"设置杠杆失败: {exc}", venue=venue)
 
     # 入场单（按模式发市价单或限价单，系统默认市价单）
-    order_mode = str(os.getenv("ASTRA_ORDER_MODE", "market")).strip().lower()
+    order_mode = str(decision.get("order_mode") or os.getenv("ASTRA_ORDER_MODE", "market")).strip().lower()
     entry_px = None if order_mode == "market" else entry
     try:
         placed = ad.place_order(asset, side, abs(contracts), price=entry_px)

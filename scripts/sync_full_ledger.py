@@ -312,13 +312,26 @@ def fetch_binance_closed_trades(environment: str = "demo", tz_bj=None) -> list:
 
         symbols = sorted(set(r.get("symbol", "") for r in income_rows if r.get("symbol")))
         user_trades_by_id = {}
+        user_trades_by_symbol = {}
         for sym in symbols:
             try:
                 ut = ad_bn.signed_request("GET", "/fapi/v1/userTrades", params={"symbol": sym, "limit": 50})
+                user_trades_by_symbol[sym] = ut or []
                 for t in (ut or []):
                     user_trades_by_id[str(t.get("id"))] = t
             except Exception:
                 pass
+
+        # 尝试拉取最近资金费（incomeType=FUNDING_FEE）
+        funding_by_symbol = {}
+        try:
+            funding_rows = ad_bn.signed_request("GET", "/fapi/v1/income", params={"incomeType": "FUNDING_FEE", "limit": 100})
+            if isinstance(funding_rows, list):
+                for fr in funding_rows:
+                    fsym = str(fr.get("symbol", "")).upper()
+                    funding_by_symbol.setdefault(fsym, []).append(fr)
+        except Exception:
+            pass
 
         for r in income_rows:
             t_id = str(r.get("tradeId") or r.get("tranId") or "")
@@ -333,10 +346,45 @@ def fetch_binance_closed_trades(environment: str = "demo", tz_bj=None) -> list:
             side = "多" if side_raw == "SELL" else ("空" if side_raw == "BUY" else "多")
             close_px = float(matched.get("price", 0) or 0)
             sz = float(matched.get("qty", 0) or 0)
-            fee = round(abs(float(matched.get("commission", 0) or 0)), 4)
+            close_fee = round(abs(float(matched.get("commission", 0) or 0)), 4)
+
+            open_time = close_time
+            open_px = close_px
+            open_fee = 0.0
+            duration_str = "0时0分"
+
+            # 寻找同标的在 close 之前的真实 open 记录
+            sym_trades = user_trades_by_symbol.get(symbol, [])
+            want_open_side = "BUY" if side_raw == "SELL" else "SELL"
+            open_candidates = [
+                t for t in sym_trades
+                if str(t.get("side", "")).upper() == want_open_side and int(t.get("time", 0) or 0) <= time_ms
+            ]
+            op_time_ms = 0
+            if open_candidates:
+                matched_open = open_candidates[-1]
+                op_time_ms = int(matched_open.get("time", 0) or 0)
+                if op_time_ms > 0:
+                    open_time = datetime.datetime.fromtimestamp(op_time_ms / 1000.0, tz=tz_bj).strftime("%Y-%m-%d %H:%M:%S")
+                    open_px = float(matched_open.get("price", 0) or open_px)
+                    open_fee = round(abs(float(matched_open.get("commission", 0) or 0)), 4)
+                    dur_s = max(0.0, (time_ms - op_time_ms) / 1000.0)
+                    dur_mins = int(dur_s / 60)
+                    duration_str = f"{dur_mins}分钟" if dur_mins < 60 else f"{dur_mins // 60}时{dur_mins % 60}分"
+
+            fee = round(open_fee + close_fee, 4) if open_fee > 0 else close_fee
+            if fee == 0.0 and close_fee > 0:
+                fee = close_fee
+
+            # 统计持仓周期内的资金费（funding fee）
+            sym_fundings = funding_by_symbol.get(symbol, [])
+            funding_fee = 0.0
+            if open_candidates and op_time_ms > 0:
+                funding_fee = round(sum(float(fr.get("income", 0.0) or 0.0) for fr in sym_fundings if op_time_ms <= int(fr.get("time", 0) or 0) <= time_ms), 4)
+
             lever = _resolve_trade_leverage(symbol, symbol_leverage_map, decisions_cache)
-            margin = round(sz * close_px / lever, 2) if (sz > 0 and close_px > 0) else 50.0
-            net_pnl = round(pnl - fee, 2)
+            margin = round(sz * (open_px or close_px) / lever, 2) if (sz > 0 and (open_px or close_px) > 0) else 50.0
+            net_pnl = round(pnl - fee + funding_fee, 2)
             roi_pct = round((pnl / max(1.0, margin)) * 100, 2)
 
             # 尝试附加开仓数理快照（自进化复盘可观测性）
@@ -372,17 +420,20 @@ def fetch_binance_closed_trades(environment: str = "demo", tz_bj=None) -> list:
                 "strategy": "🏛️ Binance",
                 "margin": margin,
                 "sz": sz,
-                "open_time": close_time,
-                "open_px": close_px,
+                "open_time": open_time,
+                "open_px": open_px,
                 "close_time": close_time,
                 "close_px": close_px,
                 "gross_pnl": pnl,
+                "open_fee": open_fee,
+                "close_fee": close_fee,
                 "fee": fee,
+                "funding_fee": funding_fee,
                 "pnl": net_pnl,
                 "net_pnl": net_pnl,
                 "roi": roi_pct,
                 "roi_pct": roi_pct,
-                "duration": "0时0分",
+                "duration": duration_str,
                 "status": "closed",
                 "exit_reason": "🎯 目标止盈达成" if net_pnl > 0 else "🛑 触发云端止损",
                 "signal_snapshot": bn_snap,
@@ -441,16 +492,23 @@ def fetch_gate_closed_trades(environment: str = "sandbox", tz_bj=None) -> list:
             contract = str(r.get("contract", "")).upper()
             base = contract.replace("_USDT", "").replace("USDT", "")
             pnl = round(float(r.get("pnl", 0) or 0), 4)
-            fee = round(abs(float(r.get("fee", 0) or 0)), 4)
+            # Gate API 返回 pnl_fee 为手续费，pnl_fund 为资金费
+            fee = round(abs(float(r.get("pnl_fee") or r.get("fee", 0) or 0)), 4)
+            funding_fee = round(float(r.get("pnl_fund", 0) or 0), 4)
             net_pnl = round(float(r.get("pnl_pnl", pnl) or pnl), 2)
             time_sec = int(r.get("time", 0) or 0)
             close_time = datetime.datetime.fromtimestamp(time_sec, tz=tz_bj).strftime("%Y-%m-%d %H:%M:%S")
             first_open = int(r.get("first_open_time", 0) or 0)
             open_time = datetime.datetime.fromtimestamp(first_open, tz=tz_bj).strftime("%Y-%m-%d %H:%M:%S") if first_open else close_time
 
+            dur_mins = 0
+            if first_open > 0 and time_sec >= first_open:
+                dur_mins = int((time_sec - first_open) / 60)
+            duration_str = f"{dur_mins}分钟" if dur_mins < 60 else f"{dur_mins // 60}时{dur_mins % 60}分"
+
             side = "多" if float(r.get("long_price") or 0) > 0 else "空"
-            open_px = float(r.get("long_price") or r.get("short_price") or 0)
-            close_px = float(r.get("short_price") if side == "多" else r.get("long_price") or 0)
+            open_px = float(r.get("long_price") if side == "多" else (r.get("short_price") or 0))
+            close_px = float(r.get("short_price") if side == "多" else (r.get("long_price") or 0))
             sz = abs(float(r.get("accum_size", 0) or 0))
             lever = _resolve_trade_leverage(contract, gate_leverage_by_contract, decisions_cache)
             margin = round(sz * (open_px or close_px) / lever, 2) if sz > 0 else 50.0
@@ -494,12 +552,15 @@ def fetch_gate_closed_trades(environment: str = "sandbox", tz_bj=None) -> list:
                 "close_time": close_time,
                 "close_px": close_px,
                 "gross_pnl": pnl,
+                "open_fee": round(fee / 2.0, 4),
+                "close_fee": round(fee / 2.0, 4),
                 "fee": fee,
+                "funding_fee": funding_fee,
                 "pnl": net_pnl,
                 "net_pnl": net_pnl,
                 "roi": roi_pct,
                 "roi_pct": roi_pct,
-                "duration": "0时0分",
+                "duration": duration_str,
                 "status": "closed",
                 "exit_reason": "🎯 目标止盈达成" if net_pnl > 0 else "🛑 触发云端止损",
                 "signal_snapshot": gt_snap,
@@ -572,8 +633,24 @@ def _other_venue_live_positions(env_axis):
                 continue
             v_side = str(vp.get("side") or ("long" if amt > 0 else "short")).lower()
             raw_d = vp.get("raw") if isinstance(vp.get("raw"), dict) else {}
-            v_notional = float(vp.get("notional") or raw_d.get("notional") or raw_d.get("value") or 0.0)
+            v_notional = abs(float(vp.get("notional") or raw_d.get("notional") or raw_d.get("value") or 0.0))
             v_margin = float(vp.get("margin") or raw_d.get("margin") or raw_d.get("initial_margin") or 0.0)
+
+            # 统一毫秒开仓时间戳
+            c_time_ms = 0
+            if v_name == "gate":
+                g_open = int(raw_d.get("open_time", 0) or vp.get("open_time", 0) or 0)
+                if g_open > 0:
+                    c_time_ms = g_open * 1000
+            elif v_name == "binance":
+                c_time_ms = int(vp.get("open_time") or vp.get("cTime") or raw_d.get("updateTime") or 0)
+            if c_time_ms <= 0:
+                c_time_ms = int(vp.get("open_time") or vp.get("cTime") or 0)
+
+            # 资金费与手续费
+            v_fee = abs(float(raw_d.get("pnl_fee") or raw_d.get("fee") or vp.get("fee") or 0.0))
+            v_funding = float(raw_d.get("pnl_fund") or vp.get("funding_fee") or 0.0)
+
             items.append({
                 "venue": v_name,
                 "instId": f"{base}-USDT-SWAP",
@@ -583,8 +660,9 @@ def _other_venue_live_positions(env_axis):
                 "markPx": float(vp.get("mark_price", 0) or vp.get("entry_price", 0) or 0),
                 "upl": float(vp.get("unrealized_pnl", 0) or 0),
                 "lever": vp.get("leverage", 3) or 3,
-                "fee": 0.0,
-                "cTime": vp.get("open_time") or vp.get("cTime") or 0,
+                "fee": v_fee,
+                "funding_fee": v_funding,
+                "cTime": c_time_ms,
                 "notional": v_notional,
                 "margin": v_margin,
             })
@@ -626,10 +704,17 @@ def _holding_row(p, venue, *, env, trackers, tz_bj, allowed, council_by_inst,
     except (TypeError, ValueError):
         lever = 3
     fee = float(p.get("fee", 0.0) or 0.0)
+    funding_fee = float(p.get("funding_fee", 0.0) or 0.0)
     ct_val = get_ct_val(inst)
 
-    raw_notional = float(p.get("notional", 0.0) or 0.0)
-    notional = raw_notional if raw_notional > 0 else (pos_sz * ct_val * mark_px)
+    raw_notional = abs(float(p.get("notional", 0.0) or 0.0))
+    if raw_notional > 0:
+        notional = raw_notional
+    elif venue in ("binance", "gate"):
+        notional = pos_sz * mark_px
+    else:
+        notional = pos_sz * ct_val * mark_px
+
     raw_margin = float(p.get("margin", 0.0) or 0.0)
     margin_usdt = round(raw_margin, 2) if raw_margin > 0 else (round(notional / lever, 2) if lever > 0 else round(notional, 2))
     roi_pct = round((upl / margin_usdt * 100) if margin_usdt > 0 else 0.0, 2)
@@ -669,7 +754,7 @@ def _holding_row(p, venue, *, env, trackers, tz_bj, allowed, council_by_inst,
         "open_fee": round(fee, 4),
         "close_fee": 0.0,
         "fee": round(fee, 2),
-        "funding_fee": 0.0,
+        "funding_fee": round(funding_fee, 4),
         "pnl": round(upl, 2),
         "net_pnl": round(upl, 2),
         "roi_pct": roi_pct,
