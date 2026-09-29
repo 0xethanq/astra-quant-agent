@@ -55,6 +55,17 @@ def _live_oco_coverage(orders: List[Dict[str, Any]], pos_side: str,
 
 
 
+def _lookup_inst_min_sz(inst_id: str) -> float:
+    try:
+        from scripts.instrument_pool import load_instruments
+        for inst in load_instruments():
+            if inst.get("instId") == inst_id:
+                return float(inst.get("minSz", 1.0) or 1.0)
+    except Exception:
+        pass
+    return 1.0
+
+
 def ensure_cloud_position_protection(inst_id: str, pos_side: str, size: float, tp_px: float, sl_px: float,
                               *,
                               okx_rest,
@@ -69,10 +80,22 @@ def ensure_cloud_position_protection(inst_id: str, pos_side: str, size: float, t
     if missing <= max(1e-12, float(size) * 0.001):
         return True, f"cloud OCO coverage verified ({coverage:g}/{size:g})"
 
+    # 量化 missing 补单张数至最小步长，防止 OKX 51121 lot size 报错误杀盈利余仓
+    min_sz = _lookup_inst_min_sz(inst_id)
+    try:
+        from astra_backend.execution.sizing import quantize_size
+        missing_to_place = quantize_size(missing, min_sz)
+    except Exception:
+        import math
+        missing_to_place = math.floor(missing / min_sz + 1e-9) * min_sz if min_sz > 0 else missing
+
+    if missing_to_place <= 0:
+        return True, f"cloud OCO coverage verified ({coverage:g}/{size:g})"
+
     close_side = "sell" if pos_side == "long" else "buy"
     try:
         okx_rest.place_algo_oco(
-            inst_id, close_side, missing, pos_side=pos_side, td_mode="cross",
+            inst_id, close_side, missing_to_place, pos_side=pos_side, td_mode="cross",
             tp_trigger_px=tp_px, tp_ord_px="-1", sl_trigger_px=sl_px, sl_ord_px="-1",
             reduce_only=True, cxl_on_close_pos=True,
         )
@@ -86,7 +109,7 @@ def ensure_cloud_position_protection(inst_id: str, pos_side: str, size: float, t
         except Exception:
             continue
         verified_coverage = _live_oco_coverage(verify_rows, pos_side)
-        if verified_coverage + max(1e-12, float(size) * 0.001) >= float(size):
+        if verified_coverage + max(1e-12, float(size) * 0.001, min_sz * 0.5) >= float(size):
             return True, f"cloud OCO repaired and verified ({verified_coverage:g}/{size:g})"
     return False, "cloud OCO repair was submitted but full coverage could not be verified"
 

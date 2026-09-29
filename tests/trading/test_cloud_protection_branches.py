@@ -147,6 +147,23 @@ class EnsureProtectionFailureTest(unittest.TestCase):
         self.assertFalse(ok)
         self.assertIn("repair failed", detail)
 
+    def test_repair_quantizes_missing_to_lot_step(self):
+        class _CapturingRest(_OkxRest):
+            def __init__(self, *a, **k):
+                super().__init__(*a, **k)
+                self.placed_size = None
+            def place_algo_oco(self, inst_id, side, size, **kwargs):
+                self.placed_size = size
+
+        rest = _CapturingRest([[], [{"sz": 361.0, "state": "live", "posSide": "short", "side": "buy", "tpTriggerPx": "0.18", "slTriggerPx": "0.22", "reduceOnly": "true"}]])
+        with patch("scripts.trader.cloud_protection._lookup_inst_min_sz", return_value=1.0), \
+             patch("scripts.trader.cloud_protection.time.sleep", lambda *_: None):
+            ok, detail = ensure_cloud_position_protection(
+                "ARB-USDT-SWAP", "short", 361.35, 0.18, 0.22,
+                okx_rest=rest, _live_oco_coverage=lambda rows, side: sum(float(r.get("sz", 0)) for r in rows if r))
+        self.assertEqual(rest.placed_size, 361.0)
+        self.assertTrue(ok)
+
 
 
 
