@@ -382,12 +382,12 @@ async function confirmClose() {
   }
 }
 
-async function loadMx() {
+async function loadMx(preserveVenue?: string) {
   try {
     mx.value = await api('/api/v1/admin/multi-exchange')
     if (mx.value?.health?.venues) {
       for (const [k, v] of Object.entries(mx.value.health.venues as Record<string, any>)) {
-        if (v?.avg_ms) {
+        if (v?.avg_ms && (!preserveVenue || k !== preserveVenue || !venueLatencies.value[k])) {
           venueLatencies.value[k] = v.avg_ms
         }
       }
@@ -432,7 +432,7 @@ async function probeVenue(venue: 'okx') {
     } else {
       toast.err(res?.message || t('admin.security.toastProbeFail', undefined, { venue: venue.toUpperCase() }))
     }
-    await loadMx()
+    await loadMx(venue)
   } catch (e: any) {
     toast.err(t('admin.security.errProbeFailed', undefined, { msg: e.message }))
   } finally {

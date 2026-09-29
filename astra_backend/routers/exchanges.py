@@ -146,18 +146,39 @@ def admin_multi_exchange_status(x_astra_admin_token: str | None = Header(default
     except Exception:
         health = {}
 
-    # 保证 OKX 健康度与延迟展示
-    if "venues" in health and "okx" in health["venues"]:
-        okx_h = health["venues"]["okx"]
-        okx_h["testnet"] = bool(okx_env.simulated)
-        if not okx_h.get("avg_ms"):
-            try:
-                from astra_backend.exchanges.diagnostics import diagnose_venue_connection
-                diag = diagnose_venue_connection("okx", "demo" if okx_env.simulated else "live", timeout=2.5)
-                if diag.get("latency_ms"):
-                    okx_h["avg_ms"] = diag["latency_ms"]
-            except Exception:
-                pass
+    # 保证 OKX 健康度与真实延迟展示：如果文件缺失、过期(>180s)或未带有效延迟，现场诊断实时更新
+    if not isinstance(health.get("venues"), dict):
+        health["venues"] = {}
+    if "okx" not in health["venues"] or not isinstance(health["venues"]["okx"], dict):
+        health["venues"]["okx"] = {}
+    okx_h = health["venues"]["okx"]
+    okx_h["testnet"] = bool(okx_env.simulated)
+
+    need_diag = not okx_h.get("avg_ms")
+    if not need_diag and health.get("updated_utc"):
+        try:
+            from datetime import datetime, timezone
+            up_dt = datetime.fromisoformat(str(health["updated_utc"]).replace(" ", "T")).replace(tzinfo=timezone.utc)
+            if (datetime.now(timezone.utc) - up_dt).total_seconds() > 180:
+                need_diag = True
+        except Exception:
+            need_diag = True
+
+    if need_diag:
+        try:
+            from astra_backend.exchanges.diagnostics import diagnose_venue_connection
+            diag = diagnose_venue_connection("okx", "demo" if okx_env.simulated else "live", timeout=2.5)
+            if diag.get("latency_ms"):
+                okx_h["avg_ms"] = diag["latency_ms"]
+                from datetime import datetime, timezone
+                health["updated_utc"] = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+                health["venues"] = {"okx": okx_h}
+                try:
+                    (DATA_DIR / "venue_health.json").write_text(json.dumps(health, ensure_ascii=False, indent=2), encoding="utf-8")
+                except Exception:
+                    pass
+        except Exception:
+            pass
 
     from astra_backend.exchanges import routing_policy
     pref = routing_policy.load_preferred_venue()
@@ -244,6 +265,26 @@ def admin_multi_exchange_test_connection(
         "mode": result.get("mode"),
         "ok": result.get("ok"),
     })
+    if result.get("latency_ms") and payload.venue == "okx":
+        try:
+            health_path = DATA_DIR / "venue_health.json"
+            h: dict[str, Any] = {}
+            if health_path.exists():
+                try:
+                    h = json.loads(health_path.read_text(encoding="utf-8"))
+                except Exception:
+                    h = {}
+            if not isinstance(h.get("venues"), dict):
+                h["venues"] = {}
+            if "okx" not in h["venues"] or not isinstance(h["venues"]["okx"], dict):
+                h["venues"]["okx"] = {}
+            h["venues"]["okx"]["avg_ms"] = result["latency_ms"]
+            h["venues"]["okx"]["testnet"] = (payload.environment == "demo")
+            from datetime import datetime, timezone
+            h["updated_utc"] = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+            health_path.write_text(json.dumps(h, ensure_ascii=False, indent=2), encoding="utf-8")
+        except Exception:
+            pass
     return result
 
 
