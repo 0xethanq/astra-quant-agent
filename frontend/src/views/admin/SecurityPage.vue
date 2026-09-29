@@ -681,6 +681,42 @@ onMounted(() => {
           </div>
         </SettingsSection>
 
+        <!-- 委托订单模式 -->
+        <SettingsSection :title="t('admin.security.orderModeTitle')" :description="t('admin.security.orderModeDesc')" :icon="Zap">
+          <template #actions>
+            <button type="button" class="btn btn-primary btn-sm" :disabled="savingOrderMode" @click="saveOrderMode">
+              <Loader2 v-if="savingOrderMode" :size="13" class="animate-spin shrink-0" />
+              <Save v-else :size="13" />
+              <span>{{ savingOrderMode ? t('admin.security.saving') : t('admin.security.saveOrderMode') }}</span>
+            </button>
+          </template>
+
+          <div class="sc-group">
+            <span class="form-label">{{ t('admin.security.orderModeTitle') }}</span>
+            <div class="seg seg-compact" role="group" :aria-label="t('admin.security.orderModeTitle')">
+              <button
+                type="button"
+                :aria-pressed="orderMode === 'limit'"
+                :class="{ 'seg-on': orderMode === 'limit' }"
+                @click="orderMode = 'limit'"
+              >
+                <span>{{ t('admin.security.optLimit') }}</span>
+              </button>
+              <button
+                type="button"
+                :aria-pressed="orderMode === 'market'"
+                :class="{ 'seg-on': orderMode === 'market' }"
+                @click="orderMode = 'market'"
+              >
+                <span>{{ t('admin.security.optMarket') }}</span>
+              </button>
+            </div>
+            <p class="sc-hint">
+              {{ orderMode === 'market' ? t('admin.security.orderModeMarketHint') : t('admin.security.orderModeLimitHint') }}
+            </p>
+          </div>
+        </SettingsSection>
+
         <!-- OKX 接入凭证 -->
         <SettingsSection :title="t('admin.security.credsTitle')" :description="t('admin.security.credsDesc')" :icon="KeyRound">
           <div class="sc-venues">
@@ -779,42 +815,6 @@ onMounted(() => {
                 </div>
               </footer>
             </article>
-          </div>
-        </SettingsSection>
-
-        <!-- 委托订单模式 -->
-        <SettingsSection :title="t('admin.security.orderModeTitle')" :description="t('admin.security.orderModeDesc')" :icon="Zap">
-          <template #actions>
-            <button type="button" class="btn btn-primary btn-sm" :disabled="savingOrderMode" @click="saveOrderMode">
-              <Loader2 v-if="savingOrderMode" :size="13" class="animate-spin shrink-0" />
-              <Save v-else :size="13" />
-              <span>{{ savingOrderMode ? t('admin.security.saving') : t('admin.security.saveOrderMode') }}</span>
-            </button>
-          </template>
-
-          <div class="sc-group">
-            <span class="form-label">{{ t('admin.security.orderModeTitle') }}</span>
-            <div class="seg seg-compact" role="group" :aria-label="t('admin.security.orderModeTitle')">
-              <button
-                type="button"
-                :aria-pressed="orderMode === 'limit'"
-                :class="{ 'seg-on': orderMode === 'limit' }"
-                @click="orderMode = 'limit'"
-              >
-                <span>{{ t('admin.security.optLimit') }}</span>
-              </button>
-              <button
-                type="button"
-                :aria-pressed="orderMode === 'market'"
-                :class="{ 'seg-on': orderMode === 'market' }"
-                @click="orderMode = 'market'"
-              >
-                <span>{{ t('admin.security.optMarket') }}</span>
-              </button>
-            </div>
-            <p class="sc-hint">
-              {{ orderMode === 'market' ? t('admin.security.orderModeMarketHint') : t('admin.security.orderModeLimitHint') }}
-            </p>
           </div>
         </SettingsSection>
 
