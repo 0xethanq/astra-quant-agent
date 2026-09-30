@@ -211,10 +211,12 @@ class BuildSnapshotTests(unittest.TestCase):
                                 protection_orphans={"okx": {"readable": True}},
                                 now=1234.0)
         self.assertEqual(snap["generated_at"], 1234.0)
+        # `scale_out`（分批止盈事件流水）是 2026-09-29 新增数据源；本用例注入的
+        # 临时目录里没有该文件 ⇒ source_ok=False（不可判定 ≠ 0，不是"零次分批"）。
         self.assertEqual(snap["sources"], {"venue_health": True, "model_calls": True,
                                            "risk_limits": True, "market_data": True,
                                            "market_stream": True, "cycle_disclosure": True,
-                                           "protection_orphans": True})
+                                           "protection_orphans": True, "scale_out": False})
 
     def test_missing_sources_are_marked_not_ok_instead_of_crashing(self):
         with mock.patch.dict(sys.modules, {
@@ -418,6 +420,23 @@ class RenderStreamAndDisclosureTests(RenderBasicsTests):
     def test_empty_cycle_disclosure_emits_nothing(self):
         text = M.render_prometheus(self._snap(cycle_disclosure={}))
         self.assertNotIn("astra_cycle_disclosure", text)
+
+    def test_session_restriction_is_visible_when_reported(self):
+        """交易时段降级（2026-09-30）：窗口外"什么都没做"必须在面板上可解释。"""
+        restricted = M.render_prometheus(self._snap(cycle_disclosure={
+            "written_at_ms": 999_000.0, "session_restricted": True,
+            "session_mode": "manage_only"}))
+        self.assertIn("astra_cycle_session_restricted 1", restricted)
+
+        normal = M.render_prometheus(self._snap(cycle_disclosure={
+            "written_at_ms": 999_000.0, "session_restricted": False}))
+        self.assertIn("astra_cycle_session_restricted 0", normal)
+
+    def test_missing_session_key_omits_the_series(self):
+        """**不可判定 ≠ 0**：旧版快照没有这个键时不发序列 ——
+        发 0 会被读成"这一轮跑了全功能"，与"不知道"是两回事。"""
+        text = M.render_prometheus(self._snap(cycle_disclosure={"written_at_ms": 999_000.0}))
+        self.assertNotIn("astra_cycle_session_restricted", text)
 
 
 class RenderOrphanTests(RenderBasicsTests):

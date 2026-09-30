@@ -49,7 +49,7 @@ export interface VenueLike {
 
 export interface MxLike {
   venues?: Record<string, VenueLike | undefined>
-  health?: { venues?: Record<string, { ok?: unknown[]; failed?: Record<string, unknown>; avg_ms?: number; testnet?: boolean }> }
+  health?: { venues?: Record<string, { ok?: unknown[]; failed?: Record<string, unknown> | unknown[]; unknown?: unknown[]; total?: number; avg_ms?: number; testnet?: boolean }> }
 }
 
 /** OKX 是否已连通：**两个条件都要**（READY 且 mode_configured 为真）。 */
@@ -61,19 +61,34 @@ export function deriveOkxLinked(runtime: any): boolean {
  * 交易所健康度 chip。
  *
  * - 缺 `health.venues` → **`null`**（不是 `[]`）；
- * - `total` = `ok` 条数 + `failed` 的**键数**；
- * - `avg_ms` 缺省 0；`testnet` 强转布尔。
+ * - `total` 优先取后端给的**池容量**（`v.total`）；后端没给才回落到 `ok + failed` 键数。
+ *   ⚠️ 2026-09-30 事故：`total` 曾经只由 `ok/failed` 推出来，而那份名单出自一个
+ *   **没有生产者**的僵尸快照（写它的 `scripts/brain/xvenue.py` 已随 OKX 专用化删除）
+ *   ⇒ 面板显示 `9/9 币`，其中 UNI 早已不在池内。现在名单由后端按「标的池 × 实时行情
+ *   证据」投影，`total` 恒等于池容量；
+ * - `failed` 兼容对象（旧形状）与数组（新形状）；
+ * - `unknown` = 快照缺失/过期而**未核实**的标的数：`unknown > 0` 时**不得**显示全绿
+ *   （读不到 ≠ 就绪），故一并透出供模板判断。
  */
 export function deriveMxHealthChips(mx: MxLike | null | undefined) {
   const venues = mx?.health?.venues
   if (!venues) return null
-  return Object.entries(venues).map(([name, v]: [string, any]) => ({
-    name,
-    ok: (v.ok || []).length,
-    total: (v.ok || []).length + Object.keys(v.failed || {}).length,
-    avg_ms: v.avg_ms || 0,
-    testnet: !!v.testnet,
-  }))
+  return Object.entries(venues).map(([name, v]: [string, any]) => {
+    const ok = (v.ok || []).length
+    const failed = Array.isArray(v.failed) ? v.failed.length : Object.keys(v.failed || {}).length
+    const unknown = (v.unknown || []).length
+    const total = typeof v.total === 'number' && v.total > 0 ? v.total : ok + failed
+    return {
+      name,
+      ok,
+      failed,
+      unknown,
+      total,
+      avg_ms: v.avg_ms || 0,
+      testnet: !!v.testnet,
+      allOk: unknown === 0 && total > 0 && ok === total,
+    }
+  })
 }
 
 /** OKX 资金档位文字（三态：live / demo / 其它一律 unknown）。 */

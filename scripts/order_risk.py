@@ -13,10 +13,20 @@ except ImportError:  # flat import when scripts/ itself is on sys.path
     from risk_constants import MIN_RISK_REWARD_RATIO, MAX_RISK_REWARD_RATIO
 
 
-def validate_quote_geometry_and_rr(action: str, entry: Any, tp: Any, sl: Any, enforce_max_rr: bool = False) -> Tuple[bool, str, float]:
+def validate_quote_geometry_and_rr(
+    action: str,
+    entry: Any,
+    tp: Any,
+    sl: Any,
+    enforce_max_rr: bool = False,
+    confidence: float = 0.0,
+    min_rr_floor: float = 0.0,
+) -> Tuple[bool, str, float]:
     """Validates that opening quote prices are positive, finite numbers satisfying
     action-specific geometry, and that the calculated risk-reward ratio meets or exceeds
     the configurable floor (ASTRA_MIN_RISK_REWARD, default 2.0).
+    Also supports dynamic expected value verification when confidence >= 80% and rr >= 1.2:
+    E = P*RR - (1-P)*1.0 >= +0.30R.
     Returns (is_valid, failure_reason, rr_ratio).
     """
     raw_act = str(action or "").upper()
@@ -54,8 +64,22 @@ def validate_quote_geometry_and_rr(action: str, entry: Any, tp: Any, sl: Any, en
     if not math.isfinite(rr):
         return False, "核心风控拦截：盈亏比计算异常", 0.0
 
+    # 绝对系统安全底线：任何情况下盈亏比不得低于 1.2:1（防手续费与滑点倒挂）
+    ABS_MIN_RR = 1.2
+    effective_floor = max(ABS_MIN_RR, float(min_rr_floor or 0.0))
+
     if rr < MIN_RISK_REWARD_RATIO:
-        return False, f"核心风控拦截：盈亏比不足 {MIN_RISK_REWARD_RATIO:.1f} (当前 R:R = {rr:.2f}:1，底线 {MIN_RISK_REWARD_RATIO:.1f}:1)", rr
+        conf_val = float(confidence or 0.0)
+        # 高置信度动态正期望放行：置信度 >= 80% 且期望收益率 E = P*RR - (1-P)*1.0 >= +0.30R，且必须满足绝对安全底线 (>= 1.2R)
+        if conf_val >= 80.0 and rr >= effective_floor:
+            p_win = conf_val / 100.0
+            expected_val = p_win * rr - (1.0 - p_win) * 1.0
+            if expected_val >= 0.30:
+                pass  # 动态正期望放行
+            else:
+                return False, f"核心风控拦截：盈亏比不足 {MIN_RISK_REWARD_RATIO:.1f} (当前 R:R = {rr:.2f}:1，底线 {MIN_RISK_REWARD_RATIO:.1f}:1)", rr
+        else:
+            return False, f"核心风控拦截：盈亏比不足 {MIN_RISK_REWARD_RATIO:.1f} (当前 R:R = {rr:.2f}:1，底线 {MIN_RISK_REWARD_RATIO:.1f}:1)", rr
 
     if enforce_max_rr:
         _cur_max_rr = float(MAX_RISK_REWARD_RATIO or 0.0)

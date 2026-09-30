@@ -31,6 +31,8 @@ def admin_notifications(x_astra_session: str | None = Header(default=None, alias
     return {
         "webhook": {"enabled": env.get("ASTRA_NOTIFY_WEBHOOK_ENABLED", "0") == "1", "url": mask_url(env.get("ASTRA_NOTIFICATION_WEBHOOK", ""))},
         "wechat": {"enabled": env.get("ASTRA_NOTIFY_WECHAT_ENABLED", "0") == "1", "webhook": mask_url(env.get("ASTRA_WECHAT_WEBHOOK", ""))},
+        "feishu": {"enabled": env.get("ASTRA_NOTIFY_FEISHU_ENABLED", "0") == "1", "webhook": mask_url(env.get("ASTRA_FEISHU_WEBHOOK", "")), "secret": mask(env.get("ASTRA_FEISHU_SECRET", ""))},
+        "dingtalk": {"enabled": env.get("ASTRA_NOTIFY_DINGTALK_ENABLED", "0") == "1", "webhook": mask_url(env.get("ASTRA_DINGTALK_WEBHOOK", "")), "secret": mask(env.get("ASTRA_DINGTALK_SECRET", ""))},
         "telegram": {"enabled": env.get("ASTRA_NOTIFY_TELEGRAM_ENABLED", "0") == "1", "bot_token": mask(env.get("ASTRA_TELEGRAM_BOT_TOKEN", "")), "chat_id": env.get("ASTRA_TELEGRAM_CHAT_ID", ""), "api_base": env.get("ASTRA_TELEGRAM_API_BASE", "")},
         "qq": {"enabled": env.get("ASTRA_NOTIFY_QQ_ENABLED", "0") == "1", "app_id": env.get("ASTRA_QQ_APP_ID", ""), "client_secret": mask(env.get("ASTRA_QQ_CLIENT_SECRET", "")), "openid": env.get("ASTRA_QQ_OPENID", "")},
     }
@@ -47,7 +49,7 @@ def admin_update_notifications(
 
     # 审计修复A2(2026-09-13)：GET 端返回 mask()/mask_url() 脱敏串，前端表单原样回传时
     # 掩码值=「用户未改动」，一律置 None 跳过写回（readiness 自然回退 current_env）。
-    for _mf in ("webhook_url", "wechat_webhook", "telegram_bot_token", "qq_client_secret"):
+    for _mf in ("webhook_url", "wechat_webhook", "feishu_webhook", "feishu_secret", "dingtalk_webhook", "dingtalk_secret", "telegram_bot_token", "qq_client_secret"):
         _mv = getattr(payload, _mf, None)
         if _mv is not None and is_masked(_mv):
             setattr(payload, _mf, None)
@@ -57,6 +59,14 @@ def admin_update_notifications(
         env_update["ASTRA_NOTIFICATION_WEBHOOK"] = payload.webhook_url.strip()
     if payload.wechat_webhook is not None:
         env_update["ASTRA_WECHAT_WEBHOOK"] = payload.wechat_webhook.strip()
+    if payload.feishu_webhook is not None:
+        env_update["ASTRA_FEISHU_WEBHOOK"] = payload.feishu_webhook.strip()
+    if payload.feishu_secret is not None:
+        env_update["ASTRA_FEISHU_SECRET"] = payload.feishu_secret.strip()
+    if payload.dingtalk_webhook is not None:
+        env_update["ASTRA_DINGTALK_WEBHOOK"] = payload.dingtalk_webhook.strip()
+    if payload.dingtalk_secret is not None:
+        env_update["ASTRA_DINGTALK_SECRET"] = payload.dingtalk_secret.strip()
     if payload.telegram_bot_token is not None:
         env_update["ASTRA_TELEGRAM_BOT_TOKEN"] = payload.telegram_bot_token.strip()
     if payload.telegram_chat_id is not None:
@@ -74,6 +84,8 @@ def admin_update_notifications(
         "qq": bool((payload.qq_app_id or current_env.get("ASTRA_QQ_APP_ID")) and (payload.qq_openid or current_env.get("ASTRA_QQ_OPENID"))),
         "telegram": bool((payload.telegram_bot_token or current_env.get("ASTRA_TELEGRAM_BOT_TOKEN")) and payload.telegram_chat_id),
         "wechat": bool(payload.wechat_webhook or current_env.get("ASTRA_WECHAT_WEBHOOK")),
+        "feishu": bool(payload.feishu_webhook or current_env.get("ASTRA_FEISHU_WEBHOOK")),
+        "dingtalk": bool(payload.dingtalk_webhook or current_env.get("ASTRA_DINGTALK_WEBHOOK")),
         "webhook": bool(payload.webhook_url or current_env.get("ASTRA_NOTIFICATION_WEBHOOK")),
     }
 
@@ -93,6 +105,16 @@ def admin_update_notifications(
         eff_wx = False
         warnings.append("企业微信频道因缺少 Webhook 暂未开启")
 
+    eff_fs = payload.feishu_enabled
+    if payload.feishu_enabled and not readiness["feishu"]:
+        eff_fs = False
+        warnings.append("飞书频道因缺少 Webhook 暂未开启")
+
+    eff_dt = payload.dingtalk_enabled
+    if payload.dingtalk_enabled and not readiness["dingtalk"]:
+        eff_dt = False
+        warnings.append("钉钉频道因缺少 Webhook 暂未开启")
+
     eff_wh = payload.webhook_enabled
     if payload.webhook_enabled and not readiness["webhook"]:
         eff_wh = False
@@ -101,6 +123,8 @@ def admin_update_notifications(
     env_update.update({
         "ASTRA_NOTIFY_WEBHOOK_ENABLED": "1" if eff_wh else "0",
         "ASTRA_NOTIFY_WECHAT_ENABLED": "1" if eff_wx else "0",
+        "ASTRA_NOTIFY_FEISHU_ENABLED": "1" if eff_fs else "0",
+        "ASTRA_NOTIFY_DINGTALK_ENABLED": "1" if eff_dt else "0",
         "ASTRA_NOTIFY_TELEGRAM_ENABLED": "1" if eff_tg else "0",
         "ASTRA_NOTIFY_QQ_ENABLED": "1" if eff_qq else "0",
     })
@@ -111,6 +135,10 @@ def admin_update_notifications(
     _secrets_put = {}
     for _attr, _key in (("webhook_url", "ASTRA_NOTIFICATION_WEBHOOK"),
                         ("wechat_webhook", "ASTRA_WECHAT_WEBHOOK"),
+                        ("feishu_webhook", "ASTRA_FEISHU_WEBHOOK"),
+                        ("feishu_secret", "ASTRA_FEISHU_SECRET"),
+                        ("dingtalk_webhook", "ASTRA_DINGTALK_WEBHOOK"),
+                        ("dingtalk_secret", "ASTRA_DINGTALK_SECRET"),
                         ("telegram_bot_token", "ASTRA_TELEGRAM_BOT_TOKEN"),
                         ("qq_client_secret", "ASTRA_QQ_CLIENT_SECRET")):
         _val = getattr(payload, _attr, None)
@@ -130,6 +158,8 @@ def admin_update_notifications(
     audit_record("notifications.update", "success", {
         "webhook": eff_wh,
         "wechat": eff_wx,
+        "feishu": eff_fs,
+        "dingtalk": eff_dt,
         "telegram": eff_tg,
         "qq": eff_qq,
         "warnings": warnings,

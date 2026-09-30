@@ -30,19 +30,30 @@ const routes: RouteRecordRaw[] = [
       { path: 'council', name: 'admin-council', component: () => import('../views/admin/CouncilPage.vue') },
       { path: 'llm', name: 'admin-llm', component: () => import('../views/admin/LlmPage.vue') },
       { path: 'notify', name: 'admin-notify', component: () => import('../views/admin/NotifyPage.vue') },
-      { path: 'about', name: 'admin-about', component: () => import('../views/admin/AboutPage.vue') },
-      { path: 'decisions', name: 'admin-decisions', component: () => import('../views/admin/DecisionsPage.vue') },
+      // ── 网关与调度（宿主：调度与投递 + Worker 运行单元）────────
       { path: 'gateway', name: 'admin-gateway', component: () => import('../views/admin/GatewayPage.vue') },
+      { path: 'agents', redirect: { path: '/admin/gateway', query: { tab: 'workers' } } },
+      // ── 系统日志（第一公民：运行日志 + 报错排查 + AI 决策 + 操作审计）────────
+      { path: 'decisions', name: 'admin-decisions', component: () => import('../views/admin/DecisionsPage.vue') },
+      { path: 'logs', redirect: '/admin/decisions' },
       { path: 'promptlib', name: 'admin-promptlib', component: () => import('../views/admin/PromptStudioPage.vue') },
       { path: 'evolution', name: 'admin-evolution', component: () => import('../views/admin/EvolutionPage.vue') },
-      { path: 'interceptors', name: 'admin-interceptors', component: () => import('../views/admin/InterceptorsPage.vue') },
+      // ── 风控与拦截（宿主：风控参数配置 + 事前风控拦截）───────────────────────
       { path: 'risk', name: 'admin-risk', component: () => import('../views/admin/RiskPage.vue') },
-      { path: 'policy', name: 'admin-policy', component: () => import('../views/admin/PolicySnapshotPage.vue') },
-      { path: 'agents', name: 'admin-agents', component: () => import('../views/admin/AgentsPage.vue') },
-      { path: 'backup', name: 'admin-backup', component: () => import('../views/admin/BackupPage.vue') },
-      { path: 'plugins', name: 'admin-plugins', component: () => import('../views/admin/PluginsPage.vue') },
-      { path: 'audit', name: 'admin-audit', component: () => import('../views/admin/AuditPage.vue') },
+      { path: 'interceptors', redirect: { path: '/admin/risk', query: { tab: 'pipeline' } } },
+      // ── 操作审计（并入系统日志，旧路径平滑重定向）───────────────────────────
+      { path: 'audit', redirect: { path: '/admin/decisions', query: { tab: 'audit' } } },
+      // ── 系统账号（独立一级页面）──────────────────────────────────────────
       { path: 'adminsys', name: 'admin-adminsys', component: () => import('../views/admin/AdminSysPage.vue') },
+      { path: 'accounts', redirect: '/admin/adminsys' },
+      // ── 系统与灾备（宿主：备份归档 + 策略快照与回滚 + 版本与更新）──────────
+      { path: 'backup', name: 'admin-backup', component: () => import('../views/admin/BackupPage.vue') },
+      { path: 'policy', redirect: { path: '/admin/backup', query: { tab: 'policy' } } },
+      { path: 'about', redirect: { path: '/admin/backup', query: { tab: 'version' } } },
+      // ⚠️ 2026-09-30 后台精简：上表被重定向的页面均已作为宿主页的
+      // 页签保留（功能零删除、书签不 404）。原先的「内置插件清单」页**已删除**
+      // （只读静态清单、15 天 0 动作、信息与通知通道/运行单元重合）⇒ 重定向到运行单元。
+      { path: 'plugins', redirect: '/admin/gateway' },
     ],
   },
   {

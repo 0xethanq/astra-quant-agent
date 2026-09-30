@@ -2,32 +2,27 @@
 /**
  * AuditPage.vue · 操作审计工位
  * ---------------------------------------------------------------------------
- * 骨架（推倒重来）：
- *   旧 = 一行简介 + 蓝色徽章 + 工具栏 + 一张 DataTable 卡（含紫色图标）
- *        + **手写 fixed 遮罩详情弹窗**（裸 JSON.stringify dump）
- *        + 色相类（emerald-400 / rose-400 / amber-400 / purple-400）
- *        + 无骨架、无错误态、无空态（仅 DataTable 的 empty-text）
- *   新 = 共享 PageHeader（治理徽章 + 刷新）
- *        → **审计统计带**（记录总数 / 成功 / 异常 / 最近留痕）
- *        → **审计流水日志面板**（时间 · 动作 · 状态徽章 · 操作者 + 详情），行点击穿透
- *        → **BaseDialog 详情**（结构化头部 + 原始 JSON），搜索 + 状态筛选
+ * 骨架：
+ *   共享 PageHeader（治理徽章 + 刷新）
+ *   → 审计统计带（记录总数 / 成功 / 异常 / 最近留痕）
+ *   → 审计流水日志面板（时间 · 动作 · 状态徽章 · 操作者 + 详情），行点击穿透
+ *   → BaseDialog 详情（结构化头部 + 原始 JSON），搜索 + 状态筛选
  *
  * 后端契约（逐字未改）：GET /api/v1/admin/audit?limit=200 → { records:[{timestamp,action,status,detail}] }
- *
- * ⚠️ 判定语义逐字保留：success/completed/accepted → 成功；failed/denied → 异常；其余 → 待定。
- * ⚠️ 检索口径逐字保留：对 `action` / `status` / `JSON.stringify(detail)` 三者合并后做大小写无关包含匹配。
  */
+const props = withDefaults(defineProps<{ embedded?: boolean }>(), { embedded: false });
 import { fmtDateTime } from '../../utils/format';
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from '../../composables/useI18n'
-import { useRovingTabs } from '../../composables/useRovingTabs';
 const { t } = useI18n()
 import { useApi } from '../../composables/useApi'
 import PageHeader from '../../components/admin/PageHeader.vue'
+
 import BaseDialog from '../../components/base/BaseDialog.vue'
 import BaseEmpty from '../../components/base/BaseEmpty.vue'
+import { useRovingTabs } from '../../composables/useRovingTabs';
 import { ScrollText, RefreshCw, Search, AlertTriangle, Loader2, CheckCircle2,
-  Ban, HelpCircle, Activity, ShieldCheck, User, FileJson, Terminal } from 'lucide-vue-next'
+  Ban, HelpCircle, Activity, ShieldCheck, User, FileJson } from 'lucide-vue-next'
 import BaseLoadingAnnounce from '../../components/base/BaseLoadingAnnounce.vue';
 
 const { api } = useApi()
@@ -144,12 +139,8 @@ onMounted(load)
 
 <template>
   <div class="au">
-    <PageHeader :title="t('nav.admin.audit')" :description="t('admin.audit.intro')">
+    <PageHeader :embedded="props.embedded" :title="t('nav.admin.audit')">
       <template #actions>
-        <RouterLink to="/admin/decisions?tab=logs" class="btn btn-ghost btn-sm text-xs inline-flex items-center gap-1.5">
-          <Terminal :size="13" />
-          <span>{{ t('admin.decisions.hubTabLogs') }}</span>
-        </RouterLink>
         <span class="badge badge-accent mono">{{ t('admin.audit.badge') }}</span>
         <button type="button" class="btn btn-ghost btn-sm" :disabled="loading" @click="load">
           <Loader2 v-if="loading && records.length" :size="14" class="animate-spin shrink-0" />

@@ -156,6 +156,10 @@ LEGACY_ALLOWED: "dict[str, str]" = {
     "docs/images/v751_features_summary.png":
         "历史功能截图（二进制）。它记录的是**当时**的界面，改写截图等于篡改历史记录；"
         "`docs/images/` 按快照对待。",
+    "tests/audit/test_deployment_scripts_are_sound.py":
+        "部署门禁要调用 `scripts/migrate_r20_to_astra.py --check` 这条**真实存在的路径**"
+        "来核对「启动脚本引用的辅助脚本是否都在」—— 这里的 `r20` 是该脚本文件名的组成部分，"
+        "不是配置兼容残留（`R20_*` 环境变量早已硬切）。把字面量改掉，这道门就指错了文件。",
 }
 
 #: 判据一的允许表：**路径 → 为什么这里必须写出被禁串**。

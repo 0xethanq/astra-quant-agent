@@ -82,6 +82,28 @@ OKX 下单**不走**「适配器执行开关」那一族环境旗标：
   可显式覆盖。展示口径分四态：`mark` / `last` / `index` / `unknown`，**读不到就报「未上报」**。
 - 门禁：`tests/venues/test_okx_trigger_price_type_semantics.py`。
 
+### 6.1 分批止盈：用**拆腿**实现，不用 OKX 原生 `closeFraction`
+
+2026-09-29 真机探针（**模拟盘**，`POST /api/v5/trade/order-algo`）：
+
+| 请求形态 | 回包 |
+|---|---|
+| `closeFraction=0.5` | ❌ `HTTP 400 {"code":"51000","msg":"Parameter closeFraction error"}` |
+| `closeFraction=0.5` + `reduceOnly` | ❌ 同样 400 |
+| `sz=1` + `reduceOnly` + `cxlOnClosePos`（对照） | ✅ `HTTP 200 sCode=0`，返回 `algoId` |
+
+即"**原生分批止盈（closeFraction）在模拟盘不可用**"成立；而"多挂一条**带尺寸**的
+reduceOnly 算法腿"两个档位都受理。故本仓首批止盈（TP1）用**双腿**实现
+（`scripts/trader/legs.py`）：`[TP1 腿(ratio×size), 余仓腿(其余)]`，
+两条腿各带**同一个止损**（覆盖率统计只认同时带 TP 与 SL 的 reduceOnly 腿；
+做成 TP-only 腿会被整条排除 ⇒ 误判缺保护 ⇒ 补单超额）。
+
+- 编排纪律：**先挂后撤**（新腿确认后才撤旧腿，任何瞬间都有保护）、**幂等**
+  （几何已匹配则一次请求都不发）、**撤单失败断路器**（`leg_stale_ids`，
+  撤销未成功前不再挂新腿，防腿数无界增长）。
+- 回调：`leg_algo_ids` 登记"角色 → algoId"，持仓中调整止盈靠它**认腿**
+  （不按价格猜 —— 价格一改就会改错腿）。详见 `scripts/trader/tp_sync.py`。
+
 ## 7. 数据健康度
 
 每 15 分钟决策周期自动落盘取数健康（成功币数 / 失败原因 / 延迟），

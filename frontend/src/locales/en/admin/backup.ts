@@ -1,5 +1,7 @@
 /** Backup page copy */
 export const enAdminBackup = {
+  tabsLabel: 'System & DR sections',
+  tabBackup: 'Backup archive',
   intro: "Full local/cloud data disaster recovery, direct download of backup archives, uploading local backups and one-click full restore.",
   badge: "Integrations & protection · 2/3",
   loading: "Loading disaster recovery config...",
@@ -76,4 +78,10 @@ export const enAdminBackup = {
   restoreConfirmDesc: 'Archive [{file}] will be extracted over the current system config, historical data and strategies',
   restoreOk: 'Backup {file} restored! {n} core files extracted. Restart or refresh the service so the new state takes over.',
   restoreFailed: 'Restore failed: {msg}',
+  deleteTitle: 'Delete archive',
+  deleteConfirmTitle: 'Delete backup archive',
+  deleteConfirmDesc: 'Are you sure you want to delete backup archive [{file}]? This action cannot be undone.',
+  confirmDelete: 'Confirm Delete',
+  deleteOk: 'Backup archive {file} deleted',
+  deleteFailed: 'Failed to delete backup archive: {msg}',
 };

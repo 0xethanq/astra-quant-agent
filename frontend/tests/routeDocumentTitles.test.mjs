@@ -46,13 +46,50 @@ test('所有后台子路由在 nav.ts 中均有唯一的导航元数据匹配', 
 
   const adminBlock = routerText.match(/path:\s*'\/admin'[\s\S]*?children:\s*\[([\s\S]*?)\]/)?.[1] || '';
   const adminChildMatches = [...adminBlock.matchAll(/path:\s*'([^']+)',\s*name:\s*'admin-([^']+)'/g)];
-  assert.ok(adminChildMatches.length >= 17, `后台子路由数量不足：${adminChildMatches.length}`);
+  // 2026-09-30 后台精简：18 项 → 11 项（页面级重组，被吸收页保留为宿主页页签）。
+  // ⚠️ 这个下限不是产品承诺，而是"防止空转通过"的下限：它曾钉在 17 是为了
+  //    匹配旧的 18 项侧栏；现在钉在 11 匹配新的信息架构。判据本身仍是**双向相等** ——
+  //    下面既查"每条命名路由都有 nav 元数据"，也查"每个 nav 项都有对应命名路由"。
+  assert.ok(adminChildMatches.length >= 11, `后台子路由数量不足：${adminChildMatches.length}`);
 
   for (const m of adminChildMatches) {
     const subPath = m[1];
     const key = `admin-${m[2]}`;
     const inNav = navText.includes(`key: '${key}'`) && navText.includes(`path: '/admin/${subPath}'`);
     assert.ok(inNav, `后台子路由 /admin/${subPath} (${key}) 未在 nav.ts 中定义`);
+  }
+
+  // 反向：nav.ts 里的每个后台项都必须有一条真实存在的命名路由（防"导航项指向空气"）
+  const navPaths = [...navText.matchAll(/key:\s*'(admin-[^']+)',\s*labelKey:[^,]+,\s*path:\s*'(\/admin\/[^']+)'/g)]
+    .map((m) => ({ key: m[1], path: m[2] }));
+  assert.equal(navPaths.length, adminChildMatches.length,
+    `nav.ts 后台项数(${navPaths.length}) 与命名路由数(${adminChildMatches.length}) 不等`);
+  for (const item of navPaths) {
+    const named = adminChildMatches.some((m) => m[1] === item.path.replace('/admin/', ''));
+    assert.ok(named, `nav.ts 的后台项 ${item.key} (${item.path}) 没有对应的命名路由`);
+  }
+});
+
+test('被吸收页面的旧路径必须保留重定向（书签不 404）', () => {
+  const routerText = readFileSync(path.join(SRC, 'router/index.ts'), 'utf8');
+  // 2026-09-30 后台精简：这些页面不再出现在侧栏，但旧 URL 必须仍然可用。
+  const redirects = {
+    agents: '/admin/gateway',
+    interceptors: '/admin/risk',
+    audit: '/admin/decisions',
+    policy: '/admin/backup',
+    about: '/admin/backup',
+    plugins: '/admin/gateway',
+    logs: '/admin/decisions',
+    accounts: '/admin/adminsys',
+  };
+  // 逐行判定：同一行内必须同时出现 `path: '<旧路径>'`、`redirect:` 与目标路径。
+  // （用行内查找而不是长正则：路由写法有字符串式与对象式两种，长正则容易漏。）
+  const lines = routerText.split('\n');
+  for (const [oldPath, target] of Object.entries(redirects)) {
+    const hit = lines.some((line) =>
+      line.includes(`path: '${oldPath}'`) && line.includes('redirect:') && line.includes(target));
+    assert.ok(hit, `/admin/${oldPath} 缺少到 ${target} 的重定向（旧书签会 404）`);
   }
 });
 
@@ -62,7 +99,7 @@ test('后台各页面标题在 locales/zh/nav.ts 与 locales/en/nav.ts 中均已
   const navText = readFileSync(path.join(SRC, 'config/nav.ts'), 'utf8');
 
   const labelKeys = [...navText.matchAll(/labelKey:\s*'nav\.admin\.([^']+)'/g)].map((m) => m[1]);
-  assert.ok(labelKeys.length >= 17, `labelKey 数量不足：${labelKeys.length}`);
+  assert.ok(labelKeys.length >= 11, `labelKey 数量不足：${labelKeys.length}`);
 
   for (const k of labelKeys) {
     assert.match(zhNavText, new RegExp(`\\b${k}:`), `zh/nav.ts 缺少 admin 标题键：${k}`);

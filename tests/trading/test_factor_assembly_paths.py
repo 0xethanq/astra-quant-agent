@@ -266,5 +266,31 @@ class SizeFallbackTest(_Base):
         self.assertEqual(f["sz"], 0.0)
 
 
+class PartialMarketDataTest(_Base):
+    """**部分**取数失败（2026-09-30 真机 429 事故）。
+
+    真实形态与上面那条不同：OKX 对 15M 蜡烛返回 **429**，而 1H/4H 成功 ——
+    此时 `price` 保持默认 0，但 1H 分支照样执行，于是 `atr / price` 把
+    **整个交易周期**炸掉（`ZeroDivisionError` 冒到 `execute_portfolio`）。
+    代价不是"少算一个指标"，而是**连持仓的追踪止损都不再执行** ——
+    最危险的失败形态，故单独钉住。
+    """
+
+    def test_missing_15m_candles_with_1h_available_must_not_raise(self):
+        f = self._call(candles_15m=[], candles_1h=_rising(35), candles_4h=_rising(25))
+        self.assertEqual(f["price"], 0.0, "价格不可用时保持默认，不臆造")
+        self.assertEqual(f["atr_pct"], 0.0, "价格不可用 ⇒ 不臆造 ATR 百分比")
+        self.assertFalse(f["market_data_valid"])
+        self.assertEqual(f["sz"], 0.0, "行情无效 ⇒ 张数归零（上层跳过该标的）")
+
+    def test_zero_last_close_is_treated_as_unavailable(self):
+        """K 线存在但收盘价是 0（坏数据）⇒ 同样不得除零。"""
+        zeros = [_candle(0.0) for _ in range(45)]
+        f = self._call(candles_15m=zeros, candles_1h=_rising(35), candles_4h=_rising(25))
+        self.assertEqual(f["price"], 0.0)
+        self.assertEqual(f["atr_pct"], 0.0)
+        self.assertFalse(f["market_data_valid"])
+
+
 if __name__ == "__main__":
     unittest.main()

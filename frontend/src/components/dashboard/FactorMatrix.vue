@@ -171,7 +171,6 @@ const processedRows = computed(() => {
             {{ processedRows.length }} / {{ rows.length }} {{ t('common.unitCoin') }}
           </span>
         </div>
-        <p class="text-3xs text-[var(--ink-3)] mt-0.5">{{ t('dash.matrix.matrix.desc') }}</p>
       </div>
 
       <!-- 搜索与筛选工具栏 -->

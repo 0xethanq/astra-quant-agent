@@ -60,7 +60,7 @@ class MarketRegimeEngineTest(unittest.TestCase):
         self.assertEqual(res["regime_id"], REGIME_TREND_EXPANSION)
         self.assertGreaterEqual(res["trend_score"], 55.0)
         self.assertEqual(res["dominant_direction"], "BULL")
-        self.assertEqual(res["recommended_profile"], "stable")
+        self.assertEqual(res["recommended_profile"], "allpattern_swing")
 
     def test_wide_range_oscillation_detection(self):
         # 构造宽幅震荡：低 ADX (<22)，高 ATR%，多空博弈冲突，多标的反转
@@ -94,7 +94,7 @@ class MarketRegimeEngineTest(unittest.TestCase):
         self.assertEqual(res["regime_id"], REGIME_WIDE_OSCILLATION)
         self.assertGreaterEqual(res["oscillation_score"], 50.0)
         self.assertGreaterEqual(res["volatility_score"], 40.0)
-        self.assertEqual(res["recommended_profile"], "wide_oscillation")
+        self.assertEqual(res["recommended_profile"], "allpattern_swing")
         self.assertIn("宽幅", res["summary_text"])
 
     def test_volatility_shock_detection(self):

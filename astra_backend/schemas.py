@@ -71,6 +71,9 @@ class AdminConfigUpdate(BaseModel):
     notification_webhook: str | None = None
     manual_close_enabled: bool | None = None
     order_mode: str | None = Field(default=None, pattern=r"^(limit|market)$")
+    scale_out_enabled: bool | None = None
+    scale_out_ratio: float | None = Field(default=None, ge=0.1, le=0.9)
+    scale_out_trigger_atr: float | None = Field(default=None, ge=0.5, le=5.0)
 
 
 class LLMActivateRequest(BaseModel):
@@ -198,7 +201,9 @@ class PromptOverrideRequest(BaseModel):
 
 
 class PromptLibraryUpdate(BaseModel):
-    active_style: str = Field(pattern=r"^(stable|aggressive|custom)$")
+    # 2026-09-30：出厂预设改为单条 `allpattern_swing`；旧值 stable/aggressive 保留
+    # 以兼容既有前端与脚本（它们会落到 load_library 的兜底，不再指向真实方案）。
+    active_style: str = Field(pattern=r"^(allpattern_swing|stable|aggressive|custom)$")
     trading_system: str = Field(default="", max_length=12000)
     trading_user: str = Field(default="", max_length=12000)
     evolution_system: str = Field(default="", max_length=12000)
@@ -208,7 +213,7 @@ class PromptLibraryUpdate(BaseModel):
 class PromptProfileCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=60)
     description: str = Field(default="", max_length=240)
-    source_id: str = Field(default="stable", max_length=80)
+    source_id: str = Field(default="allpattern_swing", max_length=80)
 
     @field_validator("name")
     @classmethod
@@ -316,6 +321,10 @@ class ChannelToggleRequest(BaseModel):
     enabled: bool
     webhook_url: str | None = None
     wechat_webhook: str | None = None
+    feishu_webhook: str | None = None
+    feishu_secret: str | None = None
+    dingtalk_webhook: str | None = None
+    dingtalk_secret: str | None = None
     telegram_bot_token: str | None = None
     telegram_chat_id: str | None = None
     telegram_api_base: str | None = None
@@ -337,6 +346,12 @@ class NotificationConfigUpdate(BaseModel):
     webhook_url: str = ""
     wechat_enabled: bool = False
     wechat_webhook: str = ""
+    feishu_enabled: bool = False
+    feishu_webhook: str = ""
+    feishu_secret: str | None = None
+    dingtalk_enabled: bool = False
+    dingtalk_webhook: str = ""
+    dingtalk_secret: str | None = None
     telegram_enabled: bool = False
     telegram_bot_token: str | None = None
     telegram_chat_id: str = ""
@@ -354,12 +369,30 @@ class QQOpenIDCaptureStartRequest(BaseModel):
 
 
 class NotificationTestRequest(BaseModel):
-    channel: str = Field(pattern=r"^(webhook|wechat|telegram|qq)$")
+    channel: str = Field(pattern=r"^(webhook|wechat|telegram|qq|feishu|dingtalk)$")
     confirmation: str = ""
 
 
 class NotificationScheduleUpdate(BaseModel):
     briefing_times: list[str] = Field(min_length=1, max_length=6)
+
+
+class TradingSessionWindow(BaseModel):
+    """一段交易时段。`days` 为 `0=周一 … 6=周日`，空 = 每天；`end <= start` = 跨午夜。"""
+    days: list[int] = Field(default_factory=list, max_length=7)
+    start: str = Field(min_length=1, max_length=5)
+    end: str = Field(min_length=1, max_length=5)
+
+
+class TradingSessionUpdate(BaseModel):
+    """交易时段配置的写入载荷（上限 12 段：够表达一周的常规窗口，又不至于让页面失控）。
+
+    ⚠️ 归一化与校验的**唯一实现**在 `scripts/trader/session.py::normalize_session`
+    （路由调用它），保证"页面校验口径 == 交易引擎判定口径"。
+    """
+    enabled: bool = False
+    mode_outside: str = Field(default="manage_only", max_length=16)
+    windows: list[TradingSessionWindow] = Field(default_factory=list, max_length=12)
 
 
 class BackupRequest(BaseModel):

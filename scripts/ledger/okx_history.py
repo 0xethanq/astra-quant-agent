@@ -38,6 +38,14 @@ def build_okx_trade(*, h, reset_time, allowed, close_orders, env, tz_bj, id_suff
 
     `id_suffix` 形如 `"_1757850000"` 或 `"_1757850000#1"`（同 posId 同开仓时刻
     的第 2 笔起带 `#n`），由调用方依据跨行状态算出。
+
+    **出场原因归属口径（2026-09-29 收紧）**：必须看**订单身份**，不能按盈亏金额猜。
+    旧实现用 `net_pnl > 3.0` 推断"目标止盈达成"，于是分批止盈的首批半仓、云端 TP
+    成交、AI 主动止盈平仓在台账里**全写成同一句** —— 实测用户因此以为分批止盈
+    从未生效（09-22~09-29 实际发生 15 次）。现行口径：
+      * 平仓单 `clOrdId` 前缀 `SO`（分批止盈 Scale-Out 软件平仓单）⇒ "首批分批止盈"；
+      * 平仓单 `clOrdId` 前缀 `O` 或 `tag` 含 `CLI` ⇒ "AI 主动止盈平仓"；
+      * **查不到平仓单** ⇒ 显式标 "止盈推定（未匹配平仓单）"，不伪装成"止盈成功"。
     """
     c_ts = int(h.get("cTime", 0) or 0) / 1000.0
     u_ts = int(h.get("uTime", 0) or 0) / 1000.0
@@ -104,7 +112,9 @@ def build_okx_trade(*, h, reset_time, allowed, close_orders, env, tz_bj, id_suff
             algo_id = matched_close.get("algoId")
             cl_ord_id = str(matched_close.get("clOrdId", ""))
 
-            if algo_id:
+            if cl_ord_id.startswith("SO"):
+                exit_reason = "🎯 首批分批止盈" if net_pnl >= 0 else "🛑 分批止盈后余仓止损"
+            elif algo_id:
                 if net_pnl > 3.0:
                     exit_reason = "🎯 目标止盈达成"
                 elif net_pnl < -1.0:
@@ -113,15 +123,17 @@ def build_okx_trade(*, h, reset_time, allowed, close_orders, env, tz_bj, id_suff
                     exit_reason = "🛡️ 移动止损保本出场"
             elif cl_ord_id.startswith("O") or "CLI" in matched_close.get("tag", ""):
                 if net_pnl > 3.0:
-                    exit_reason = "✨ 移动止盈锁利"
+                    exit_reason = "🤖 AI 主动止盈平仓"
                 elif net_pnl < -1.0:
                     exit_reason = "🛑 策略风控止损"
                 else:
                     exit_reason = "⏱️ 超时/保本平仓"
             else:
-                exit_reason = "🎯 目标止盈达成" if net_pnl > 3.0 else ("🛑 止损离场" if net_pnl < -1.0 else "🛡️ 保本平仓")
+                exit_reason = (("🎯 止盈推定（未匹配平仓单）" if net_pnl > 3.0
+                                else "🛑 止损离场" if net_pnl < -1.0 else "🛡️ 保本平仓"))
         else:
-            exit_reason = "🎯 目标止盈达成" if net_pnl > 3.0 else ("🛑 止损出场" if net_pnl < -1.0 else "🛡️ 保本平仓")
+            exit_reason = (("🎯 止盈推定（未匹配平仓单）" if net_pnl > 3.0
+                            else "🛑 止损出场" if net_pnl < -1.0 else "🛡️ 保本平仓"))
 
     funding_fee = round(float(h.get("fundingFee") or 0.0), 4)
 

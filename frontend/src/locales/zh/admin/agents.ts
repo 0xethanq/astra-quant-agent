@@ -1,5 +1,6 @@
 /** 运行单元页文案 */
 export const zhAdminAgents = {
+  title: 'Worker 与遥测',
   desc: '受管 Worker 存活、密文库状态与大模型调用遥测。',
   policyChip: '策略配置 · 3/3',
   loading: '正在加载运行单元...',
@@ -40,6 +41,17 @@ export const zhAdminAgents = {
   callsTitle: '调用流水',
   emptyCalls: '暂无调用记录',
   promptPolicy: '提示词策略',
+
+  // ── 前缀缓存可观测（2026-09-29）──
+  // 三态必须分开：`unreported` = 上游没上报缓存字段（不可判定）。
+  // 它此前被印成「缓存: 0」，正是"还是 0 缓存"说不清的根源。
+  cacheHitRate: '缓存命中率',
+  cacheHit: '命中',
+  cacheMiss: '未命中',
+  cacheUnreported: '未上报',
+  cacheHitTitle: '命中前缀缓存 {n} tokens',
+  cacheMissTitle: '上游上报未命中（缓存 0 tokens）',
+  cacheUnreportedTitle: '上游未上报缓存字段（当前路由不返回），命中与否不可判定',
 
   // 批 27：健康 / 运行状态 / 调用状态此前都是原样印后端枚举
   // （healthy、success、not-run），而同页 KPI 带写的是「健康 / 异常」。查表本地化。

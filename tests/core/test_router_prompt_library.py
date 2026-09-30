@@ -190,14 +190,14 @@ class ActiveStyleValidatorTest(unittest.TestCase):
             PromptLibraryUpdate(active_style="balanced")
 
     def test_the_three_known_styles_are_accepted(self):
-        for style in ("stable", "aggressive", "custom"):
+        for style in ("allpattern_swing", "custom"):
             with self.subTest(style=style):
                 self.assertEqual(PromptLibraryUpdate(active_style=style).active_style, style)
 
     def test_prompt_bodies_are_length_capped(self):
         from pydantic import ValidationError
         with self.assertRaises(ValidationError):
-            PromptLibraryUpdate(active_style="stable", trading_system="x" * 12001)
+            PromptLibraryUpdate(active_style="allpattern_swing", trading_system="x" * 12001)
 
 
 if __name__ == "__main__":

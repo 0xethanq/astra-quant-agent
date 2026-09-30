@@ -29,12 +29,16 @@ def toggle_channel(channel: str, payload: ChannelToggleRequest, x_astra_session:
         "qq": "ASTRA_NOTIFY_QQ_ENABLED",
         "telegram": "ASTRA_NOTIFY_TELEGRAM_ENABLED",
         "wechat": "ASTRA_NOTIFY_WECHAT_ENABLED",
+        "feishu": "ASTRA_NOTIFY_FEISHU_ENABLED",
+        "dingtalk": "ASTRA_NOTIFY_DINGTALK_ENABLED",
         "webhook": "ASTRA_NOTIFY_WEBHOOK_ENABLED",
     }
     channel_names = {
         "qq": "QQ 官方 Bot",
         "telegram": "Telegram Bot",
         "wechat": "企业微信",
+        "feishu": "飞书 (Feishu/Lark)",
+        "dingtalk": "钉钉 (DingTalk)",
         "webhook": "通用 Webhook",
     }
     if channel not in keys:
@@ -47,6 +51,24 @@ def toggle_channel(channel: str, payload: ChannelToggleRequest, x_astra_session:
         if val:
             save_secrets({"ASTRA_WECHAT_WEBHOOK": val})
             remove_env({"ASTRA_WECHAT_WEBHOOK"})
+    elif channel == "feishu":
+        if payload.feishu_secret is not None and payload.feishu_secret.strip() and not is_masked(payload.feishu_secret):
+            save_secrets({"ASTRA_FEISHU_SECRET": payload.feishu_secret.strip()})
+            remove_env({"ASTRA_FEISHU_SECRET"})
+        if payload.feishu_webhook is not None and not is_masked(payload.feishu_webhook):
+            val = payload.feishu_webhook.strip()
+            if val:
+                save_secrets({"ASTRA_FEISHU_WEBHOOK": val})
+                remove_env({"ASTRA_FEISHU_WEBHOOK"})
+    elif channel == "dingtalk":
+        if payload.dingtalk_secret is not None and payload.dingtalk_secret.strip() and not is_masked(payload.dingtalk_secret):
+            save_secrets({"ASTRA_DINGTALK_SECRET": payload.dingtalk_secret.strip()})
+            remove_env({"ASTRA_DINGTALK_SECRET"})
+        if payload.dingtalk_webhook is not None and not is_masked(payload.dingtalk_webhook):
+            val = payload.dingtalk_webhook.strip()
+            if val:
+                save_secrets({"ASTRA_DINGTALK_WEBHOOK": val})
+                remove_env({"ASTRA_DINGTALK_WEBHOOK"})
     elif channel == "webhook" and payload.webhook_url is not None and not is_masked(payload.webhook_url):
         val = payload.webhook_url.strip()
         if val:
@@ -82,15 +104,21 @@ def toggle_channel(channel: str, payload: ChannelToggleRequest, x_astra_session:
             "qq": bool(env.get("ASTRA_QQ_APP_ID") and env.get("ASTRA_QQ_CLIENT_SECRET") and env.get("ASTRA_QQ_OPENID")),
             "telegram": bool(env.get("ASTRA_TELEGRAM_BOT_TOKEN") and env.get("ASTRA_TELEGRAM_CHAT_ID")),
             "wechat": bool(env.get("ASTRA_WECHAT_WEBHOOK")),
+            "feishu": bool(env.get("ASTRA_FEISHU_WEBHOOK")),
+            "dingtalk": bool(env.get("ASTRA_DINGTALK_WEBHOOK")),
             "webhook": bool(env.get("ASTRA_NOTIFICATION_WEBHOOK")),
         }
-        if not readiness[channel]:
+        if not readiness.get(str(channel), False):
             if channel == "qq":
                 if not env.get("ASTRA_QQ_OPENID"):
                     raise HTTPException(status_code=400, detail="QQ 缺少目标用户 OpenID，请先点击「⚡ 自动获取 OpenID」向 Bot 发送消息完成绑定")
                 raise HTTPException(status_code=400, detail="QQ App ID 或 Client Secret 尚未配置完整")
             elif channel == "wechat":
                 raise HTTPException(status_code=400, detail="企业微信尚未配置 Webhook URL，请先填入有效 Webhook 地址再开启")
+            elif channel == "feishu":
+                raise HTTPException(status_code=400, detail="飞书尚未配置 Webhook URL，请先填入有效 Webhook 地址再开启")
+            elif channel == "dingtalk":
+                raise HTTPException(status_code=400, detail="钉钉尚未配置 Webhook URL，请先填入有效 Webhook 地址再开启")
             elif channel == "webhook":
                 raise HTTPException(status_code=400, detail="通用 Webhook 尚未配置 URL，请先填入有效 Webhook 地址再开启")
             elif channel == "telegram":

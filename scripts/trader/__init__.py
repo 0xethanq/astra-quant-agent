@@ -35,7 +35,11 @@
 | `data_shape.py` | 生产数据产物**形状校验**（意图/追踪器：类型·键名·单调性，每条违规带下游后果）+ `read_json_safe` 只读读取 | 无（纯函数；不取数、不写盘） |
 | `reservation_reconcile.py` | `_utc_age_seconds` SQLite UTC→秒龄（不可解析 = **-inf**，方向是红线） + `reconcile_reservation_ledger` 预留台账账实相符回笼（US-010，74 行） | `reservation_manager` / `fetch_other_venue_positions` / `state_closed` / `default_ttl_s`，**全部调用期注入** |
 | `scale_out.py` | `execute_scale_out_if_eligible` 分批平仓止盈执行引擎（首批50%锁定+云端OCO重置+保本移损+互斥加仓锁） | `okx_rest` / `venue_registry` / `record_trade` / `notify_trade_close` / `close_fee` 等全部调用期注入 |
+| `tp1.py` | TP1/TP2 **单一真源**与几何守卫（TP1 建仓冻结、`现价<TP1<TP2` 校验、门槛文案百分比）（2026-09-29 分批止盈实盘化） | 无（纯函数；risk_constants 可选） |
+| `legs.py` | 持仓保护**双腿**编排（TP1 腿 + 余仓腿；先挂后撤、幂等、撤单失败断路器、`leg_algo_ids` 登记） | `okx_rest` 调用期注入 |
+| `tp_sync.py` | 持仓中调整止盈的**腿感知** amend（认腿靠登记、一次 amend 同带 SL+TP、失败不回写真源、单向律 + 下调开关） | `okx_rest` 调用期注入 |
 | `venue_protection.py` | 保护腿**覆盖核验与归属判定**：`scan_protective_orders` 纯判定（缺口/临期/不可判定）+ `attribute_protective_orders` **逐腿归属**（matched / 旧量腿 / 可归因孤儿 / **归属不可判定**——后者不得自动撤销）+ `read_ledger_rows` 台账取证 | 零门面注入：IO 全部由调用方传 `ad`（子模块 import 期不绑定任何门面名字） |
+| `session.py` | **交易时段闸门**：用户自定义运行窗口的解析与判定（HH:MM 规范化、星期掩码、跨午夜 `[start,end)` 语义、下一切换时刻、覆盖估算）；窗口内 = 全功能，窗口外 = `manage_only`（只做机械风控）/ `off`（完全停跑）。失败方向写死为"配不全 ⇒ 按全天候运行 + 告警"（读不到 ≠ 停实盘） | 无（纯函数；配置由调用方在调用期传入，模块内零 IO、零状态） |
 
 ## ⛔ 已评估、**结论是不该抽**：`execute_portfolio` 的开仓执行段
 

@@ -261,22 +261,23 @@ class StrategyPromptsTailsTests(unittest.TestCase):
     # 7. 自进化起始时间配置 (evolution/config)
     # -------------------------------------------------------------------------
     def test_get_evolution_config(self):
-        with patch("astra_backend.account_baseline.load_account_baseline", return_value={"evolution_start_time": "2026-09-10 12:00:00"}):
-            with patch("scripts.self_improvement_engine.load_closed_trades", return_value=[{"id": 1}, {"id": 2}]):
-                res = sp.get_evolution_config()
-                self.assertEqual(res["evolution_start_time"], "2026-09-10 12:00:00")
-                self.assertEqual(res["active_trades_count"], 2)
-                self.assertIn("历史人工合约订单", res["note"])
+        with patch("astra_backend.llm_manager.init_llm_config", return_value={"models": []}):
+            with patch("astra_backend.evolution_config.load_evolution_config", return_value={"start_time": "2026-09-10 12:00:00"}):
+                with patch("scripts.self_improvement_engine.load_closed_trades", return_value=[{"id": 1}, {"id": 2}]):
+                    res = sp.get_evolution_config()
+                    self.assertEqual(res["evolution_start_time"], "2026-09-10 12:00:00")
+                    self.assertEqual(res["active_trades_count"], 2)
+                    self.assertIn("历史人工合约订单", res["note"])
 
     def test_update_evolution_config(self):
         payload = sp.EvolutionConfigUpdate(start_time="2026-09-15 00:00:00")
-        with patch("astra_backend.account_baseline.update_evolution_start_time", return_value={"evolution_start_time": "2026-09-15 00:00:00"}):
+        with patch("astra_backend.evolution_config.save_evolution_config", return_value={"start_time": "2026-09-15 00:00:00", "effective_model_id": "auto", "thinking_timeout": 300.0}):
             with patch("scripts.self_improvement_engine.load_closed_trades", return_value=[{"id": 1}]):
                 res = sp.update_evolution_config(payload)
                 self.assertTrue(res["ok"])
                 self.assertEqual(res["evolution_start_time"], "2026-09-15 00:00:00")
                 self.assertEqual(res["active_trades_count"], 1)
-                self.assertIn("自进化复盘起始时间已更新", res["effect"])
+                self.assertIn("自进化配置已成功更新", res["effect"])
 
 
 if __name__ == "__main__":

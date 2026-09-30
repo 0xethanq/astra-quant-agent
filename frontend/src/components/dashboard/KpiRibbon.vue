@@ -3,13 +3,12 @@
  * KpiRibbon.vue · DeepSeek Harness 风格核心指标仪表盘
  * 纯净低饱和黑白/深灰主题，分层卡片结构，呈现 OKX 账户总权益、走势、浮亏与防线
  */
-import { computed, onMounted, ref } from 'vue';
+import { computed } from 'vue';
 import { ShieldCheck } from 'lucide-vue-next';
 import { useDashboardStore } from '../../stores/dashboard';
 import { useI18n } from '../../composables/useI18n';
 import { fmtNum, fmtSigned, fmtPct, arrow } from '../../utils/format';
 import BaseStat from '../base/BaseStat.vue';
-import BaseSparkline from '../base/BaseSparkline.vue';
 
 const store = useDashboardStore();
 const { t } = useI18n();
@@ -70,18 +69,6 @@ const ocoCoverage = computed(() => {
   const ok = store.positions.filter((p: any) => p.cloud_oco_verified !== false && p.protectionStatus !== 'unprotected').length;
   return { pct: Math.round((ok / total) * 100), missing: total - ok };
 });
-
-/* 14 日净值走势 */
-const eqSeries = ref<number[]>([]);
-onMounted(async () => {
-  try {
-    const r = await fetch('/api/v1/equity_history?days=14');
-    const d = await r.json();
-    eqSeries.value = (d.days || []).map((x: any) => Number(x.equity)).filter((n: number) => Number.isFinite(n));
-  } catch {
-    /* sparkline optional */
-  }
-});
 </script>
 
 <template>
@@ -94,14 +81,12 @@ onMounted(async () => {
           :value="totalEquity"
           :hint="totalEquityNum === null ? t('dash.matrix.kpi.equityEmpty') : t('dash.matrix.kpi.equityTip')"
         >
-          <!-- 今日盈亏与净值走势取自**后端交易轴**（OKX 台账）。总权益未知时这一行
-               整块不渲染；今日盈亏本身在下方的「今日已实现」有专格。 -->
+          <!-- 今日盈亏：总权益未知时这一行整块不渲染；今日盈亏本身在下方的「今日已实现」有专格。 -->
           <template v-if="totalEquityNum !== null" #extra>
             <div class="flex items-center gap-2 mt-1">
               <span class="num text-xs font-semibold" :class="todayNet >= 0 ? 'up' : 'down'">
-                {{ arrow(todayNet) }} {{ fmtSigned(todayNet) }}
+                <template v-if="todayNet !== 0">{{ arrow(todayNet) }} </template>{{ fmtSigned(todayNet) }}
               </span>
-              <BaseSparkline :values="eqSeries" :width="48" :height="18" />
             </div>
           </template>
         </BaseStat>

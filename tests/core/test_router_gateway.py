@@ -39,6 +39,7 @@ from astra_backend.schemas import (
     NotificationScheduleUpdate,
     NotificationTestRequest,
     QQOpenIDCaptureStartRequest,
+    TradingSessionUpdate,
 )
 
 
@@ -260,6 +261,133 @@ class GatewayOpsTests(_GatewayBase):
         self.assertTrue(out["completed"])
         self.assertEqual(out["output"], "ok-output")
         self.assertEqual(self.audits[-1][0][1], "success")
+
+
+class TradingSessionEndpointTests(_GatewayBase):
+    """交易时段端点（2026-09-30）：**校验口径 == 运行口径**，非法输入绝不落盘。
+
+    这一组用例的每一条失败模式都会直接改变实盘行为：
+    存进一个引擎解释不了的配置 ⇒ 引擎按全天候运行（悄悄多烧 ~4M token/天）；
+    把用户的窗口写丢 ⇒ 该休市时不下线。故"400 且 save 未被调用"与"成功必须真的写盘"
+    同等重要。
+    """
+
+    def setUp(self):
+        self.audits = []
+        self.saved = []
+        self.admin = mock.Mock(return_value={"id": 1, "username": "root"})
+        self._start(mock.patch.object(GO, "refresh_settings"))
+        self._start(mock.patch.object(GO, "require_admin_header", self.admin))
+        self._start(mock.patch.object(GO, "audit_record",
+                                      lambda *a, **k: self.audits.append((a, k))))
+        self._start(mock.patch.object(GO, "load_trading_session",
+                                      lambda: {"enabled": False, "mode_outside": "manage_only",
+                                               "timezone": "Asia/Shanghai", "windows": []}))
+        self._start(mock.patch.object(GO, "save_trading_session",
+                                      lambda cfg: self.saved.append(cfg)))
+
+    def _put(self, **kwargs):
+        payload = TradingSessionUpdate(**kwargs)
+        return GO.update_trading_session(payload, x_astra_admin_token="tok")
+
+    def test_get_returns_config_state_and_coverage(self):
+        out = GO.trading_session_config(x_astra_admin_token="tok")
+        self.assertIn("state", out)
+        self.assertIn("coverage", out)
+        self.assertEqual(out["timezone"], "Asia/Shanghai")
+        self.assertIn("北京时间", out["timezone_note"])
+        self.assertIn(out["state"]["mode"], ("full", "manage_only", "off"))
+
+    def test_get_merges_normalisation_errors_into_the_state(self):
+        self._start(mock.patch.object(
+            GO, "load_trading_session",
+            lambda: {"enabled": True, "windows": [{"start": "99:99", "end": "x"}]}))
+        out = GO.trading_session_config(x_astra_admin_token="tok")
+        self.assertEqual(out["state"]["mode"], "full", "配不全 ⇒ 按全天候运行（失败方向）")
+        self.assertTrue(out["state"]["errors"], "配不全必须留下可见告警")
+
+    def test_put_normalises_and_saves(self):
+        out = self._put(enabled=True, mode_outside="off",
+                        windows=[{"days": [5, 0, 0], "start": "7:5", "end": "9:05"}])
+        self.assertTrue(out["saved"])
+        self.assertEqual(len(self.saved), 1)
+        cfg = self.saved[-1]
+        self.assertTrue(cfg["enabled"])
+        self.assertEqual(cfg["mode_outside"], "off")
+        self.assertEqual(cfg["windows"], [{"days": [0, 5], "start": "07:05", "end": "09:05"}],
+                         "必须补零、去重、排序后再落盘")
+        self.assertEqual(cfg["timezone"], "Asia/Shanghai")
+        self.assertEqual(self.audits[-1][0][0], "gateway.trading_session")
+        self.assertEqual(self.audits[-1][0][1], "success")
+        self.assertEqual(self.audits[-1][0][2]["window_count"], 1)
+
+    def test_put_rejects_invalid_times_without_saving(self):
+        with self.assertRaises(HTTPException) as ctx:
+            self._put(enabled=True, windows=[{"days": [], "start": "25:00", "end": "10:00"}])
+        self.assertEqual(ctx.exception.status_code, 400)
+        self.assertIn("开始时间非法", ctx.exception.detail)
+        self.assertEqual(self.saved, [], "非法输入绝不允许落盘")
+
+    def test_put_rejects_equal_start_and_end(self):
+        with self.assertRaises(HTTPException) as ctx:
+            self._put(enabled=True, windows=[{"days": [], "start": "09:00", "end": "09:00"}])
+        self.assertEqual(ctx.exception.status_code, 400)
+        self.assertIn("无法判定运行区间", ctx.exception.detail)
+        self.assertEqual(self.saved, [])
+
+    def test_put_rejects_out_of_range_days(self):
+        with self.assertRaises(HTTPException) as ctx:
+            self._put(enabled=True, windows=[{"days": [0, 9], "start": "09:00", "end": "10:00"}])
+        self.assertEqual(ctx.exception.status_code, 400)
+        self.assertIn("越界", ctx.exception.detail)
+        self.assertEqual(self.saved, [])
+
+    def test_put_rejects_unknown_outside_mode(self):
+        with self.assertRaises(HTTPException) as ctx:
+            self._put(enabled=True, mode_outside="halt")
+        self.assertEqual(ctx.exception.status_code, 400)
+        self.assertIn("窗口外模式无效", ctx.exception.detail)
+        self.assertEqual(self.saved, [])
+
+    def test_put_accepts_enabled_without_windows_but_warns_through_state(self):
+        """启用却没配时段 = 引擎会按全天候跑。**不拦**（可能正在配置中），但状态里必须点名。"""
+        out = self._put(enabled=True, windows=[])
+        self.assertTrue(self.saved)
+        self.assertEqual(out["state"]["mode"], "full")
+        self.assertTrue(any("没有任何有效时段" in e for e in out["state"]["errors"]))
+
+    def test_put_requires_admin_credentials(self):
+        self.admin.side_effect = HTTPException(status_code=401, detail="未授权")
+        with self.assertRaises(HTTPException) as ctx:
+            self._put(enabled=False)
+        self.assertEqual(ctx.exception.status_code, 401)
+        self.assertEqual(self.saved, [])
+
+    def test_manual_trader_run_forces_full_mode_through_env(self):
+        """后台「立即运行 trader」必须带 `ASTRA_SESSION_FORCE=1`。
+
+        否则休市窗口里点按钮只会跑一轮 `manage_only`，用户会以为按钮坏了。
+        """
+        tmp = Path(tempfile.mkdtemp(prefix="astra-gw-run-"))
+        self.addCleanup(__import__("shutil").rmtree, tmp, True)
+        (tmp / "ai_factor_trader.py").write_text("# stub", encoding="utf-8")
+        self._start(mock.patch.object(GO, "SCRIPTS_DIR", tmp))
+        runner = mock.Mock(return_value=mock.Mock(returncode=0, stdout="ok", stderr=""))
+        self._start(mock.patch.object(GO.subprocess, "run", runner))
+        GO.run_gateway_job("trader", {}, x_astra_admin_token="tok")
+        env = runner.call_args.kwargs["env"]
+        self.assertEqual(env.get("ASTRA_SESSION_FORCE"), "1")
+        self.assertIn("PATH", env, "必须继承父进程环境，而不是只传那个变量")
+
+    def test_other_jobs_do_not_carry_the_force_flag(self):
+        tmp = Path(tempfile.mkdtemp(prefix="astra-gw-run2-"))
+        self.addCleanup(__import__("shutil").rmtree, tmp, True)
+        (tmp / "factor_library.py").write_text("# stub", encoding="utf-8")
+        self._start(mock.patch.object(GO, "SCRIPTS_DIR", tmp))
+        runner = mock.Mock(return_value=mock.Mock(returncode=0, stdout="ok", stderr=""))
+        self._start(mock.patch.object(GO.subprocess, "run", runner))
+        GO.run_gateway_job("factor_library", {}, x_astra_admin_token="tok")
+        self.assertNotIn("ASTRA_SESSION_FORCE", runner.call_args.kwargs["env"])
 
 
 class NotificationsTests(_GatewayBase):

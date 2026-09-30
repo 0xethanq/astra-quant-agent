@@ -133,10 +133,12 @@ test('模板只允许使用原件提供的 5 个 fact 类名', () => {
     }
   }
   assert.deepEqual(bad, [], `模板用了原件没有的 fact 类（会静默无样式）：\n  ${bad.join('\n  ')}`);
-  // 现状基线：49 个单元 / 38 组 label+value+foot（防"改着改着少了一片"）
-  assert.equal(counts.get('fact'), 49, `统计单元实例应为 49 个，实测 ${counts.get('fact')}`);
+  // 现状基线：44 个单元 / 34 组 label+value+foot（防"改着改着少了一片"）。
+  // 2026-09-30 后台精简：内置插件清单页（PluginsPage）删除，其 5 个统计单元随之移除
+  //（49 → 44；label/value/foot 38 → 34）。
+  assert.equal(counts.get('fact'), 44, `统计单元实例应为 44 个，实测 ${counts.get('fact')}`);
   for (const k of ['fact-label', 'fact-value', 'fact-foot']) {
-    assert.equal(counts.get(k), 38, `${k} 应为 38 个，实测 ${counts.get(k)}`);
+    assert.equal(counts.get(k), 34, `${k} 应为 34 个，实测 ${counts.get(k)}`);
   }
 });
 

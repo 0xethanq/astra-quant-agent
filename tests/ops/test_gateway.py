@@ -307,14 +307,22 @@ class ModelCallStatsTests(_TempStore):
                "duration_ms": 1000, "input_chars": 10, "output_chars": 20,
                "prompt_fingerprint": "fp", "prompt_transport": "python-direct",
                "input_tokens": 5, "output_tokens": 7, "total_tokens": 12,
+               # 2026-09-29 新增的三列（前缀缓存可观测）。`record_model_call` 的契约是
+               # **整条记录**（缺失的键会显式写 NULL ⇒ 撞 NOT NULL），故夹具必须给全。
+               "cached_tokens": 0, "cache_status": "unreported", "usage_keys": "prompt_tokens",
                "error_type": ""}
         row.update(over)
         return self.store.record_model_call(row)
 
     def test_an_empty_table_reports_zeros(self):
+        # 2026-09-29：汇总里多了前缀缓存四件套（累计命中 token / 命中次数 / 上报次数 /
+        # 命中率）。空表时前三个是 0，而**命中率必须是 None** —— 一次上报都没有时
+        # "命中率 0%" 是伪造的可判定性（不可判定 ≠ 0）。
         self.assertEqual(self.store.model_stats(),
                          {"total_calls": 0, "successful_calls": 0,
-                          "avg_duration_ms": 0, "total_tokens": 0})
+                          "avg_duration_ms": 0, "total_tokens": 0,
+                          "cached_tokens_total": 0, "cache_hit_calls": 0,
+                          "cache_reporting_calls": 0, "cache_hit_rate": None})
 
     def test_record_model_call_returns_an_id(self):
         self.assertGreater(self._record(), 0)
@@ -366,18 +374,23 @@ class ModelCallStatsTests(_TempStore):
                                           "output_chars": 1,
                                           "prompt_fingerprint": "fp"})
 
-    def test_the_three_nullable_columns_may_be_omitted(self):
-        """只有 token 三兄弟是**真可空**的；其余 11 列一个都不能少。"""
+    def test_the_four_nullable_columns_may_be_omitted(self):
+        """真可空的是 token 三兄弟 + `cached_tokens`；其余列一个都不能少。
+
+        2026-09-29：`cached_tokens` 刻意**可空** —— 历史行没有这个数（NULL = 从未记录），
+        与"上游上报了 0"（`cache_status='miss'` 且 `cached_tokens=0`）必须分得开。
+        """
         row_id = self.store.record_model_call({
             "caller": "c", "model": "m", "reasoning_effort": "low",
             "status": "success", "started_at": "2026-09-20 10:00:00",
             "duration_ms": 1, "input_chars": 1, "output_chars": 1,
             "prompt_fingerprint": "fp", "prompt_transport": "python-direct",
-            "error_type": ""})
+            "cache_status": "", "usage_keys": "", "error_type": ""})
         stored = next(r for r in self.store.model_calls() if r["id"] == row_id)
         self.assertIsNone(stored["input_tokens"])
         self.assertIsNone(stored["output_tokens"])
         self.assertIsNone(stored["total_tokens"])
+        self.assertIsNone(stored["cached_tokens"])
 
 
 class RuntimeStateTests(_TempStore):

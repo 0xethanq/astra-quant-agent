@@ -65,10 +65,26 @@ CREATE TABLE IF NOT EXISTS model_calls (
   input_tokens INTEGER,
   output_tokens INTEGER,
   total_tokens INTEGER,
+  cached_tokens INTEGER,
+  cache_status TEXT NOT NULL DEFAULT '',
+  usage_keys TEXT NOT NULL DEFAULT '',
   error_type TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_model_calls_caller ON model_calls(caller, id DESC);
 """
+
+#: `model_calls` 的历史补列（2026-09-29 缓存可观测性）。
+#:
+#: 老库已存在且**不能重建**（里面积着全部调用遥测），所以只做
+#: `ALTER TABLE ADD COLUMN` 的幂等补齐；新库由上面的 CREATE TABLE 一次到位。
+#: 之所以要这三列：`cached_tokens` 让"命中多少"可算，`cache_status` 把
+#: 「上游上报未命中」与「上游根本没上报」分开（不可判定 ≠ 0），`usage_keys`
+#: 只留 usage 顶层键名供诊断上游到底报了什么（无任何内容）。
+MIGRATION_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("cached_tokens", "INTEGER"),
+    ("cache_status", "TEXT NOT NULL DEFAULT ''"),
+    ("usage_keys", "TEXT NOT NULL DEFAULT ''"),
+)
 
 
 class GatewayStore:
@@ -77,7 +93,16 @@ class GatewayStore:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.connect() as connection:
             connection.executescript(SCHEMA)
+            self._ensure_columns(connection)
         self._secure_files()
+
+    @staticmethod
+    def _ensure_columns(connection: sqlite3.Connection) -> None:
+        """幂等补齐历史库缺失的列（老库原地升级，绝不重建）。"""
+        existing = {row["name"] for row in connection.execute("PRAGMA table_info(model_calls)")}
+        for name, declaration in MIGRATION_COLUMNS:
+            if name not in existing:
+                connection.execute(f"ALTER TABLE model_calls ADD COLUMN {name} {declaration}")
 
     def _secure_files(self) -> None:
         for candidate in (self.path, Path(str(self.path)+"-wal"), Path(str(self.path)+"-shm")):
@@ -244,7 +269,8 @@ class GatewayStore:
         columns = (
             "caller", "model", "reasoning_effort", "status", "started_at", "duration_ms",
             "input_chars", "output_chars", "prompt_fingerprint", "prompt_transport",
-            "input_tokens", "output_tokens", "total_tokens", "error_type",
+            "input_tokens", "output_tokens", "total_tokens", "cached_tokens",
+            "cache_status", "usage_keys", "error_type",
         )
         with self.connect() as connection:
             cursor = connection.execute(
@@ -264,10 +290,24 @@ class GatewayStore:
                 """SELECT COUNT(*) total_calls,
                    SUM(CASE WHEN status='success' THEN 1 ELSE 0 END) successful_calls,
                    COALESCE(ROUND(AVG(duration_ms)),0) avg_duration_ms,
-                   COALESCE(SUM(total_tokens),0) total_tokens
+                   COALESCE(SUM(total_tokens),0) total_tokens,
+                   COALESCE(SUM(cached_tokens),0) cached_tokens_total,
+                   SUM(CASE WHEN cache_status='hit' THEN 1 ELSE 0 END) cache_hit_calls,
+                   SUM(CASE WHEN cache_status IN ('hit','miss') THEN 1 ELSE 0 END) cache_reporting_calls
                    FROM model_calls"""
             ).fetchone()
-        return {key: int(row[key] or 0) for key in ("total_calls", "successful_calls", "avg_duration_ms", "total_tokens")}
+        stats: dict[str, Any] = {
+            key: int(row[key] or 0)
+            for key in ("total_calls", "successful_calls", "avg_duration_ms", "total_tokens",
+                        "cached_tokens_total", "cache_hit_calls", "cache_reporting_calls")
+        }
+        # 不可判定 ≠ 0：没有任何一次调用得到过上游的缓存字段时，命中率是 None（面板显示 --），
+        # 绝不写 0.0 冒充"命中率为零"。
+        stats["cache_hit_rate"] = (
+            round(stats["cache_hit_calls"] / stats["cache_reporting_calls"] * 100, 1)
+            if stats["cache_reporting_calls"] else None
+        )
+        return stats
 
     def set_state(self, key: str, value: str) -> None:
         with self.connect() as connection:

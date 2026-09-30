@@ -77,6 +77,7 @@
 /* 批 88：**卡体内**「标题下的说明行」（`<p>` 紧跟标题 / `</header>` 之后）。
    实测 NotifyPage / PluginsPage / PromptStudioPage 各写一份，前两份**逐字节相同**，
    第三份只差 `margin-top`（6px vs 4px）。取值取多数决，第三份的 6px 归一到 4px。
+   （2026-09-30 后台精简：PluginsPage 已删除，现存用户为 NotifyPage / PromptStudioPage / RiskPage。）
    与 `.card-sub` 的区别是**位置与可读性**：`.card-sub` 属于 `.card-head` 副标题
    （`text-placeholder` + 2px + 1.45 行高），本原件属于正文区的说明段
    （`text-description` + 4px + 1.6 行高）。 */

@@ -29,6 +29,11 @@ from astra_backend.llm_manager import (
     fetch_remote_models,
     recent_failover_events,
 )
+from astra_backend.llm.model_health import audit_llm_config, dead_model_ids
+from astra_backend.llm.policy import SUPPORTED_API_FORMATS
+
+#: 结构自检用的格式白名单（与运行时同一份常量）。
+SUPPORTED_FORMATS = tuple(f["id"] for f in SUPPORTED_API_FORMATS)
 
 router = APIRouter(tags=["llm"])
 
@@ -37,7 +42,11 @@ router = APIRouter(tags=["llm"])
 @router.get("/api/v1/admin/llm/models")
 def admin_get_llm_models(x_astra_session: str | None = Header(default=None, alias="X-Astra-Session")) -> dict[str, Any]:
     require_admin_header(x_astra_session=x_astra_session)
-    return load_llm_config(mask_keys=True)
+    payload = load_llm_config(mask_keys=True)
+    # 结构自检随配置一起下发：界面要给每条模型打"可用性徽标"，否则三条并列显示、
+    # 其中两条是死的（无密钥 / 供应商不存在）也看不出来（2026-09-29 实测）。
+    payload["model_health"] = audit_llm_config(payload, SUPPORTED_FORMATS)
+    return payload
 
 
 @router.post("/api/v1/admin/llm/activate")
@@ -137,6 +146,116 @@ def admin_test_llm(payload: LLMTestRequest, x_astra_session: str | None = Header
         "endpoint": result.get("endpoint"),
     })
     return result
+
+
+@router.post("/api/v1/admin/llm/test-all")
+def admin_test_all_llm_models(x_astra_session: str | None = Header(default=None, alias="X-Astra-Session")) -> dict[str, Any]:
+    """逐条真机探测**全部**模型条目（串行、极小请求）。
+
+    与 `/test` 的分工：`/test` 回答"我改的这一条通不通"；`/test-all` 回答
+    "后台现在这张矩阵里到底哪几条能用"。结构上不可能发请求的条目（无密钥）
+    直接跳过并给出理由 —— 真机请求不必浪费在已知死条目上。
+
+    ⚠️ 真机结论**不写回配置**：一次 402 只代表"此刻余额不足"，
+    写成永久状态会让配置页撒谎（充值后它仍然是死的）。
+    """
+    require_admin_header(x_astra_session=x_astra_session)
+    raw_config = load_llm_config(mask_keys=False)
+    health = audit_llm_config(raw_config, SUPPORTED_FORMATS)
+    fn_test = app_attr("test_llm_connection", test_llm_connection)
+
+    rows: list[dict[str, Any]] = []
+    for model in raw_config.get("models", [])[:20]:
+        model_id = str(model.get("id") or "")
+        if not model_id:
+            continue
+        entry = (health.get("models") or {}).get(model_id) or {}
+        provider = next((p for p in raw_config.get("providers", [])
+                         if str(p.get("id") or "") == str(model.get("provider_id") or "")), None)
+        api_key = str(model.get("api_key") or "") or str((provider or {}).get("api_key") or "")
+        if entry.get("status") == "dead" or not api_key:
+            rows.append({
+                "model": model_id,
+                "api_format": model.get("api_format") or "openai_chat",
+                "role": entry.get("role", "dormant"),
+                "status": entry.get("status", "dead"),
+                "ok": False,
+                "status_code": 0,
+                "latency_ms": 0,
+                "endpoint": "",
+                "error": "结构上不可用：" + "；".join(
+                    i.get("detail", "") for i in entry.get("issues", []) if i.get("level") == "dead"
+                ) or "缺少 API Key",
+                "skipped": True,
+            })
+            continue
+        result = fn_test(
+            base_url=str(model.get("base_url") or (provider or {}).get("base_url") or ""),
+            api_key=api_key,
+            model=model_id,
+            api_format=str(model.get("api_format") or "openai_chat"),
+            reasoning_effort=str(model.get("reasoning_effort") or "auto"),
+            reasoning_type=str(model.get("reasoning_type") or "auto"),
+            api_path=str(model.get("api_path") or ""),
+            timeout=25.0,
+        )
+        rows.append({
+            "model": model_id,
+            "api_format": str(model.get("api_format") or "openai_chat"),
+            "role": entry.get("role", "dormant"),
+            "status": entry.get("status", "ok"),
+            "ok": bool(result.get("ok")),
+            "status_code": result.get("status_code"),
+            "latency_ms": result.get("latency_ms"),
+            "endpoint": result.get("endpoint"),
+            "error": result.get("error") or result.get("response_preview") or "",
+            "skipped": False,
+        })
+
+    report = {
+        "rows": rows,
+        "total": len(rows),
+        "ok": sum(1 for r in rows if r["ok"]),
+        "failed": sum(1 for r in rows if not r["ok"] and not r.get("skipped")),
+        "skipped": sum(1 for r in rows if r.get("skipped")),
+        "warnings": health.get("warnings") or [],
+    }
+    audit_record("llm.connection.test_all", "success", {
+        "total": report["total"], "ok": report["ok"],
+        "failed": report["failed"], "skipped": report["skipped"],
+    })
+    return report
+
+
+@router.post("/api/v1/admin/llm/models/cleanup")
+def admin_cleanup_dead_llm_models(x_astra_session: str | None = Header(default=None, alias="X-Astra-Session")) -> dict[str, Any]:
+    """一键清理**结构死条目**（无密钥 / 供应商不存在且无密钥）。
+
+    刻意只删 `dead`：余额不足、限流、供应商停用一律保留 —— 那些是运行态，
+    删掉用户配置属于越权（充值/开启后它们本该恢复正常）。
+    """
+    actor = require_superadmin(x_astra_session)
+    raw_config = load_llm_config(mask_keys=False)
+    health = audit_llm_config(raw_config, SUPPORTED_FORMATS)
+    targets = dead_model_ids(health)
+
+    removed: list[str] = []
+    failed: list[dict[str, str]] = []
+    for model_id in targets:
+        model = next((m for m in raw_config.get("models", []) if m.get("id") == model_id), None)
+        provider_id = str((model or {}).get("provider_id") or "custom")
+        try:
+            delete_model(provider_id, model_id)
+            removed.append(model_id)
+        except ValueError as exc:          # 例如"当前正在使用的模型不可删"
+            failed.append({"model": model_id, "reason": str(exc)})
+        except Exception as exc:           # 单条失败不该中断整批
+            failed.append({"model": model_id, "reason": f"{type(exc).__name__}: {exc}"})
+
+    audit_record("llm.model.cleanup", "success", {
+        "actor": actor["username"], "removed": removed, "failed": failed,
+    })
+    return {"removed": removed, "failed": failed, "scanned": targets}
 
 
 @router.post("/api/v1/admin/llm/models")

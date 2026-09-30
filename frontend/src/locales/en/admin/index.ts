@@ -7,19 +7,18 @@ import { enAdminAdminSys } from './adminSys';
 import { enAdminGateway } from './gateway';
 import { enAdminAbout } from './about';
 import { enAdminBackup } from './backup';
-import { enAdminPlugins } from './plugins';
 import { enAdminAudit } from './audit';
 import { enAdminAgents } from './agents';
 import { enAdminCouncil } from './council';
 import { enAdminInterceptors } from './interceptors';
 import { enAdminLlm } from './llm';
-import { enAdminLegacy } from './legacy';
 import { enAdminSecurity } from './security';
 import { enAdminDecisions } from './decisions';
 import { enAdminEvolution } from './evolution';
 import { enAdminNotify } from './notify';
 import { enAdminRisk } from './risk';
 
+/** 控制台文案聚合（2026-09-30：`plugins` / `legacy` 随页面删除而移除） */
 export const enAdmin = {
   shell: enAdminShell,
   login: enAdminLogin,
@@ -30,13 +29,11 @@ export const enAdmin = {
   gateway: enAdminGateway,
   about: enAdminAbout,
   backup: enAdminBackup,
-  plugins: enAdminPlugins,
   audit: enAdminAudit,
   agents: enAdminAgents,
   council: enAdminCouncil,
   interceptors: enAdminInterceptors,
   llm: enAdminLlm,
-  legacy: enAdminLegacy,
   security: enAdminSecurity,
   decisions: enAdminDecisions,
   evolution: enAdminEvolution,

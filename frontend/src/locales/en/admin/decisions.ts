@@ -1,4 +1,5 @@
 export const enAdminDecisions = {
+  title: 'Logs & errors',
   desc: 'Unified Log Hub: Live runtime logs, system-wide error center, and AI decision deliberations',
   normalRun: 'Normal operation',
   latestFirst: 'Newest first',

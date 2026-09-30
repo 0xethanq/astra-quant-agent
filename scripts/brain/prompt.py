@@ -166,7 +166,7 @@ def construct_full_market_prompt(packages: List[Dict[str, Any]], pos_summary: st
 【{p['name']} ({p['instId']})】| 数据质量: {quality} | 现价: {p['price']} | 24H涨跌: {p['chg24h']}% | 盘口买/卖: {p['bidPx']}/{p['askPx']}
 - 🏛️ 三重滤网宏观结构: 4H宏观大势={p.get('macro_4h', '4H_MACRO_RANGE')} | 1H波段结构={p.get('structure_1h', '1H_SWING_CHOP')}
 - 👑 顶级聪明钱 (SmartMoney Top100): {("加权做多占比=" + str(sm.get('weighted_long_pct')) + "% | 24H净流入=" + str(sm.get('net_flow_usdt', '--')) + " | 多头均价=" + str(sm.get('avg_long_entry', '--')) + " | 空头均价=" + str(sm.get('avg_short_entry', '--')) + " | " + str(sm.get('top_win_rate', ''))) if sm.get('available') else "数据源缺失（OKX CLI 已移除，暂无公开 V5 等价接口；本项不构成任何方向的证据，禁止臆测填充）"}
-- 📐 1H核心波段指标: 1H ATR(14)={p.get('atr_1h', p.get('atr', '--'))} (止损基准: {sl_atr_desc}) | 1H RSI(14)={p.get('rsi_1h', '--')} | 1H ADX趋势强度={adx_val} (注:<20无趋势垃圾市, ≥22强单边)
+- 📐 1H核心波段指标: 1H ATR(14)={p.get('atr_1h', p.get('atr', '--'))} (止损基准: {sl_atr_desc}) | 1H RSI(14)={p.get('rsi_1h', '--')} | 1H ADX趋势强度={adx_val} (注:<20区间整理/均值回归范式, ≥22单边动量趋势范式)
 - ⚡ 15M微观执行参考: 15M ATR={p.get('atr_15m', '--')} | 15M RSI={p.get('rsi_15m', '--')} | VWAP乖离={p.get('vwap_bias', '--')}% | 15M量比={p.get('vol_ratio', '--')}x | OBV资金流={p.get('obv_flow', '--')}
 - 📐 1H三大数理基石硬证据: {core_math_line}
 - ∂ 多周期微积分动力学摘要: {calc_line}
@@ -238,84 +238,19 @@ def construct_full_market_prompt(packages: List[Dict[str, Any]], pos_summary: st
 
     risk_budget_text = build_risk_budget_text(usdt_available)
 
-    prompt = f"""{memory_lessons}
+    # ── 提示词正文已全部迁出代码（2026-09-30 重构，用户批准）──────────────────
+    # 本函数**只负责装配实时数据**；系统/用户提示词的正文（角色、军规、快节奏
+    # 兑现纪律、形态、任务清单、JSON 输出骨架）一律存在 `data/prompt_library.json`
+    # 的 `trading_user` 模块里，由其中的 `{{slot}}` 引用下面这份 `runtime_vars`。
+    #
+    # 因此 `base_text` 传**空串**：`apply_module_layout` 会直接按方案里的模块编排，
+    # 并用 `context=runtime_vars` 渲染插槽。这里不再拼任何提示词文本。
+    #
+    # ⚠️ 历史教训（别退回去）：旧实现把任务清单与**第二份 JSON Schema** 写在这个
+    # f-string 里，与 `SYSTEM_PROMPT` 的契约各存一份 ⇒ 两处漂移，表现就是
+    # "在工坊里改了、实发却没变"。现在 Schema 只有一份（代码所有、工坊只读）。
+    prompt = ""
 
-================================================================================
-【推演与决策任务】:
-你只能在 System Prompt 的 P0 硬约束内进行综合裁决。按“数据有效性 → 4H方向 → 1H三大数理基石 → 量能/OI/聪明钱 → 15M执行位置”的顺序逐项检查；任一硬条件失败或证据无法闭环时，开仓输出 WAIT：
-1. 【在途持仓管理 (科学持仓与动态风控)】：
-   - 逐一分析当前在途持仓：
-     • 若 1H 波段趋势完好且微积分动能平稳，坚决坚定持有 (HOLD)，给大波段充分呼吸空间；
-     • 若出现【1H 结构破位 / 动能加速度严重逆转 / 聪明钱反向出逃】等真实趋势逆转信号且置信度 ≥ 85%，果断输出 CLOSE_MARKET 提前斩仓止损，杜绝死等硬止损；
-     • 若底仓浮盈已超过 1.2x 1H ATR 且需锁定利润，输出 UPDATE_SL 并确保新止损与现价保留 0.7x 1H ATR 安全缓冲，严禁贴脸移动止损。
-2. 【在途限价挂单生命周期审查与裁决 (Pending Orders Management)】：
-   - 仔细审查上述在途未成交挂单：若挂单价格已大幅偏离最新盘口、或者行情动能/突发要闻已转变导致原挂单计划失效，必须在 pending_orders_management 中为该挂单输出 CANCEL 立即撤单指令，防止挂单成交在不利价格；若原计划仍然有效且价格合适，输出 KEEP 维持挂单。
-3. 【多空开仓与顺势浮盈加仓全权裁决 (Opening & Pyramiding)】：
-   - 【首发开仓】：自主判断未持仓品种是否具备确定性爆发机会，结合最新资讯、多周期形态与筹码，决定多空方向 (action: BUY_LONG / SELL_SHORT / WAIT)；
-   - 【顺势浮盈金字塔加仓申请】：已有多仓仅可输出同向 BUY_LONG，已有空仓仅可输出同向 SELL_SHORT；这只是加仓申请，执行层仍将复核底仓 ROI/保本、最多{max_scale_in_count}次、累计保证金≤【本周期风险预算】单标的上限、置信度≥{min_scale_in_confidence:g}%、加速度与延续/击穿概率门禁。任何不确定均输出 WAIT；
-   - 自主规划拟开仓/加仓保证金 (margin_usdt: 可用余额的 5%~{max_margin_equity_ratio:.0%}，且不得超过系统上限) 与杠杆 ({min_leverage:g}~{max_leverage:g}x 内按信心强弱自主裁决)；
-   - 自主规划 entry_price、take_profit_price 与 stop_loss_price；目标盈亏比与止盈宽度见【本周期风险预算】，且任何低于其硬底线的报价会被执行层拒绝，超出上限的超远止盈将被执行层自动平滑收窄。
-4. 必须输出严格 JSON，格式如下：
-{{
-  "macro_assessment": "30字内全市场宏观流动性与情绪总结",
-  "position_management": [
-    {{
-      "instId": "LINK-USDT-SWAP",
-      "action": "HOLD" | "CLOSE_MARKET" | "UPDATE_SL",
-      "suggested_sl_price": float (若调整止损填具体价格，否则0),
-      "confidence": 0~100,
-      "reason": "30字内持仓调整原因与当前动能分析"
-    }}
-  ],
-  "pending_orders_management": [
-    {{
-      "ordId": "3879092142614409217",
-      "instId": "LINK-USDT-SWAP",
-      "action": "KEEP" | "CANCEL",
-      "reason": "30字内撤单或维持挂单原因"
-    }}
-  ],
-  "decisions": {{
-    "BTC-USDT-SWAP": {{
-      "action": "BUY_LONG" | "SELL_SHORT" | "WAIT",
-      "confidence": 0~100,
-      "leverage": {int(max(min_leverage, min(max_leverage, (min_leverage + max_leverage) / 2)))} (杠杆必须落在 {min_leverage:g}~{max_leverage:g} 区间内按信心强弱自主取值：一般信号取下限侧、P0 全通过且概率优势显著才取上限侧；本模板数字仅为占位，严禁无差别照抄),
-      "margin_usdt": float (根据信号强度自主取值：常规机会取上方【本周期风险预算】常规单笔区间，强信号可上浮至强信号单笔上限；严禁套用任何固定绝对金额),
-      "entry_price": float,
-      "take_profit_price": float,
-      "stop_loss_price": float,
-      "summary_reason": "30字内核心逻辑",
-      "market_structure": "4H/1H趋势与15M短线形态",
-      "calculus_dynamics": "必须引用1H具体 v/a/j/I、状态及方向解释；WAIT也需说明冲突或缺失",
-      "math_prob_rationale": "必须引用具体 E/A、延续或击穿估计概率、VaR/CVaR与肥尾风险",
-      "volume_and_oi": "量能/筹码流向简述"
-    }},
-    ... (依次包含全部标的)
-  }}
-}}
-
-======================= 【全网实时重大快讯与宏观情报】 =======================
-【宏观环境基调】: {macro_env}
-【最新核心资讯要闻】:
-{news_text}
-
-======================= 【账户当前持仓与风险敞口全景】 =======================
-【账户持仓概况】: {pos_summary}
-【当前活动在途持仓明细】:
-{active_pos_text}
-
-======================= 【在途未成交限价挂单 (Pending Maker Orders)】 =======================
-【当前在途挂单列表】:
-{pending_orders_text}
-
-======================= 【全标的池原生行情、技术指标与筹码矩阵】 =======================
-{all_market_str}
-
-======================= 【当前决策时间戳与市场时效】 =======================
-【推演基准时间】: {now_bj_str}
-【当前账户可用资金】: {avail_balance_str}
-{risk_budget_text}
-"""
     regime_text = ""
     regime_data = None
     try:
@@ -330,6 +265,19 @@ def construct_full_market_prompt(packages: List[Dict[str, Any]], pos_summary: st
         except Exception:
             pass
 
+    # 分节标题现在由 `data/prompt_library.json` 的模块自己承载；而
+    # `render_trading_memory()` 会**前置**同一个标题（那是给 Markdown 镜像用的）。
+    # 不剥掉就会在实发提示词里出现**两遍**同名小节（2026-09-30 在
+    # data/ai_brain_last_prompt.txt 里实测确认过这个重复）。
+    # ⚠️ 刻意写成**行内**逻辑而不是模块级 helper：本函数体会被
+    #    tests/llm/test_prompt_rendering_isolated.py 按 AST 抽取后隔离 exec，
+    #    那个命名空间只注入它已知的名字，模块级 helper 在那里是 NameError。
+    memory_body = memory_lessons.strip()
+    if memory_body.startswith("=") and "\n" in memory_body:
+        _first, _rest = memory_body.split("\n", 1)
+        if "【" in _first:
+            memory_body = _rest.strip()
+
     runtime_vars = {
         "decision_timestamp": f"【推演基准时间】: {now_bj_str}",
         "account_balance": f"【当前账户可用资金】: {avail_balance_str}",
@@ -337,7 +285,7 @@ def construct_full_market_prompt(packages: List[Dict[str, Any]], pos_summary: st
         "account_positions": f"【账户持仓概况】: {pos_summary}\n【当前活动在途持仓明细】:\n{active_pos_text}",
         "pending_orders": f"【当前在途挂单列表】:\n{pending_orders_text}",
         "news_intelligence": f"【宏观环境基调】: {macro_env}\n【最新核心资讯要闻】:\n{news_text}",
-        "trading_memory": memory_lessons.strip(),
+        "trading_memory": memory_body,
         "market_regime": regime_text,
         "market_matrix": f"{regime_text}\n\n{all_market_str}" if regime_text else all_market_str,
     }

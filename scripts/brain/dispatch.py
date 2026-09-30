@@ -7,7 +7,8 @@
 ## 安全属性（与 trader 域同一套纪律）
 
 - 段体 **AST 逐字**（对拍门 `tests/extraction/test_brain_dispatch_extraction.py`）；
-- 全部自由名（`37` 个）**同名 kw-only 入参** ⇒ 门面调用期解析，
+- 全部自由名（`38` 个：2026-09-30 增 `repair_json_object` 做容错 JSON 解析，
+  修不动仍抛原始错误 ⇒ 行为 fail-closed 不变）**同名 kw-only 入参** ⇒ 门面调用期解析，
   `patch.object(ai_brain_trader, "assemble_decision_cache", ...)` 这类测试缝照常生效；
 - 段内两处 `return` 即函数终返 ⇒ 调用点 `return helper(...)` 直接透传（无哨兵）。
 """
@@ -46,6 +47,7 @@ def dispatch_llm_and_persist_decisions(*,
         policy_summary,
         policy_version,
         prompt,
+        repair_json_object,
         runtime_context,
         safe_float,
         telemetry,
@@ -155,7 +157,18 @@ def dispatch_llm_and_persist_decisions(*,
             if content.startswith("```"): content = content[3:]
             if content.endswith("```"): content = content[:-3]
 
-            brain_output = json.loads(content.strip())
+            try:
+                brain_output = json.loads(content.strip())
+            except ValueError as parse_error:
+                # 容错修复（2026-09-30，与自进化复盘共用 `repair_json_object`）：
+                # 裸控制字符 / 尾逗号 / 前后散文在模型输出里很常见，而这里解析失败会走到
+                # 外层 except ⇒ `_record_cycle_health("failed")` + 返回 None
+                # ⇒ **整个交易周期没有任何决策**。修不动就抛**原始**错误，
+                # 行为与修复前逐字一致（fail-closed，不新增任何决策语义）。
+                try:
+                    brain_output, _repair_report = repair_json_object(content=content)
+                except ValueError:
+                    raise parse_error
             if not isinstance(brain_output, dict):
                 raise ValueError("LLM response root must be an object")
         decisions_dict = brain_output.get("decisions", {})

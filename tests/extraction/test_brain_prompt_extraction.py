@@ -31,6 +31,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import scripts.ai_brain_trader as abt
+import scripts.risk_constants as risk_constants
 from scripts.brain import prompt as brain_prompt
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -40,7 +41,11 @@ SUBMODULE = ROOT / "scripts" / "brain" / "prompt.py"
 # 只在子模块里存在、门面不应再有的实现体特征行
 _IMPL_ONLY_MARKERS = (
     '- 15M K线(倒序12根 [O,H,L,C,V])',
-    '严禁无差别照抄',
+    # ⚠️ 2026-09-30 换锚：原第二个标记 `严禁无差别照抄` 属于**提示词正文**，
+    # 已随提示词来源迁移搬进 `data/prompt_library.json`（代码里再也搜不到）。
+    # 本用例的目的是"实现体在子模块、门面只剩薄壳"，故改用一个**仍然只属于
+    # 实现体**的装配代码标记（记忆分节标题剥离 —— 见 `memory_body` 那段）。
+    'memory_body = memory_lessons.strip()',
 )
 
 
@@ -92,13 +97,33 @@ class InjectionContractTest(unittest.TestCase):
     """风控常量与文件路径的测试缝必须仍然生效。"""
 
     def _render(self, **patches):
+        """渲染**带风险预算**的用户提示词，并断言补丁真的生效。
+
+        ⚠️ 2026-09-30 重钉（两处都必须说清，否则这条用例会变成假绿）：
+
+        ① **必须传 `usdt_available`**。风险预算小节过去是内联在门面的 f-string 里
+           （`{min_leverage:g}~{max_leverage:g}x`），所以不传余额也能渲染出数字。
+           提示词正文迁进 `data/prompt_library.json` 后，这些数字统一由
+           `{{risk_budget}}` 插槽承载，而 `build_risk_budget_text(None)` 的语义是
+           `[MISSING_CONTEXT:risk_budget]`（**缺上下文就该大声缺**，不是静默给个默认值）
+           ⇒ 不传余额这条用例只会对着占位符断言。
+
+        ② **补丁打在 `risk_constants` 上**，不是门面名。口径同源的单一事实源现在是
+           `risk_constants`（`build_risk_budget_text` 在调用期 `import scripts.risk_constants as rc`
+           再读 `rc.MIN_LEVERAGE` 等），门面的 `MIN_LEVERAGE` 只是它的一层转发。
+           这条用例本来就该盯"调用期读、不许 import 期烘焙"这件事 —— 钉 SSOT 比
+           钉转发层更贴近它要守的不变量。
+        """
         stack = ExitStack()
         for name, value in patches.items():
-            stack.enter_context(patch.object(abt, name, value))
+            stack.enter_context(patch.object(risk_constants, name, value))
         try:
-            return abt.construct_full_market_prompt([])
+            text = abt.construct_full_market_prompt([], usdt_available=1000.0)
         finally:
             stack.close()
+        self.assertNotIn("[MISSING_CONTEXT:risk_budget]", text,
+                         "风险预算小节没渲染出来 —— 本用例的断言会退化成对占位符的对拍")
+        return text
 
     def test_leverage_constants_are_read_at_call_time(self):
         """`patch.object(abt, "MAX_LEVERAGE")` 必须体现在渲染出的提示词里。
@@ -110,17 +135,23 @@ class InjectionContractTest(unittest.TestCase):
         (lo+hi)/2)))` 那个示例值也会跟着动，但不单独钉数值以免绑死示例算法）。
         """
         text = self._render(MAX_LEVERAGE=42.0, MIN_LEVERAGE=3.0)
-        self.assertIn("3~42x", text, "杠杆区间未读到补丁值 → 提示词口径与执行层漂移")
-        self.assertNotIn("2~5x", text, "渲染出了旧区间，说明常量被 import 期烘焙")
+        # 新格式（风险预算小节）：`{min:g}x ~ {max:g}x`
+        self.assertIn("3x ~ 42x", text, "杠杆区间未读到补丁值 → 提示词口径与执行层漂移")
+        self.assertNotIn("6x ~ 12x", text, "渲染出了旧区间，说明常量被 import 期烘焙")
 
     def test_confidence_gate_is_read_at_call_time(self):
         """加仓置信度门禁必须调用期读（它会直接进提示词，写死就是口径漂移）。"""
         text = self._render(MIN_SCALE_IN_CONFIDENCE=66)
-        self.assertIn("置信度≥66%", text, "加仓置信度门禁未读到补丁值")
+        self.assertIn("置信度 ≥ 66%", text, "加仓置信度门禁未读到补丁值")
 
     def test_scale_in_disabled_flag_is_read_at_call_time(self):
         text = self._render(MAX_SCALE_IN_COUNT=0)
-        self.assertIn("最多0次", text, "加仓次数上限未读到补丁值")
+        # ⚠️ 2026-09-30 改锚：`MAX_SCALE_IN_COUNT <= 0` 走的从来**不是** "最多 0 次"
+        # 那条分支，而是"已禁用"分支（`build_risk_budget_text` 里的三目）。旧断言
+        # `最多0次` 在旧内联 f-string 里也许凑巧成立过，但按现实现必须是禁用文案 ——
+        # 改锚到这里反而更准：它证明的是"0 这个补丁值被**读到**并改变了分支"。
+        self.assertIn("金字塔加仓: 已禁用", text, "加仓次数上限未读到补丁值（没走禁用分支）")
+        self.assertNotIn("最多 2 次", text, "渲染出了旧上限，说明常量被 import 期烘焙")
 
     def test_safe_float_is_injected_and_used(self):
         """`safe_float` 必须是被注入进来的那个。
@@ -191,6 +222,24 @@ class DualCallShapeTest(unittest.TestCase):
             "MAX_SCALE_IN_COUNT": 1, "MIN_SCALE_IN_CONFIDENCE": 70,
             "MAX_MARGIN_EQUITY_RATIO": 0.31,
         }
+        # ⚠️ 2026-09-30 重钉：原断言 `assertIn("2~9x", text)` 盯的是"注入的
+        # MIN/MAX_LEVERAGE 出现在提示词里"。提示词正文迁进 `data/prompt_library.json`
+        # 后，杠杆区间改由 `{{risk_budget}}` 插槽承载（源头是 `risk_constants`，
+        # 不经过这两个注入项）⇒ 注入值不再进提示词，那条断言已无处可落。
+        #
+        # 但本用例真正要守的不变量是"**注入项能从 globals() 回退解析**、只传用户参数
+        # 也不会 TypeError"。故改为把 `apply_module_layout` 换成一个**间谍**：
+        # 它被调用即证明回退解析走到了最后一步，返回哨兵即证明用的就是注入的那个
+        # —— 比对着提示词文本找数字更直接，且不会因为文案改版而假绿。
+        sentinel = "SENTINEL_FROM_INJECTED_APPLY_MODULE_LAYOUT"
+        calls = []
+
+        def _spy_apply_module_layout(*args, **kwargs):
+            calls.append((args, kwargs))
+            return sentinel
+
+        injected = dict(injected)
+        injected["apply_module_layout"] = _spy_apply_module_layout
         saved = {k: brain_prompt.__dict__.get(k, _MISSING) for k in injected}
         brain_prompt.__dict__.update(injected)
         try:
@@ -201,8 +250,12 @@ class DualCallShapeTest(unittest.TestCase):
                     brain_prompt.__dict__.pop(k, None)
                 else:
                     brain_prompt.__dict__[k] = v
-        self.assertIn("2~9x", text, "回退解析未生效（注入项未从 globals 取到）")
-        self.assertNotIn("2~5x", text, "回退到了真实门面值，说明回退逻辑没生效")
+        self.assertTrue(calls, "注入的 apply_module_layout 没被调用 —— 回退解析没生效")
+        self.assertEqual(text, sentinel, "返回值不是注入项给的 —— 说明用的不是注入的那个")
+        # 间谍必须拿到**渲染上下文**（否则"回退成功"也可能是在空跑）
+        _args, _kwargs = calls[0]
+        self.assertIn("context", _kwargs, "apply_module_layout 未收到 context（插槽渲染会退化）")
+        self.assertTrue(_kwargs["context"], "context 为空 —— 实时数据没进提示词")
         self.assertEqual(len(names), 14)
 
 

@@ -1,5 +1,6 @@
 /** 物理拦截插件页文案 */
 export const zhAdminInterceptors = {
+  title: '事前风控拦截',
   desc: '配置下单前的逐层拦截规则与失败动作',
   testing: '正在回归测试...',
   runSandbox: '现场沙箱回归测试',
@@ -27,7 +28,7 @@ export const zhAdminInterceptors = {
   filenamePlaceholder: '如: my_volatility_filter.py',
   filenameRequired: '请输入插件文件名',
   codeLabel: '插件 Python 源码',
-  createAndAdd: '创建并加入管线',
+  createAndAdd: '创建并启用规则',
   reportTitle: '沙箱拦截回归测试报告',
   reportSummary: '已激活 {enabled}/{total} 个拦截插件 · 总执行耗时 {ms}ms',
   intercepted: '已成功物理拦截 (WAIT)',
@@ -39,7 +40,7 @@ export const zhAdminInterceptors = {
   closeReport: '关闭测试报告',
 
   // ── 推倒重来新增（批 6）──
-  pipelineTitle: '拦截管线',
+  pipelineTitle: '事前风控拦截规则',
   pipelineDesc: '按执行优先级从高到低排列；越靠上的插件越早介入风控判定',
   empty: '暂无拦截插件，可点击右上角「新建插件」添加',
   editorTitle: '插件源码',  // ── 批 38：本地化写死文案（原先直接写死在 InterceptorsPage.vue）──
@@ -47,7 +48,7 @@ export const zhAdminInterceptors = {
   toggleOn: '已启用拦截插件「{name}」',
   toggleOff: '已停用拦截插件「{name}」',
   opFailed: '操作失败：{msg}',
-  reorderOk: '已更新拦截管线执行优先级顺序',
+  reorderOk: '已更新拦截规则执行优先级顺序',
   reorderFailed: '排序更新失败：{msg}',
   readSourceFailed: '读取插件源码失败：{msg}',
   saveCodeOk: '插件「{file}」代码已保存并热加载生效',

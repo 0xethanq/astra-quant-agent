@@ -367,6 +367,33 @@ async function deleteMemoryItem(idx: number, lessonId: string) {
   }
 }
 
+const hasDisabledLessons = computed(() => structuredLessons.value.some((l: any) => !l.enabled));
+
+async function purgeDisabledLessons() {
+  const disabled = structuredLessons.value.filter((l: any) => !l.enabled);
+  if (!disabled.length) return;
+  const _ok = await ask({
+    title: t('admin.evolution.purgeDisabledTitle'),
+    desc: t('admin.evolution.purgeDisabledDesc', undefined, { n: disabled.length }),
+    danger: true,
+    okText: t('common.del'),
+  });
+  if (!_ok) return;
+  busy.value = 'delete';
+  try {
+    for (const item of disabled) {
+      await api(`/api/v1/admin/memory/0?lesson_id=${encodeURIComponent(item.id)}&expected_version=${encodeURIComponent(expectedMemoryVersion())}`, { method: 'DELETE' });
+    }
+    toast.ok(t('admin.evolution.purgeDisabledOk', undefined, { n: disabled.length }));
+  } catch (e: any) {
+    memoryVersion.value = null;
+    toast.err(t('admin.evolution.purgeDisabledFailed', undefined, { msg: e.message }));
+  } finally {
+    busy.value = '';
+    await refreshMemory();
+  }
+}
+
 async function savePipelineModules() {
   if (!selectedProfile.value) return;
   busy.value = 'save';
@@ -439,12 +466,29 @@ function evoStatusBadgeClass(status?: string, error?: string): string {
   return resolveEvolutionStatus(status, error).adminBadgeClass;
 }
 
+/**
+ * 复盘失败时徽章上显示的**文案**（2026-09-30）。
+ *
+ * ⚠️ 用户报障：「自进化看起来也没更新啊」——真实情况是本周期复盘**失败**了
+ * （主模型输出 JSON 里有个裸换行 → `JSONDecodeError`；唯一回退模型欠费 402），
+ * 而页面把 `llm_error` **只用在徽章配色上**，文字照旧显示 `NO_CHANGE`
+ * （报告里的 `change_status` 默认值），错误详情一个字都不显示 ⇒ 用户看到的是
+ * "跑过了、没变化"，而不是"跑失败了、原因是……"。
+ *
+ * `resolveEvolutionStatus` 是唯一事实源（它已把非空 `llm_error` 判成 FAILED）。
+ */
+function evoStatusLabel(status?: string, error?: string): string {
+  const resolved = resolveEvolutionStatus(status, error);
+  if (resolved.category === 'FAILED') return t('admin.evolution.statusFailed');
+  return resolved.key || 'NO_CHANGE';
+}
+
 onMounted(loadData);
 </script>
 
 <template>
   <div class="evo">
-    <PageHeader :title="t('nav.admin.evolution')" :description="t('admin.evolution.desc')">
+    <PageHeader :title="t('nav.admin.evolution')">
       <template #actions>
         <span class="dsh-pill">
           <span class="dsh-status-dot active" aria-hidden="true" />
@@ -513,7 +557,7 @@ onMounted(loadData);
                 class="badge"
                 :class="evoStatusBadgeClass(evolutionReport.change_status, evolutionReport.llm_error)"
               >
-                {{ evolutionReport.change_status || 'NO_CHANGE' }}
+                {{ evoStatusLabel(evolutionReport.change_status, evolutionReport.llm_error) }}
               </span>
               <span v-if="evoConfig.effective_model_id" class="badge mono text-3xs">
                 {{ t('admin.evolution.usedModel') }} {{ evoConfig.effective_model_id }}
@@ -548,6 +592,21 @@ onMounted(loadData);
           <div v-if="evolutionReport.memory_overwrites_reason" class="evo-verdict">
             <span class="label-caps">{{ t('admin.evolution.verdictReason') }}</span>
             <p>{{ evolutionReport.memory_overwrites_reason }}</p>
+          </div>
+
+          <!--
+            复盘失败必须**可见**（2026-09-30）。
+            以前 `llm_error` 只参与徽章配色，文字仍是 `NO_CHANGE`、洞察面板空则整块隐藏 ⇒
+            用户看到的是"跑过了、没变化"，而真相是"这一轮失败了、原因是……"。
+            这里用 alert 明确区分"失败未更新"与"NO_CHANGE"，并给出可操作原因
+            （例如回退模型欠费 402）。
+          -->
+          <div v-if="evolutionReport.llm_error" class="evo-failure" role="alert">
+            <span class="label-caps evo-failure-title">
+              {{ t('admin.evolution.failedTitle') }}
+            </span>
+            <p class="evo-failure-note">{{ t('admin.evolution.failedNote') }}</p>
+            <pre class="log-panel evo-failure-detail mono" tabindex="0">{{ evolutionReport.llm_error }}</pre>
           </div>
 
           <!-- 洞见日志面板 -->
@@ -800,6 +859,17 @@ onMounted(loadData);
               <h2 class="card-title"><Brain :size="14" />{{ t('admin.evolution.lifecycle') }}</h2>
               <p class="card-sub">{{ t('admin.evolution.lifecycleHint') }}</p>
             </div>
+            <button
+              v-if="hasDisabledLessons && auth.isSuperadmin"
+              type="button"
+              class="btn btn-ghost btn-sm is-danger"
+              :disabled="busy !== '' || loading"
+              :title="t('admin.evolution.purgeDisabledTitle')"
+              @click="purgeDisabledLessons"
+            >
+              <Trash2 :size="13" />
+              <span>{{ t('admin.evolution.purgeDisabled') }}</span>
+            </button>
           </header>
 
           <!-- 新增心法 -->
@@ -1080,6 +1150,40 @@ onMounted(loadData);
 .evo-verdict {
   padding: var(--ds-space-3) var(--ds-space-4);
   border-bottom: 1px solid var(--ds-color-border-default);
+}
+/* 复盘失败横幅：与 `.state-block.is-error` 同一套错误 token，但**内联**而不是居中空态
+   （它是报告卡里的一条诊断，不是"这里什么都没有"的占位）。 */
+.evo-failure {
+  margin: var(--ds-space-3) var(--ds-space-4);
+  padding: var(--ds-space-3);
+  border: 1px solid var(--down-line);
+  border-radius: var(--r-card);
+  background-color: var(--down-bg);
+}
+.evo-failure-title {
+  color: var(--down);
+}
+/* 横幅内说明行：形状与 `.evo-verdict p` 同为「--text-xs + text-secondary」，
+   属**语义 delta**（错误语义块），已在 tests/panelDescPrimitive.test.mjs 的
+   DESC_SHAPE_ALLOWED 登记。
+   ⚠️ 这条规则**不能省**：省掉 `evo-failure-note` 就成了"模板里写了但编译产物里没规则"
+   的死类，`deadUtilities`/编译产物死类门当场翻红（实测：一次 stale dist 把它藏住了，
+   重新 build 后才暴露）。两条门要同时满足 —— 登记 + 有规则。 */
+.evo-failure-note {
+  margin-top: 4px;
+  font-size: var(--text-xs);
+  line-height: var(--leading-body);
+  color: var(--ds-color-text-secondary);
+}
+/* 错误详情：等宽块本体**全部复用** `.log-panel`（inset 底 + 边框 + 圆角 + mono）。
+   这里只补两条与"说明行形状"无关的 delta。
+   ⚠️ 刻意**不写** font-size / line-height / color —— `panelDescPrimitive` 门把
+   "margin-top + font-size + line-height + color" 四条同现判成"又自造了一条说明行"，
+   实测本文件因这两条规则翻红；`color` 也不是真正的语义 delta（沿用本体即可）。 */
+.evo-failure-detail {
+  margin-top: var(--ds-space-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .evo-verdict p {
   margin-top: 4px;

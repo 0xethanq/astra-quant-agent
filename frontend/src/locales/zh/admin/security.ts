@@ -53,6 +53,16 @@ export const zhAdminSecurity = {
   orderModeMarketHint: '市价单模式：入场按最新盘口市价立刻吃单撮合，彻底避免急速行情下限价单挂单踏空；止盈止损保护腿继续保持联动。',
   saveOrderMode: '保存订单模式',
   toastOrderModeSaved: '委托订单模式已保存并生效',
+  scaleOutTitle: '出场与分批止盈 (Scale-Out)',
+  scaleOutDesc: '两阶段止盈体系：首批目标锁定现金利润并自动将余仓止损推进至开仓保本位。',
+  scaleOutEnabledTag: '已开启',
+  scaleOutDisabledTag: '已禁用',
+  scaleOutSwitchLabel: '启用分批止盈',
+  scaleOutHint: '开启后，当持仓浮盈达到设定倍数 × 1H ATR 时，自动市价平仓指定比例锁定利润，并立即将剩余持仓止损拉至保本位（无风险奔跑）。',
+  scaleOutCurrentPreset: '当前出场参数',
+  scaleOutCustomizeInRisk: '前往风控参数页自定义比例与 ATR 阈值',
+  scaleOutOnToast: '分批止盈策略已启用',
+  scaleOutOffToast: '分批止盈策略已关闭',
   optDemo: 'DEMO',
   optLive: 'LIVE',
   liveTrio: 'LIVE 凭据',
@@ -140,6 +150,10 @@ export const zhAdminSecurity = {
   bandVenues: '接入场所',
   healthOk: '全部可用',
   healthDegraded: '部分降级',
+  // ── 2026-09-30：健康名单改为「标的池 × 实时行情证据」投影 ──
+  // 快照缺失/过期时标的计入 unknown ⇒ 徽标与提示必须说"未核实"，绝不升级为全绿。
+  healthUnknownBadge: '{count} 个未核实',
+  healthUnknownNote: '行情快照缺失或已过期，以上数字为未核实（不等于标的故障）；下个巡检周期自动复核。',
   routingEffectiveTitle: '当前生效',
 
   // ── 批 32：脚本里的 toast / 确认框文案（全文件扫描才看得见）──

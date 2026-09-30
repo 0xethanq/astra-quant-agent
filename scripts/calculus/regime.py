@@ -46,11 +46,13 @@ _REGIME_TAGS = {
     REGIME_VOLATILITY_SHOCK: "黑天鹅防御 · 避险锁仓",
 }
 
+# 2026-09-30：两条出厂预设（stable / wide_oscillation）已被「全形态波段策略(提示词样板)」
+# 取代 —— 新样板本身就覆盖趋势与震荡全形态，故四类体制统一推荐同一条，不再按体制分派。
 _REGIME_PRESET_MAP = {
-    REGIME_TREND_EXPANSION: "stable",
-    REGIME_WIDE_OSCILLATION: "wide_oscillation",
-    REGIME_LOW_VOL_CHOPPY: "stable",
-    REGIME_VOLATILITY_SHOCK: "stable",
+    REGIME_TREND_EXPANSION: "allpattern_swing",
+    REGIME_WIDE_OSCILLATION: "allpattern_swing",
+    REGIME_LOW_VOL_CHOPPY: "allpattern_swing",
+    REGIME_VOLATILITY_SHOCK: "allpattern_swing",
 }
 
 
@@ -82,7 +84,7 @@ def detect_macro_market_regime(packages: Sequence[Dict[str, Any]]) -> Dict[str, 
             "shock_risk": False,
             "dominant_direction": "NEUTRAL",
             "recommended_action": "市场数据缺失，克制交易欲望，保持观望。",
-            "recommended_profile": "stable",
+            "recommended_profile": "allpattern_swing",
             "summary_text": "【市场体制识别】当前宏观体制为【窄幅低波横盘】(数据样本为空)。建议维持默认风控与稳健基座。",
         }
 

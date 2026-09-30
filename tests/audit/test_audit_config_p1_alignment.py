@@ -245,14 +245,27 @@ class PipelineMergeNoDoublingTests(_SandboxBase):
         return {k: [{**m, "locked": False} for m in (profile["pipelines"].get(k) or [])]
                 for k in self.pl.TEMPLATE_KEYS}
 
+    def _base_text_for(self, key):
+        """渲染该管线时**真实**的基座文本（= 生产里传进 `apply_module_layout` 的那一份）。
+
+        ⚠️ 2026-09-30 修正：旧实现给 `trading_user` 传的是
+        `construct_full_market_prompt(...)` 的**返回值**。提示词体系重构后，
+        那个函数本身就是"装配好的整段用户提示词"（它内部已经调用过
+        `apply_module_layout`）—— 再拿它当基座，等于把装配结果**又装配一遍**，
+        于是每个分节在渲染结果里出现两遍，本文件的"防重复前置"判据直接假红。
+
+        正确的基座永远只有一个来源：`base_template_text(key)`
+        （只有 `trading_system` 非空 = 只读 JSON Schema；其余三条刻意为空）。
+        """
+        return self.pl.base_template_text(key)
+
     def _snapshot(self):
         profile = self.pl.active_profile()
         out = {}
         for key in self.pl.TEMPLATE_KEYS:
             modules = profile["pipelines"].get(key) or []
-            base = self.pl.compile_modules(modules)
-            rendered = self.pl.apply_module_layout(base, profile, key, "t")
-            out[key] = (sorted({str(m.get("source")) for m in modules}), len(base), len(rendered))
+            rendered = self.pl.apply_module_layout(self._base_text_for(key), profile, key, "t")
+            out[key] = (sorted({str(m.get("source")) for m in modules}), rendered)
         return out
 
     def _assert_unchanged_after(self, changes):
@@ -261,32 +274,57 @@ class PipelineMergeNoDoublingTests(_SandboxBase):
         self.pl.update_profile(profile_id, changes)
         after = self._snapshot()
         self.assertEqual(before, after, "保存单页后其它管线被改写（P1-2 回归）")
-        # 渲染长度不得翻倍：布局若丢掉 base 标签，apply_module_layout 会把 base 整段前置
-        for key, (_srcs, base_len, rendered_len) in after.items():
-            self.assertLess(rendered_len, max(base_len * 1.5, base_len + 400),
-                            f"{key} 渲染后长度异常膨胀（base 被重复前置）")
+        # 不得重复前置基座：判据用**分节标题出现次数**（比长度启发式精确）
+        import re
+        for key, (_srcs, rendered) in after.items():
+            titles = re.findall(r"==== 【([^】]+)】 ====", rendered)
+            dupes = sorted({t for t in titles if titles.count(t) > 1})
+            self.assertEqual(dupes, [], f"{key} 渲染出现重复基座段（base 被重复前置）: {dupes}")
         return after
 
     def test_evolution_page_shape_does_not_downgrade_other_pipelines(self):
+        """★ 判据改为**设计无关**（2026-09-30 换预设后重写）。
+
+        旧写法硬断言 `assertIn("base", ...)`：新样板「全形态波段策略(提示词样板)」
+        的 `trading_system` / `evolution_system` 刻意**不列** base 模块（渲染器见布局
+        无 base 模块时会自动前置全部基座，这样才不会把代码基座抄成快照而漂移）——
+        于是"必须含 base 标签"这条约定对新方案不成立。
+        本用例真正要守的是**保存单页不得把任何模块的来源标签降级**（降级会让下次
+        布局把 base 整段重复前置）。故改为逐管线比对保存前后的来源集合。
+        """
         profile = self.pl.active_profile()
+        before = self._snapshot()
         after = self._assert_unchanged_after({"pipelines": self._shape_evolution(profile)})
-        for key in ("trading_system", "trading_user", "evolution_user"):
-            self.assertIn("base", after[key][0], f"{key} 的 base 标签被降级成 legacy → 下次布局会翻倍")
+        for key in self.pl.TEMPLATE_KEYS:
+            self.assertEqual(after[key][0], before[key][0],
+                             f"{key} 的 source 标签被降级 → 下次布局会把 base 重复前置")
 
     def test_studio_shape_keeps_base_tags_and_does_not_double(self):
         profile = self.pl.active_profile()
+        before = self._snapshot()
         after = self._assert_unchanged_after({"pipelines": self._shape_studio(profile)})
-        self.assertIn("base", after["trading_system"][0])
-        self.assertIn("base", after["evolution_system"][0])
+        for key in self.pl.TEMPLATE_KEYS:
+            self.assertEqual(after[key][0], before[key][0], f"{key} 的 base 标签被降级成 legacy")
+        # 防"空转"：当前出厂方案里必须**至少有一条**管线带 base 模块，否则本用例失去意义
+        self.assertTrue(any("base" in sources for sources, _r in after.values()),
+                        "当前出厂方案没有任何 base 模块 —— 本用例已退化为空转")
 
     def test_submitted_pipeline_without_source_inherits_stored_base_tag(self):
-        """API 客户端漏传 source 时，不能把 base 模块悄悄降级成 custom。"""
+        """API 客户端漏传 source 时，不能把 base 模块悄悄降级成 custom。
+
+        ⚠️ 2026-09-30 改钉：重构后**只有 `trading_system` 带 base 模块**
+        （= 只读 JSON Schema），`trading_user` 的正文全部是 `custom`。
+        故改用 `trading_system` 来钉"漏传 source 时继承存量标签"这条语义。
+        """
         profile = self.pl.active_profile()
+        stored_sources = sorted({m["source"] for m in profile["pipelines"]["trading_system"]})
+        self.assertIn("base", stored_sources, "trading_system 应当带 base 模块（只读 Schema）")
         stripped = {"trading_system": [{k: m[k] for k in ("id", "title", "content", "enabled") if k in m}
                                        for m in profile["pipelines"]["trading_system"]]}
         profile_id = self.pl.load_library()["active_profile_id"]
         updated = self.pl.update_profile(profile_id, {"pipelines": stripped})
-        self.assertEqual(sorted({m["source"] for m in updated["pipelines"]["trading_system"]}), ["base"])
+        self.assertEqual(sorted({m["source"] for m in updated["pipelines"]["trading_system"]}),
+                         stored_sources, "漏传 source 的模块必须继承存量来源，不得降级")
 
     def test_clean_pipelines_keeps_stored_modules_for_unmentioned_pipeline(self):
         """_clean_pipelines 的兜底分支：已存定义在场时，未提到的管线不得被重建成 legacy。
@@ -329,7 +367,13 @@ class AdminOverrideReachesModelTests(_SandboxBase):
         effective = self.brain.get_effective_system_prompt()
         self.assertIn(self.MARK, effective, "覆盖层被 apply_module_layout 丢弃（P1-3 回归）")
         self.assertTrue(effective.rstrip().endswith(self.MARK), "覆盖层应位于最终提示词末尾")
-        self.assertIn("核心军规", effective, "布局本身必须仍然生效")
+        # ⚠️ 2026-09-30 改钉：原判据 `核心军规` 出自已被删除的代码常量 `_SYSTEM_CORE`。
+        # 现在正文只存 `data/prompt_library.json`，故改钉新出厂基线的**分节标题**——
+        # 它与 `核心军规` 承担同一职责：证明"布局本身真的生效了"，而不是只剩覆盖层。
+        self.assertIn("快节奏兑现与亏损截断", effective,
+                      "布局本身必须仍然生效（只读 Schema + JSON 正文模块都要在）")
+        self.assertIn("严格 JSON 规范契约与完整输出骨架", effective,
+                      "只读 JSON Schema 必须始终在实发提示词里")
 
     def test_no_override_means_plain_base(self):
         self.override_path.unlink()

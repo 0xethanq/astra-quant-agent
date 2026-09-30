@@ -21,7 +21,8 @@ from scripts.trader.cycle_snapshot import venue_position_span
 
 class _Rig:
     def __init__(self, *, cb=(False, ""), brain=None, brain_raises=None, refresh=None,
-                 health=None, pool_trustworthy=True, margin=250.0, batch_enabled=True):
+                 health=None, pool_trustworthy=True, margin=250.0, batch_enabled=True,
+                 session_restricted=False):
         self.actions = []
         self.saved = []
         self.managed = []
@@ -36,6 +37,7 @@ class _Rig:
         self.pool_trustworthy = pool_trustworthy
         self.margin = margin
         self.batch_enabled = batch_enabled
+        self.session_restricted = session_restricted
         self.pos_desc = None
         self.merged_into = None
 
@@ -75,7 +77,8 @@ class _Rig:
             query_positions=query,
             read_cycle_health=lambda: self.health,
             real_pos_dict=getattr(self, "real_pos_dict", {}),
-            save_trackers=lambda tr: self.saved.append(dict(tr)))
+            save_trackers=lambda tr: self.saved.append(dict(tr)),
+            session_restricted=self.session_restricted)
         return out
 
 
@@ -93,6 +96,35 @@ class ScanRiskGatesAndBrainTest(unittest.TestCase):
         rig.run()
         self.assertIsNone(rig.pos_desc, "总开关关掉 ⇒ 一个模型调用都不发")
         self.assertEqual(rig.queries, 0)
+
+    def test_session_restricted_skips_the_model_entirely(self):
+        """窗口外（manage_only）：一个模型调用都不发（这是省下 94% token 的那一刀）。"""
+        rig = _Rig(brain={"BTC": {"action": "BUY_LONG"}}, session_restricted=True)
+        _, cache, _, _ = rig.run()
+        self.assertIsNone(rig.pos_desc, "休市窗口里绝不许叫模型")
+        self.assertEqual(rig.queries, 0, "没叫模型就不需要刷持仓")
+        self.assertEqual(rig.managed, [])
+        self.assertEqual(cache, {}, "brain_cache 必须为空 ⇒ 入场扫描无新鲜决策可用（fail-closed）")
+
+    def test_session_restriction_leaves_a_searchable_action_line(self):
+        rig = _Rig(session_restricted=True)
+        rig.run()
+        self.assertEqual(len(rig.actions), 1, "降级必须留下恰好一条可检索的动作行")
+        self.assertIn("非交易时段", rig.actions[0])
+        self.assertIn("机械风控照常", rig.actions[0])
+
+    def test_circuit_breaker_wins_over_session_restriction(self):
+        """熔断时不该出现"时段"文案：真正的停手理由是熔断，别让日志指向错误原因。"""
+        rig = _Rig(cb=(True, "🚨 断崖"), session_restricted=True)
+        rig.run()
+        self.assertEqual(rig.actions, [])
+
+    def test_default_flag_keeps_the_old_behaviour(self):
+        """不传 `session_restricted`（既有调用点/测试夹具）⇒ 与改造前逐位一致。"""
+        rig = _Rig(brain={"BTC": {"action": "HOLD"}})
+        _, cache, _, _ = rig.run()
+        self.assertEqual(cache, {"BTC": {"action": "HOLD"}})
+        self.assertEqual(rig.queries, 1)
 
     def test_asset_margin_cap_comes_from_the_adaptive_helper(self):
         cap, _, _, _ = _Rig(margin=777.0).run()

@@ -92,6 +92,16 @@ from scripts.trader.order_lifecycle import (
     clean_stale_open_orders as _order_lifecycle_clean,
     reconcile_pending_orders as _order_lifecycle_reconcile,
 )
+# 交易时段闸门（2026-09-30）：判定是纯函数（子模块），配置读取走 store。
+# 两者都**不在 import 期取值**（除函数引用外无绑定）：配置每个周期重读一次，
+# 与 `risk_constants` 的"子进程重新 import ⇒ .env 改参下轮生效"同一语义。
+from scripts.trader.session import (
+    resolve_session as _session_resolve,
+    session_state_summary as _session_summary,
+)
+from astra_backend.trading_session_store import (
+    load_trading_session as _load_trading_session,
+)
 from scripts.trader.ledger_writer import (
     record_open_intent as _ledger_writer_intent,
     record_trade as _ledger_writer_trade,
@@ -823,11 +833,27 @@ def _live_oco_coverage(orders: List[Dict[str, Any]], pos_side: str) -> float:
     """壳（第八十五刀搬至 `scripts/trader/cloud_protection.py`）。"""
     return _cloud_protection_coverage(orders, pos_side, _float_or_zero=_float_or_zero)
 
-def ensure_cloud_position_protection(inst_id: str, pos_side: str, size: float, tp_px: float, sl_px: float) -> Tuple[bool, str]:
-    """壳（第八十五刀搬至 `scripts/trader/cloud_protection.py`）。"""
+def ensure_cloud_position_protection(inst_id: str, pos_side: str, size: float, tp_px: float, sl_px: float,
+                                    tp1_px=None, scale_out_ratio: float = 0.5,
+                                    leg_min_sz: float = 0.0,
+                                    prec: int = 2, px_prec=None, legs_state=None,
+                                    simulated: bool = False, split_enabled: bool = True) -> Tuple[bool, str]:
+    """壳（第八十五刀搬至 `scripts/trader/cloud_protection.py`）。
+
+    2026-09-29：新增分批止盈参数透传（`tp1_px`/`scale_out_ratio`/`legs_state` 等）——
+    **壳必须把新参数原样转发**，否则持仓退出路径传进来的双腿意图会被静默丢弃
+    （表现为 `TypeError: unexpected keyword argument 'tp1_x'`）。
+
+    2026-09-30：`leg_min_sz` 同款补转发。它由 `position_exit` 根据**当前持仓的
+    `minSz`** 传入（而非行情表的 `minSz`，两者可能不同），漏转发会让双腿拆分退回
+    实例最小下单量，实测导致腿量凑不满仓位 → 覆盖率卡在 98.13% → 看板报「1 笔缺失止损」。
+    """
     return _cloud_protection_ensure(
         inst_id, pos_side, size, tp_px, sl_px,
-        okx_rest=okx_rest, _live_oco_coverage=_live_oco_coverage)
+        okx_rest=okx_rest, _live_oco_coverage=_live_oco_coverage,
+        tp1_px=tp1_px, scale_out_ratio=scale_out_ratio, leg_min_sz=leg_min_sz,
+        prec=prec, px_prec=px_prec,
+        legs_state=legs_state, simulated=simulated, split_enabled=split_enabled)
 
 def build_signal_snapshot(f: dict) -> dict:
     """壳（第八十二刀搬至 `scripts/trader/signal_snapshot.py`）。
@@ -988,6 +1014,22 @@ def evaluate_asset_signal(f):
         load_adaptive_config=load_adaptive_config,
     )
 
+def trading_session_state(now_bj=None):
+    """交易时段闸门的**门面壳**：判定纯函数在 `scripts/trader/session.py`。
+
+    为什么是壳而不是别名：本模块的计数/来源锚点与 `patch.object(门面, 名字)` 测试缝
+    都要求"门面里有一个真正的 def"（见 `scripts/trader/__init__.py` 铁律 2）。
+
+    `ASTRA_SESSION_FORCE=1` ⇒ 强制按 `full` 运行（运维显式意图优先于时段配置）。
+    两个消费者：后台「立即运行」端点（子进程带该变量）与测试。
+
+    配置由 `_load_trading_session()` 在**调用期**读取（每周期一份新配置，
+    所以后台保存后下一轮即生效，无需重启任何进程）。
+    """
+    return _session_resolve(_load_trading_session(), now_bj=now_bj,
+                            force=os.getenv("ASTRA_SESSION_FORCE", "") == "1")
+
+
 def _slot_guard_should_skip(now_slot: int) -> bool:
     """同槽重复触发守卫：**判定 + 记录**（第一百三十六刀从装饰器内联抽出）。
 
@@ -1035,7 +1077,17 @@ def single_trader_cycle(func):
         try:
             now_slot = int(time.time()) // 900
             # 判定 + 记录走助手（原子写 + 读失败告警；见其 docstring）
-            if _slot_guard_should_skip(now_slot):
+            #
+            # ⚠️ 2026-09-30（交易时段闸门）：`ASTRA_SESSION_FORCE=1`（后台「立即运行」
+            # 与测试用）时**仍然写**槽文件、但**不拦截**本轮。理由：休市周期会提前
+            # return，槽文件却已经写下 ⇒ 紧接着的手工强制运行会被"同槽重复"静默吞掉
+            # （实测的坑：点两次「立即运行」只有第一次有效）。写槽保证下一轮**定时**
+            # 周期仍按同槽去重；跳过拦截保证运维的显式意图不被一个状态文件否掉。
+            # 默认不设该变量 ⇒ 现有行为逐位不变。
+            if os.getenv("ASTRA_SESSION_FORCE", "") == "1":
+                _atomic_write_json(TRADER_SLOT_FILE,
+                                   {"slot": now_slot, "started_at": int(time.time()), "pid": os.getpid()})
+            elif _slot_guard_should_skip(now_slot):
                 return None
             lock_handle.seek(0)
             lock_handle.truncate()
@@ -1056,6 +1108,14 @@ def single_trader_cycle(func):
 # =============================================================================
 @single_trader_cycle
 def execute_portfolio():
+    # 0a. 交易时段闸门（2026-09-30）：**在任何网络调用之前**判定，因为它的目的就是省钱。
+    #    窗口内 / 未启用 / ASTRA_SESSION_FORCE=1 ⇒ full（后面逐位照旧）；
+    #    窗口外 ⇒ manage_only（跳过相位 4 的批量主脑调用与新开仓）或 off（相位 0/0a 后退出）。
+    #    ⚠️ 判定本身只读一个本地 JSON + 一个纯函数，失败方向是"按全天候运行 + 告警"。
+    _session = trading_session_state()
+    print(_session_summary(_session))
+    session_restricted = _session["mode"] == "manage_only"
+
     # US-002 fail-closed entry gate: without a static V5 API Key for the frozen
     # cycle environment the engine must physically refuse to trade.
     # current_environment (not selected_environment): the decorator froze the env
@@ -1073,6 +1133,25 @@ def execute_portfolio():
     if _preflight is None:
         return None
     entries_blocked, timestamp_full = _preflight
+
+    # 0b. 交易时段 = `off`：相位 0/0a 已经跑完（就绪闸 + 挂单对账 + **超时挂单回收**），
+    #     随后立即退出 —— 不查持仓、不动追踪止损、不叫大模型。
+    #
+    #     ⚠️ 为什么不是"一步都不跑"：`clean_stale_open_orders` 的陈旧判据是 4 分钟
+    #     （`scripts/trader/order_lifecycle.py::STALE_MS`）。若整段休市窗口一次都不跑，
+    #     窗口关闭瞬间仍未成交的**入场限价单会一直挂在交易所**。相位 0/0a 只有 3 次
+    #     只读接口 + 一次撤单机会、零 token，用它换掉"陌生挂单过夜"是划算的。
+    #     ⚠️ 刻意**不**改写 `data/trading_state.json`：那会用一份空状态覆盖看板上的好数据。
+    if _session["mode"] == "off":
+        _disc = cycle_disclosure_payload(
+            broken_venues=_BROKEN_VENUES,
+            entries_blocked=entries_blocked,
+            session=_session)
+        print(cycle_disclosure_summary(_disc))
+        write_cycle_disclosure_snapshot(
+            path=CYCLE_DISCLOSURE_FILE, payload=_disc,
+            _atomic_write_json=_atomic_write_json)
+        return None
 
     # 0.5 只读形状预检：把"读得到但会被静默忽略"的形状问题**尽早指名道姓**
     #     （只警告、不阻断 —— 行为判定在加载侧：意图 fail-closed、追踪器拒绝覆盖）
@@ -1129,9 +1208,13 @@ def execute_portfolio():
         query_positions=query_positions,
         read_cycle_health=read_cycle_health,
         real_pos_dict=real_pos_dict,
-        save_trackers=save_trackers    )
+        save_trackers=save_trackers,
+        session_restricted=session_restricted    )
 
-    if not cb_active and pool_is_trustworthy():
+    # 交易时段窗口外（manage_only）：`brain_cache` 必为空 ⇒ 入场扫描只会逐标的打印
+    # "本轮无有效新鲜 AI 决策，禁止开仓"然后 continue。既然一个仓位都开不出来，
+    # 就不必跑这段循环（它同时省掉一次全标的的信号求值）。
+    if not cb_active and pool_is_trustworthy() and not session_restricted:
         execute_entry_scan(
             all_factors=all_factors,
             brain_cache=brain_cache,
@@ -1210,7 +1293,8 @@ def execute_portfolio():
     _disc = cycle_disclosure_payload(
         broken_venues=_BROKEN_VENUES,
         entries_blocked=entries_blocked,
-        shape_violations=_shape_violations)
+        shape_violations=_shape_violations,
+        session=_session)
     print(cycle_disclosure_summary(_disc))
     write_cycle_disclosure_snapshot(
         path=CYCLE_DISCLOSURE_FILE, payload=_disc,

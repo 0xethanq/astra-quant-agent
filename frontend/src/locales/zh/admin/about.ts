@@ -1,5 +1,6 @@
 /** 关于与更新页文案 */
 export const zhAdminAbout = {
+  title: '版本与更新',
   intro: "确认版本状态，执行安全快进更新。",
   badge: "治理 · 3/3",
   loading: "正在加载组件与版本数据...",

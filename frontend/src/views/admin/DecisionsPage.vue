@@ -1,5 +1,11 @@
 <script setup lang="ts">
 /**
+ * `embedded`（2026-09-30 后台精简）：本页被吸收为宿主页的一个页签时为真。
+ * 宿主页负责大标题与页签标签，本页 PageHeader 降级为紧凑行（说明收起），
+ * 但 #actions 里的按钮原样渲染 —— 被吸收页的按钮一个都不能丢。
+ */
+const props = withDefaults(defineProps<{ embedded?: boolean }>(), { embedded: false })
+/**
  * DecisionsPage.vue · 系统日志控制台 (System Logs Console)
  * ---------------------------------------------------------------------------
  * 职责定位：专注呈现机器与服务的运行状态、异常报错与 AI 决策推演。
@@ -24,7 +30,6 @@ import {
   AlertCircle,
   BrainCircuit,
   Search,
-  ArrowRight,
   TrendingUp,
   TrendingDown,
   PauseCircle,
@@ -35,31 +40,33 @@ import PageHeader from '../../components/admin/PageHeader.vue';
 import CopyButton from '../../components/base/CopyButton.vue';
 import BaseLoadingAnnounce from '../../components/base/BaseLoadingAnnounce.vue';
 import BaseEmpty from '../../components/base/BaseEmpty.vue';
+import BaseTabs from '../../components/base/BaseTabs.vue';
+import AuditPage from './AuditPage.vue';
 
 const { t } = useI18n();
 const { api } = useApi();
 const route = useRoute();
 
-/* ── 一级主维度切换 (运行流 / 报错汇总 / AI决策) ── */
-type HubTab = 'logs' | 'errors' | 'decisions';
-const currentHubTab = ref<HubTab>('logs');
+/* ── 一级主维度切换 (运行流 / 报错汇总 / AI决策 / 操作审计) ── */
+type HubTab = 'logs' | 'errors' | 'decisions' | 'audit';
 
-const HUB_TABS = ['logs', 'errors', 'decisions'] as const;
-const { setRef: setHubTabRef, onKeydown: onHubTabKey, roving: hubTabRoving } = useRovingTabs(
-  () => HUB_TABS.length,
-  (i) => { switchHubTab(HUB_TABS[i]); },
-);
-
-function switchHubTab(tab: HubTab) {
-  currentHubTab.value = tab;
-  if (tab === 'logs' && !entries.value.length) {
-    fetchLogStream(activeLogTab.value);
-  } else if (tab === 'errors' && !criticalIssues.value.length) {
-    fetchAllIssues();
-  } else if (tab === 'decisions' && !decisionsList.value.length) {
-    fetchDecisions();
-  }
+function resolveHubTab(raw: unknown): HubTab {
+  const v = Array.isArray(raw) ? raw[0] : raw;
+  if (v === 'stream' || v === 'logs') return 'logs';
+  if (v === 'errors') return 'errors';
+  if (v === 'decisions') return 'decisions';
+  if (v === 'audit') return 'audit';
+  return 'logs';
 }
+
+const currentHubTab = ref<HubTab>(resolveHubTab(route.query.tab));
+
+const hubTabs = computed(() => [
+  { key: 'logs', label: t('admin.decisions.hubTabLogs') },
+  { key: 'errors', label: t('admin.decisions.hubTabErrors'), count: criticalIssues.value.length || undefined },
+  { key: 'decisions', label: t('admin.decisions.hubTabDecisions') },
+  { key: 'audit', label: t('admin.audit.tabAudit') },
+]);
 
 /* ══════════════════════════════════════════════════
  * 1. 运行日志流 (Runtime Stream)
@@ -341,12 +348,29 @@ function handleRefresh() {
   }
 }
 
+function switchHubTab(tab: HubTab) {
+  currentHubTab.value = tab;
+  if (tab === 'logs' && !entries.value.length) {
+    fetchLogStream(activeLogTab.value);
+  } else if (tab === 'errors' && !criticalIssues.value.length) {
+    fetchAllIssues();
+  } else if (tab === 'decisions' && !decisionsList.value.length) {
+    fetchDecisions();
+  }
+}
+
+watch(currentHubTab, (tab) => {
+  switchHubTab(tab);
+});
+
 function syncRouteTab() {
   const qTab = (route.query.tab as string)?.toLowerCase();
   if (qTab === 'errors' || qTab === 'error') {
     switchHubTab('errors');
   } else if (qTab === 'decisions') {
     switchHubTab('decisions');
+  } else if (qTab === 'audit') {
+    switchHubTab('audit');
   } else {
     switchHubTab('logs');
   }
@@ -361,7 +385,7 @@ onMounted(() => {
 
 <template>
   <div class="dc">
-    <PageHeader :title="t('nav.admin.decisions')" :description="t('admin.decisions.desc')">
+    <PageHeader :embedded="props.embedded" :title="t('admin.decisions.title')">
       <template #actions>
         <span class="dsh-pill">
           <span class="dsh-status-dot active" aria-hidden="true" />
@@ -382,69 +406,20 @@ onMounted(() => {
       </template>
     </PageHeader>
 
-    <!-- ══ 主维度分段器：运行日志 / 报错汇总 / AI决策 + 操作审计跳转 ══ -->
-    <div class="flex items-center justify-between gap-3 flex-wrap">
-      <div class="seg" role="tablist" :aria-label="t('admin.decisions.hubAria')">
-        <button
-          type="button"
-          role="tab"
-          :ref="setHubTabRef(0)"
-          :aria-selected="currentHubTab === 'logs'"
-          :tabindex="hubTabRoving(currentHubTab === 'logs')"
-          :class="{ 'seg-on': currentHubTab === 'logs' }"
-          @click="switchHubTab('logs')"
-          @keydown="onHubTabKey($event, 0)"
-        >
-          <Terminal :size="13" class="inline -mt-0.5 me-1" />
-          {{ t('admin.decisions.hubTabLogs') }}
-        </button>
-        <button
-          type="button"
-          role="tab"
-          :ref="setHubTabRef(1)"
-          :aria-selected="currentHubTab === 'errors'"
-          :tabindex="hubTabRoving(currentHubTab === 'errors')"
-          :class="{ 'seg-on': currentHubTab === 'errors' }"
-          @click="switchHubTab('errors')"
-          @keydown="onHubTabKey($event, 1)"
-        >
-          <Bug :size="13" class="inline -mt-0.5 me-1 text-rose-400" />
-          {{ t('admin.decisions.hubTabErrors') }}
-          <span v-if="criticalIssues.length" class="dc-seg-n num text-rose-400 font-bold">
-            {{ criticalIssues.length }}
-          </span>
-        </button>
-        <button
-          type="button"
-          role="tab"
-          :ref="setHubTabRef(2)"
-          :aria-selected="currentHubTab === 'decisions'"
-          :tabindex="hubTabRoving(currentHubTab === 'decisions')"
-          :class="{ 'seg-on': currentHubTab === 'decisions' }"
-          @click="switchHubTab('decisions')"
-          @keydown="onHubTabKey($event, 2)"
-        >
-          <BrainCircuit :size="13" class="inline -mt-0.5 me-1" />
-          {{ t('admin.decisions.hubTabDecisions') }}
-        </button>
-      </div>
-
-      <!-- 快速导流到独立的操作审计台账，理顺产品认知 -->
-      <RouterLink
-        to="/admin/audit"
-        class="text-3xs text-zinc-400 hover:text-emerald-400 inline-flex items-center gap-1 transition-colors"
-      >
-        <span>{{ t('admin.decisions.jumpAuditTip') }}</span>
-        <span class="text-zinc-200 underline">{{ t('admin.decisions.jumpAuditLink') }}</span>
-        <ArrowRight :size="11" />
-      </RouterLink>
-    </div>
+    <!-- ══ 主维度选项卡：运行日志 / 报错汇总 / AI决策 / 操作审计 ══ -->
+    <BaseTabs
+      v-model="currentHubTab"
+      :items="hubTabs"
+      :label="t('admin.decisions.hubAria')"
+      baseId="dc"
+    />
 
     <!-- ══════════════════════════════════════════════════
          视图 1：三路系统运行日志控制台
          ══════════════════════════════════════════════════ -->
-    <section v-if="currentHubTab === 'logs'" class="card dc-console">
-      <header class="card-head dc-head">
+    <div v-if="currentHubTab === 'logs'" id="dc-panel-logs" role="tabpanel" aria-labelledby="dc-tab-logs" tabindex="0">
+      <section class="card dc-console">
+        <header class="card-head dc-head">
         <div class="dc-head-left">
           <h2 class="card-title"><Terminal :size="14" />{{ t('admin.decisions.hubTabLogs') }}</h2>
           <span class="badge">{{ t('admin.decisions.latestFirst') }}</span>
@@ -607,11 +582,13 @@ onMounted(() => {
         </div>
       </div>
     </section>
+    </div>
 
     <!-- ══════════════════════════════════════════════════
          视图 2：全系统报错汇总大盘 (Error Center)
          ══════════════════════════════════════════════════ -->
-    <section v-else-if="currentHubTab === 'errors'" class="card flex flex-col flex-1 min-h-[400px]">
+    <div v-else-if="currentHubTab === 'errors'" id="dc-panel-errors" role="tabpanel" aria-labelledby="dc-tab-errors" tabindex="0">
+    <section class="card flex flex-col flex-1 min-h-[400px]">
       <header class="card-head dc-head">
         <div class="dc-head-left">
           <h2 class="card-title text-rose-400"><Bug :size="14" />{{ t('admin.decisions.errorsTitle') }}</h2>
@@ -736,11 +713,13 @@ onMounted(() => {
         </div>
       </div>
     </section>
+    </div>
 
     <!-- ══════════════════════════════════════════════════
          视图 3：AI 决策卷宗 (AI Brain Decisions)
          ══════════════════════════════════════════════════ -->
-    <section v-else-if="currentHubTab === 'decisions'" class="card flex flex-col flex-1 min-h-[400px]">
+    <div v-else-if="currentHubTab === 'decisions'" id="dc-panel-decisions" role="tabpanel" aria-labelledby="dc-tab-decisions" tabindex="0">
+    <section class="card flex flex-col flex-1 min-h-[400px]">
       <header class="card-head dc-head">
         <div class="dc-head-left">
           <h2 class="card-title"><BrainCircuit :size="14" />{{ t('admin.decisions.decisionsTitle') }}</h2>
@@ -857,6 +836,14 @@ onMounted(() => {
         </div>
       </div>
     </section>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════
+         视图 4：操作审计流水
+         ══════════════════════════════════════════════════ -->
+    <div v-else id="dc-panel-audit" role="tabpanel" aria-labelledby="dc-tab-audit" tabindex="0">
+      <AuditPage embedded />
+    </div>
   </div>
 </template>
 

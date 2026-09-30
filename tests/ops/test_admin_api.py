@@ -274,7 +274,7 @@ class AdminApiTests(unittest.TestCase):
 
         # 1. Anonymous access returns 401
         self.assertEqual(self.client.get("/api/v1/admin/prompt-library").status_code, 401)
-        self.assertEqual(self.client.put("/api/v1/admin/prompt-library", json={"active_style": "stable"}).status_code, 401)
+        self.assertEqual(self.client.put("/api/v1/admin/prompt-library", json={"active_style": "allpattern_swing"}).status_code, 401)
         self.assertEqual(self.client.get("/api/v1/admin/prompt-profiles").status_code, 401)
         self.assertEqual(self.client.post("/api/v1/admin/prompt-profiles", json={"name": "test"}).status_code, 401)
         self.assertEqual(self.client.get("/api/v1/admin/prompts").status_code, 401)
@@ -286,11 +286,11 @@ class AdminApiTests(unittest.TestCase):
         self.assertEqual(self.client.get("/api/v1/admin/prompts", headers=operator).status_code, 200)
 
         # Operator forbidden on PUT prompt-library and PUT prompts (403)
-        self.assertEqual(self.client.put("/api/v1/admin/prompt-library", headers=operator, json={"active_style": "stable"}).status_code, 403)
+        self.assertEqual(self.client.put("/api/v1/admin/prompt-library", headers=operator, json={"active_style": "allpattern_swing"}).status_code, 403)
         self.assertEqual(self.client.put("/api/v1/admin/prompts", headers=operator, json={"content": "test"}).status_code, 403)
 
         # 3. Superadmin can PUT prompt-library and prompts
-        put_lib = self.client.put("/api/v1/admin/prompt-library", headers=root, json={"active_style": "stable", "trading_system": "", "trading_user": "", "evolution_system": "", "evolution_user": ""})
+        put_lib = self.client.put("/api/v1/admin/prompt-library", headers=root, json={"active_style": "allpattern_swing", "trading_system": "", "trading_user": "", "evolution_system": "", "evolution_user": ""})
         self.assertEqual(put_lib.status_code, 200)
 
         put_prompts = self.client.put("/api/v1/admin/prompts", headers=root, json={"content": ""})
@@ -312,7 +312,7 @@ class AdminApiTests(unittest.TestCase):
         self.assertEqual(bad_import.status_code, 400)
 
         # Whitespace-only profile name creation -> 422
-        bad_create = self.client.post("/api/v1/admin/prompt-profiles", headers=root, json={"name": "   ", "source_id": "stable"})
+        bad_create = self.client.post("/api/v1/admin/prompt-profiles", headers=root, json={"name": "   ", "source_id": "allpattern_swing"})
         self.assertEqual(bad_create.status_code, 422)
 
     def test_admin_update_endpoints_and_status(self):

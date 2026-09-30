@@ -20,7 +20,7 @@ export const enLanding = {
     tag: 'AI AUTOMATED QUANT · CALCULUS & PROBABILITY · MATHEMATICAL RISK',
     titlePart1: 'Next-Gen Crypto Algorithmic Quant System',
     titleHighlight: '24/7 AI Automated Quantitative Trading',
-    subtitle: 'Powered by causal calculus dynamics and probability risk models, strictly enforcing R:R ≥ 2.0 expectancy and constant 1R risk budgets. Continuous 24/7 unattended autonomous execution with 17 fail-closed risk gates and automated two-stage profit ratchets, 100% locally self-hosted with zero third-party custody.',
+    subtitle: 'Powered by causal calculus dynamics and dynamic positive expectancy (E > 0), integrating conviction-based adaptive risk budgeting and two-stage profit ratchets. Continuous 24/7 unattended autonomous execution with 17 fail-closed risk gates, 100% locally self-hosted with zero third-party custody.',
     ctaPrimary: 'Launch Terminal',
     ctaSecondary: 'Architecture Docs',
     ctaGithub: 'GitHub Repository',
@@ -121,7 +121,7 @@ export const enLanding = {
   },
   cta: {
     title: 'Deploy 24/7 AI Automated Trading Today',
-    subtitle: 'Causal calculus dynamics · R:R ≥ 2.0 mathematical expectancy · 17 fail-closed risk gates · 100% local self-hosted non-custodial.',
+    subtitle: 'Causal calculus dynamics · Dynamic positive expectancy · 17 fail-closed risk gates · 100% local self-hosted non-custodial.',
     launchBtn: 'Launch Terminal',
     docsBtn: 'Explore Documentation',
     githubBtn: 'GitHub Repository',

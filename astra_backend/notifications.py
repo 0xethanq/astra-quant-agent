@@ -106,7 +106,7 @@ def _send_qq(env: dict[str, str], message: str) -> tuple[bool, str]:
 def enabled_channels(env: dict[str, str] | None = None) -> list[str]:
     env = env or _env()
     channels = []
-    for channel in ("webhook", "wechat", "telegram", "qq"):
+    for channel in ("webhook", "wechat", "telegram", "qq", "feishu", "dingtalk"):
         if env.get(f"ASTRA_NOTIFY_{channel.upper()}_ENABLED") == "1":
             channels.append(channel)
     return channels
@@ -118,6 +118,8 @@ def diagnose_channel(channel: str, env: dict[str, str] | None = None) -> dict[st
     required = {
         "webhook": ("ASTRA_NOTIFICATION_WEBHOOK",),
         "wechat": ("ASTRA_WECHAT_WEBHOOK",),
+        "feishu": ("ASTRA_FEISHU_WEBHOOK",),
+        "dingtalk": ("ASTRA_DINGTALK_WEBHOOK",),
         "telegram": ("ASTRA_TELEGRAM_BOT_TOKEN", "ASTRA_TELEGRAM_CHAT_ID"),
         "qq": ("ASTRA_QQ_APP_ID", "ASTRA_QQ_CLIENT_SECRET", "ASTRA_QQ_OPENID"),
     }
@@ -233,6 +235,56 @@ def send_channel(channel: str, message: str, env: dict[str, str] | None = None) 
         if response.get("ok") is not True:
             return False, f"Telegram 业务拒绝：{response.get('description') or response}"
         return True, f"accepted: message_id={((response.get('result') or {}).get('message_id',''))}"
+
+    if channel == "feishu":
+        url = env.get("ASTRA_FEISHU_WEBHOOK", "").strip()
+        if not url:
+            return False, "飞书 Webhook 未配置"
+        try:
+            url = validate_outbound_url(url, allow_private=True)
+        except ValueError as exc:
+            return False, f"飞书 Webhook 无效：{exc}"
+        payload: dict[str, Any] = {"msg_type": "text", "content": {"text": message}}
+        feishu_secret = env.get("ASTRA_FEISHU_SECRET", "").strip()
+        if feishu_secret:
+            ts = int(time.time())
+            sign_str = f"{ts}\n{feishu_secret}"
+            hmac_code = hmac.new(sign_str.encode("utf-8"), digestmod=hashlib.sha256).digest()
+            sign = base64.b64encode(hmac_code).decode("utf-8")
+            payload["timestamp"] = str(ts)
+            payload["sign"] = sign
+        ok, detail, response = _post_json(url, payload)
+        if not ok:
+            return False, f"{detail} {response}"
+        code = response.get("code") or response.get("StatusCode")
+        if code not in (0, "0", None):
+            return False, f"飞书业务拒绝 code={code} msg={response.get('msg', '')}"
+        return True, "accepted: HTTP 200 code=0"
+
+    if channel == "dingtalk":
+        url = env.get("ASTRA_DINGTALK_WEBHOOK", "").strip()
+        if not url:
+            return False, "钉钉 Webhook 未配置"
+        try:
+            url = validate_outbound_url(url, allow_private=True)
+        except ValueError as exc:
+            return False, f"钉钉 Webhook 无效：{exc}"
+        ding_secret = env.get("ASTRA_DINGTALK_SECRET", "").strip()
+        if ding_secret:
+            ts = int(time.time() * 1000)
+            sign_str = f"{ts}\n{ding_secret}"
+            hmac_code = hmac.new(ding_secret.encode("utf-8"), sign_str.encode("utf-8"), hashlib.sha256).digest()
+            sign = urllib.parse.quote_plus(base64.b64encode(hmac_code).decode("utf-8"))
+            sep = "&" if "?" in url else "?"
+            url = f"{url}{sep}timestamp={ts}&sign={sign}"
+        payload = {"msgtype": "text", "text": {"content": message}}
+        ok, detail, response = _post_json(url, payload)
+        if not ok:
+            return False, f"{detail} {response}"
+        errcode = response.get("errcode")
+        if errcode not in (0, "0", None):
+            return False, f"钉钉业务拒绝 errcode={errcode} errmsg={response.get('errmsg', '')}"
+        return True, "accepted: HTTP 200 errcode=0"
 
     if channel == "qq":
         return _send_qq(env, message)

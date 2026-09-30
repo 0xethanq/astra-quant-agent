@@ -333,6 +333,9 @@ def admin_config(x_astra_admin_token: str | None = Header(default=None)) -> dict
             "notification_webhook": settings.notification_webhook,
             "manual_close_enabled": settings.manual_close_enabled,
             "order_mode": settings.order_mode,
+            "scale_out_enabled": bool(int(os.getenv("ASTRA_SCALE_OUT_ENABLED", "1") or 1)),
+            "scale_out_ratio": float(os.getenv("ASTRA_SCALE_OUT_RATIO", "0.5") or 0.5),
+            "scale_out_trigger_atr": float(os.getenv("ASTRA_SCALE_OUT_TRIGGER_ATR", "1.2") or 1.2),
             "initial_capital": baseline.get("initial_capital", 4061.04),
             "initial_capital_reset_time": baseline.get("reset_time", ""),
         },
@@ -383,6 +386,9 @@ def update_admin_config(payload: AdminConfigUpdate, x_astra_admin_token: str | N
         "ASTRA_NOTIFICATION_WEBHOOK": data.get("notification_webhook"),
         "ASTRA_MANUAL_CLOSE_ENABLED": "1" if data.get("manual_close_enabled") else "0" if "manual_close_enabled" in data else None,
         "ASTRA_ORDER_MODE": data.get("order_mode"),
+        "ASTRA_SCALE_OUT_ENABLED": "1" if data.get("scale_out_enabled") else "0" if "scale_out_enabled" in data else None,
+        "ASTRA_SCALE_OUT_RATIO": str(data["scale_out_ratio"]) if data.get("scale_out_ratio") is not None else None,
+        "ASTRA_SCALE_OUT_TRIGGER_ATR": str(data["scale_out_trigger_atr"]) if data.get("scale_out_trigger_atr") is not None else None,
     }
     update_env(env_values)
     if data.get("order_mode"):

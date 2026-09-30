@@ -281,12 +281,20 @@ def scan_risk_gates_and_ai_brain(*,
         query_positions,
         read_cycle_health,
         real_pos_dict,
-        save_trackers):
+        save_trackers,
+        session_restricted=False):
     """相位 4 前段：熔断判定 + 单标的保证金上限自适应 + 主脑批量扫描 + 池可信闸。
 
     段内不动控制流（无 return/break）：`executed_actions` 由**原地 append** 回传
     （故只入参、不返回）；`brain_cache` 在段内顶层初始化为 `{}` ⇒ 必然绑定。
     4 项输出见调用点解包。
+
+    ⚠️ `session_restricted`（2026-09-30 交易时段闸门）：为真时**不叫大模型** ——
+    交易主脑实测占全系统模型消耗的 94%（≈4.2M token/天），窗口外让它继续跑
+    就是纯烧钱。**默认 False** 是刻意的：既有调用点（含各测试的 `_scan_kwargs`）
+    不传它时必须与改造前逐位一致。抑制发生在**本段内部**而不是门面传 `None`：
+    门面调用点受 `test_facade_calls_pass_every_parameter_once_same_name` 约束
+    （每个关键字必须与参数同名、且顺序一致），传三元表达式会当场翻红。
     """
     cb_active, cb_reason = is_circuit_breaker_active(usdt_available)
     # 单标的累计保证金上限按可用余额自适应，与提示词 {{risk_budget}} 同口径
@@ -294,7 +302,7 @@ def scan_risk_gates_and_ai_brain(*,
 
     brain_cache = {}
     # One LLM call covers the full six-instrument universe and all active positions.
-    if not cb_active and execute_batch_ai_brain_cycle:
+    if not cb_active and execute_batch_ai_brain_cycle and not session_restricted:
         try:
             pos_desc = "当前系统总" + venue_position_span(
                 okx_count=active_pos_count, okx_long=long_count, okx_short=short_count,
@@ -329,6 +337,9 @@ def scan_risk_gates_and_ai_brain(*,
                     executed_actions.append("本轮AI推理并发跳过（旧指令不违规复用），禁止复用旧持仓指令")
         except Exception as e:
             print(f"[AI Brain Batch Scan Warning] {e}")
+    elif not cb_active and session_restricted:
+        # 窗口外：必须留下**一条可检索**的动作行，否则"这一轮为什么什么都没做"在日志里无从解释
+        executed_actions.append("🕒 非交易时段：跳过 AI 大模型决策与新开仓（机械风控照常）")
 
     # 审计 P2-11：标的池不可信（文件损坏/为空/条目非法）时，旧实现会拿 10 币出厂默认
     # 清单继续开新仓 —— 管理员删掉的标的会因"文件坏了"重新被交易。这里 fail-closed：
@@ -371,7 +382,7 @@ def data_shape_preflight_stage(*, intents_path, trackers_path,
     return violations
 
 def cycle_disclosure_payload(*, broken_venues=(), entries_blocked=False,
-                            shape_violations=()) -> dict:
+                            shape_violations=(), session=None) -> dict:
     """周期披露的**结构化**载荷（第 51 刀）：供"渲染一条行"与"落盘成指标"共用。
 
     单一事实源：`cycle_disclosure_summary` 只负责把它渲染成一行；
@@ -381,6 +392,11 @@ def cycle_disclosure_payload(*, broken_venues=(), entries_blocked=False,
     ⚠️ 绝不抛异常（`None` 集合、含 `None` 的列表一律宽容）：报告器不得成为新的
     单点故障。跨所保护巡检（roadmap G8）已随多所执行面移除 ⇒ `watchdog_*` 三个
     字段一并删除（`/metrics` 侧用 `.get`，读不到即不发对应计数）。
+
+    ⚠️ `session`（2026-09-30 交易时段闸门）：为 `None` 或 `mode == "full"` 时
+    载荷与 `clean` **逐键不变**（既有测试 `test_clean_cycle` 钉住整行文案）；
+    只有在窗口外降级时才追加 `session_*` 三个键并把 `clean` 置 False ——
+    "没开闸/降级跑"不是错误，但**必须被看见**（与 `entries_blocked` 同一哲学）。
     """
     # ⚠️ `str(None)` 是 `"None"`（真值！）—— 旧写法会把列表里的 `None` 渲染成
     # "一所名叫 None 的坏所"，披露行里就多出一条假场所（"UI 不说谎"的反面）。
@@ -388,14 +404,20 @@ def cycle_disclosure_payload(*, broken_venues=(), entries_blocked=False,
     venues = sorted({str(v).strip() for v in (broken_venues or [])
                      if v is not None and str(v).strip()})
     bad = [str(b) for b in (shape_violations or [])]
-    return {
+    restricted = bool(isinstance(session, dict) and session.get("restricted"))
+    payload = {
         "broken_venues": venues,
         "broken_venue_count": len(venues),
         "entries_blocked": bool(entries_blocked),
         "shape_violation_count": len(bad),
         "shape_violation_head": bad[:3],
-        "clean": not (venues or entries_blocked or bad),
+        "clean": not (venues or entries_blocked or bad or restricted),
     }
+    if restricted:
+        payload["session_mode"] = str(session.get("mode") or "")
+        payload["session_reason"] = str(session.get("reason") or "")
+        payload["session_restricted"] = True
+    return payload
 
 
 def cycle_disclosure_summary(payload: dict) -> str:
@@ -414,6 +436,11 @@ def cycle_disclosure_summary(payload: dict) -> str:
         parts.append(f"凭证坏所={n_ven}({','.join(payload.get('broken_venues') or [])})")
     if payload.get("entries_blocked"):
         parts.append("对账失败（禁本轮新开仓）")
+    if payload.get("session_restricted"):
+        # 2026-09-30：休市降级必须出现在**这一行**里 —— 它每轮都打印、也可检索，
+        # 是"这一轮为什么什么都没做"的唯一常驻线索。
+        mode = str(payload.get("session_mode") or "")
+        parts.append("时段限制=" + ("完全停跑" if mode == "off" else "只做机械风控"))
     n_bad = int(payload.get("shape_violation_count") or 0)
     if n_bad:
         head = "; ".join(payload.get("shape_violation_head") or [])

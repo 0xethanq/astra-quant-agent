@@ -40,8 +40,8 @@ class CustomSystemApiTests(unittest.TestCase):
         return {"X-Astra-Session": response.json()["session_token"]}
 
     def test_prompt_profile_lifecycle_and_rbac(self):
-        self.assertEqual(self.client.post("/api/v1/admin/prompt-profiles", headers=self.operator, json={"name": "denied", "source_id": "stable"}).status_code, 403)
-        created = self.client.post("/api/v1/admin/prompt-profiles", headers=self.root, json={"name": "自定义波段", "description": "test", "source_id": "stable"})
+        self.assertEqual(self.client.post("/api/v1/admin/prompt-profiles", headers=self.operator, json={"name": "denied", "source_id": "allpattern_swing"}).status_code, 403)
+        created = self.client.post("/api/v1/admin/prompt-profiles", headers=self.root, json={"name": "自定义波段", "description": "test", "source_id": "allpattern_swing"})
         self.assertEqual(created.status_code, 200, created.text)
         profile = created.json()["profile"]
         payload = {**profile, "trading_user": "时区={{timezone}}", "note": "api test"}

@@ -91,25 +91,24 @@ class TwoFileLibraryTest(unittest.TestCase):
 
     def test_local_profile_wins_over_baseline(self):
         self.local.write_text(json.dumps({
-            "version": 2, "active_profile_id": "stable",
-            "profiles": {"stable": pl._clean_profile({"name": "本地版"}, "stable")},
+            "version": 2, "active_profile_id": "allpattern_swing",
+            "profiles": {"allpattern_swing": pl._clean_profile({"name": "本地版"}, "allpattern_swing")},
             "revisions": [],
         }, ensure_ascii=False), encoding="utf-8")
-        self.assertEqual(pl.load_library()["profiles"]["stable"]["name"], "本地版")
+        self.assertEqual(pl.load_library()["profiles"]["allpattern_swing"]["name"], "本地版")
 
     def test_local_active_profile_wins(self):
         self.local.write_text(json.dumps({
-            "version": 2, "active_profile_id": "wide_oscillation", "profiles": {}, "revisions": [],
+            "version": 2, "active_profile_id": "allpattern_swing", "profiles": {}, "revisions": [],
         }), encoding="utf-8")
-        self.assertEqual(pl.load_library()["active_profile_id"], "wide_oscillation")
+        self.assertEqual(pl.load_library()["active_profile_id"], "allpattern_swing")
 
     def test_baseline_missing_falls_back_to_code_presets(self):
         """基线缺失（新克隆且用户没改过）⇒ 退化为代码预设，不抛异常。"""
         self.baseline.unlink()
         lib = pl.load_library()
-        self.assertEqual(lib["active_profile_id"], "stable")
-        self.assertEqual([p["id"] for p in pl.all_profiles()][:2],
-                         ["stable", "wide_oscillation"])
+        self.assertEqual(lib["active_profile_id"], "allpattern_swing")
+        self.assertEqual([p["id"] for p in pl.all_profiles()], ["allpattern_swing"])
 
     # ---- 写入：只写本地、只写差异 -------------------------------------------
 
@@ -119,18 +118,18 @@ class TwoFileLibraryTest(unittest.TestCase):
         基线一旦被写，git 工作区就又脏了 ⇒ 后台「更新」又会被 409 拦住 ⇒
         「更新后预设覆盖用户预设」的事故原样复发。
         """
-        pl.update_profile("stable", {"name": "我的自定义方案"}, note="测试")
-        pl.create_profile("我的新方案", source_id="stable")
+        pl.update_profile("allpattern_swing", {"name": "我的自定义方案"}, note="测试")
+        pl.create_profile("我的新方案", source_id="allpattern_swing")
         self.assertEqual(self.baseline.read_bytes(), self.baseline_bytes,
                          "基线被改写了 —— 工作区又会被弄脏，事故会复发")
 
     def test_edited_preset_is_persisted_locally(self):
-        pl.update_profile("stable", {"name": "我的自定义方案"}, note="测试")
-        self.assertIn("stable", self._local_json()["profiles"])
-        self.assertEqual(pl.get_profile("stable")["name"], "我的自定义方案")
+        pl.update_profile("allpattern_swing", {"name": "我的自定义方案"}, note="测试")
+        self.assertIn("allpattern_swing", self._local_json()["profiles"])
+        self.assertEqual(pl.get_profile("allpattern_swing")["name"], "我的自定义方案")
 
     def test_user_created_profile_is_persisted_locally(self):
-        pl.create_profile("我的新方案", source_id="stable")
+        pl.create_profile("我的新方案", source_id="allpattern_swing")
         pids = self._local_json()["profiles"]
         self.assertTrue([p for p in pids if p.startswith("custom-")], pids)
 
@@ -141,21 +140,21 @@ class TwoFileLibraryTest(unittest.TestCase):
         否则"永远不相同"，本地会留一份副本把厂基线**永久钉死**在旧版本上。
         """
         lib = pl.load_library()
-        lib["profiles"]["wide_oscillation"] = pl.get_profile("wide_oscillation")
+        lib["profiles"]["allpattern_swing"] = pl.get_profile("allpattern_swing")
         pl.save_library(lib)
-        self.assertNotIn("wide_oscillation", self._local_json()["profiles"],
+        self.assertNotIn("allpattern_swing", self._local_json()["profiles"],
                          "纯净预设被落进本地 = 以后收不到发版改进")
 
     def test_untouched_baseline_profile_is_not_persisted_locally(self):
-        """基线里那条 `stable` 原样存回 ⇒ 也不该落本地（它仍是"没改过"）。"""
+        """基线里那条出厂样板原样存回 ⇒ 也不该落本地（它仍是"没改过"）。"""
         pl.save_library(pl.load_library())
-        self.assertNotIn("stable", self._local_json()["profiles"])
+        self.assertNotIn("allpattern_swing", self._local_json()["profiles"])
 
     # ---- 修订历史：按 id 去重合并，不随 load 膨胀 ---------------------------
 
     def test_revisions_do_not_duplicate_across_repeated_saves(self):
         for i in range(3):
-            pl.update_profile("stable", {"name": f"第{i}版"}, note=f"n{i}")
+            pl.update_profile("allpattern_swing", {"name": f"第{i}版"}, note=f"n{i}")
         first = len(pl.load_library()["revisions"])
         pl.save_library(pl.load_library())
         pl.save_library(pl.load_library())
@@ -163,8 +162,8 @@ class TwoFileLibraryTest(unittest.TestCase):
                          "基线修订被反复前置 ⇒ 历史无限膨胀（去重要按 id）")
 
     def test_revision_history_survives_the_split(self):
-        pl.update_profile("stable", {"name": "改一下"}, note="留下痕迹")
-        self.assertTrue(pl.profile_history("stable"), "修订历史丢了")
+        pl.update_profile("allpattern_swing", {"name": "改一下"}, note="留下痕迹")
+        self.assertTrue(pl.profile_history("allpattern_swing"), "修订历史丢了")
 
     # ---- 指纹辅助函数的边界 -----------------------------------------------
 
@@ -177,18 +176,29 @@ class TwoFileLibraryTest(unittest.TestCase):
 
     def test_is_user_owned_semantics(self):
         shipped = pl._shipped_profiles(json.loads(self.baseline_bytes.decode("utf-8")))
-        self.assertFalse(pl._is_user_owned("stable", shipped["stable"], shipped),
+        self.assertFalse(pl._is_user_owned("allpattern_swing", shipped["allpattern_swing"], shipped),
                          "与出厂逐字相同 ⇒ 不算用户所有")
         self.assertTrue(pl._is_user_owned("nope-1", pl._clean_profile({}, "nope-1"), shipped),
                         "基线里没有它 ⇒ 用户自建")
         self.assertTrue(pl._is_user_owned(
-            "stable", pl._clean_profile(dict(shipped["stable"], name="改了"), "stable"), shipped))
+            "allpattern_swing", pl._clean_profile(dict(shipped["allpattern_swing"], name="改了"), "allpattern_swing"), shipped))
 
     def test_shipped_profiles_prefers_baseline_over_code_presets(self):
-        """基线在时**必须盖住**代码兜底：实测二者不同（evolution_system 1049 vs 92）。"""
+        """基线在时**必须盖住**代码兜底。
+
+        2026-09-30 起基线由代码预设生成、两者同源 ⇒ 不能再靠"线上文本更长"来判。
+        改为**构造式**判据：给基线塞一条与代码不同的同 id 方案，`_shipped_profiles`
+        必须取基线那一条。这样判据与线上数据脱钩，永远有效。
+        """
         shipped = pl._shipped_profiles(json.loads(self.baseline_bytes.decode("utf-8")))
-        self.assertGreater(len(shipped["stable"].get("evolution_system") or ""),
-                           len(pl.PRESETS["stable"].get("evolution_system") or ""))
+        synthetic = dict(shipped["allpattern_swing"], description="基线版本（故意与代码兜底不同）")
+        baseline = {"version": 2, "active_profile_id": "allpattern_swing",
+                    "profiles": {"allpattern_swing": synthetic}, "revisions": []}
+        got = pl._shipped_profiles(baseline)
+        self.assertEqual(got["allpattern_swing"]["description"], "基线版本（故意与代码兜底不同）",
+                         "基线必须优先于代码兜底（否则发版交付的完整预设会被兜底盖掉）")
+        self.assertNotEqual(got["allpattern_swing"]["description"],
+                            pl.PRESETS["allpattern_swing"]["description"])
 
 
 if __name__ == "__main__":

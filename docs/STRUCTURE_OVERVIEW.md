@@ -1,147 +1,151 @@
-# ASTRA 代码结构优化总结（阶段 4 收口）
+# AstraQuant 代码结构总览
 
-> 分支：`refactor/phase4-frontend-modernization`　收口日期：2026-09-15（Asia/Shanghai）
-> 完整逐刀记录：`plan_local/records/structure-01..05.md`（本地 gitignore）
-> —— 2026-09-22 起该记录**已分片为 5 片**，原单文件
-> `plan_local/ASTRA_STRUCTURE_OPTIMIZATION_20260914.md` 已删除（内容全部迁入分片）。
-> **全量逐刀索引**（含每刀落在哪个文件）见 `plan_local/records/index.tsv`，
-> 导航总入口 `plan_local/README.md`。
-> 本文件是**对外的收口说明**：量化结果、问题清单状态、目录约定、后续维护须知。
+> 面向**接手开发者**的结构地图：分层架构、目录约定、每块代码住在哪里、以及改动时必须守的硬约束。
+> 最后校对：2026-09-30。
 
-## 1. 一句话结论
+**一句话**：`astra_backend/` 是控制面（FastAPI + 管理后台），`astra_gateway/` 是调度与执行面，
+`scripts/` 是交易与认知的运行时逻辑，`frontend/` 是 Vue 3 单页应用。
+所有跨层耦合都通过**显式注入**发生，因此每一层都可以单独测试。
 
-**接口、页面、业务逻辑零变更**：全部改动都是「同一棵 AST 的搬家 + 同名注入」，
-每刀都有对拍门（段体与改造前逐字同源、调用点传参完整、行为例、负向验证）兜底。
-后端测试从基线 **1299 → 3133 例**，前端 27 用例 / 136 断言全绿。重构期间实盘交易周期**零异常**。
+---
 
-## 2. 验证矩阵（收口实测）
+## 1. 分层架构
 
-| 检查 | 结果 |
-|---|---|
-| 后端全量 `unittest discover -s tests -t .` | **3133 OK**（skipped=1） |
-| 离线套件 `tests/offline_suite.py` | **3114 OK**（skipped=27）；`CONFIG_WRITE_ATTEMPTS: []`；EGRESS 自检通过 |
-| 前端 `node --test tests/*.test.mjs` | **27 用例 / 136 断言，0 失败** |
-| 前端 `npx vue-tsc --noEmit` | 干净（无输出） |
-| 前端 `npx vite build` | 成功（1.64s） |
-| 实盘交易周期（13:00 / 13:15 / 13:30 / 13:45 / 14:00） | 异常行 **0** |
-| 标的池 `data/instrument_pool.json` | 未变（sha256 前缀 `a08684e8`） |
-| 工作树 | 干净 |
+```text
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  浏览器 · Vue 3 SPA (frontend/)                                              │
+│  操盘工作站 · 管理后台 · 提示词工坊 · 投委会看板                              │
+└───────────────────────────────┬──────────────────────────────────────────────┘
+                                │ REST /api/v1/**（同源，无独立前端服务）
+┌───────────────────────────────▼──────────────────────────────────────────────┐
+│  L2 路由层   astra_backend/routers/**                                        │
+│  strategy/(5) · gateway/(6) · 以及若干单文件 router                          │
+│  只做：鉴权、参数校验、调用领域层、组装响应。不放业务规则。                    │
+├──────────────────────────────────────────────────────────────────────────────┤
+│  L3 领域层                                                                   │
+│   dashboard_payload/(20) 看板载荷按数据域装配                                 │
+│   council/(6) 投委会配置与辩论引擎      policy/(8) 策略快照生成/归档/恢复      │
+│   llm/(13) 模型配置存储/能力探测/传输派发  execution/(8) 执行闸门与路由         │
+│   exchanges/(9) OKX 适配器与签名/订单/诊断                                    │
+├──────────────────────────────────────────────────────────────────────────────┤
+│  L1 装配层 + L0 门面                                                          │
+│   app.py 装配路由与中间件；门面模块（如 llm_manager / dashboard_cache）只做     │
+│   「薄壳 + 同名注入」，实现体在 L3/L4 子包中                                   │
+└───────────────────────────────┬──────────────────────────────────────────────┘
+                                │ 进程内调用 + 文件/JSON 契约
+┌───────────────────────────────▼──────────────────────────────────────────────┐
+│  调度与执行面   astra_gateway/**                                             │
+│   scheduler.py 全部节奏的**唯一声明处**（trader/news/factors/evolution/...）  │
+│   worker.py 循环取任务、加分布式锁、写心跳；agents.py 任务清单                │
+└───────────────────────────────┬──────────────────────────────────────────────┘
+                                │ 子进程调用
+┌───────────────────────────────▼──────────────────────────────────────────────┐
+│  运行时逻辑   scripts/**                                                     │
+│   trader/(33) 交易主循环各步（信号/风控/下单/记账/保护腿）                     │
+│   brain/(9) AI 大脑决策链路（行情包、提示词装配、派发、解析）                  │
+│   evolution/(5) 自进化上下文/解析/报告载荷   ledger/(5) 台账行构建与清理       │
+│   news/(3) 资讯采集与加权                                                     │
+│   根层：入口脚本（可直跑）+ 守护进程 + 共享叶子模块                            │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
 
-> 命令与数字口径：抽取门文件 **75** 个、测试文件 **211** 个（另含 1 个结构门 `test_module_free_names.py` 与其扫描器 `_free_names_scan.py`）。
+---
 
-## 3. 量化对照（改造前 → 现在）
+## 2. 目录职责一览
 
-| 文件 | 前 | 后 | 说明 |
-|---|---:|---:|---|
-| `scripts/ai_factor_trader.py` | 3565 | 1108 | 最大函数 1021 行级 → 142 行 |
-| `astra_backend/dashboard_cache.py` | 2047 | 533 | `update_cache_cycle` **1021 → 185 行**（全仓最大单函数） |
-| `astra_backend/llm_manager.py` | 2105 | 281 | 最大函数 19 行 |
-| `astra_backend/council_manager.py` | 1194 | 416 | 最大函数 66 行 |
-| `astra_backend/policy_snapshot.py` | 1101 | 295 | 最大函数 61 行 |
-| `astra_backend/llm/store.py` | 997 | 883 | |
-| `scripts/ai_brain_trader.py` | 748 | 953 | 期间含功能新增 |
-| `scripts/sync_full_ledger.py` | 715 | 690 | |
-| `scripts/self_improvement_engine.py` | 752 | 738 | |
-| `frontend/src/views/admin/LlmPage.vue` | 1762 | **39** | 拆为组件 + `useLlmConfig` 等 composable |
-| `frontend/src/components/dashboard/ChartWorkstation.vue` | 1285 | 902 | 叠加层计算拆到 `chartLiveLevels.ts` |
-| `frontend/src/locales/legacy/` | 648（100% 死键） | **已删除** | |
-
-## 4. 问题清单状态（对应结构报告 §0）
-
-| 编号 | 问题 | 状态 |
-|---|---|---|
-| B1 | 双路由层：`astra_backend/dashboard_cache.py` 影子 handler 永不执行 | ✅ 已修 |
-| B2 | `update_cache_cycle` 1021 行单函数 | ✅ 已拆（现 185 行，载荷字节基准回归） |
-| B3 | 实盘交易员单文件 3565 行 | ✅ 已拆（现 1108 行，`scripts/trader/` 27 模块） |
-| B4 | LLM 管理器三段混住 | ✅ 薄壳 + 核心抽离（现 281 行，`astra_backend/llm/` 12 模块） |
-| B5 | 委员会配置与辩论引擎混住 | ✅ 已拆（现 416 行，`astra_backend/council/` 6 模块） |
-| B6 | 策略快照三域混住 | ✅ 已拆（现 295 行，`astra_backend/policy/` 8 模块） |
-| B7 | 后端根与 `scripts/` 扁平无分组 | ✅ 已按域建目录（见 §5） |
-| B8 | 单 router 承载 30+ 端点 | ✅ 已拆（`routers/strategy/` 5 模块、`routers/gateway/` 6 模块） |
-| F1 | `DataTable.vue` 只有 1 页用 | ✅ 现 **10** 处使用 |
-| F2 | 管理页重复 `useApi`/loading/catch 样板 | ✅ 抽 `composables/`（`useApi`/`useAsyncAction` 等 8 个） |
-| F3 | `LlmPage.vue` 1762 行 | ✅ 现 **39** 行 |
-| F4 | `ChartWorkstation.vue` 1285 行 | ✅ 现 902 行（叠加层计算出表 + 12 例前端测试） |
-| F5 | `locales/legacy/` 648 行死键 | ✅ 已删除（含死键检测） |
-| F6 | `views/` 布局不一致 | ✅ 现只有 `admin/` `dashboard/` `docs/` |
-| F7 | `components/admin/` 名为共享实则单用 | ✅ 已按域归位（该目录现 2 个真共享组件 + README 导航） |
-| D1 | zh 侧 `promptElided` 键路径错位（中文界面显示裸键名） | ✅ 已修（zh 键路径已对齐） |
-
-## 5. 目录约定（新增/整理的域目录）
-
-| 目录 | 模块数 | 职责 | 文档位置 |
+| 目录 | 模块数 | 职责 | 详细文档 |
 |---|---:|---|---|
-| `scripts/trader/` | 27 | 交易员主循环各步（信号/风控/下单/记账…） | `scripts/README.md` + 各 `__init__.py` 模块表 |
-| `scripts/brain/` | 10 | AI 大脑决策链路 | 同上 |
-| `scripts/ledger/` | 5 | 台账行构建/清理/通知 | 同上 |
+| `astra_backend/routers/strategy/` | 5 | 策略域端点（提示词、风控、投委会、快照…） | `astra_backend/README.md` |
+| `astra_backend/routers/gateway/` | 6 | 网关域端点（备份、通道、通知、运维…） | 同上 |
+| `astra_backend/dashboard_payload/` | 20 | 看板载荷按数据域分块装配 | 同上 |
+| `astra_backend/council/` | 6 | 投委会席位配置 + 辩论引擎 | 同上 |
+| `astra_backend/policy/` | 8 | 策略快照生成 / 归档 / 恢复 / 指纹 | 同上 |
+| `astra_backend/llm/` | 13 | 模型注册表、能力探测、传输派发、健康判定 | 同上 |
+| `astra_backend/execution/` | 8 | 执行闸门、交易所路由、下单前置校验 | 同上 |
+| `astra_backend/exchanges/` | 9 | OKX 适配器、签名、订单、诊断 | 同上 |
+| `astra_gateway/` | — | 调度器、worker、任务清单、存活心跳 | `astra_gateway/` 内 README |
+| `scripts/trader/` | 33 | 交易主循环各阶段 | `scripts/README.md` |
+| `scripts/brain/` | 9 | 主脑行情装配、提示词渲染、决策派发与解析 | 同上 |
 | `scripts/evolution/` | 5 | 自进化上下文、解析、报告载荷 | 同上 |
-| `astra_backend/dashboard_payload/` | 21 | 看板载荷按数据域装配 | `astra_backend/README.md` + 模块表 |
-| `astra_backend/routers/strategy/` `gateway/` | 5 / 6 | 超大 router 按域拆分（URL/方法/处理器名/ tags 一字未改） | 同上 |
-| `astra_backend/council/` | 6 | 委员会配置 + 辩论引擎 | 同上 |
-| `astra_backend/policy/` | 8 | 策略快照生成/归档/恢复 | 同上 |
-| `astra_backend/llm/` | 12 | LLM 配置存储 / 能力探测 / 传输派发 | 同上 |
-| `astra_backend/exchanges/` | — | OKX 适配器 + 订单/签名/诊断 | 同上 |
-| `astra_backend/execution/` | 6 | 执行闸门与路由 | 同上 |
-| `frontend/src/components/dashboard/` | — | 图表与叠加层（计算逻辑出表为 `.ts`） | `frontend/README.md`、`components/admin/README.md` |
+| `scripts/ledger/` | 5 | 台账行构建、清理、通知 | 同上 |
+| `scripts/news/` | 3 | 资讯选择与加权 | 同上 |
+| `frontend/src/views/` | 30 `.vue` | 页面级组件（`admin/` `dashboard/` `docs/`） | `frontend/…/admin/README.md` |
+| `frontend/src/composables/` | 17 `.ts` | 可复用状态与业务逻辑 | 同上 |
+| `frontend/src/components/` | 43 `.vue` | 展示组件（按域归位） | 同上 |
 
-> `docs/BEIJING_TIME_CONTRACT.md`、`docs/exchange_support_matrix.md` 为既有契约文档（后者已随 OKX 专用化重写为单所接入说明）。
+---
 
-## 6. 维护须知（本阶段沉淀的硬约束）
+## 3. 提示词与配置的数据流
 
-> 测试目录已于 §138 按域分子目录，约定见 `tests/README.md`（域名不得与标准库/顶层包重名已由门钉死）。
+这是全仓**最容易搞错**的一条链路，单独画出来：
 
-1. **抽段手法**：只搬「同一棵 AST 的语句段」，调用点用**同名关键字注入**（`name=name`），
-   门面保留调用期全局查找 ⇒ `patch.object(模块, "名字")` 等既有测试接缝不失效。
-2. **结构门是自动的**：`tests/extraction/test_extraction_call_site_names.py` 自动发现全部
-   "参数全为 `name=name`" 的调用点（9 个门面 / 33+ 处），校验参数可解析 **且被调函数名可解析**
-   —— 忘写 import 会被当场拦下。
-3. **两类 pin 必须区别对待**：
-   - **设计边界 pin**（如 `_holding_row` 必须是门面的 `def`、`_pos_id_seen` 跨行状态、
-     接缝模块的 `PUBLIC_SURFACE`）⇒ **不可迁移**，抽段前先 grep 该段的关键局部名；
-   - **行程式清单 pin**（如"dashboard 下应有 N 个 `.ts` 模块"）⇒ 可按 pin 自带提示更新。
-4. **门的子进程限制**：离线套件只放行 `git show <rev>:<path>` 与 `git rev-parse --short <ref>`；
-   结构检查请用纯 Python/AST，不要起 `git grep` 之类子进程。
-5. **提交前跑两套件**：`unittest discover`（全量）与 `offline_suite.py`（离线/无外泄/无写盘）
-   —— 守卫专属检查只在离线套件里生效。
-6. **负向验证是门的一部分**：每条新门都要做"注入一处篡改 ⇒ 精确翻红"的验证；
-   **在任何篡改下都绿的门等于没写**（本阶段靠这条抓出过"没牙的测试"）。
-7. **子模块内部自由名也必须静态可验**（`tests/audit/test_module_free_names.py`，扫全仓 236 个模块）：
-   整段搬迁若漏带模块级 import，而该模块的 IO 又包在静默 `except: pass` 里，
-   会**编译通过、导入通过、单测全绿、运行时静默归零**。
-   这条门正是因一次真实事故（见 §9）而补的 —— 只验"调用点完整"不够。
+```text
+                    ┌────────────────────────────────────────────┐
+                    │ data/prompt_library.json                   │
+                    │ 出厂基线（git 跟踪）—— 全部提示词正文在此  │
+                    └───────────────┬────────────────────────────┘
+                                    │ ⊕
+                    ┌───────────────▼────────────────────────────┐
+                    │ data/prompt_library.local.json             │
+                    │ 你的改动（git 忽略）                       │
+                    └───────────────┬────────────────────────────┘
+                                    ▼
+        ┌───────────────────────────────────────────────────────────┐
+        │ 代码基座（只读）                                          │
+        │ scripts/ai_brain_trader.py :: READONLY_OUTPUT_SCHEMA      │
+        │ = 模型输出 JSON 契约。工坊禁用、接口拒绝改动、删除会回插。 │
+        └───────────────────────────┬───────────────────────────────┘
+                                    ▼
+        ┌───────────────────────────────────────────────────────────┐
+        │ apply_module_layout()  —— 渲染边界                        │
+        │ 按方案里的模块顺序编排 · 归一化 base 模块 · 渲染 {{插槽}}  │
+        └───────────────────────────┬───────────────────────────────┘
+                                    ▼
+        ┌───────────────────────────────────────────────────────────┐
+        │ 实发提示词（System ⊕ User）                               │
+        │ 插槽值来自 scripts/brain/prompt.py 逐周期生成的 runtime_vars│
+        └───────────────────────────────────────────────────────────┘
+```
 
-## 7. 剩余（刻意未做，属收益递减）
+**两条不能破的规则：**
 
-- `scripts/sync_full_ledger.py` 690（`build_lifecycle_ledger` 191）：剩余段落多为 IO 编排，
-  或受设计边界 pin 约束（`_pos_id_seen` 跨行状态、官方平仓行构建）。
-- `scripts/self_improvement_engine.py` 738（`run_self_evolution` 149）：剩余为 LLM 调用与落盘编排。
-- 前端 F2 剩余样板、F7 收尾。
+1. **正文只存 JSON。** Python 里除只读 Schema 外不得出现提示词正文 —— 一旦出现第二份副本，
+   「工坊改了没生效」这类静默故障就会回来。门禁：`tests/llm/test_prompt_source_of_truth.py`。
+2. **只读契约不可改。** 内容/启停改动会被 `validate_profile` fail-closed 拒绝；删除则由渲染层回插。
 
-## 8. 未决事项（需人工拍板）
+---
 
-- **API 服务重启**：`uvicorn astra_backend.app:app`（PID 328199，未带 `--reload`）仍在跑旧代码；
-  `routers/` 拆分（阶段 4 前期）需重启后生效 —— 未擅自重启，等你决定窗口。
-- **自进化复验**：14:00 调度器的自进化复盘结果由你复查（已从代理待办中移除）。
+## 4. 硬约束（改动前必读）
 
-## 9. 事故记录：主脑行情静默失败（2026-09-15，已修复）
+1. **双拼写 import 是两个模块对象。** `instrument_pool is not scripts.instrument_pool`。
+   只 patch 一个，另一个照旧读真实配置 —— 这是本仓反复踩到的一类坑。
+2. **门面被重载（`importlib.reload`）会冲掉 `setattr`**，因此测试沙箱用 `sys.meta_path` finder
+   包住 loader，而不是裸赋值。
+3. **抽取/搬家只能搬「同一棵 AST 的语句段」**，调用点用**同名关键字注入**（`name=name`），
+   使 `patch.object(模块, "名字")` 这类既有测试接缝不失效。
+4. **子模块内部自由名也必须静态可验**（`tests/audit/test_module_free_names.py`）：
+   整段搬迁若漏带模块级 import，而该模块的 IO 又包在静默 `except` 里，
+   会编译通过、导入通过、单测全绿、**运行时静默归零**（本仓真出过一次 30 小时的事故）。
+5. **配置路径必须调用期解析**（环境变量可重定向），否则测试会写生产文件。
+6. **门禁必须跑在「将要提交的那棵树」上**：新增文件被 `.gitignore` 吞掉时，本地可以全绿而仓库里什么都没有。
 
-**现象**：看板报「现价为 0 且数据 invalid，触发 P0 数据有效性拦截」，主脑每轮只做持仓风控、禁止开新仓。
+---
 
-**根因**：本阶段 B3 抽取 `scripts/brain/packages.py`（2026-09-14 08:41，`b53ba13`）时，
-**模块级 `import json` / `import urllib.request` 没跟着搬过去**；该模块每处取数都包在静默
-`except: pass` 里 ⇒ `NameError` 被吞 ⇒ 现价恒为 0 ⇒ `data_quality: invalid` ⇒ P0 拦截。
+## 5. 验证
 
-**影响窗口**：2026-09-14 08:41 → 2026-09-15 14:52（约 30 小时）。
-**未影响**：本地灾备（同类缺陷在 `backup_upload.py`，但只落在未启用的百度网盘目标里）、
-量子交易员的持仓风控（走 `market_data_service`，独立路径）。
+```bash
+.venv/bin/pytest tests/ -q                 # 后端全量离线回归
+cd frontend && npx vue-tsc --noEmit -p tsconfig.app.json
+npm run build && node --test tests/*.test.mjs
+```
 
-**修复**：补齐 import（3 个文件）；新增全仓自由名静态门 + 白名单自检；实盘实证 15:00 周期
-**`data_quality=valid` 9/9** 且主脑恢复真实决策（`UNI-USDT-SWAP: BUY_LONG @ 6.585`）。
+> 始终使用 `.venv/bin/python` / `.venv/bin/pytest` —— 本仓**刻意不依赖全局 Python**。
 
-**为什么既有防线全失效**（详版见 `plan_local/` 台账 §136）：编译/导入/单测都碰不到运行期
-`NameError`；该模块当时零测试覆盖；抽取对拍门只验"段体 AST + 调用点传参 + 被调名可解析"，
-**没验子模块内部自由名**；静默 `except` 让失败零信号。
+---
 
-**后续加固（§137）**：6 处静默取数 `except` 已接入 `scripts/market_data_health.py` 的
-**失败计数 + 每类一次性告警**（只加可观测性，取值行为一字不变），并有门用"6 处全失败必须
-留下 6 条痕"把这类"零信号"反过来钉死。
+## 6. 历史记录去哪了
+
+阶段 4 的结构重构逐刀记录（含量化对照、问题清单、事故复盘）已归档到本地
+`plan_local/records/`（gitignore，不入库）。那份材料是**当时的收口报告**，
+其中的行数、用例数与未决事项都会随时间失效 —— 因此不再作为对外结构文档，
+以免"文档说的和代码实际不一致"。对外请以本文件为准。

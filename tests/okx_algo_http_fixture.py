@@ -36,15 +36,31 @@ class AlgoHTTP:
             if path.endswith('/orders-algo-pending'):
                 rows = self.pending.pop(0) if self.pending else self.rows
             elif path.endswith('/order-algo'):
-                row = dict(body, algoId='created', state='live')
+                # 每次下单给**唯一** algoId（双腿场景下两条腿若共用一个 id，
+                # "认腿"就无从验证 —— 2026-09-29 持仓中调整止盈正是按 id 认腿的）。
+                self._created = getattr(self, '_created', 0) + 1
+                algo_id = 'created-%d' % self._created
+                row = dict(body, algoId=algo_id, state='live')
                 self.rows.append(row)
-                rows = [{'algoId': 'created', 'sCode': '0'}]
+                rows = [{'algoId': algo_id, 'sCode': '0'}]
             elif path.endswith('/amend-algos'):
+                # V5 amend-algos：**一个对象**，可同时带新止损与新止盈。
+                # 2026-09-29：fixture 需如实建模 `newTpTriggerPx`（持仓中调整止盈
+                # 的生产路径就是靠它），否则"改了止盈"在夹具里看不出效果。
                 assert isinstance(body, dict) and body['instId']
                 for row in self.rows:
                     if row['algoId'] == body['algoId'] and row['instId'] == body['instId']:
                         row['slTriggerPx'] = body['newSlTriggerPx']
+                        if body.get('newTpTriggerPx') is not None:
+                            row['tpTriggerPx'] = body['newTpTriggerPx']
                 rows = [{'algoId': body['algoId'], 'sCode': '0'}]
+            elif path.endswith('/cancel-algos'):
+                # V5 cancel-algos：**一个数组** [{instId, algoId}]。双腿编排是
+                # "先挂后撤"（新腿确认后才撤旧腿），所以这条路径必须可被夹具承接。
+                assert isinstance(body, list) and body, 'cancel-algos 必须是数组'
+                for item in body:
+                    self.rows = [r for r in self.rows if r['algoId'] != item['algoId']]
+                rows = [{'algoId': item['algoId'], 'sCode': '0'} for item in body]
             elif path.endswith(('/orders-pending', '/positions')):
                 rows = []
             elif path.endswith('/close-position'):

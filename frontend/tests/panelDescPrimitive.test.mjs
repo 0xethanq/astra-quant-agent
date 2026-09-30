@@ -46,7 +46,6 @@ export const PANEL_DESC_PROPS = [
 /** 使用 `.panel-desc` 的模板清册（数量不符即翻红）。 */
 export const PANEL_DESC_USERS = {
   'views/admin/NotifyPage.vue': 1,
-  'views/admin/PluginsPage.vue': 1,
   'views/admin/PromptStudioPage.vue': 1,
   'views/admin/RiskPage.vue': 2,
 };
@@ -58,6 +57,7 @@ export const PANEL_DESC_USERS = {
 export const DESC_SHAPE_ALLOWED = {
   '.cn-macro p': '宏观解读段：刻意用 --text-xs 与 text-primary（比普通说明更醒目）',
   '.evo-verdict p': '自进化结论段：刻意用 --text-xs 与 text-secondary',
+  '.evo-failure-note': '自进化**复盘失败横幅**内的说明行：与 .evo-verdict p 同形但属错误语义块（横幅已由 .evo-failure 给出 --down-* 边框/底色），不是卡体普通说明',
   '.gw-warn': '网关告警行：语义色 var(--warn) + 12px 间距（告警块需要更大分隔）',
   '.ph-desc': '页头说明（PageHeader 组件，70 处引用）：刻意用 --text-xs(12px) + max-width 80ch，属页头层级而非卡体说明',
   '.sc-note': '安全页提示块：带 border-top + padding-top 的独立块（不是一行说明），间距 16px 是分隔需要',
@@ -129,7 +129,8 @@ test('三页必须挂 .panel-desc（清册逐文件钉数量）', () => {
     if (actual !== expected) bad.push(`${rel} 应挂 ${expected} 处 panel-desc，实测 ${actual} 处`);
   }
   assert.deepEqual(bad, [], `说明行丢了 .panel-desc：\n  ${bad.join('\n  ')}`);
-  assert.equal(total, 5, `全站说明行实例应为 5 个（批 88 并入 RiskPage 2 处），实测 ${total} 个`);
+  // 2026-09-30 后台精简：内置插件清单页（PluginsPage）删除，其 1 处 .panel-desc 随之移除（5 → 4）。
+  assert.equal(total, 4, `全站说明行实例应为 4 个（批 88 并入 RiskPage 2 处；2026-09-30 删 PluginsPage 1 处），实测 ${total} 个`);
 });
 
 test('被收口的三个旧类名不得回潮', () => {

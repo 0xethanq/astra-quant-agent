@@ -81,6 +81,10 @@ data/*.bak
 data/*.enc
 data/*.txt
 data/*.md
+# 2026-09-30 补：`data/scale_out_events.jsonl`（分批止盈事件流水，交易进程**只追加**）
+# 一直不在任何规则里 —— 它是纯运行时证据，进仓库只会带来"莫名其妙的改动"。
+# 按扩展名列举的老问题（见下条 2026-09- 的注释）再犯一次，故这次连扩展名一起补。
+data/*.jsonl
 data/.*secret_key
 # 2026-09 新增：上面是按**扩展名**列举的，于是**没有扩展名**的运行时产物会漏网。
 # 实测：`data/.astra_gateway_heartbeat`（worker 每秒重写的存活心跳）就这么被 `git add -A`

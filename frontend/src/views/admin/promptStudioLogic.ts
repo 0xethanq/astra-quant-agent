@@ -122,3 +122,50 @@ export function appendVariableSlot(content: unknown, key: string): { content: st
 export function deriveImportName(fileName: unknown): string {
   return String(fileName || '').replace(/\.json$/i, '').replace(/^astra-strategy-/, '')
 }
+
+/** 标准量化下单与持仓管理 JSON 契约模板 */
+export const ORDER_JSON_TEMPLATE = `【标准下单 JSON 契约 (必须严格按此 JSON 输出，严禁包含任何前导或后置闲聊)】：
+{
+  "macro_assessment": "30字内全市场宏观流动性与情绪总结",
+  "position_management": [
+    {
+      "instId": "LINK-USDT-SWAP",
+      "action": "HOLD",
+      "suggested_sl_price": 0.0,
+      "suggested_tp1_price": 0.0,
+      "suggested_tp2_price": 0.0,
+      "confidence": 85,
+      "reason": "30字内持仓调整原因与当前动能分析"
+    }
+  ],
+  "pending_orders_management": [
+    {
+      "ordId": "3879092142614409217",
+      "instId": "LINK-USDT-SWAP",
+      "action": "KEEP",
+      "reason": "30字内撤单或维持挂单原因"
+    }
+  ],
+  "decisions": {
+    "BTC-USDT-SWAP": {
+      "action": "BUY_LONG",
+      "confidence": 82,
+      "leverage": 3,
+      "margin_usdt": 120.0,
+      "entry_price": 64200.0,
+      "take_profit_price": 68500.0,
+      "stop_loss_price": 62100.0,
+      "summary_reason": "4H顺势回踩VWAP，1H加速度由负转正，R:R=2.05",
+      "market_structure": "4H多头通道，1H回踩企稳",
+      "calculus_dynamics": "1H: v=+0.06, a=+0.35, 态=KINETIC_ACCELERATING",
+      "math_prob_rationale": "P续=76%, P破=24%, 肥尾风险受控",
+      "volume_and_oi": "资金费率健康，OI平稳净吃单为正"
+    }
+  }
+}`
+
+/** 向模块内容追加标准下单 JSON 模板 */
+export function appendOrderJsonTemplate(content: unknown): string {
+  const cur = String(content ?? '').trim()
+  return cur ? `${cur}\n\n${ORDER_JSON_TEMPLATE}` : ORDER_JSON_TEMPLATE
+}

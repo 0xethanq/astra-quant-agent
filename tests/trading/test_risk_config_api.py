@@ -9,6 +9,7 @@
 """
 from __future__ import annotations
 
+import json
 import os
 import sys
 import tempfile
@@ -233,8 +234,13 @@ class RiskConfigApiTests(unittest.TestCase):
         self.assertEqual(ip.derive_instrument_leverage_cap("tier_1_bluechip", 5.0, 7.0), 7)
         self.assertEqual(ip.derive_instrument_leverage_cap("tier_2_momentum", 5.0, 7.0), 6)
 
+        # ⚠️ 夹具不再抄**运行态**池文件（2026-09-30）：那份文件可被后台随时增删
+        # （本次收敛 8 → 6 就把 SUI 删掉了，本用例当场 StopIteration）。改用出厂默认清单
+        # —— 它有独立门禁（tests/audit/test_audit_config_p4_cleanup.py::DefaultRosterIntegrityTests）
+        # 保证合法且含 BTC，是**稳定的**夹具来源。
         sandbox_pool = Path(self.temp.name) / "instrument_pool.json"
-        sandbox_pool.write_text((ROOT / "data" / "instrument_pool.json").read_text(encoding="utf-8"), encoding="utf-8")
+        sandbox_pool.write_text(json.dumps({"version": 1, "instruments": ip.DEFAULT_INSTRUMENTS},
+                                           ensure_ascii=False, indent=2), encoding="utf-8")
 
         with patch.object(ip, "POOL_FILE", sandbox_pool):
             headers = self.login("admin", "InitialAdmin123456")
@@ -244,17 +250,17 @@ class RiskConfigApiTests(unittest.TestCase):
 
             pool = ip.load_instruments()
             btc = next(item for item in pool if item["instId"] == "BTC-USDT-SWAP")
-            sui = next(item for item in pool if item["instId"] == "SUI-USDT-SWAP")
+            sol = next(item for item in pool if item["instId"] == "SOL-USDT-SWAP")
             self.assertEqual(btc["max_leverage"], 7)
-            self.assertEqual(sui["max_leverage"], 6)
+            self.assertEqual(sol["max_leverage"], 6)
 
             res_reset = self.client.post("/api/v1/admin/risk/reset", headers=headers, json={"confirmation": "RESET RISK"})
             self.assertEqual(res_reset.status_code, 200)
             pool_reset = ip.load_instruments()
             btc_reset = next(item for item in pool_reset if item["instId"] == "BTC-USDT-SWAP")
-            sui_reset = next(item for item in pool_reset if item["instId"] == "SUI-USDT-SWAP")
+            sol_reset = next(item for item in pool_reset if item["instId"] == "SOL-USDT-SWAP")
             self.assertEqual(btc_reset["max_leverage"], 5)
-            self.assertEqual(sui_reset["max_leverage"], 3)
+            self.assertEqual(sol_reset["max_leverage"], 3)
 
 
 class PromptRiskContractTests(unittest.TestCase):
@@ -290,19 +296,37 @@ class PromptRiskContractTests(unittest.TestCase):
         return importlib.reload(ai_brain_trader)
 
     def test_system_prompt_is_static_constitution(self):
+        """代码所有的 System 文本必须**静态**（快照安全），动态口径一律只做"指向"。
+
+        ⚠️ 2026-09-30 由提示词来源迁移重钉：代码里**只剩输出 JSON Schema**
+        （`SYSTEM_PROMPT == READONLY_OUTPUT_SCHEMA`），角色/军规等正文搬进了
+        `data/prompt_library.json`。故本用例拆成两层，两层都保留原意图：
+
+        ① **代码所有的那一份**（= 宪法本体）必须逐字等于 `READONLY_OUTPUT_SCHEMA`，
+           且不得内嵌任何具体风控数值字面量 —— 这是"宪法静态 = 快照安全"的本体，
+           与提示词正文搬到哪无关；
+        ② **口径指向**（"一切金额/盈亏比/置信度以【本周期风险预算】为准"）现在由
+           JSON 方案模块承载，故改在 **effective** 提示词上断言。
+        """
         import ai_brain_trader
         prompt = ai_brain_trader.SYSTEM_PROMPT
-        self.assertIn("以每轮用户消息【本周期风险预算】的实时声明为准", prompt)
-        # 批5 P3-4：目标 R:R 与置信度带不再写死在宪法里——写死会与可配的硬底线/门禁冲突
-        # （稳健套件门禁 85，而旧宪法的 78%~88% 一带有整片必拒值）。数值统一由
-        # build_risk_budget_text() 派生，宪法只做指向。
-        self.assertIn("目标 R:R 与绝对盈亏比底线一律以【本周期风险预算】", prompt)
-        self.assertIn("按【本周期风险预算】给出的置信度标定带给值", prompt)
-        # 宪法不得内嵌任何具体风控数值字面量（防止快照固化过期口径）
+        # ① 宪法本体 = 只读 JSON Schema（逐字，静态）
+        self.assertEqual(prompt, ai_brain_trader.READONLY_OUTPUT_SCHEMA,
+                         "SYSTEM_PROMPT 必须逐字等于代码所有的只读 JSON Schema")
+        self.assertIn("macro_assessment", prompt)
         for forbidden in ("同向持仓上限 3 笔", "同向持仓上限 4 笔", "杠杆不超过 5x",
                           "门禁为 80%", "绝对底线 2.0", "{same_dir}", "{rr_floor}",
                           "目标 R:R ≥ 2.2", "目标 R:R ≥ 2.5", "78% ~ 88%", "5%~10%"):
             self.assertNotIn(forbidden, prompt, f"宪法内嵌了动态风控字面量: {forbidden}")
+        # ② 口径指向（JSON 方案模块）：金额/盈亏比/置信度一律指向运行期推导值
+        from scripts.prompt_library import active_profile
+        effective = ai_brain_trader.get_effective_system_prompt(active_profile())
+        self.assertIn("以每轮用户消息【本周期风险预算】小节的实时推导值为准", effective,
+                      "金额类参数必须指向运行期风险预算，不得内嵌固定值")
+        self.assertIn("目标盈亏比不得低于执行层声明的硬底线", effective,
+                      "盈亏比底线必须指向执行层声明值（不得写死具体数字）")
+        self.assertIn("按置信度弹性取【本周期风险预算】常规区间", effective,
+                      "保证金/杠杆必须按运行期风险预算区间弹性取值")
 
     def test_risk_budget_carries_live_values(self):
         abt = self._reload_clean()
@@ -319,32 +343,78 @@ class PromptRiskContractTests(unittest.TestCase):
             self.assertIn("盈亏比 R:R 硬底线: 2.0", budget)
             self.assertIn("新开仓最低置信度门禁: 80%", budget)
             self.assertIn("止损后同标的冷静期: 30 分钟", budget)
-            # System 宪法保持逐字不变（快照安全）
-            self.assertEqual(abt.SYSTEM_PROMPT, abt._SYSTEM_CORE + abt._PYRAMID + "\n" + abt._SYSTEM_JSON_CONTRACT)
+            # System 宪法保持逐字不变（快照安全）。
+            # ★ 2026-09-30 重钉：`_SYSTEM_CORE` / `_PYRAMID` 已删除（那是提示词正文，
+            # 已迁入 data/prompt_library.json）；代码所有的那一份现在就是只读 Schema。
+            self.assertEqual(abt.SYSTEM_PROMPT, abt.READONLY_OUTPUT_SCHEMA)
         finally:
             del os.environ["ASTRA_MAX_SAME_DIRECTION_POSITIONS"]
             del os.environ["ASTRA_MAX_SCALE_IN_COUNT"]
 
-    def test_section_titles_match_live_layout(self):
-        """标题即接口：代码分节必须与线上 trading_system 布局一一对应，否则线上会用旧快照内容。"""
+    def test_rendered_system_prompt_carries_each_base_section_exactly_once(self):
+        """出厂方案的渲染结果里，8 段代码基座必须**各出现一次**（2026-09-30 重写）。
+
+        旧写法（`test_section_titles_match_live_layout`）把线上 `profiles["stable"]`
+        的 base 模块与代码文本逐字比对。它抓到了真问题，但判据本身有两个缺陷：
+        ① 硬编码 `stable` —— 该预设已被用户淘汰（换成单条「全形态波段策略(提示词样板)」），
+           旧判据会直接 KeyError；
+        ② 它只比"存下来的快照"，而**快照本身就是病根**：线上 stable 把 8 段基座抄进了
+           方案里，其中 3 段是旧版文本 —— 于是代码新加的 `UPDATE_TP` 与
+           `suggested_tp1_price` 被快照吃掉，模型**从未见过**这些新能力。
+
+        新判据改为**渲染级**（与方案怎么存无关）：
+        · 每段基座标题在渲染文本里恰好出现 1 次（缺失 = 掉段；重复 = 快照变第二事实源）；
+        · 渲染两次逐字节一致（前缀缓存的前提）；
+        · 方案里若仍带 `source=base` 的非空快照，其内容必须与代码逐字相同（不许留旧版）。
+        """
         import json as _json
+        import re
         import ai_brain_trader
-        from prompt_library import text_to_modules
+        import prompt_library as pl
         live_library = ROOT / "data" / "prompt_library.json"
         if not live_library.exists():
-            self.skipTest("无线上快照（全新部署），跳过布局对齐检查")
+            self.skipTest("无出厂基线（全新部署），跳过渲染对齐检查")
         lib = _json.loads(live_library.read_text(encoding="utf-8"))
-        layout_titles = [m["title"] for m in lib["profiles"]["stable"]["pipelines"]["trading_system"]
-                         if m.get("source") == "base"]
-        code_titles = [m["title"] for m in text_to_modules(ai_brain_trader.SYSTEM_PROMPT, "base")]
-        self.assertEqual(sorted(layout_titles), sorted(code_titles),
-                         f"分节标题漂移: 布局缺{set(layout_titles)-set(code_titles)} 代码缺{set(code_titles)-set(layout_titles)}")
-        # 线上快照内容必须与代码文本一致（快照只是缓存，不得成为第二事实源）
-        live_map = {m["title"]: m["content"] for m in lib["profiles"]["stable"]["pipelines"]["trading_system"]
-                    if m.get("source") == "base"}
-        code_map = {m["title"]: m["content"] for m in text_to_modules(ai_brain_trader.SYSTEM_PROMPT, "base")}
-        for title in layout_titles:
-            self.assertEqual(live_map[title], code_map[title], f"线上快照与代码文本漂移: {title}")
+        active = lib.get("active_profile_id")
+        profiles = lib.get("profiles") or {}
+        self.assertIn(active, profiles, f"出厂基线的 active 方案 {active} 不在 profiles 里")
+
+        code_map = {m["title"]: m["content"]
+                    for m in pl.text_to_modules(ai_brain_trader.SYSTEM_PROMPT, "base")}
+        for pid, prof in profiles.items():
+            with self.subTest(profile=pid):
+                rendered = pl.apply_module_layout(
+                    ai_brain_trader.SYSTEM_PROMPT, prof, "trading_system", f"{pid} 渲染")
+                for title in code_map:
+                    hits = len(re.findall(r"==== 【" + re.escape(title) + r"】 ====", rendered))
+                    self.assertEqual(hits, 1,
+                                     f"{pid}: 基座段「{title}」在渲染里出现 {hits} 次"
+                                     f"（0=掉段，>1=快照成了第二事实源）")
+                for module in (prof.get("pipelines") or {}).get("trading_system", []):
+                    if module.get("source") != "base":
+                        continue
+                    stored = str(module.get("content") or "")
+                    live_text = code_map.get(str(module.get("title") or ""))
+                    if live_text is not None and stored:
+                        self.assertEqual(stored, live_text,
+                                         f"{pid}: 方案里存的基座快照与代码漂移（{module.get('title')}）"
+                                         f" ⇒ 模型会收到过期硬约束")
+
+    def test_rendered_system_prompt_is_byte_stable(self):
+        """渲染两次必须逐字节一致 —— 前缀缓存与"看到的=收到的"都依赖这一点。
+
+        用**代码出厂预设**渲染（本用例所在模块的方案库被沙箱化，不读线上文件）。
+        """
+        import copy
+        import ai_brain_trader
+        import prompt_library as pl
+        prof = pl._clean_profile(copy.deepcopy(pl.PRESETS["allpattern_swing"]), "allpattern_swing")
+        first = pl.apply_module_layout(ai_brain_trader.SYSTEM_PROMPT, prof, "trading_system", "t")
+        second = pl.apply_module_layout(ai_brain_trader.SYSTEM_PROMPT, prof, "trading_system", "t")
+        self.assertEqual(first, second)
+        # 代码新加的能力不得再被快照吃掉（本次事故的指纹）
+        self.assertIn("UPDATE_TP", first)
+        self.assertIn("suggested_tp1_price", first)
 
 
 class RiskExecutionWiringTests(unittest.TestCase):

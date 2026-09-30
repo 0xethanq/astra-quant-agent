@@ -1,5 +1,6 @@
 /** About & update page copy */
 export const enAdminAbout = {
+  title: 'Version & updates',
   intro: "Verify the version status and run a safe fast-forward update.",
   badge: "Governance · 3/3",
   loading: "Loading component and version data...",

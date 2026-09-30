@@ -103,6 +103,12 @@ def update_simple_backup(payload: SimpleBackupUpdateRequest, x_astra_session: st
         saved = update_backup_job(job["id"], job)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if wanted_type == "local" and payload.retention > 0:
+        local_dir = _get_root() / "backups" / "local"
+        if local_dir.exists():
+            from scripts.backup_runtime import prune
+            all_local = [p for p in local_dir.glob("*.tar.gz") if p.is_file()]
+            prune(all_local, payload.retention)
     audit_record("backup.simple.update", "success", {"actor": actor["username"], "destination": payload.destination, "enabled": payload.enabled})
     return {"saved": True, "job": saved}
 
@@ -329,6 +335,15 @@ def backup_status(x_astra_admin_token: str | None = Header(default=None)) -> dic
     refresh_settings()
     require_admin_header(x_astra_admin_token)
     backups_dir = _get_root() / "backups"
+    simple_job = next((x for x in list_backup_jobs() if x.get("id") == "nightly-default"), None)
+    local_target = next((x for x in (simple_job.get("targets", []) if simple_job else []) if x.get("type") == "local" and x.get("enabled")), None)
+    if not local_target and simple_job:
+        local_target = next((x for x in simple_job.get("targets", []) if x.get("type") == "local"), None)
+    retention_limit = int((local_target or {}).get("retention") or 0)
+    if retention_limit > 0 and (backups_dir / "local").exists():
+        from scripts.backup_runtime import prune
+        all_local = [p for p in (backups_dir / "local").glob("*.tar.gz") if p.is_file()]
+        prune(all_local, retention_limit)
     archive_paths = list(backups_dir.glob("*.tar.gz")) + list((backups_dir / "local").glob("*.tar.gz")) if backups_dir.exists() else []
     local_archives = [{"name": str(item.relative_to(backups_dir)), "bytes": item.stat().st_size, "mtime": int(item.stat().st_mtime)} for item in archive_paths if item.is_file()]
     sqlite_files = list((backups_dir / "sqlite").glob("*.db")) + list((backups_dir / "sqlite").glob("*/*.db")) if (backups_dir / "sqlite").exists() else []
@@ -399,6 +414,37 @@ def download_backup_archive(
         filename=clean_name,
         headers={"Content-Disposition": f'attachment; filename="{clean_name}"'}
     )
+
+
+@router.delete("/api/v1/admin/backups/{filename:path}")
+def delete_backup_archive(
+    filename: str,
+    x_astra_admin_token: str | None = Header(default=None),
+    x_astra_session: str | None = Header(default=None, alias="X-Astra-Session"),
+) -> dict[str, Any]:
+    refresh_settings()
+    actor = require_superadmin(x_astra_session)
+    if ".." in Path(filename).parts:
+        raise HTTPException(status_code=400, detail="非法文件路径：不能包含 ..")
+    clean_name = Path(filename).name
+    backups_dir = _get_root() / "backups"
+    candidate = backups_dir / clean_name
+    if not candidate.exists():
+        candidate = backups_dir / "local" / clean_name
+    if not candidate.exists():
+        rel_candidate = (backups_dir / filename).resolve()
+        if rel_candidate.is_relative_to(backups_dir.resolve()) and rel_candidate.exists():
+            candidate = rel_candidate
+    if not candidate.exists() or not candidate.is_file():
+        raise HTTPException(status_code=404, detail="备份文件不存在或已清理")
+    if not candidate.resolve().is_relative_to(backups_dir.resolve()):
+        raise HTTPException(status_code=400, detail="非法文件路径")
+    try:
+        candidate.unlink()
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"删除备份归档失败: {exc}")
+    audit_record("backup.archive.delete", "success", {"actor": actor["username"], "filename": clean_name})
+    return {"deleted": True, "filename": clean_name}
 
 
 @router.post("/api/v1/admin/backups/upload")

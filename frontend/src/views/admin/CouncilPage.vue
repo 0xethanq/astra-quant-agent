@@ -410,7 +410,7 @@ onMounted(loadData);
 
 <template>
   <div class="cn">
-    <PageHeader :title="t('nav.admin.council')" :description="t('admin.council.desc')">
+    <PageHeader :title="t('nav.admin.council')">
       <template #actions>
         <button type="button" class="btn btn-ghost btn-sm" :disabled="!auth.isSuperadmin" @click="exportConfig">
           <Download :size="14" />

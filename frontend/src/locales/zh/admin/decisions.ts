@@ -1,5 +1,6 @@
 /** 系统日志与决策页文案 */
 export const zhAdminDecisions = {
+  title: '系统日志与报错',
   desc: '统一日志中枢：聚合服务运行日志流、全系统报错大盘与 AI 决策推演',
   normalRun: '日常运行',
   latestFirst: '最新在前',

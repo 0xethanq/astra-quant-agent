@@ -57,6 +57,56 @@ class DisclosurePayloadTest(unittest.TestCase):
         self.assertEqual(cycle_disclosure_summary("字符串"), "[周期披露] 本轮无跳过/未核验项")
 
 
+class SessionRestrictionDisclosureTest(unittest.TestCase):
+    """交易时段降级必须在披露里可见（2026-09-30）。
+
+    降级不是错误，但它是"这一轮什么都没做"的原因 —— 而披露行是每轮都打印、
+    且可检索的唯一常驻线索。把原因藏起来，评审就会以为"系统坏了"。
+    """
+
+    FULL = {"mode": "full", "restricted": False, "reason": "运行中"}
+
+    def test_full_session_keeps_the_payload_byte_identical(self):
+        base = cycle_disclosure_payload()
+        with_full = cycle_disclosure_payload(session=self.FULL)
+        self.assertEqual(base, with_full, "窗口内/未启用时载荷必须**逐键不变**")
+        self.assertTrue(with_full["clean"])
+        for key in ("session_mode", "session_reason", "session_restricted"):
+            self.assertNotIn(key, with_full, "仅 full 时不得引入任何 session_* 键")
+
+    def test_manage_only_is_disclosed_and_not_clean(self):
+        payload = cycle_disclosure_payload(session={"mode": "manage_only", "restricted": True,
+                                                    "reason": "休市中（窗口外）：只做机械风控"})
+        self.assertTrue(payload["session_restricted"])
+        self.assertEqual(payload["session_mode"], "manage_only")
+        self.assertFalse(payload["clean"], "降级跑的周期不算干净周期")
+        line = cycle_disclosure_summary(payload)
+        self.assertIn("时段限制=只做机械风控", line)
+
+    def test_off_is_disclosed_separately(self):
+        payload = cycle_disclosure_payload(session={"mode": "off", "restricted": True,
+                                                    "reason": "休市中（窗口外）：完全停跑巡检"})
+        line = cycle_disclosure_summary(payload)
+        self.assertIn("时段限制=完全停跑", line)
+
+    def test_garbage_session_is_tolerated(self):
+        for raw in (None, "x", 5, [], {"mode": None}, {}):
+            with self.subTest(raw=raw):
+                payload = cycle_disclosure_payload(session=raw)
+                self.assertIn("clean", payload)
+                self.assertNotIn("session_restricted", payload)
+
+    def test_truthy_restricted_flag_is_reported_rather_than_hidden(self):
+        """非布尔但真值的 `restricted`（上游形状漂移）⇒ **报出来**。
+
+        方向选择：多报一次"降级"只是多一行日志，漏报一次就会让"这轮什么都没做"
+        变成无解之谜 —— 所以这里刻意不把 `restricted` 强制成 `is True`。
+        """
+        payload = cycle_disclosure_payload(session={"restricted": "yes"})
+        self.assertTrue(payload["session_restricted"])
+        self.assertFalse(payload["clean"])
+
+
 class SnapshotWriteTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(prefix="astra-wd-")

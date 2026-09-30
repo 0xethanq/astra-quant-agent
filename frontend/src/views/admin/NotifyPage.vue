@@ -52,7 +52,7 @@ let captureTimer: any = null;
 
 const enabledChannelsCount = computed(() => {
   if (!config.value) return 0
-  return ['qq', 'telegram', 'wechat', 'webhook'].filter(k => config.value[k]?.enabled).length
+  return ['qq', 'telegram', 'wechat', 'feishu', 'dingtalk', 'webhook'].filter(k => config.value[k]?.enabled).length
 })
 
 async function loadConfig(silent = false) {
@@ -64,6 +64,8 @@ async function loadConfig(silent = false) {
     if (config.value) {
       if (config.value.qq?._secret) res.qq._secret = config.value.qq._secret
       if (config.value.telegram?._token) res.telegram._token = config.value.telegram._token
+      if (config.value.feishu?._secret) res.feishu._secret = config.value.feishu._secret
+      if (config.value.dingtalk?._secret) res.dingtalk._secret = config.value.dingtalk._secret
     }
     const schedule = await api('/api/v1/admin/notifications/schedule')
     res._briefingTimes = schedule.briefing_times?.join(', ') || ''
@@ -82,6 +84,14 @@ async function toggleChannel(channel: string, enabled: boolean) {
     const payload: any = { enabled }
     if (config.value) {
       if (channel === 'wechat' && config.value.wechat?.webhook) payload.wechat_webhook = config.value.wechat.webhook
+      if (channel === 'feishu') {
+        if (config.value.feishu?.webhook) payload.feishu_webhook = config.value.feishu.webhook
+        if (config.value.feishu?._secret) payload.feishu_secret = config.value.feishu._secret
+      }
+      if (channel === 'dingtalk') {
+        if (config.value.dingtalk?.webhook) payload.dingtalk_webhook = config.value.dingtalk.webhook
+        if (config.value.dingtalk?._secret) payload.dingtalk_secret = config.value.dingtalk._secret
+      }
       if (channel === 'webhook' && config.value.webhook?.url) payload.webhook_url = config.value.webhook.url
       if (channel === 'telegram') {
         if (config.value.telegram?._token) payload.telegram_bot_token = config.value.telegram._token
@@ -116,18 +126,24 @@ async function toggleChannel(channel: string, enabled: boolean) {
 async function saveAll() {
   try {
     const body: any = {
-      webhook_enabled: config.value.webhook.enabled,
-      webhook_url: config.value.webhook.url,
-      wechat_enabled: config.value.wechat.enabled,
-      wechat_webhook: config.value.wechat.webhook,
-      telegram_enabled: config.value.telegram.enabled,
-      telegram_bot_token: config.value.telegram._token || undefined,
-      telegram_chat_id: config.value.telegram.chat_id,
-      telegram_api_base: config.value.telegram.api_base || undefined,
-      qq_enabled: config.value.qq.enabled,
-      qq_app_id: config.value.qq.app_id,
-      qq_client_secret: config.value.qq._secret || undefined,
-      qq_openid: config.value.qq.openid,
+      webhook_enabled: config.value.webhook?.enabled ?? false,
+      webhook_url: config.value.webhook?.url ?? '',
+      wechat_enabled: config.value.wechat?.enabled ?? false,
+      wechat_webhook: config.value.wechat?.webhook ?? '',
+      feishu_enabled: config.value.feishu?.enabled ?? false,
+      feishu_webhook: config.value.feishu?.webhook ?? '',
+      feishu_secret: config.value.feishu?._secret || undefined,
+      dingtalk_enabled: config.value.dingtalk?.enabled ?? false,
+      dingtalk_webhook: config.value.dingtalk?.webhook ?? '',
+      dingtalk_secret: config.value.dingtalk?._secret || undefined,
+      telegram_enabled: config.value.telegram?.enabled ?? false,
+      telegram_bot_token: config.value.telegram?._token || undefined,
+      telegram_chat_id: config.value.telegram?.chat_id ?? '',
+      telegram_api_base: config.value.telegram?.api_base || undefined,
+      qq_enabled: config.value.qq?.enabled ?? false,
+      qq_app_id: config.value.qq?.app_id ?? '',
+      qq_client_secret: config.value.qq?._secret || undefined,
+      qq_openid: config.value.qq?.openid ?? '',
     }
     const res = await api('/api/v1/admin/notifications', { method: 'PUT', body: JSON.stringify(body) })
     toast.ok(res.message || t('admin.notify.savedAll'))
@@ -277,16 +293,34 @@ interface ChannelCard {
 
 const channelCards = computed<ChannelCard[]>(() => [
   {
-    key: 'qq',
-    title: t('admin.notify.qqTitle'),
-    offTitle: t('admin.notify.qqOff'),
-    onTitle: t('admin.notify.qqOn'),
-    qqActions: true,
+    key: 'feishu',
+    title: t('admin.notify.feishuTitle'),
+    offTitle: t('admin.notify.feishuOff'),
+    onTitle: t('admin.notify.feishuOn'),
+    qqActions: false,
     fields: [
-      { key: 'app_id', label: 'App ID' },
-      { key: '_secret', label: 'Client Secret', type: 'password', placeholder: t('admin.notify.keepExisting') },
-      { key: 'openid', label: t('admin.notify.targetOpenId'), span: true },
+      { key: 'webhook', label: 'Webhook URL', placeholder: 'https://open.feishu.cn/open-apis/bot/v2/hook/...', span: true },
+      { key: '_secret', label: t('admin.notify.signatureSecret'), type: 'password', placeholder: t('admin.notify.optionalSecret'), span: true },
     ],
+  },
+  {
+    key: 'dingtalk',
+    title: t('admin.notify.dingtalkTitle'),
+    offTitle: t('admin.notify.dingtalkOff'),
+    onTitle: t('admin.notify.dingtalkOn'),
+    qqActions: false,
+    fields: [
+      { key: 'webhook', label: 'Webhook URL', placeholder: 'https://oapi.dingtalk.com/robot/send?access_token=...', span: true },
+      { key: '_secret', label: t('admin.notify.signatureSecret'), type: 'password', placeholder: t('admin.notify.optionalSecret'), span: true },
+    ],
+  },
+  {
+    key: 'wechat',
+    title: t('admin.notify.wechatTitle'),
+    offTitle: t('admin.notify.wechatOff'),
+    onTitle: t('admin.notify.wechatOn'),
+    qqActions: false,
+    fields: [{ key: 'webhook', label: 'Webhook URL', placeholder: 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...', span: true }],
   },
   {
     key: 'telegram',
@@ -301,12 +335,16 @@ const channelCards = computed<ChannelCard[]>(() => [
     ],
   },
   {
-    key: 'wechat',
-    title: t('admin.notify.wechatTitle'),
-    offTitle: t('admin.notify.wechatOff'),
-    onTitle: t('admin.notify.wechatOn'),
-    qqActions: false,
-    fields: [{ key: 'webhook', label: 'Webhook URL', span: true }],
+    key: 'qq',
+    title: t('admin.notify.qqTitle'),
+    offTitle: t('admin.notify.qqOff'),
+    onTitle: t('admin.notify.qqOn'),
+    qqActions: true,
+    fields: [
+      { key: 'app_id', label: 'App ID' },
+      { key: '_secret', label: 'Client Secret', type: 'password', placeholder: t('admin.notify.keepExisting') },
+      { key: 'openid', label: t('admin.notify.targetOpenId'), span: true },
+    ],
   },
   {
     key: 'webhook',
@@ -314,7 +352,7 @@ const channelCards = computed<ChannelCard[]>(() => [
     offTitle: t('admin.notify.webhookOff'),
     onTitle: t('admin.notify.webhookOn'),
     qqActions: false,
-    fields: [{ key: 'url', label: t('admin.notify.webhookUrlLabel'), span: true }],
+    fields: [{ key: 'url', label: t('admin.notify.webhookUrlLabel'), placeholder: 'https://api.example.com/webhook', span: true }],
   },
 ])
 
@@ -359,10 +397,10 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="nf">
-    <PageHeader :title="t('nav.admin.notify')" :description="t('admin.notify.desc')">
+    <PageHeader :title="t('nav.admin.notify')">
       <template #actions>
         <span class="badge badge-accent mono">
-          {{ t('admin.notify.channelsChip') }} {{ enabledChannelsCount }}/4
+          {{ t('admin.notify.channelsChip') }} {{ enabledChannelsCount }}/6
         </span>
         <button type="button" class="btn btn-ghost btn-sm" :disabled="loading" @click="loadConfig()">
           <Loader2 v-if="loading && config" :size="14" class="animate-spin shrink-0" />
@@ -399,7 +437,7 @@ onBeforeUnmount(() => {
           <div class="fact">
             <span class="fact-label"><Radio :size="12" />{{ t('admin.notify.bandEnabled') }}</span>
             <span class="fact-value num" :class="enabledChannelsCount ? 'is-up' : ''">
-              {{ enabledChannelsCount }} / 4
+              {{ enabledChannelsCount }} / 6
             </span>
             <span class="fact-foot">{{ t('admin.notify.channelsTitle') }}</span>
           </div>

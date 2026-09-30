@@ -94,8 +94,8 @@ _PARAMS: list[dict[str, Any]] = [
      "desc": "单笔 1R 最大可承受亏损绝对上限（USDT；0 = 不设绝对硬顶，纯按可用余额×单笔风险额占比动态推导）。实际生效取 min(本值, 余额×占比)，设 0 为纯动态比例。",
      "type": "float", "min": 0.0, "max": 50000.0, "step": 10.0, "unit": "USDT", "display_scale": 1},
     {"key": "ASTRA_MIN_RISK_REWARD", "group": "per_trade",
-     "label": "最小盈亏比 R:R 硬底线", "label_en": "Minimum R:R Ratio",
-     "desc": "盈亏比低于该值的开仓报价会被核心风控物理拦截（Fail-Closed），无论来自 AI 还是人工。",
+     "label": "最小盈亏比 R:R 基准底线", "label_en": "Base Minimum R:R Ratio",
+     "desc": "单笔交易的基础盈亏比底线。若报价低于此基准但 ≥ 1.2 且 AI 置信度满足高正期望（E ≥ +0.30R），执行层将弹性放行；低于 1.2 物理绝对拦截。",
      "type": "float", "min": 1.0, "max": 10.0, "step": 0.1, "unit": ": 1", "display_scale": 1},
     {"key": "ASTRA_MAX_RISK_REWARD", "group": "per_trade",
      "label": "最大盈亏比 R:R 上限", "label_en": "Max Risk-Reward Ratio Cap",
@@ -150,11 +150,13 @@ _PARAMS: list[dict[str, Any]] = [
      "type": "int", "min": 0, "max": 1, "step": 1, "unit": "", "display_scale": 1},
     {"key": "ASTRA_SCALE_OUT_RATIO", "group": "exit_strategy",
      "label": "首批平仓止盈比例", "label_en": "Scale-Out Close Ratio",
-     "desc": "第一目标达成时市价落袋的仓位百分比，默认 50%（平一半、留一半博大单边）。",
+     "desc": "第一目标达成时市价落袋的仓位百分比，默认 35%（先落袋三分之一强，剩余仓位博大单边）。",
      "type": "float", "min": 0.1, "max": 0.9, "step": 0.05, "unit": "%", "display_scale": 100},
     {"key": "ASTRA_SCALE_OUT_TRIGGER_ATR", "group": "exit_strategy",
      "label": "分批止盈触发门槛", "label_en": "Scale-Out Trigger Threshold",
-     "desc": "持仓浮盈达到该倍数 × 1H ATR 时启动分批平仓（通常为 1.0~1.5x ATR）。",
+     "desc": "持仓浮盈达到该倍数 × 1H ATR 时启动分批平仓（通常 1.5~2.5x ATR）。"
+             "⚠️ 必须不低于止损的 ATR 倍数（池内主流币 1.8、其余 2.2），否则首批止盈会在止损之前落袋，"
+             "锁定的 R 小于 1 ⇒ 结构上赢小输大（2026-09-30 实测矫正：旧默认 1.20x 只锁 0.6R）。",
      "type": "float", "min": 0.5, "max": 5.0, "step": 0.1, "unit": "× ATR", "display_scale": 1},
     {"key": "ASTRA_MAX_TAKE_PROFIT_ATR", "group": "exit_strategy",
      "label": "单笔最大止盈宽度 (×ATR)", "label_en": "Max Take-Profit ATR Band",
@@ -181,7 +183,7 @@ SUITES: list[dict[str, Any]] = [
          "ASTRA_TIME_STOP_HOURS": 12.0, "ASTRA_TIME_STOP_ATR_BAND": 0.10, "ASTRA_STOP_COOLDOWN_MINUTES": 90,
          "ASTRA_MAX_SCALE_IN_COUNT": 0, "ASTRA_MIN_SCALE_IN_PROFIT_RATIO": 0.012, "ASTRA_MIN_SCALE_IN_CONFIDENCE": 85.0,
          "ASTRA_MAX_TOTAL_EXPOSURE_USDT": 600.0,
-         "ASTRA_SCALE_OUT_ENABLED": 1, "ASTRA_SCALE_OUT_RATIO": 0.50, "ASTRA_SCALE_OUT_TRIGGER_ATR": 1.00,
+         "ASTRA_SCALE_OUT_ENABLED": 1, "ASTRA_SCALE_OUT_RATIO": 0.30, "ASTRA_SCALE_OUT_TRIGGER_ATR": 2.50,
          "ASTRA_MAX_TAKE_PROFIT_ATR": 2.80,
      }},
     {"id": "balanced", "name": "⚖️ 均衡波段", "tagline": "推荐默认 · 攻守兼备",
@@ -190,7 +192,7 @@ SUITES: list[dict[str, Any]] = [
      "values": {key: DEFAULTS[key] for key in DEFAULTS}},
     {"id": "aggressive", "name": "🚀 进取猎手", "tagline": "高频波段 · 经验账户专用",
      "desc": "专为敏捷波段与高资金周转打造：单笔杠杆提升至 6x~9.9x（主流币10x/动量币8x），单笔保证金放宽至 40%，单标的无绝对硬上限（纯按可用余额 48% 比例动态推导），"
-             "同向放宽至 5 仓多币种多点开花、置信度门禁降至 68% 抢先上车、允许 2 次金字塔加仓放大盈利单、15分钟冷静期与 1.0x ATR 极速分批止盈快速回笼资金。"
+             "同向放宽至 5 仓多币种多点开花、置信度门禁降至 68% 抢先上车、允许 2 次金字塔加仓放大盈利单、15分钟冷静期与 2.2x ATR 分批止盈（=1.0R 落袋，绝不回到'止损前落袋'的赢小输大结构）。"
              "日亏熔断线设为 10%/500U，激进追求波段收益，最大化资金利用效率与波段收益空间。",
      "values": {
          "ASTRA_PORTFOLIO_RISK_BUDGET_USDT": 0.0,
@@ -204,7 +206,7 @@ SUITES: list[dict[str, Any]] = [
          "ASTRA_TIME_STOP_HOURS": 8.0, "ASTRA_TIME_STOP_ATR_BAND": 0.15, "ASTRA_STOP_COOLDOWN_MINUTES": 15,
          "ASTRA_MAX_SCALE_IN_COUNT": 2, "ASTRA_MIN_SCALE_IN_PROFIT_RATIO": 0.006, "ASTRA_MIN_SCALE_IN_CONFIDENCE": 68.0,
          "ASTRA_MAX_TOTAL_EXPOSURE_USDT": 50000.0,
-         "ASTRA_SCALE_OUT_ENABLED": 1, "ASTRA_SCALE_OUT_RATIO": 0.50, "ASTRA_SCALE_OUT_TRIGGER_ATR": 1.00,
+         "ASTRA_SCALE_OUT_ENABLED": 1, "ASTRA_SCALE_OUT_RATIO": 0.40, "ASTRA_SCALE_OUT_TRIGGER_ATR": 2.20,
          "ASTRA_MAX_TAKE_PROFIT_ATR": 4.50,
      }},
 ]

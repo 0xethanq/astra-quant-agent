@@ -89,7 +89,7 @@ class ReadmeClaimTest(unittest.TestCase):
 
     def test_the_ten_components_all_have_real_consumers(self):
         """现存组件全部有消费者 —— 逐个实测。"""
-        components = ["BaseSwitch", "BaseSparkline", "BaseDrawer", "BaseDialog",
+        components = ["BaseSwitch", "BaseDrawer", "BaseDialog",
                       "BaseTabs", "CopyButton",
                       "DataStatus", "SettingsPopover", "FactorDrawer"]
         for name in components:
@@ -126,7 +126,7 @@ class ReadmeClaimTest(unittest.TestCase):
 
     def test_correction_table_counts_match_reality(self):
         """README 更正表里写的消费者数必须与实测一致（**从文档解析**）。"""
-        components = ["BaseSwitch", "BaseSparkline", "BaseDrawer", "BaseDialog",
+        components = ["BaseSwitch", "BaseDrawer", "BaseDialog",
                       "BaseTabs", "CopyButton",
                       "DataStatus", "SettingsPopover", "FactorDrawer"]
         for name in components:

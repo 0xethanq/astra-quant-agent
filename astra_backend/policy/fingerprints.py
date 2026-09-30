@@ -109,8 +109,8 @@ def extract_prompt_profile_fingerprint(
         except Exception as e:
             logger.warning("Failed to load active profile: %s", e)
             prof = {
-                "id": "stable",
-                "name": "全维度波段强化版",
+                "id": "allpattern_swing",
+                "name": "全形态波段策略(提示词样板)",
                 "editor_mode": "modules",
             }
         finally:
@@ -120,8 +120,8 @@ def extract_prompt_profile_fingerprint(
                 except ValueError:
                     pass
 
-    p_id = str(prof.get("id", "stable"))
-    p_name = str(prof.get("name", "全维度波段强化版"))
+    p_id = str(prof.get("id", "allpattern_swing"))
+    p_name = str(prof.get("name", "全形态波段策略(提示词样板)"))
     editor_mode = str(prof.get("editor_mode", "modules"))
     layout_hash = compute_layout_hash(prof)
 

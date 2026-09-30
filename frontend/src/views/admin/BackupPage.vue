@@ -27,16 +27,44 @@ import { useToast } from '../../composables/useToast'
 import { useConfirm } from '../../composables/useConfirm'
 const toast = useToast()
 const { ask } = useConfirm()
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import PageHeader from '../../components/admin/PageHeader.vue'
+import BaseTabs from '../../components/base/BaseTabs.vue'
+import PolicySnapshotPage from './PolicySnapshotPage.vue'
+import AboutPage from './AboutPage.vue'
+
 import BaseSwitch from '../../components/base/BaseSwitch.vue'
 import BaseEmpty from '../../components/base/BaseEmpty.vue'
 import { useI18n } from '../../composables/useI18n'
+import { useRoute } from 'vue-router'
 const { t } = useI18n()
+
+/**
+ * 系统与灾备页签（2026-09-30 后台精简）：本页是宿主页，吸收了两个原独立页面 ——
+ *   backup  备份归档（本页原有内容：灾备任务、归档清单、远端凭据）
+ *   policy  策略快照与回滚（PolicySnapshotPage；归档/回滚/四单元指纹全部保留）
+ *   version 版本与更新（AboutPage；自更新检查/执行/回滚全部保留）
+ * 三者同属"可恢复性"：数据能回来、策略能回滚、版本能退回。
+ * 旧路径 /admin/policy → ?tab=policy，/admin/about → ?tab=version。
+ */
+type BkTab = 'backup' | 'policy' | 'version';
+function resolveBkTab(raw: unknown): BkTab {
+  const v = Array.isArray(raw) ? raw[0] : raw;
+  const s = String(v);
+  return s === 'policy' || s === 'version' ? (s as BkTab) : 'backup';
+}
+const route = useRoute();
+const activeTab = ref<BkTab>(resolveBkTab(route.query.tab));
+watch(() => route.query.tab, (v) => { activeTab.value = resolveBkTab(v); });
+const tabs = computed(() => [
+  { key: 'backup', label: t('admin.backup.tabBackup') },
+  { key: 'policy', label: t('admin.policySnapshot.title') },
+  { key: 'version', label: t('admin.about.title') },
+]);
 import { useApi } from '../../composables/useApi'
 import { useAuthStore } from '../../stores/auth'
 import { HardDrive, RefreshCw, PlugZap, Save, PlayCircle, Archive, Download,
-  Upload, RotateCcw, AlertTriangle, Loader2, MapPin, Clock, CalendarClock, History } from 'lucide-vue-next'
+  Upload, RotateCcw, AlertTriangle, Loader2, MapPin, Clock, CalendarClock, History, Trash2 } from 'lucide-vue-next'
 import BaseLoadingAnnounce from '../../components/base/BaseLoadingAnnounce.vue';
 
 const { api } = useApi()
@@ -44,7 +72,7 @@ const auth = useAuthStore()
 
 const loading = ref(true)
 const loadError = ref('')
-const busy = ref<'test' | 'save' | 'run' | 'restore' | 'upload' | ''>('')
+const busy = ref<'test' | 'save' | 'run' | 'restore' | 'upload' | 'delete' | ''>('')
 const downloadingArchive = ref<string>('')
 
 const simple = ref<any>(null)
@@ -291,6 +319,29 @@ async function restoreArchive(archiveName: string) {
   }
 }
 
+async function deleteArchive(archiveName: string) {
+  const clean = archiveName.split('/').pop() || archiveName
+  const ok = await ask({
+    title: t('admin.backup.deleteConfirmTitle'),
+    desc: t('admin.backup.deleteConfirmDesc', undefined, { file: clean }),
+    danger: true,
+    okText: t('admin.backup.confirmDelete'),
+  })
+  if (!ok) return
+  busy.value = 'delete'
+  try {
+    await api(`/api/v1/admin/backups/${encodeURIComponent(clean)}`, {
+      method: 'DELETE',
+    })
+    toast.ok(t('admin.backup.deleteOk', undefined, { file: clean }))
+    await load()
+  } catch (e: any) {
+    toast.err(t('admin.backup.deleteFailed', undefined, { msg: e.message }))
+  } finally {
+    busy.value = ''
+  }
+}
+
 function fmtBytes(n: number) {
   if (!n) return '--'
   return n > 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.round(n / 1024) + ' KB'
@@ -356,7 +407,7 @@ onMounted(load)
 
 <template>
   <div class="bk">
-    <PageHeader :title="t('nav.admin.backup')" :description="t('admin.backup.intro')">
+    <PageHeader :title="t('nav.admin.backup')">
       <template #actions>
         <span class="badge" :class="simple?.configured ? 'badge-up' : 'badge-warn'">
           {{ simple?.configured ? t('admin.backup.targetConfigured') : t('admin.backup.targetNotConfigured') }}
@@ -368,6 +419,10 @@ onMounted(load)
         </button>
       </template>
     </PageHeader>
+
+    <BaseTabs v-model="activeTab" :items="tabs" :label="t('admin.backup.tabsLabel')" baseId="bk" />
+
+    <div v-if="activeTab === 'backup'" id="bk-panel-backup" role="tabpanel" aria-labelledby="bk-tab-backup" tabindex="0">
 
     <div v-if="loadError && !simple" role="alert" class="state-block is-error">
       <span class="state-icon"><AlertTriangle :size="17" /></span>
@@ -580,6 +635,15 @@ onMounted(load)
                   >
                     <RotateCcw :size="13" />
                   </button>
+                  <button type="button"
+                    v-if="auth.isSuperadmin"
+                    class="btn btn-quiet btn-sm is-danger"
+                    :disabled="busy === 'delete'"
+                    :title="t('admin.backup.deleteTitle')"
+                    @click="deleteArchive(a.name)"
+                  >
+                    <Trash2 :size="13" />
+                  </button>
                 </div>
               </article>
             </div>
@@ -589,6 +653,15 @@ onMounted(load)
         </div>
       </template>
     </template>
+    </div>
+
+    <div v-else-if="activeTab === 'policy'" id="bk-panel-policy" role="tabpanel" aria-labelledby="bk-tab-policy" tabindex="0">
+      <PolicySnapshotPage embedded />
+    </div>
+
+    <div v-else id="bk-panel-version" role="tabpanel" aria-labelledby="bk-tab-version" tabindex="0">
+      <AboutPage embedded />
+    </div>
   </div>
 </template>
 

@@ -10,6 +10,9 @@ export const enAdminPromptStudio = {
     insertVars: 'Insert variables',
     dictTitle: 'View all available data slots and the variable dictionary',
     dictionary: 'Variable dictionary',
+    insertJsonTemplate: 'Insert Order JSON',
+    insertJsonTemplateTitle: 'Insert standard quantitative order & position management JSON schema',
+    jsonTemplateInserted: 'Standard order JSON template inserted',
     importTitle: 'Import a strategy profile from a local file or text',
     import: 'Import profile',
     exportTitle: 'Export the current profile as a JSON strategy package',
@@ -40,6 +43,7 @@ export const enAdminPromptStudio = {
       legacy: 'Edited',
       custom: 'Custom',
       baseTip: 'identical to the code base — future code updates apply automatically',
+      baseEditNote: 'Base modules are owned by the code: editing one here is never lost — on save it becomes an "Edited" overlay, so what is sent is the base plus your overlay.',
       otherTip: 'content has diverged from the code base (or is user-created): future code updates will not overwrite it',
     },
   modules: {
@@ -51,6 +55,11 @@ export const enAdminPromptStudio = {
     delete: 'Delete module',
     enabledTip: 'Module enabled (click to disable)',
     disabledTip: 'Module disabled (click to enable)',
+    // Read-only module (code-owned: the output JSON schema). The backend
+    // validate_profile rejects any change; explain WHY here so it never looks broken.
+    lockedBadge: 'Read-only',
+    lockedTip: 'Code-owned module (the output JSON contract) — cannot be edited, deleted or disabled',
+    lockedNote: '🔒 Read-only: this is the model output JSON contract. Field names and allowed values must stay byte-aligned with the executor parser, so it is code-owned and not editable here. To change the contract, change the code and ship a release.',
     contentPlaceholder: 'Write this module’s prompt or insert {{variable}} data slots...',
     add: 'Add custom rule module',
     save: 'Save current profile',
@@ -61,10 +70,12 @@ export const enAdminPromptStudio = {
   },
   preview: {
     title: 'Assembled template preview',
+    effective: 'Effective view',
     rendered: 'Assembled text',
     template: 'Template source',
     copy: 'Copy',
-    hintRendered: 'Local assembly only; live data not substituted. Base merging is applied at send time.',
+    hintEffective: 'Same source as what is actually sent (code base + this profile): nothing exists only at send time here. Live data is not substituted.',
+    hintRendered: "Local assembly of this profile's modules only, without the code base. Live data is not substituted.",
     hintTemplate: 'Shows the raw template syntax and slots contained in the modules',
     charCount: '{n} chars',
     empty: '(empty)',

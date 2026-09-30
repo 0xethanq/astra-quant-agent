@@ -10,6 +10,9 @@ export const zhAdminPromptStudio = {
     insertVars: '插入变量',
     dictTitle: '查看所有可用数据插槽与变量字典',
     dictionary: '变量字典',
+    insertJsonTemplate: '插入下单格式',
+    insertJsonTemplateTitle: '向当前正在编辑的模块插入标准量化下单与持仓管理 JSON Schema 模板',
+    jsonTemplateInserted: '已插入标准下单 JSON 模板',
     importTitle: '从本地文件或文本导入策略方案',
     import: '导入方案',
     exportTitle: '将当前方案导出为 JSON 策略包',
@@ -40,6 +43,7 @@ export const zhAdminPromptStudio = {
       legacy: '已改写',
       custom: '新增',
       baseTip: '与代码基座逐字相同：代码升级后会自动同步到本方案',
+      baseEditNote: '基座模块由代码所有：直接在这里改不会丢 —— 保存时会自动另存为「已改写」覆盖层，实发 = 基座 + 你的覆盖层。',
       otherTip: '内容已偏离代码基座（或为自建模块）：代码升级不会再自动覆盖它',
     },
   modules: {
@@ -51,6 +55,11 @@ export const zhAdminPromptStudio = {
     delete: '删除模块',
     enabledTip: '已启用该模块 (点击禁用)',
     disabledTip: '已禁用该模块 (点击启用)',
+    // 只读模块（代码所有：输出 JSON Schema）。后端 validate_profile 会拒绝任何改动，
+    // 这里把"为什么不能改"直接讲清楚，避免用户以为是界面坏了。
+    lockedBadge: '只读',
+    lockedTip: '该模块由代码所有（输出 JSON 契约），不可修改、删除或禁用',
+    lockedNote: '🔒 只读模块：这是模型的输出 JSON 契约，字段名与取值枚举必须与执行层解析器逐字对齐，因此由代码所有、在工坊里不可修改。如需调整输出契约，请改代码并发版。',
     contentPlaceholder: '编写该模块的提示词或插入 {{variable}} 数据插槽...',
     add: '新增自定义规则模块',
     save: '保存当前方案',
@@ -61,10 +70,12 @@ export const zhAdminPromptStudio = {
   },
   preview: {
     title: '模板组装预览',
+    effective: '生效视图',
     rendered: '拼接文本',
     template: '模板源码',
     copy: '复制',
-    hintRendered: '仅本地拼接，未代入实时数据；base合并以发送阶段为准',
+    hintEffective: '与实发同源（基座 + 本方案）：本页看不到"只在实发存在"的内容；仅未代入实时数据',
+    hintRendered: '仅本方案的模块本地拼接，不含代码基座；未代入实时数据',
     hintTemplate: '显示模块包含的原始模版语法与插槽',
     charCount: '{n} 字符',
     empty: '（空）',

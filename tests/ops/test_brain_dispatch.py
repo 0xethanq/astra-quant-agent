@@ -36,6 +36,7 @@ for _p in (str(ROOT), str(ROOT / "scripts")):
 import astra_backend.council_manager as council_manager  # noqa: E402
 import astra_backend.file_locks as file_locks  # noqa: E402
 from scripts.brain import dispatch  # noqa: E402
+from scripts.evolution.review_context import repair_json_object  # noqa: E402
 
 
 class _Telemetry:
@@ -156,7 +157,8 @@ class _Harness(unittest.TestCase):
             "execute_llm_request": self._llm,
             "json": json, "model_name": "m1", "os": os, "packages": [],
             "policy_hash": "H", "policy_snapshot": {}, "policy_summary": "PS",
-            "policy_version": "V", "prompt": "USER_PROMPT", "runtime_context": {},
+            "policy_version": "V", "prompt": "USER_PROMPT",
+            "repair_json_object": repair_json_object, "runtime_context": {},
             "safe_float": lambda v: float(v or 0), "telemetry": self.telemetry,
             "thinking_timeout": 30.0, "time": time, "time_str": "T",
             "urllib": urllib,
@@ -167,6 +169,59 @@ class _Harness(unittest.TestCase):
         kw.update(over)
         self.kw = kw
         return dispatch.dispatch_llm_and_persist_decisions(**kw)
+
+
+class MalformedJsonRecoveryTests(_Harness, unittest.TestCase):
+    """容错解析（2026-09-30）：一枚裸换行不该让**整个交易周期**停摆。
+
+    修复前：`json.loads` 抛 ⇒ 外层 except ⇒ `_record_cycle_health("failed")` + 返回 None
+    ⇒ 本轮**没有任何决策**（不做任何持仓调整/开仓裁决）。
+    修复后：格式类错误就地修复并照常决策；**真坏**仍然 fail-closed 记录失败。
+
+    ## 两个"会让用例变成摆设"的坑（都实测踩过，故写进注释）
+
+    1. **必须同时传 `brain_output=None`**：`_run` 的条件是
+       `if "llm_result" not in over and self.brain_output is not None:` —— 只传
+       `llm_result=` 时它被 pop 走了，条件反而成立，`self.llm_result` 被
+       `json.dumps(brain_output)` **静默覆盖成合法 JSON**；
+    2. **裸控制字符不能在源码里写成 `\\n`**：`"...\\n..."` 是**合法 JSON 转义**，
+       那样 `json.loads` 本来就成功，用例根本不触发修复路径。
+       故下面的载荷用 `RAW_NEWLINE` 常量显式构造，并当场断言它确实**不是**合法 JSON。
+    """
+
+    #: 真实的裸换行（不是 `\n` 这个两字符转义）—— 正是生产日志里那种坏输出。
+    RAW_NEWLINE = chr(10)
+
+    def _assert_payload_is_genuinely_broken(self, payload: str) -> None:
+        """自检：载荷必须真的让 `json.loads` 失败，否则本组用例又在空转。"""
+        with self.assertRaises(ValueError, msg=f"载荷其实是合法 JSON，用例会空转: {payload!r}"):
+            json.loads(payload.strip())
+
+    def test_a_raw_control_char_no_longer_kills_the_whole_cycle(self):
+        payload = '{"macro_assessment": "第一行' + self.RAW_NEWLINE + '第二行", "decisions": {}}'
+        self._assert_payload_is_genuinely_broken(payload)
+        out = self._run(brain_output=None,
+                        llm_result=(payload, None, {"total_tokens": 7}, None))
+        self.assertIsNotNone(out, "裸控制字符不应再让本轮返回 None")
+        self.assertTrue(out["assembled"])
+        self.assertNotIn("failed", [h[0] for h in self.health], f"不该记成周期失败: {self.health}")
+        self.assertIn("ok", [h[0] for h in self.health], "应当记录为正常周期")
+
+    def test_trailing_commas_and_prose_wrapping_are_recovered(self):
+        payload = '好的，结论如下：' + self.RAW_NEWLINE + '{"macro_assessment": "中性", "decisions": {},}'
+        self._assert_payload_is_genuinely_broken(payload)
+        out = self._run(brain_output=None,
+                        llm_result=(payload, None, {"total_tokens": 7}, None))
+        self.assertIsNotNone(out)
+        self.assertNotIn("failed", [h[0] for h in self.health])
+
+    def test_genuinely_broken_json_still_fails_closed(self):
+        """★ 反向牙齿：真坏必须仍然返回 None 并记录失败（行为与修复前一致）。"""
+        payload = "not json at all"
+        self._assert_payload_is_genuinely_broken(payload)
+        out = self._run(brain_output=None, llm_result=(payload, None, {"total_tokens": 7}, None))
+        self.assertIsNone(out, "真坏 JSON 不得被「修」成成功")
+        self.assertEqual([h[0] for h in self.health], ["failed"], "必须记录周期失败且不记成功")
 
 
 class CouncilDisabledTests(_Harness, unittest.TestCase):

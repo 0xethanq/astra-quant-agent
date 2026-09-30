@@ -33,7 +33,7 @@ def check_risk(package: dict, decision: dict, context: dict) -> tuple[bool, str]
     name = str(package.get("name", "")).upper()
     tier = str(package.get("tier") or "")
     is_high_noise = (tier in _HIGH_NOISE_TIERS) if tier else (name in _LEGACY_HIGH_NOISE_SYMBOLS)
-    high_noise_threshold = max(base_conf + 5.0, 80.0)
+    high_noise_threshold = max(base_conf, 80.0) if is_high_noise else base_conf
     if is_high_noise and conf < high_noise_threshold:
         label = f"{tier or name} 高杂波分级标的" if tier else f"{name} 高杂波标的"
         return False, f"{label}置信度 {conf:.1f}% 未达 {high_noise_threshold:.0f}% 防破位门禁，安全降级为 WAIT。"

@@ -43,6 +43,7 @@ import BaseEmpty from '../../components/base/BaseEmpty.vue'
 import {
   Save, RefreshCw, Layers, Trash2, Zap, ShieldCheck, KeyRound,
   Wallet, Activity, AlertTriangle, Loader2, Radar, Share2, Copy, Eye,
+  TrendingUp, ArrowRight,
 } from 'lucide-vue-next'
 import BaseLoadingAnnounce from '../../components/base/BaseLoadingAnnounce.vue'
 
@@ -137,6 +138,8 @@ const mx = ref<any>(null)
 const okxCredViewLive = ref(false)
 const orderMode = ref<'limit' | 'market'>('market')
 const savingOrderMode = ref(false)
+const scaleOutEnabled = ref(true)
+const savingScaleOut = ref(false)
 const venueLatencies = ref<Record<string, number>>({})
 const savingOkx = ref(false)
 const probingVenue = ref<'' | 'okx'>('')
@@ -207,6 +210,7 @@ async function loadAll() {
     } else {
       orderMode.value = 'market'
     }
+    scaleOutEnabled.value = cfg?.editable?.scale_out_enabled !== false
     newCapital.value = String(cfg.editable?.initial_capital ?? '')
     manualClose.value = !!cfg.editable?.manual_close_enabled
     const inst = await api('/api/v1/admin/instruments')
@@ -269,6 +273,25 @@ async function saveOrderMode() {
     toast.err(t('admin.security.errSaveFailed', undefined, { msg: e.message }))
   } finally {
     savingOrderMode.value = false
+  }
+}
+
+async function toggleScaleOut(val: boolean) {
+  savingScaleOut.value = true
+  try {
+    await api('/api/v1/admin/config', {
+      method: 'PUT',
+      body: JSON.stringify({ scale_out_enabled: val }),
+    })
+    scaleOutEnabled.value = val
+    if (config.value?.editable) {
+      config.value.editable.scale_out_enabled = val
+    }
+    toast.ok(val ? t('admin.security.scaleOutOnToast') : t('admin.security.scaleOutOffToast'))
+  } catch (e: any) {
+    toast.err(t('admin.security.errSaveFailed', undefined, { msg: e?.message || e }))
+  } finally {
+    savingScaleOut.value = false
   }
 }
 
@@ -382,12 +405,13 @@ async function confirmClose() {
   }
 }
 
-async function loadMx(preserveVenue?: string) {
+async function loadMx(preserveVenue?: string | Event) {
   try {
+    const targetVenue = typeof preserveVenue === 'string' ? preserveVenue : undefined
     mx.value = await api('/api/v1/admin/multi-exchange')
     if (mx.value?.health?.venues) {
       for (const [k, v] of Object.entries(mx.value.health.venues as Record<string, any>)) {
-        if (v?.avg_ms && (!preserveVenue || k !== preserveVenue || !venueLatencies.value[k])) {
+        if (v?.avg_ms && (!targetVenue || k !== targetVenue || !venueLatencies.value[k])) {
           venueLatencies.value[k] = v.avg_ms
         }
       }
@@ -447,8 +471,15 @@ const okxEnvText = computed(() => okxEnvTextOf(config.value?.editable?.okx_envir
 
 const healthAllOk = computed(() => {
   const chips = mxHealthChips.value || []
-  return chips.length > 0 && chips.every((h: any) => h.ok === h.total)
+  // 全绿必须同时满足：每条 chip 都 allOk（未核实数=0 且 ok=池容量）。
+  // 快照缺失/过期时后端把标的放进 unknown ⇒ 这里永远不会误报"健康"。
+  return chips.length > 0 && chips.every((h: any) => h.allOk)
 })
+
+/** 未核实标的总数（跨场所求和）：>0 时卡片给出解释性提示，避免"0/6 币"被误读成标的坏了。 */
+const healthUnknownTotal = computed(() =>
+  (mxHealthChips.value || []).reduce((sum: number, h: any) => sum + (h.unknown || 0), 0),
+)
 
 // ---- 顶部概览四元指标带 ----
 const bandFacts = computed(() => {
@@ -577,7 +608,7 @@ onMounted(() => {
 
 <template>
   <div class="sc">
-    <PageHeader :title="t('nav.admin.security')" :description="t('admin.security.desc')">
+    <PageHeader :title="t('nav.admin.security')">
       <template #actions>
         <span class="badge mono" :class="isUnifiedLive ? 'badge-warn' : 'badge-accent'">
           {{ isUnifiedLive ? t('admin.security.envLive') : t('admin.security.optDemo') }}
@@ -642,7 +673,7 @@ onMounted(() => {
       <!-- ══════════ 页签 1：交易所账户 ══════════ -->
       <template v-if="activeTab === 'venues'">
         <!-- 全局统一交易环境一键切换 -->
-        <SettingsSection :title="t('admin.security.unifiedEnvTitle')" :description="t('admin.security.unifiedEnvDesc')" :icon="ShieldCheck">
+        <SettingsSection :title="t('admin.security.unifiedEnvTitle')" :icon="ShieldCheck">
           <template #actions>
             <span class="badge mono" :class="isUnifiedLive ? 'badge-warn' : 'badge-accent'">
               {{ isUnifiedLive ? t('admin.security.envLive') : t('admin.security.optDemo') }}
@@ -682,7 +713,7 @@ onMounted(() => {
         </SettingsSection>
 
         <!-- 委托订单模式 -->
-        <SettingsSection :title="t('admin.security.orderModeTitle')" :description="t('admin.security.orderModeDesc')" :icon="Zap">
+        <SettingsSection :title="t('admin.security.orderModeTitle')" :icon="Zap">
           <template #actions>
             <button type="button" class="btn btn-primary btn-sm" :disabled="savingOrderMode" @click="saveOrderMode">
               <Loader2 v-if="savingOrderMode" :size="13" class="animate-spin shrink-0" />
@@ -717,8 +748,44 @@ onMounted(() => {
           </div>
         </SettingsSection>
 
+        <!-- 出场与分批止盈 (Scale-Out) -->
+        <SettingsSection :title="t('admin.security.scaleOutTitle')" :icon="TrendingUp">
+          <template #actions>
+            <span class="badge" :class="scaleOutEnabled ? 'badge-up' : 'badge-neutral'">
+              {{ scaleOutEnabled ? t('admin.security.scaleOutEnabledTag') : t('admin.security.scaleOutDisabledTag') }}
+            </span>
+          </template>
+
+          <div class="sc-group">
+            <div class="flex items-center justify-between">
+              <div>
+                <span class="form-label mb-1">{{ t('admin.security.scaleOutSwitchLabel') }}</span>
+                <p class="sc-hint mb-0">
+                  {{ t('admin.security.scaleOutHint') }}
+                </p>
+              </div>
+              <div class="flex items-center gap-2 shrink-0">
+                <Loader2 v-if="savingScaleOut" :size="14" class="animate-spin shrink-0" />
+                <BaseSwitch
+                  :model-value="scaleOutEnabled"
+                  :aria-label="t('admin.security.scaleOutSwitchLabel')"
+                  :disabled="savingScaleOut"
+                  @update:model-value="toggleScaleOut"
+                />
+              </div>
+            </div>
+            <div class="mt-3 flex items-center justify-between text-xs text-[var(--ink-2)] border-t border-[var(--line-1)] pt-3">
+              <span>{{ t('admin.security.scaleOutCurrentPreset') }}: {{ Math.round((config?.editable?.scale_out_ratio || 0.5) * 100) }}% · {{ config?.editable?.scale_out_trigger_atr || 1.2 }}x ATR</span>
+              <RouterLink to="/admin/risk" class="text-[var(--accent)] hover:underline inline-flex items-center gap-1 font-medium">
+                <span>{{ t('admin.security.scaleOutCustomizeInRisk') }}</span>
+                <ArrowRight :size="12" />
+              </RouterLink>
+            </div>
+          </div>
+        </SettingsSection>
+
         <!-- OKX 接入凭证 -->
-        <SettingsSection :title="t('admin.security.credsTitle')" :description="t('admin.security.credsDesc')" :icon="KeyRound">
+        <SettingsSection :title="t('admin.security.credsTitle')" :icon="KeyRound">
           <div class="sc-venues">
             <article class="sc-venue-card">
               <header class="sc-venue-head">
@@ -819,12 +886,12 @@ onMounted(() => {
         </SettingsSection>
 
         <!-- OKX 行情健康 -->
-        <SettingsSection :title="t('admin.security.healthTitle')" :description="t('admin.security.healthDesc')" :icon="Activity">
+        <SettingsSection :title="t('admin.security.healthTitle')" :icon="Activity">
           <template #actions>
             <span class="badge" :class="healthAllOk ? 'badge-up' : 'badge-warn'">
               {{ healthAllOk ? t('admin.security.healthOk') : t('admin.security.healthDegraded') }}
             </span>
-            <button type="button" class="btn btn-quiet btn-sm" @click="loadMx">
+            <button type="button" class="btn btn-quiet btn-sm" @click="loadMx()">
               <RefreshCw :size="14" />
               <span>{{ t('admin.security.recheck') }}</span>
             </button>
@@ -837,18 +904,22 @@ onMounted(() => {
               v-for="h in mxHealthChips"
               :key="h.name"
               class="sc-health-row"
-              :class="{ 'is-ok': h.ok === h.total }"
+              :class="{ 'is-ok': h.allOk, 'is-unknown': h.unknown > 0 }"
             >
               <span class="sc-health-name">{{ h.name }}</span>
               <span class="sc-health-stat mono num">{{ h.ok }}/{{ h.total }} {{ t('admin.security.coinsUnit') }}</span>
+              <span v-if="h.unknown" class="badge badge-warn">
+                {{ t('admin.security.healthUnknownBadge', undefined, { count: h.unknown }) }}
+              </span>
               <span v-if="h.avg_ms" class="sc-health-ms mono num">{{ h.avg_ms }}ms</span>
               <span v-if="h.testnet" class="badge">{{ t('admin.security.sandboxTag') }}</span>
             </div>
+            <p v-if="healthUnknownTotal" class="sc-hint pad">{{ t('admin.security.healthUnknownNote') }}</p>
           </div>
         </SettingsSection>
 
         <!-- 策略广场实盘共享 -->
-        <SettingsSection :title="t('admin.security.plazaShareTitle')" :description="t('admin.security.plazaShareDesc')" :icon="Share2">
+        <SettingsSection :title="t('admin.security.plazaShareTitle')" :icon="Share2">
           <template #actions>
             <span class="badge mono" :class="!isUnifiedLive ? 'badge-warn' : plazaSettings.enabled ? 'badge-accent' : ''">
               {{ !isUnifiedLive ? t('admin.security.plazaDemoLocked') : plazaSettings.enabled ? t('admin.security.plazaActive') : t('admin.security.plazaOff') }}
@@ -983,7 +1054,7 @@ onMounted(() => {
 
       <!-- ══════════ 页签 2：标的池与初始本金 ══════════ -->
       <template v-if="activeTab === 'pool'">
-        <SettingsSection :title="t('admin.security.capitalTitle')" :description="t('admin.security.capitalDesc')" :icon="Wallet">
+        <SettingsSection :title="t('admin.security.capitalTitle')" :icon="Wallet">
           <template #actions>
             <button
               type="button"
@@ -1027,7 +1098,7 @@ onMounted(() => {
           <p class="sc-hint pad">{{ t('admin.security.capitalFooter') }}</p>
         </SettingsSection>
 
-        <SettingsSection :title="t('admin.security.poolTitle')" :description="t('admin.security.poolDesc')" :icon="Layers">
+        <SettingsSection :title="t('admin.security.poolTitle')" :icon="Layers">
           <template #actions>
             <input
               v-model="newInstId"
@@ -1094,7 +1165,7 @@ onMounted(() => {
 
       <!-- ══════════ 页签 3：应急风控与持仓 ══════════ -->
       <template v-if="activeTab === 'emergency'">
-        <SettingsSection :title="t('admin.security.manualTitle')" :description="t('admin.security.manualDesc')" :icon="Zap">
+        <SettingsSection :title="t('admin.security.manualTitle')" :icon="Zap">
           <template #actions>
             <button type="button" class="btn btn-quiet btn-sm" @click="saveManualClose">
               <Save :size="13" />
@@ -1110,7 +1181,7 @@ onMounted(() => {
           </div>
         </SettingsSection>
 
-        <SettingsSection :title="t('admin.security.snapshotTitle')" :description="t('admin.security.snapshotDesc')" :icon="Radar">
+        <SettingsSection :title="t('admin.security.snapshotTitle')" :icon="Radar">
           <template #actions>
             <button type="button" class="btn btn-quiet btn-sm" @click="loadPositions">
               <Zap :size="13" />
@@ -1672,6 +1743,16 @@ onMounted(() => {
   font-weight: 600;
   color: var(--ds-color-text-primary);
   text-transform: uppercase;
+}
+/* 行级状态色（2026-09-30 补齐：此前模板绑了 is-ok 却没有对应规则 ⇒ 死类，
+   全绿与否只体现在标题徽标上）。未核实走 warn 色，与"全绿"在视觉上互斥。 */
+.sc-health-row.is-ok {
+  border-color: var(--up-line);
+  background-color: var(--up-bg);
+}
+.sc-health-row.is-unknown {
+  border-color: var(--warn-line);
+  background-color: var(--warn-bg);
 }
 .sc-health-stat {
   color: var(--ds-color-text-description);

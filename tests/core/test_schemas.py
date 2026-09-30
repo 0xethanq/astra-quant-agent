@@ -48,7 +48,7 @@ class PromptProfileCreateNameTests(unittest.TestCase):
     def test_the_optional_fields_have_defaults(self):
         req = S.PromptProfileCreateRequest(name="x")
         self.assertEqual(req.description, "")
-        self.assertEqual(req.source_id, "stable")
+        self.assertEqual(req.source_id, "allpattern_swing")
 
     def test_the_name_length_cap(self):
         self.assertEqual(len(S.PromptProfileCreateRequest(name="x" * 60).name), 60)

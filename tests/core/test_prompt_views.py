@@ -17,7 +17,7 @@
 | ★ **`updated` 是 mtime 的整数字符串** | 前端靠它判断"这份快照是不是变了"；用 `int()` 截断（不做本地时区格式化）|
 | ★ **解码失败不许炸** | `errors="replace"` —— 盘上的文件混进坏字节时给个带替换符的结果，而不是把整个编辑器打不开 |
 | ★ **两份快照固定叫 trading / evolution** | 键名是前端契约；各自读 `ai_brain_last_prompt.txt` / `self_improvement_last_prompt.txt` |
-| ★ **模板里的 `{{...}}` 是插槽，不是代码** | 这两段长模板靠 `{{变量}}` 被下游替换，故断言插槽真的在（防止有人把花括号"顺手"改掉）|
+| ★ **模板里的 `{{...}}` 是插槽，不是代码** | 用户提示词长模板（2026-09-30 起由 `data/prompt_library.json` 供给）靠 `{{变量}}` 被下游替换，故断言插槽真的在（防止有人把花括号"顺手"改掉）|
 """
 
 import unittest
@@ -167,6 +167,17 @@ class RenderedSnapshotsTests(unittest.TestCase):
 
 
 class TemplateTests(unittest.TestCase):
+    def _effective(self, pipeline):
+        """由 `data/prompt_library.json` 的启用方案渲染出该管线的用户提示词。
+
+        ★ 2026-09-30 提示词来源迁移：`PV.EVOLUTION_USER_TEMPLATE` /
+        `PV.TRADING_USER_TEMPLATE` 已被清空为 `""`（正文只存 JSON）。本测试类原先
+        断言的那两段常量已不存在，故统一改读"方案模块 layout 出的实发文本"。
+        不注入运行期 context ⇒ 插槽保持 `{{...}}` 形态，量的正是模板正文。
+        """
+        from scripts.prompt_library import active_profile, apply_module_layout, base_template_text
+        return apply_module_layout(base_template_text(pipeline), active_profile(), pipeline, "test")
+
     def test_the_real_data_dir_is_under_the_repo_root(self):
         self.assertEqual(PV.DATA, PV.ROOT / "data")
         # ⚠️ 这里原来断言 `str(PV.ROOT).endswith("<检出目录名>")` —— 钉的是**检出目录的名字**，
@@ -175,36 +186,70 @@ class TemplateTests(unittest.TestCase):
         self.assertEqual(Path(PV.__file__).resolve().parent.parent, Path(PV.ROOT).resolve())
 
     def test_the_evolution_template_exposes_its_slots(self):
+        """复盘用户提示词（现由 JSON `evolution_user` 模块承载）必须暴露全部台账插槽。
+
+        ★ 2026-09-30 重钉：`EVOLUTION_USER_TEMPLATE` 已空，原断言对空串必失败；
+        改在 JSON 方案渲染出的实发文本上断言，插槽集合不变。
+        """
+        text = self._effective("evolution_user")
+        self.assertGreater(len(text), 500, "evolution_user 渲染为空 —— 定位错了对象")
         for slot in ("timestamp_beijing", "existing_memory_markdown", "total",
                      "wins", "losses", "win_rate", "total_net", "total_fees",
                      "target_instruments", "closed_trades_json"):
             with self.subTest(slot=slot):
-                self.assertIn("{{" + slot + "}}", PV.EVOLUTION_USER_TEMPLATE)
+                self.assertIn("{{" + slot + "}}", text)
 
     def test_the_evolution_template_demands_strict_json_output(self):
-        self.assertIn("change_status", PV.EVOLUTION_USER_TEMPLATE)
-        self.assertIn("NO_CHANGE", PV.EVOLUTION_USER_TEMPLATE)
+        """★ 2026-09-30 重钉：改判 JSON `evolution_user` 模块渲染文本上的严格 JSON 契约。"""
+        text = self._effective("evolution_user")
+        self.assertGreater(len(text), 500, "evolution_user 渲染为空 —— 定位错了对象")
+        self.assertIn("change_status", text)
+        self.assertIn("NO_CHANGE", text)
 
     def test_the_trading_template_declares_its_sections(self):
+        """交易用户提示词（现由 JSON `trading_user` 模块承载）必须声明各实时小节。
+
+        ★ 2026-09-30 重钉：`TRADING_USER_TEMPLATE` 已空；小节标题现在就是
+        `data/prompt_library.json` 里那 7 条模块的 title，故在渲染文本上断言同一组小节。
+        """
+        text = self._effective("trading_user")
+        self.assertGreater(len(text), 500, "trading_user 渲染为空 —— 定位错了对象")
         for section in ("当前决策时间戳与市场时效", "账户当前持仓与风险敞口全景",
                         "在途未成交限价挂单", "AstraQuant 启发式实战认知与长期记忆",
                         "全标的池原生行情、技术指标与筹码矩阵"):
             with self.subTest(section=section):
-                self.assertIn(section, PV.TRADING_USER_TEMPLATE)
+                self.assertIn(section, text)
 
     def test_the_trading_template_keeps_the_hard_gate_disclaimer(self):
-        """编辑器的"用户提示词"框不许改到 P0 与执行层硬门禁 —— 模板里明写了这条。"""
-        self.assertIn("P0 与执行层硬门禁仍由 System Prompt 和执行器锁定",
-                      PV.TRADING_USER_TEMPLATE)
+        """编辑器的"用户提示词"框不许改到 P0 与执行层硬门禁 —— 正文里明写了这条。
+
+        ★ 2026-09-30 重钉：旧短语「P0 与执行层硬门禁仍由 System Prompt 和执行器锁定」
+        随代码常量消失；JSON `custom-tu-task` 用「你只能在 System Prompt 的 P0 硬约束内
+        进行综合裁决」表达同一约束，改钉该句。
+        """
+        text = self._effective("trading_user")
+        self.assertGreater(len(text), 500, "trading_user 渲染为空 —— 定位错了对象")
+        self.assertIn("你只能在 System Prompt 的 P0 硬约束内进行综合裁决", text)
+        self.assertIn("P0 硬约束", text)
 
     def test_neither_template_contains_the_split_marker(self):
-        """切分标记只由下游拼接产生；模板里自带会把切分点提前。"""
-        self.assertNotIn("【USER PROMPT", PV.EVOLUTION_USER_TEMPLATE)
-        self.assertNotIn("【USER PROMPT", PV.TRADING_USER_TEMPLATE)
+        """切分标记只由下游拼接产生；模板里自带会把切分点提前。
+
+        ★ 2026-09-30 重钉：两段常量已空，对空串 `assertNotIn` 会**真空通过**；
+        改在 JSON 渲染出的非空文本上断言，并先显式确认非空（防空断言）。
+        """
+        for pipeline in ("trading_user", "evolution_user"):
+            with self.subTest(pipeline=pipeline):
+                text = self._effective(pipeline)
+                self.assertGreater(len(text), 300, f"{pipeline} 为空 —— assertNotIn 会假通过")
+                self.assertNotIn("【USER PROMPT", text)
 
     def test_the_templates_are_non_trivial(self):
-        self.assertGreater(len(PV.EVOLUTION_USER_TEMPLATE), 500)
-        self.assertGreater(len(PV.TRADING_USER_TEMPLATE), 300)
+        """★ 2026-09-30 重钉：长度预算改由 JSON 模块承载（原常量已空）。"""
+        evolution = self._effective("evolution_user")
+        trading = self._effective("trading_user")
+        self.assertGreater(len(evolution), 500)
+        self.assertGreater(len(trading), 300)
 
 
 if __name__ == "__main__":

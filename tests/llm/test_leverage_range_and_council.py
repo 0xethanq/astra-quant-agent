@@ -100,10 +100,31 @@ class BrainPromptAntiAnchorTests(unittest.TestCase):
         return combined("scripts/ai_brain_trader.py", pkg_name="brain")
 
     def test_template_has_no_static_three_anchor(self):
+        """杠杆示例不得再钉死 3；区间声明必须来自 MIN/MAX 常量，且模型被要求按预算区间自裁。
+
+        ★ 2026-09-30 提示词来源迁移后重钉：旧的杠杆示例文案（含"严禁无差别照抄"）
+        随提示词正文一起搬进了 `data/prompt_library.json`，代码子里已搜不到该短语。
+        同一意图拆成两半守：
+          ① 代码侧：运行期风险预算仍从单一事实源 `rc.MIN_LEVERAGE / rc.MAX_LEVERAGE`
+             派生"单笔杠杆区间"，且不存在写死 3 的 `int(min(3, MAX_LEVERAGE))`；
+          ② 提示词侧（现由 JSON 方案模块承载）：模型被要求按【本周期风险预算】的
+             区间弹性取杠杆，而不是照抄示例数字。
+        """
+        from tests.source_scan import assert_area_looks_real
         src = self._brain_src()
+        assert_area_looks_real(self, src, must_contain="def construct_full_market_prompt")
         self.assertNotIn("int(min(3, MAX_LEVERAGE))", src)
-        self.assertIn("严禁无差别照抄", src)
+        # ① 区间来自 risk_constants 单一事实源（非硬编码）
         self.assertIn("单笔杠杆区间", src)
+        self.assertIn("rc.MIN_LEVERAGE", src)
+        self.assertIn("rc.MAX_LEVERAGE", src)
+        # ② 模型侧指令（JSON 方案模块）要求按预算区间自裁，不得照抄固定档位
+        from scripts.prompt_library import active_profile, apply_module_layout, base_template_text
+        effective = apply_module_layout(base_template_text("trading_system"),
+                                        active_profile(), "trading_system", "x")
+        self.assertGreater(len(effective), 1000, "effective system prompt 为空 —— 定位错了对象")
+        self.assertIn("按置信度弹性取【本周期风险预算】常规区间", effective)
+        self.assertIn("强信号可取上限侧", effective)
 
     def test_rendered_example_is_range_midpoint(self):
         lo, hi = 5.0, 7.0

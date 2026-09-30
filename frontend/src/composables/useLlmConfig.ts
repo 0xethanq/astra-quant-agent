@@ -74,6 +74,36 @@ const testResult = ref<any>(null)
 const testLoading = ref(false)
 const testingModelId = ref<string | null>(null)
 
+// ── 模型条目结构自检（2026-09-29）────────────────────────────────────────
+// 后台此前把三条模型并列显示、其中两条是死的（无密钥 / 供应商不存在）却毫无标记，
+// 且 `fallback_model_ids` 为空（等于没有回退）。这里把后端下发的 `model_health`
+// 接到界面：可用性徽标 + 「全部测试」真机自检 + 「清理失效条目」。
+const testAllLoading = ref(false)
+const testAllResult = ref<any>(null)
+const cleanupLoading = ref(false)
+const cleanupResult = ref<any>(null)
+const modelHealth = computed<any>(() => cfg.value?.model_health || { models: {}, warnings: [], counts: {} })
+const healthWarnings = computed<any[]>(() => modelHealth.value.warnings || [])
+const deadModelIds = computed<string[]>(() =>
+  Object.entries(modelHealth.value.models || {})
+    .filter(([, h]: any) => h?.status === 'dead')
+    .map(([id]) => id))
+function healthOf(modelId: string) {
+  return modelHealth.value.models?.[modelId] || null
+}
+function providerHealth(prov: any) {
+  const rows = (prov?.models || []).map((m: any) => healthOf(m.id)).filter(Boolean)
+  // ⚠️ 刻意不用内联 `return { … }`：`tests/llm/test_frontend_llm_config_baseline.py`
+  // 用非贪婪正则 `return \{(.*?)\n  \}` 解析本模块的**导出面**，多一个内联 return
+  // 对象就会让那道门禁解析到错误的块（实测：导出面被判"缺 7 个键"）。
+  const summary = {
+    dead: rows.filter((h: any) => h.status === 'dead').length,
+    warn: rows.filter((h: any) => h.status === 'warn').length,
+    total: rows.length,
+  }
+  return summary
+}
+
 // Remote Fetch State & Modal
 const fetchModalVisible = ref(false)
 const fetchingRemote = ref(false)
@@ -542,6 +572,33 @@ async function deleteSingleModel(m: any) {
 }
 
 // ----------------- Test Connection -----------------
+async function testAllModels() {
+  testAllLoading.value = true
+  testAllResult.value = null
+  cleanupResult.value = null
+  try {
+    testAllResult.value = await api('/api/v1/admin/llm/test-all', { method: 'POST' })
+  } catch (e: any) {
+    testAllResult.value = { rows: [], error: String(e?.message || e) }
+  } finally {
+    testAllLoading.value = false
+  }
+}
+
+async function cleanupDeadModels() {
+  cleanupLoading.value = true
+  cleanupResult.value = null
+  try {
+    const res = await api('/api/v1/admin/llm/models/cleanup', { method: 'POST' })
+    cleanupResult.value = res
+    await loadConfig()
+  } catch (e: any) {
+    cleanupResult.value = { removed: [], failed: [{ model: '-', reason: String(e?.message || e) }] }
+  } finally {
+    cleanupLoading.value = false
+  }
+}
+
 async function runTestModel(m: any) {
   testLoading.value = true
   testingModelId.value = m.id
@@ -632,9 +689,20 @@ onMounted(() => {
     setPresetTimeout,
     settingsResult,
     showApiKey,
+    testAllLoading,
+    testAllModels,
+    testAllResult,
     testLoading,
     testResult,
     testingModelId,
+    cleanupDeadModels,
+    cleanupLoading,
+    cleanupResult,
+    deadModelIds,
+    healthOf,
+    healthWarnings,
+    modelHealth,
+    providerHealth,
     thinkingTimeoutInput,
     toggleCapability,
     toggleFallback,

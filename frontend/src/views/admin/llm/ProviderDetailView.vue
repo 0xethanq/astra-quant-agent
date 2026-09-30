@@ -15,14 +15,18 @@
  * ⚠️ 逻辑模块 `useLlmConfig.ts` / `llmLogic.ts` 未触碰；本组件只接 `useLlmCtx()`。
  */
 import { useI18n } from '../../../composables/useI18n'
+import { useToast } from '../../../composables/useToast'
+import { useApi } from '../../../composables/useApi'
 import { useRovingTabs } from '../../../composables/useRovingTabs'
 import { useLlmCtx } from './injection'
 import BaseSwitch from '../../../components/base/BaseSwitch.vue'
 import BaseEmpty from '../../../components/base/BaseEmpty.vue'
 import { AlertCircle, ArrowLeft, CheckCircle2, DownloadCloud, Eye, EyeOff,
-  Layers, Plus, RefreshCw, Settings, Cpu, Trash2, Wrench, Brain, ImageIcon } from 'lucide-vue-next'
+  Layers, Plus, RefreshCw, Settings, Cpu, Trash2, Wrench, Brain, ImageIcon, Sparkles } from 'lucide-vue-next'
 
 const { t } = useI18n()
+const toast = useToast()
+const { api } = useApi()
 const {
   activateModel,
   cfg,
@@ -30,6 +34,7 @@ const {
   deleteSingleModel,
   detailTab,
   goBackToList,
+  loadConfig,
   onApiFormatChange,
   openAddModelModal,
   openEditModelModal,
@@ -44,6 +49,139 @@ const {
   testResult,
   testingModelId,
 } = useLlmCtx()
+
+interface ProviderPreset {
+  id: string
+  name: string
+  base_url: string
+  api_format: string
+  api_path: string
+  recommended_models: Array<{
+    id: string
+    name: string
+    capabilities: string[]
+    reasoning_type: string
+  }>
+}
+
+const PROVIDER_PRESETS: ProviderPreset[] = [
+  {
+    id: 'deepseek',
+    name: 'DeepSeek',
+    base_url: 'https://api.deepseek.com',
+    api_format: 'openai_chat',
+    api_path: '/chat/completions',
+    recommended_models: [
+      { id: 'deepseek-chat', name: 'DeepSeek-V3', capabilities: ['chat', 'tools'], reasoning_type: 'none' },
+      { id: 'deepseek-reasoner', name: 'DeepSeek-R1', capabilities: ['chat', 'reasoning'], reasoning_type: 'full' },
+    ],
+  },
+  {
+    id: 'openai',
+    name: 'OpenAI',
+    base_url: 'https://api.openai.com/v1',
+    api_format: 'openai_chat',
+    api_path: '/chat/completions',
+    recommended_models: [
+      { id: 'gpt-4o', name: 'GPT-4o', capabilities: ['chat', 'vision', 'tools'], reasoning_type: 'none' },
+      { id: 'gpt-4o-mini', name: 'GPT-4o mini', capabilities: ['chat', 'vision', 'tools'], reasoning_type: 'none' },
+      { id: 'o3-mini', name: 'o3-mini', capabilities: ['chat', 'reasoning'], reasoning_type: 'full' },
+    ],
+  },
+  {
+    id: 'claude',
+    name: 'Anthropic Claude',
+    base_url: 'https://api.anthropic.com/v1',
+    api_format: 'claude_messages',
+    api_path: '/messages',
+    recommended_models: [
+      { id: 'claude-3-7-sonnet-20250219', name: 'Claude 3.7 Sonnet', capabilities: ['chat', 'vision', 'tools', 'reasoning'], reasoning_type: 'hybrid' },
+      { id: 'claude-3-5-haiku-20241022', name: 'Claude 3.5 Haiku', capabilities: ['chat', 'tools'], reasoning_type: 'none' },
+    ],
+  },
+  {
+    id: 'siliconflow',
+    name: 'SiliconFlow',
+    base_url: 'https://api.siliconflow.cn/v1',
+    api_format: 'openai_chat',
+    api_path: '/chat/completions',
+    recommended_models: [
+      { id: 'deepseek-ai/DeepSeek-V3', name: 'DeepSeek-V3', capabilities: ['chat', 'tools'], reasoning_type: 'none' },
+      { id: 'deepseek-ai/DeepSeek-R1', name: 'DeepSeek-R1', capabilities: ['chat', 'reasoning'], reasoning_type: 'full' },
+      { id: 'Qwen/Qwen2.5-72B-Instruct', name: 'Qwen 2.5 72B', capabilities: ['chat'], reasoning_type: 'none' },
+    ],
+  },
+  {
+    id: 'qwen',
+    name: 'Qwen (DashScope)',
+    base_url: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    api_format: 'openai_chat',
+    api_path: '/chat/completions',
+    recommended_models: [
+      { id: 'qwen-plus', name: 'Qwen Plus', capabilities: ['chat', 'tools'], reasoning_type: 'none' },
+      { id: 'qwen-turbo', name: 'Qwen Turbo', capabilities: ['chat'], reasoning_type: 'none' },
+      { id: 'qwen-max', name: 'Qwen Max', capabilities: ['chat', 'tools'], reasoning_type: 'none' },
+    ],
+  },
+  {
+    id: 'ollama',
+    name: 'Ollama',
+    base_url: 'http://localhost:11434/v1',
+    api_format: 'openai_chat',
+    api_path: '/chat/completions',
+    recommended_models: [
+      { id: 'deepseek-r1:8b', name: 'DeepSeek R1 8B', capabilities: ['chat', 'reasoning'], reasoning_type: 'full' },
+      { id: 'qwen2.5:7b', name: 'Qwen 2.5 7B', capabilities: ['chat'], reasoning_type: 'none' },
+    ],
+  },
+]
+
+function applyProviderPreset(p: ProviderPreset) {
+  providerForm.value.name = p.name
+  if (!providerForm.value.id || selectedProvider.value.is_new) {
+    providerForm.value.id = p.id
+  }
+  providerForm.value.base_url = p.base_url
+  providerForm.value.api_format = p.api_format
+  providerForm.value.api_path = p.api_path
+  toast.ok(t('admin.llm.presetApplied', undefined, { name: p.name }))
+}
+
+async function importRecommendedModels() {
+  const provId = (selectedProvider.value.id || providerForm.value.id || '').toLowerCase()
+  const preset = PROVIDER_PRESETS.find(p => p.id === provId || provId.includes(p.id) || p.name.toLowerCase().includes(provId))
+  if (!preset) {
+    toast.warn(t('admin.llm.noPresetModels'))
+    return
+  }
+  const existingIds = new Set((selectedProvider.value.models || []).map((m: any) => m.id))
+  const newModels = preset.recommended_models.filter(m => !existingIds.has(m.id))
+  if (!newModels.length) {
+    toast.ok(t('admin.llm.modelsAlreadyExist'))
+    return
+  }
+  try {
+    for (const m of newModels) {
+      await api('/api/v1/admin/llm/models', {
+        method: 'POST',
+        body: JSON.stringify({
+          id: m.id,
+          name: m.name,
+          capabilities: m.capabilities,
+          reasoning_type: m.reasoning_type,
+          provider_id: selectedProvider.value.id || preset.id,
+          provider_name: selectedProvider.value.name || preset.name,
+          base_url: selectedProvider.value.base_url || preset.base_url,
+          api_format: selectedProvider.value.api_format || preset.api_format,
+        }),
+      })
+    }
+    await loadConfig()
+    toast.ok(t('admin.llm.modelsImported', undefined, { n: newModels.length }))
+  } catch (err: any) {
+    toast.err(err.message)
+  }
+}
 
 /** 批 66：详情页两页签的漫游 tabindex 与方向键导航（此前全在 Tab 键顺序里）。 */
 const DETAIL_TABS: Array<'config' | 'models'> = ['config', 'models']
@@ -108,6 +246,24 @@ function monogram(name: string): string {
 
     <!-- ══════════ Tab A：配置 ══════════ -->
     <template v-if="detailTab === 'config'">
+      <!-- 快捷预设横条 -->
+      <section class="card">
+        <div class="pd-presets-bar">
+          <span class="pd-presets-label">{{ t('admin.llm.quickPresets') }}:</span>
+          <div class="pd-presets-list">
+            <button
+              v-for="p in PROVIDER_PRESETS"
+              :key="p.id"
+              type="button"
+              class="btn btn-ghost btn-sm"
+              @click="applyProviderPreset(p)"
+            >
+              {{ p.name }}
+            </button>
+          </div>
+        </div>
+      </section>
+
       <section class="card">
         <header class="card-head">
           <h2 class="card-title"><Settings :size="14" />{{ t('admin.llm.manage') }}</h2>
@@ -122,7 +278,6 @@ function monogram(name: string): string {
           <div class="kv-row">
             <div class="pd-kv-k-block">
               <span class="pd-kv-k">{{ t('admin.llm.apiProtocol') }}</span>
-              <span class="pd-kv-hint">{{ t('admin.llm.apiProtocolDesc') }}</span>
             </div>
             <select
               v-model="providerForm.api_format"
@@ -195,7 +350,6 @@ function monogram(name: string): string {
           <label class="field-stack">
             <span class="form-label">API Base URL</span>
             <input v-model="providerForm.base_url" :placeholder="t('admin.llm.baseUrlPlaceholder')" class="field mono" />
-            <span class="pd-field-hint">{{ t('admin.llm.baseUrlDesc') }}</span>
           </label>
 
           <label class="field-stack">
@@ -296,6 +450,10 @@ function monogram(name: string): string {
         </div>
 
         <footer class="pd-toolbar">
+          <button type="button" class="btn btn-ghost btn-sm" :title="t('admin.llm.importRecommendedModelsTitle')" @click="importRecommendedModels">
+            <Sparkles :size="13" />
+            <span>{{ t('admin.llm.importRecommendedModels') }}</span>
+          </button>
           <button type="button" class="btn btn-ghost btn-sm" @click="openFetchDialog">
             <DownloadCloud :size="13" />
             <span>{{ t('admin.llm.fetch') }}</span>
@@ -376,6 +534,29 @@ function monogram(name: string): string {
   margin-left: auto;
 }
 
+/* ══ 快捷预设横条 ══ */
+.pd-presets-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  flex-wrap: wrap;
+  padding: var(--ds-space-2) var(--ds-space-4);
+  background-color: var(--ds-color-bg-surface-inset);
+}
+.pd-presets-label {
+  font-size: var(--text-3xs);
+  font-weight: 600;
+  color: var(--ds-color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wider);
+}
+.pd-presets-list {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-1);
+  flex-wrap: wrap;
+}
+
 /* ══ 配置 kv ══ */
 .pd-kv {
   display: flex;
@@ -390,10 +571,6 @@ function monogram(name: string): string {
   flex-direction: column;
   gap: 2px;
   min-width: 0;
-}
-.pd-kv-hint {
-  font-size: var(--text-4xs);
-  color: var(--ds-color-text-placeholder);
 }
 .pd-kv-v {
   font-size: var(--text-3xs);
@@ -413,11 +590,6 @@ function monogram(name: string): string {
   padding: var(--ds-space-4);
 }
 
-.pd-field-hint {
-  font-size: var(--text-4xs);
-  line-height: var(--leading-body);
-  color: var(--ds-color-text-placeholder);
-}
 .pd-key {
   position: relative;
   display: flex;

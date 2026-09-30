@@ -311,7 +311,8 @@ def submit_protected_limit_order(inst_id: str, side: str, pos_side: str, size: f
     # Final Non-Bypassable Verification: verify actual effective price, tp and sl
     from scripts.order_risk import validate_quote_geometry_and_rr
     action_type = "BUY_LONG" if pos_side == "long" else "SELL_SHORT"
-    is_valid, reason, _ = validate_quote_geometry_and_rr(action_type, effective_px, effective_tp, effective_sl)
+    _ai_conf = float(venue_ctx.get("confidence", 0.0) or 0.0) if isinstance(venue_ctx, dict) else 0.0
+    is_valid, reason, _ = validate_quote_geometry_and_rr(action_type, effective_px, effective_tp, effective_sl, confidence=_ai_conf)
     if not is_valid:
         print(f"[Order Rejected] 最终有效开仓报价未通过核心安全复验: {reason} (px={effective_px}, tp={effective_tp}, sl={effective_sl})")
         release_signal_reservation(_reservation, "核心安全复验拒绝")

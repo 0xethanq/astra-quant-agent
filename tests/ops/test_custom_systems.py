@@ -39,7 +39,7 @@ class PromptProfileV2Tests(unittest.TestCase):
         self.assertEqual(prompts.active_profile()["trading_system"], "OLD_CUSTOM")
 
     def test_version_history_and_rollback(self):
-        profile = prompts.create_profile("波段方案", source_id="stable")
+        profile = prompts.create_profile("波段方案", source_id="allpattern_swing")
         updated = prompts.update_profile(profile["id"], {"trading_system": "FIRST"}, "first")
         prompts.update_profile(profile["id"], {"trading_system": "SECOND"}, "second")
         history = prompts.profile_history(profile["id"])
@@ -55,7 +55,7 @@ class PromptProfileV2Tests(unittest.TestCase):
         self.assertEqual(prompts.render_variables("{{timezone}}", {}), "Asia/Shanghai")
 
     def test_export_import_round_trip(self):
-        profile = prompts.create_profile("导出源", source_id="stable")
+        profile = prompts.create_profile("导出源", source_id="allpattern_swing")
         profile = prompts.update_profile(profile["id"], {"trading_user": "CUSTOM_USER"})
         exported = prompts.export_profile(profile["id"])
         imported = prompts.import_profile(exported, "导入副本")

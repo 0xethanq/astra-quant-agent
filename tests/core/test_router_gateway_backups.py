@@ -659,6 +659,43 @@ class DownloadBackupTests(_BackupBase):
         self.assertIn("非法文件路径", ctx.exception.detail)
 
 
+class DeleteBackupTests(_BackupBase):
+    def setUp(self):
+        super().setUp()
+        self.local = self.root / "backups" / "local"
+        self.local.mkdir(exist_ok=True)
+        self.arch = self.local / "del.tar.gz"
+        self.arch.write_bytes(b"archive")
+
+    def test_dotdot_is_400(self):
+        with self.assertRaises(HTTPException) as ctx:
+            BT.delete_backup_archive("../etc/passwd")
+        self.assertEqual(ctx.exception.status_code, 400)
+        self.assertIn("..", ctx.exception.detail)
+
+    def test_missing_file_is_404(self):
+        with self.assertRaises(HTTPException) as ctx:
+            BT.delete_backup_archive("nope.tar.gz")
+        self.assertEqual(ctx.exception.status_code, 404)
+
+    def test_delete_success_removes_file_and_audits(self):
+        out = BT.delete_backup_archive("del.tar.gz")
+        self.assertEqual(out, {"deleted": True, "filename": "del.tar.gz"})
+        self.assertFalse(self.arch.exists())
+        self.assertEqual(self._rec()[0][0], "backup.archive.delete")
+
+    def test_symlink_escaping_backups_is_400(self):
+        outside = Path(tempfile.mkdtemp(prefix="astra-outside-"))
+        self.addCleanup(shutil.rmtree, outside, True)
+        target = outside / "real.tar.gz"
+        target.write_bytes(b"x")
+        os.symlink(target, self.root / "backups" / "esc.tar.gz")
+        with self.assertRaises(HTTPException) as ctx:
+            BT.delete_backup_archive("esc.tar.gz")
+        self.assertEqual(ctx.exception.status_code, 400)
+        self.assertIn("非法文件路径", ctx.exception.detail)
+
+
 class _Upload:
     def __init__(self, filename, content):
         self.filename = filename

@@ -63,13 +63,19 @@ class PromptUniversalityTests(unittest.TestCase):
         self.assertEqual(_offenders(get_effective_system_prompt()), [], "代码 base 系统提示词含绝对金额")
 
     def test_base_user_prompt_has_no_absolute_money(self):
-        # 结构优化阶段 4：用户提示词 f-string 已搬进 scripts/brain/prompt.py。
-        # 原先按单文件 index() 切片，搬走即 ValueError。改为扫「主脑域源码集」——
-        # 两个 marker 都在同一个函数体内，切出来的仍是同一段提示词文本。
-        from tests.source_scan import combined
-        src = combined("scripts/ai_brain_trader.py", pkg_name="brain")
-        start, end = src.index("    prompt = f\"\"\""), src.index("    runtime_vars = {")
-        self.assertEqual(_offenders(src[start:end]), [], "代码 base 用户提示词含绝对金额")
+        """用户提示词模板（现由 JSON 方案模块承载）不得写死绝对法币金额。
+
+        ★ 2026-09-30 提示词来源迁移后重钉：旧写法在 `scripts/brain/prompt.py` 源码里
+        slice 出 f-string 模板（`prompt = f...` 到 `runtime_vars = {...}` 之间），而该函数现已改为
+        只组装 `runtime_vars` 再调 `apply_module_layout("", …)`，两个 marker 都不复存在。
+        判据改落在**组装后的用户提示词**（JSON `trading_user` 模块；不注入运行期 context，
+        故插槽保持 `{{...}}` 形态，量出来的正是模板正文而非运行期数字），
+        仍然守住"模板不得硬编码金额、一切金额按可用余额自适应推导"这一不变量。
+        """
+        from scripts.prompt_library import active_profile, apply_module_layout, base_template_text
+        text = apply_module_layout(base_template_text("trading_user"), active_profile(), "trading_user", "x")
+        self.assertGreater(len(text), 500, "用户提示词为空 —— 否则本用例会退化成对空串的假通过")
+        self.assertEqual(_offenders(text), [], "代码 base 用户提示词含绝对金额")
 
     def test_source_presets_have_no_absolute_money(self):
         src = (ROOT / "scripts" / "prompt_library.py").read_text(encoding="utf-8")
@@ -77,9 +83,18 @@ class PromptUniversalityTests(unittest.TestCase):
         self.assertEqual(_offenders(block), [], "源码预设含绝对金额，小资金账户会冲突")
 
     def test_live_profile_has_no_absolute_money(self):
+        """出厂基线的**每一条**方案都不得含绝对金额（2026-09-30 起遍历全部）。
+
+        此前只查 `profiles["stable"]`：预设换成单条「全形态波段策略(提示词样板)」后，
+        那种写法会 KeyError（或更糟——静默查了个空）。遍历才是"出厂方案整体"的判据。
+        """
         live = json.loads((ROOT / "data" / "prompt_library.json").read_text(encoding="utf-8"))
-        self.assertEqual(_offenders(json.dumps(live["profiles"]["stable"], ensure_ascii=False)), [],
-                         "线上方案缓存快照含绝对金额")
+        profiles = live.get("profiles") or {}
+        self.assertTrue(profiles, "出厂基线里没有任何方案？")
+        for pid, prof in profiles.items():
+            with self.subTest(profile=pid):
+                self.assertEqual(_offenders(json.dumps(prof, ensure_ascii=False)), [],
+                                 f"出厂方案 {pid} 含绝对金额")
 
     def test_risk_budget_is_an_allowed_variable_and_rendered(self):
         import prompt_library as pl
@@ -105,7 +120,7 @@ class PromptUniversalityTests(unittest.TestCase):
         """risk_budget 是多行块，内插进 system 正文会把句子撑断（曾在实盘 prompt 中出现）。
         约定：它只能作为独立小节出现在 trading_user，不得出现在 trading_system 文本里。"""
         live = json.loads((ROOT / "data" / "prompt_library.json").read_text(encoding="utf-8"))
-        prof = live["profiles"]["stable"]
+        prof = live["profiles"][live["active_profile_id"]]
         sys_blob = json.dumps(
             {"modules": (prof.get("pipelines") or {}).get("trading_system", []),
              "legacy": prof.get("trading_system")}, ensure_ascii=False)
@@ -129,8 +144,8 @@ class PromptUniversalityTests(unittest.TestCase):
         from scripts.ai_brain_trader import get_effective_system_prompt
         corpus = get_effective_system_prompt()
         corpus += (ROOT / "scripts" / "prompt_library.py").read_text(encoding="utf-8")
-        corpus += json.dumps(json.loads((ROOT / "data" / "prompt_library.json").read_text(encoding="utf-8"))
-                             ["profiles"]["stable"], ensure_ascii=False)
+        corpus += json.dumps(json.loads((ROOT / "data" / "prompt_library.json").read_text(encoding="utf-8")),
+                             ensure_ascii=False)
         for bad in ("六币种", "6币种", "在 6 个标的", "6 个标的中"):
             self.assertNotIn(bad, corpus, f"提示词写死了标的数量: {bad}")
 

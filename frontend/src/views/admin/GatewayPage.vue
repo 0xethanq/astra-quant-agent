@@ -18,21 +18,55 @@
  *        body { confirmation: <输入去空格转大写> }
  *   ⚠️ 语义与旧版一致：仍由后端校验确认短语，前端只负责收集；输入非空即允许提交。
  */
-import { computed, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from '../../composables/useI18n';
+import { useRoute, useRouter } from 'vue-router';
 import { useApi } from '../../composables/useApi';
 import { useToast } from '../../composables/useToast';
+import { useConfirm } from '../../composables/useConfirm';
 import { useResource } from '../../composables/useResource';
 import DataTable from '../../components/admin/DataTable.vue';
 import BaseDialog from '../../components/base/BaseDialog.vue';
 import PageHeader from '../../components/admin/PageHeader.vue';
-import { Zap, RefreshCw, RotateCcw, Server, Clock, AlertTriangle } from 'lucide-vue-next';
+import BaseTabs from '../../components/base/BaseTabs.vue';
+import AgentsPage from './AgentsPage.vue';
+
+import { Zap, RefreshCw, RotateCcw, Server, Clock, CalendarClock, AlertTriangle, Save } from 'lucide-vue-next';
 import { fmtDateTime } from '../../utils/format';
 import BaseLoadingAnnounce from '../../components/base/BaseLoadingAnnounce.vue';
 
 const { t } = useI18n();
+
+/**
+ * 运行单元页签：本页是宿主页 ——
+ *   dispatch 调度与投递（本页原有内容）
+ *   workers  Worker 与遥测（AgentsPage）
+ */
+type GwTab = 'dispatch' | 'workers';
+function resolveGwTab(raw: unknown): GwTab {
+  const v = Array.isArray(raw) ? raw[0] : raw;
+  return String(v) === 'workers' ? 'workers' : 'dispatch';
+}
+const route = useRoute();
+const router = useRouter();
+if (route.query.tab === 'logs') {
+  router.replace('/admin/decisions');
+}
+const activeTab = ref<GwTab>(resolveGwTab(route.query.tab));
+watch(() => route.query.tab, (v) => {
+  if (v === 'logs') {
+    router.replace('/admin/decisions');
+    return;
+  }
+  activeTab.value = resolveGwTab(v);
+});
+const tabs = computed(() => [
+  { key: 'dispatch', label: t('admin.gateway.tabDispatch') },
+  { key: 'workers', label: t('admin.agents.title') },
+]);
 const { api } = useApi();
 const toast = useToast();
+const { ask } = useConfirm();
 
 function fmtJobTime(iso: string): string {
   return fmtDateTime(iso).slice(5);
@@ -108,11 +142,126 @@ function statusTone(s: string): string {
 function statusLabel(s: string): string {
   return t(`admin.gateway.status.${s}`, s);
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * 交易时段（2026-09-30）
+ * ---------------------------------------------------------------------------
+ * 后端契约（逐字）：
+ *   GET  /api/v1/admin/gateway/trading-session
+ *        → { enabled, mode_outside, timezone, windows[{days,start,end}],
+ *            state{mode,restricted,reason,next_change_bj,errors[]}, coverage{}, … }
+ *   PUT  同路径 body { enabled, mode_outside, windows[] }
+ *
+ * ⚠️ 为什么 `state` 由后端算：判定口径只有一份实现（scripts/trader/session.py）。
+ *    前端自己比时间就会出现"页面说在窗口内、引擎按窗口外跑"的分叉，
+ *    而那个分叉的代价是 43k token/次。
+ * ⚠️ 时段一律北京时间（与提示词时间戳同源），页面只展示、不做时区换算。
+ * ═════════════════════════════════════════════════════════════════════════ */
+
+interface SessionWindow { days: number[]; start: string; end: string }
+
+const session = ref<any>(null);
+const sessionLoading = ref(false);
+const sessionSaving = ref(false);
+const sessionError = ref('');
+const sessionLoaded = ref(false);
+const draftEnabled = ref(false);
+const draftMode = ref<'manage_only' | 'off'>('manage_only');
+const draftWindows = ref<SessionWindow[]>([]);
+
+/** 星期取值与后端同一口径：0=周一 … 6=周日。 */
+const WEEKDAYS = [0, 1, 2, 3, 4, 5, 6];
+
+function weekdayLabel(day: number): string {
+  return t(`admin.gateway.session.weekdays.${day}`);
+}
+
+async function loadSession() {
+  sessionLoading.value = true;
+  sessionError.value = '';
+  try {
+    const res = await api('/api/v1/admin/gateway/trading-session');
+    session.value = res;
+    draftEnabled.value = !!res.enabled;
+    draftMode.value = res.mode_outside === 'off' ? 'off' : 'manage_only';
+    draftWindows.value = (res.windows || []).map((w: any) => ({
+      days: [...(w.days || [])],
+      start: String(w.start || ''),
+      end: String(w.end || ''),
+    }));
+    sessionLoaded.value = true;
+  } catch (e: any) {
+    sessionError.value = e.message;
+  } finally {
+    sessionLoading.value = false;
+  }
+}
+
+function addWindow() {
+  draftWindows.value.push({ days: [], start: '09:00', end: '11:00' });
+}
+
+function removeWindow(index: number) {
+  draftWindows.value.splice(index, 1);
+}
+
+function toggleDay(win: SessionWindow, day: number) {
+  const at = win.days.indexOf(day);
+  if (at >= 0) win.days.splice(at, 1);
+  else win.days.push(day);
+}
+
+async function saveSession() {
+  sessionSaving.value = true;
+  sessionError.value = '';
+  try {
+    const res = await api('/api/v1/admin/gateway/trading-session', {
+      method: 'PUT',
+      body: JSON.stringify({
+        enabled: draftEnabled.value,
+        mode_outside: draftMode.value,
+        windows: draftWindows.value,
+      }),
+    });
+    session.value = res;
+    toast.ok(t('admin.gateway.session.saved'));
+    await loadSession();
+  } catch (e: any) {
+    sessionError.value = e.message;
+    toast.err(t('admin.gateway.session.saveFailed', undefined, { msg: e.message }));
+  } finally {
+    sessionSaving.value = false;
+  }
+}
+
+/** 恢复全天候运行 = **放松**方向（重新开始烧 token、重新开新仓）⇒ 需要一次确认。 */
+async function resumeFullTime() {
+  const ok = await ask({
+    title: t('admin.gateway.session.resumeTitle'),
+    desc: t('admin.gateway.session.resumeDesc'),
+    okText: t('admin.gateway.session.resumeOk'),
+    danger: true,
+  });
+  if (!ok) return;
+  draftEnabled.value = false;
+  draftWindows.value = [];
+  draftMode.value = 'manage_only';
+  await saveSession();
+}
+
+const sessionMode = computed<string>(() => session.value?.state?.mode || 'full');
+const sessionNextChange = computed<string>(() => session.value?.state?.next_change_bj || '');
+const sessionErrors = computed<string[]>(() => session.value?.state?.errors || []);
+const sessionCoverage = computed<any>(() => session.value?.coverage || {});
+
+onMounted(() => {
+  loadSession();
+});
 </script>
 
 <template>
   <div class="gw">
-    <PageHeader :title="t('nav.admin.gateway')" :description="t('admin.gateway.desc')">
+    <PageHeader :title="t('nav.admin.gateway')">
       <template #actions>
         <span class="badge">{{ t('admin.gateway.opsBadge') }}</span>
         <button type="button" class="btn btn-ghost btn-sm" :disabled="loading" @click="load">
@@ -121,6 +270,11 @@ function statusLabel(s: string): string {
         </button>
       </template>
     </PageHeader>
+
+    <!-- 页签：运行单元三块（被吸收页各自保留页头动作行，按钮一个不少） -->
+    <BaseTabs v-model="activeTab" :items="tabs" :label="t('admin.gateway.tabsLabel')" baseId="gw" />
+
+    <div v-if="activeTab === 'dispatch'" id="gw-panel-dispatch" role="tabpanel" aria-labelledby="gw-tab-dispatch" tabindex="0">
 
     <!-- 拉取失败（无任何数据） -->
     <div v-if="error && !gw" role="alert" class="state-block is-error">
@@ -241,6 +395,153 @@ function statusLabel(s: string): string {
         </div>
       </section>
 
+      <!-- ══ 交易时段 ══ -->
+      <section class="card">
+        <header class="card-head">
+          <div>
+            <h2 class="card-title"><CalendarClock :size="14" />{{ t('admin.gateway.session.title') }}</h2>
+            <p class="card-sub">{{ t('admin.gateway.session.subtitle') }}</p>
+          </div>
+          <span class="badge" :class="sessionMode === 'full' ? 'badge-up' : 'badge-warn'">
+            {{ t(`admin.gateway.session.mode.${sessionMode}`) }}
+          </span>
+        </header>
+
+        <div v-if="sessionLoading && !sessionLoaded" class="gw-sess-pad">
+          <BaseLoadingAnnounce />
+        </div>
+
+        <div v-else class="gw-sess-pad">
+          <!-- 实时状态：判定由后端给出，页面只渲染 -->
+          <p class="gw-sess-state">
+            <span class="gw-dim">{{ t('admin.gateway.session.currentLabel') }}</span>
+            <span class="gw-sess-strong">{{ session?.state?.reason || '--' }}</span>
+            <span v-if="sessionNextChange" class="gw-dim mono">
+              · {{ t('admin.gateway.session.nextChange', undefined, { time: sessionNextChange }) }}
+            </span>
+          </p>
+
+          <p v-if="sessionErrors.length" role="status" aria-live="polite" class="gw-sess-warn">
+            {{ t('admin.gateway.session.configWarning', undefined, { n: sessionErrors.length }) }}
+            {{ sessionErrors.join('；') }}
+          </p>
+          <p v-if="sessionError" role="alert" class="gw-sess-bad">{{ sessionError }}</p>
+
+          <!-- 开关 + 窗口外行为 -->
+          <div class="gw-sess-row">
+            <label class="gw-sess-check">
+              <input
+                v-model="draftEnabled"
+                type="checkbox"
+                :aria-label="t('admin.gateway.session.enableLabel')"
+              />
+              <span>{{ t('admin.gateway.session.enableLabel') }}</span>
+            </label>
+
+            <label class="gw-sess-mode">
+              <span class="form-label">{{ t('admin.gateway.session.modeLabel') }}</span>
+              <select
+                v-model="draftMode"
+                class="field"
+                :aria-label="t('admin.gateway.session.modeLabel')"
+                :disabled="!draftEnabled"
+              >
+                <option value="manage_only">{{ t('admin.gateway.session.modeOptions.manageOnly') }}</option>
+                <option value="off">{{ t('admin.gateway.session.modeOptions.off') }}</option>
+              </select>
+            </label>
+          </div>
+
+          <!-- 时段列表 -->
+          <div class="gw-sess-windows">
+            <p v-if="!draftWindows.length" class="gw-dim">
+              {{ draftEnabled ? t('admin.gateway.session.emptyEnabled') : t('admin.gateway.session.emptyDisabled') }}
+            </p>
+
+            <div v-for="(win, index) in draftWindows" :key="index" class="gw-sess-window">
+              <div class="gw-sess-days" role="group" :aria-label="t('admin.gateway.session.daysLabel', undefined, { n: index + 1 })">
+                <button
+                  v-for="day in WEEKDAYS"
+                  :key="day"
+                  type="button"
+                  class="gw-sess-day"
+                  :class="{ 'is-on': win.days.includes(day) }"
+                  :aria-pressed="win.days.includes(day) ? 'true' : 'false'"
+                  @click="toggleDay(win, day)"
+                >
+                  {{ weekdayLabel(day) }}
+                </button>
+              </div>
+
+              <label class="gw-sess-time">
+                <span class="form-label">{{ t('admin.gateway.session.startLabel') }}</span>
+                <input
+                  v-model="win.start"
+                  class="field num"
+                  type="time"
+                  autocomplete="off"
+                  spellcheck="false"
+                  :aria-label="t('admin.gateway.session.startLabel')"
+                />
+              </label>
+              <label class="gw-sess-time">
+                <span class="form-label">{{ t('admin.gateway.session.endLabel') }}</span>
+                <input
+                  v-model="win.end"
+                  class="field num"
+                  type="time"
+                  autocomplete="off"
+                  spellcheck="false"
+                  :aria-label="t('admin.gateway.session.endLabel')"
+                />
+              </label>
+
+              <button
+                type="button"
+                class="btn btn-quiet btn-sm"
+                @click="removeWindow(index)"
+              >
+                <span>{{ t('admin.gateway.session.remove') }}</span>
+              </button>
+            </div>
+          </div>
+
+          <p class="gw-dim gw-sess-hint">{{ t('admin.gateway.session.crossMidnightHint') }}</p>
+
+          <p class="gw-dim gw-sess-hint">
+            {{ t('admin.gateway.session.coverage', undefined, {
+              hours: sessionCoverage.hours_per_week ?? 0,
+              saved: sessionCoverage.saved_brain_calls_per_day ?? 0,
+            }) }}
+          </p>
+
+          <footer class="gw-sess-actions">
+            <button type="button" class="btn btn-ghost btn-sm" @click="addWindow">
+              <span>{{ t('admin.gateway.session.addWindow') }}</span>
+            </button>
+            <button
+              type="button"
+              class="btn btn-primary btn-sm"
+              :disabled="sessionSaving"
+              @click="saveSession"
+            >
+              <Save :size="14" />
+              <span>{{ sessionSaving ? t('admin.gateway.session.saving') : t('admin.gateway.session.save') }}</span>
+            </button>
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm"
+              :disabled="sessionSaving || (!draftEnabled && !draftWindows.length)"
+              @click="resumeFullTime"
+            >
+              <span>{{ t('admin.gateway.session.resumeFullTime') }}</span>
+            </button>
+          </footer>
+
+          <p class="gw-dim gw-sess-hint">{{ t('admin.gateway.session.restartNote') }}</p>
+        </div>
+      </section>
+
       <!-- ══ 投递流水 ══ -->
       <section class="card">
         <header class="card-head">
@@ -348,6 +649,11 @@ function statusLabel(s: string): string {
         </button>
       </template>
     </BaseDialog>
+    </div>
+
+    <div v-else id="gw-panel-workers" role="tabpanel" aria-labelledby="gw-tab-workers" tabindex="0">
+      <AgentsPage embedded />
+    </div>
   </div>
 </template>
 
@@ -435,6 +741,112 @@ function statusLabel(s: string): string {
   font-size: var(--text-3xs);
   color: var(--ds-color-text-placeholder);
   white-space: nowrap;
+}
+
+/* ══ 交易时段 ══ */
+.gw-sess-pad {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-3);
+  padding: var(--ds-space-4);
+}
+.gw-sess-state {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--ds-space-2);
+  margin: 0;
+  font-size: var(--text-xs);
+}
+.gw-sess-strong {
+  color: var(--ds-color-text-primary);
+  font-weight: 500;
+}
+.gw-sess-warn,
+.gw-sess-bad {
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: var(--r-ctl);
+  font-size: var(--text-xs);
+}
+.gw-sess-warn {
+  background-color: var(--warn-bg);
+  color: var(--warn);
+}
+.gw-sess-bad {
+  background-color: var(--down-bg);
+  color: var(--down);
+}
+.gw-sess-row {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: var(--ds-space-4);
+}
+.gw-sess-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-xs);
+  color: var(--ds-color-text-secondary);
+}
+.gw-sess-check input {
+  accent-color: var(--ds-color-accent);
+}
+.gw-sess-mode {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 220px;
+}
+.gw-sess-windows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+}
+.gw-sess-window {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: var(--ds-space-3);
+  padding: var(--ds-space-2) 0;
+  border-bottom: 1px solid var(--ds-color-border-default);
+}
+.gw-sess-days {
+  display: flex;
+  gap: 4px;
+}
+.gw-sess-day {
+  min-width: 44px;
+  padding: 4px 8px;
+  border: 1px solid var(--ds-color-border-default);
+  border-radius: var(--r-ctl);
+  background-color: var(--ds-color-bg-surface);
+  color: var(--ds-color-text-placeholder);
+  font-size: var(--text-3xs);
+  cursor: pointer;
+}
+.gw-sess-day.is-on {
+  border-color: var(--ds-color-accent);
+  background-color: var(--accent-bg);
+  color: var(--ds-color-accent);
+}
+.gw-sess-time {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 108px;
+}
+.gw-sess-hint {
+  margin: 0;
+  font-size: var(--text-3xs);
+  line-height: 1.5;
+}
+.gw-sess-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--ds-space-2);
 }
 
 /* ══ 投递表 ══

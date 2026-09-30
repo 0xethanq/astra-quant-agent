@@ -409,42 +409,6 @@ onMounted(() => {
           </button>
         </div>
       </section>
-
-      <!-- 7. 行动召唤 (FINAL CTA) -->
-      <section class="w-full max-w-4xl px-4 sm:px-6 py-16 border-t border-white/[0.04]">
-        <div class="rounded-2xl border border-white/[0.06] bg-[#0c0e15] p-8 sm:p-12 text-center flex flex-col items-center">
-          <h2 class="text-xl sm:text-3xl font-extrabold tracking-tight text-white">
-            {{ t('landing.cta.title') }}
-          </h2>
-          <p class="mt-3 text-xs sm:text-sm text-zinc-400 max-w-lg leading-relaxed">
-            {{ t('landing.cta.subtitle') }}
-          </p>
-
-          <div class="mt-6 flex flex-wrap items-center justify-center gap-3.5">
-            <button
-              type="button"
-              class="h-10 sm:h-11 px-7 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-black text-xs font-bold cursor-pointer inline-flex items-center gap-2 shadow-md transition-all active:scale-95"
-              @click="navTo('/trading')"
-            >
-              <span>{{ t('landing.cta.launchBtn') }}</span>
-              <ArrowRight class="h-4 w-4" />
-            </button>
-
-            <button
-              type="button"
-              class="h-10 sm:h-11 px-6 rounded-xl border border-white/[0.08] bg-zinc-900/40 hover:bg-zinc-800 text-zinc-200 text-xs font-medium inline-flex items-center gap-2 cursor-pointer transition-colors"
-              @click="openExternal(OFFICIAL_REPO)"
-            >
-              <Github class="h-4 w-4" aria-hidden="true" />
-              <span>{{ t('landing.cta.githubBtn') }}</span>
-            </button>
-          </div>
-
-          <div class="mt-5 text-4xs font-mono text-zinc-500">
-            {{ t('landing.cta.note') }}
-          </div>
-        </div>
-      </section>
     </main>
 
     <!-- 8. 生态页脚 -->

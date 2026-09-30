@@ -100,10 +100,15 @@ MIN_SCALE_IN_CONFIDENCE = _env_float("ASTRA_MIN_SCALE_IN_CONFIDENCE", 75.0)
 # ── 组5 · 持仓退出与分批止盈 ─────────────────────────────────────
 # 是否启用分批平仓止盈机制（1 = 开启，0 = 关闭）。
 SCALE_OUT_ENABLED = bool(_env_int("ASTRA_SCALE_OUT_ENABLED", 1) > 0)
-# 分批平仓比例（默认 0.50 即平仓 50%，锁定本金利润，剩余仓位博大波段）。
-SCALE_OUT_RATIO = _env_float("ASTRA_SCALE_OUT_RATIO", 0.50)
-# 分批平仓触发浮盈门槛（×ATR，达到该门槛时触发分批落袋，默认 1.2x ATR）。
-SCALE_OUT_TRIGGER_ATR = _env_float("ASTRA_SCALE_OUT_TRIGGER_ATR", 1.20)
+# 分批平仓比例（默认 0.35 即先落袋 35%，锁定部分利润，剩余仓位博大波段）。
+# 2026-09-30 盈亏比矫正：旧默认 0.50 与下面的触发门槛组合出"赢小输大"结构。
+SCALE_OUT_RATIO = _env_float("ASTRA_SCALE_OUT_RATIO", 0.35)
+# 分批平仓触发浮盈门槛（×ATR，默认 2.00x ATR）。
+# ⚠️ 必须与止损的 ATR 倍数同量级（池内 `sl_atr_mult`：主流币 1.8、其余 2.2）——
+#    低于止损倍数意味着"首批止盈在止损之前落袋"，锁定的 R 小于 1（旧默认 1.20×ATR
+#    对 2.0×ATR 止损只锁 0.6R，用户实测当日 18 笔均盈 23.87U 对均亏 48.01U）。
+#    `tests/trading/test_risk_reward_structure.py` 是本条的常驻护栏。
+SCALE_OUT_TRIGGER_ATR = _env_float("ASTRA_SCALE_OUT_TRIGGER_ATR", 2.00)
 # 单笔最大止盈 ATR 宽度（× 1H ATR，超出此倍数的止盈单会被执行层平滑收窄钳制，防止止盈过远）。
 MAX_TAKE_PROFIT_ATR = _env_float("ASTRA_MAX_TAKE_PROFIT_ATR", 3.50)
 
@@ -150,8 +155,8 @@ DEFAULTS = {
     "ASTRA_MIN_SCALE_IN_PROFIT_RATIO": 0.008,
     "ASTRA_MIN_SCALE_IN_CONFIDENCE": 75.0,
     "ASTRA_SCALE_OUT_ENABLED": 1,
-    "ASTRA_SCALE_OUT_RATIO": 0.50,
-    "ASTRA_SCALE_OUT_TRIGGER_ATR": 1.20,
+    "ASTRA_SCALE_OUT_RATIO": 0.35,
+    "ASTRA_SCALE_OUT_TRIGGER_ATR": 2.00,
     "ASTRA_MAX_TAKE_PROFIT_ATR": 3.50,
 }
 

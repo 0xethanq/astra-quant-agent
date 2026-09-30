@@ -1,5 +1,6 @@
 /** Policy snapshot page copy */
 export const enAdminPolicySnapshot = {
+  title: 'Policy snapshots & rollback',
   desc: 'Archive the strategy pack; roll back with per-unit verification (auto-revert on mismatch)',
   loading: 'Computing and aggregating live fingerprints of the four policy units...',
   notRecorded: 'Not recorded',

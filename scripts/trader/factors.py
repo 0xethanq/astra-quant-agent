@@ -207,8 +207,12 @@ def fetch_single_instrument_data(item, all_positions, usdt_available, *,
         total_len = max(c_high - c_low, f["price"] * 0.0001)
         lower_wick = min(c_open, c_close) - c_low
         upper_wick = c_high - max(c_open, c_close)
-        f["lower_wick_ratio"] = lower_wick / total_len
-        f["upper_wick_ratio"] = upper_wick / total_len
+        # ⚠️ 2026-09-30 与下面 1H 分支同一族（同一份坏数据触发）：`price` 为 0 且
+        # 高低价齐平时 `total_len` 也是 0 ⇒ 除零崩掉整周期。正常行情下 `total_len`
+        # 必然 > 0（价格 > 0 有 0.0001 倍兜底），故这里只挡退化情形、不改任何正常取值。
+        if total_len > 0:
+            f["lower_wick_ratio"] = lower_wick / total_len
+            f["upper_wick_ratio"] = upper_wick / total_len
         
         f["vol_15m"] = vols[-1]
         f["vol_ma20"] = sum(vols[-20:]) / min(len(vols), 20) if vols else 1.0
@@ -226,7 +230,13 @@ def fetch_single_instrument_data(item, all_positions, usdt_available, *,
         f["atr_1h"] = calc_atr(c_1h, 14)
         f["atr_15m"] = f["atr"]
         f["atr"] = max(f["atr_1h"], f["atr_15m"] * 1.5, f["price"] * 0.012)
-        f["atr_pct"] = (f["atr"] / f["price"]) * 100.0
+        # ⚠️ 2026-09-30 真机事故：15M 取数被 OKX **429 限流**时 `f["price"]` 保持默认 0
+        # （15M 分支整段跳过），而 1H 取数成功 ⇒ 走到这里直接 ZeroDivisionError，
+        # **整个交易周期崩掉**（连持仓的追踪止损都不再执行 —— 最危险的失败形态）。
+        # 与上面 15M 分支同一口径：价格不可用时不臆造百分比，交给结尾的
+        # `market_data_valid` 闸（它会 `sz=0` 并让下游跳过该标的）。
+        if f["price"] > 0:
+            f["atr_pct"] = (f["atr"] / f["price"]) * 100.0
         
         e9_1h = calc_ema(closes_1h, 9)
         e21_1h = calc_ema(closes_1h, 21)

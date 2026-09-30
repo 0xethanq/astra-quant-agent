@@ -6,20 +6,20 @@
 
 ### Autonomous OKX-Native Quant Trading Terminal & Multi-Agent Operating System
 
-[![Release](https://img.shields.io/badge/Release-v8.4.0-00E599.svg?style=flat-square)](https://github.com/0xethanq/astra-quant-agent/releases/tag/v8.4.0)
+[![Release](https://img.shields.io/badge/Release-v8.5.0--preview-00E599.svg?style=flat-square)](https://github.com/0xethanq/astra-quant-agent/releases)
 [![Website](https://img.shields.io/badge/Site-www.astraquant.tech-6E56CF.svg?style=flat-square)](https://www.astraquant.tech)
 [![License](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)](LICENSE)
-[![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg?style=flat-square)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.100%2B-009688.svg?style=flat-square)](https://fastapi.tiangolo.com/)
-[![Vue 3](https://img.shields.io/badge/Vue-3.5%2B-4FC08D.svg?style=flat-square)](https://vuejs.org/)
-[![Tests](https://img.shields.io/badge/Tests-10k%2B%20Passing-brightgreen.svg?style=flat-square)](tests/)
+[![Python](https://img.shields.io/badge/Python-3.11-3776AB.svg?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.100%2B-009688.svg?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![Vue 3](https://img.shields.io/badge/Vue-3.5%2B-4FC08D.svg?style=flat-square&logo=vuedotjs&logoColor=white)](https://vuejs.org/)
+[![Tests](https://img.shields.io/badge/Tests-9.5k%2B%20Passing-brightgreen.svg?style=flat-square)](tests/)
 [![Community](https://img.shields.io/badge/Community-LINUX%20DO-F97316.svg?style=flat-square&logo=linux&logoColor=white)](https://linux.do/)
 
-**Named AI seats debate → CIO arbitrates the final call → Physical Python risk pipeline vetoes → OKX receives live maker limit orders with atomic conditional protection.**
+**Named AI seats debate → CIO arbitrates → a physical Python risk pipeline vetoes → OKX receives maker limit orders with atomic conditional protection.**
 
 *Cognition belongs to the models; physical risk control belongs to the base layer. Zero black-box magic.*
 
-[Quick start](#-quick-start) · [What it is](#-what-it-is) · [Design principles](#-four-core-design-principles) · [Visual showcase](#-visual-showcase) · [Strategy configuration centers](#-strategy-configuration-centers) · [Capital & risk](#-capital-scaling-and-tiered-risk) · [Deploy](#-deploy) · [Code map](#-code-map-for-developers--handoff-agents) · [Brand & codename](#-brand-and-internal-codename-read-before-renaming)
+[Quick start](#-quick-start) · [Architecture](#-architecture) · [Design principles](#-design-principles) · [Scheduling](#-scheduling) · [Prompt system](#-prompt-system) · [Risk model](#-risk-model) · [Visual tour](#-visual-tour) · [Deploy](#-deploy) · [Code map](#-code-map)
 
 </div>
 
@@ -29,334 +29,301 @@
 
 ## 🚀 Quick start
 
-Get up and running in **60 seconds**:
-
 ```bash
 git clone https://github.com/0xethanq/astra-quant-agent.git && cd astra-quant-agent
-./deploy/docker-start.sh          # Docker (recommended); for host install run ./deploy/install.sh
+./deploy/docker-start.sh     # Docker (recommended). Bare metal: ./deploy/install.sh && ./start.sh
 ```
 
-| Surface | URL | Default Access |
+| Surface | URL | Access |
 |---|---|---|
-| **Trading Workstation** (Dashboard) | `http://localhost:8080/trading` (or `/`) | Public |
-| **Admin Control Plane** | `http://localhost:8080/admin/login` | User: `admin` |
-| **System Docs & API Specs** | `http://localhost:8080/docs` | Public |
+| **Trading Workstation** | `http://localhost:8080/trading` | Public |
+| **Admin Control Plane** | `http://localhost:8080/admin/login` | User `admin` |
+| **System Docs & OpenAPI** | `http://localhost:8080/docs` | Public |
 
-> 🛡️ **Safety first**: AstraQuant boots in **paper / demo simulation mode** by default. It will never touch live exchange funds until you explicitly configure both your **LLM provider keys** and **OKX API keys**, then switch the environment toggle on `/admin/security`.
+> 🛡️ **Safety first.** AstraQuant boots in **demo / paper mode** and will not touch live funds until you configure **both** LLM provider keys **and** OKX API keys, then flip the environment toggle on `/admin/security`. Until a complete key trio exists for the selected environment the system reports `NOT READY` and refuses all trading.
 
 ---
 
-## 🧭 What it is
+## 🏛 Architecture
 
-AstraQuant is an **institutional-grade, OKX-native autonomous quant decision and execution operating system** engineered for professional trading desks, prop firms, and systematic crypto traders.
+One 15-minute cycle, four hard boundaries. Everything below the line is ordinary Python you can read, test, and patch:
 
-Every **15 minutes**, the autonomous trading brain initiates an execution cycle:
-1. **Dynamic Market Regime Detection**: Analyzes OKX order books and kinematic calculus derivatives (velocity $v$, acceleration $a$, integral energy $E$, and volatility distributions) to identify macro regimes (e.g. Bull Trend, Wide Chop, Liquidity Flush).
-2. **Multi-Model Investment Committee**: Specialized AI seats (Trend, Momentum, Quantitative Math, Macro/News) debate in cross-examination rounds. A Chief Investment Officer (**CIO**) seat synthesizes proposals into an actionable order intent.
-3. **Fail-Closed Physical Risk Interception**: Before reaching any exchange gateway, every proposed order must penetrate a non-bypassable, physical Python risk pipeline (order geometry check, minimum risk/reward ratio, 4H counter-trend veto, same-direction exposure quotas).
-4. **OKX-Native Execution**: Orders are submitted to **OKX** as maker limit orders (or smart market orders), accompanied by atomic attached conditional Stop-Loss and Take-Profit brackets (TP1/TP2 + trailing profit ratchets).
-
-```
-   ┌──────────────────────────────────────────────────────────────┐
-   │                     15-Minute Brain Cycle                    │
-   └──────────────────────────────┬───────────────────────────────┘
-                                  ▼
-   ┌──────────────────────────────────────────────────────────────┐
-   │         Market Regime Auto-Detection & Calculus Matrix       │
-   │      Velocity v · Acceleration a · Energy E · ADX · Depth    │
-   └──────────────────────────────┬───────────────────────────────┘
-                                  ▼
-   ┌──────────────────────────────────────────────────────────────┐
-   │             Multi-Model Investment Committee                 │
-   │  Trend Officer · Momentum Officer · Quant Math · CIO Seat    │
-   │        (Claude 3.7 / DeepSeek-R1 / GPT-4o / Gemini)          │
-   └──────────────────────────────┬───────────────────────────────┘
-                                  ▼
-   ┌──────────────────────────────────────────────────────────────┐
-   │           Fail-Closed Physical Python Risk Pipeline          │
-   │   Geometry Check · 2.0R Floor · 4H Trend Veto · Exposure     │
-   │           (Any error / timeout = Hard Reject)                │
-   └──────────────────────────────┬───────────────────────────────┘
-                                  ▼
-   ┌──────────────────────────────────────────────────────────────┐
-   │                    OKX-Native Execution                      │
-   │                            OKX V5                            │
-   │   Maker Limit / BBO · Attached TP1/TP2 · Cloud SL Legs       │
-   └──────────────────────────────────────────────────────────────┘
+```text
+                    ┌───────────────────────────────────────────────┐
+                    │        Scheduler · 15-minute brain cycle       │
+                    │  trader · news(10m) · factors(60s) · evolve(6h)│
+                    └───────────────────────┬───────────────────────┘
+                                            ▼
+   ┌────────────────────────────────────────────────────────────────────────┐
+   │ 1 · MARKET REGIME & CALCULUS                                           │
+   │   velocity v · acceleration a · impulse I · energy ∫E · deviation ∫A   │
+   │   probability (skew / kurtosis / VaR / CVaR) · ADX · depth · OI · news │
+   │   → regime label (bull trend / wide chop / low-velocity range / …)      │
+   └───────────────────────────────┬────────────────────────────────────────┘
+                                   ▼
+   ┌────────────────────────────────────────────────────────────────────────┐
+   │ 2 · MULTI-MODEL COMMITTEE            (user-defined seats, any provider)│
+   │   Trend seat · Momentum seat · Quant-math seat · Macro/news seat        │
+   │   cross-examination rounds  →  CIO seat arbitrates one order intent     │
+   └───────────────────────────────┬────────────────────────────────────────┘
+                                   ▼
+   ┌────────────────────────────────────────────────────────────────────────┐
+   │ 3 · FAIL-CLOSED PHYSICAL RISK PIPELINE        (non-bypassable Python)  │
+   │   data validity · price geometry · R:R floor · 4H direction veto        │
+   │   leverage & margin caps · exposure quota · interceptor plugins         │
+   │   ⚠️ any exception or timeout  =  HARD REJECT (never "open anyway")     │
+   └───────────────────────────────┬────────────────────────────────────────┘
+                                   ▼
+   ┌────────────────────────────────────────────────────────────────────────┐
+   │ 4 · OKX-NATIVE EXECUTION                                               │
+   │   maker / BBO limit · attached TP1 · TP2 · cloud stop-loss legs         │
+   │   scale-out (35% at 2.0×ATR) · profit ratchet · time stop (8h)          │
+   └────────────────────────────────────────────────────────────────────────┘
 ```
 
----
-
-## 🎯 Four core design principles
-
-1. **Cognition belongs to the model; physical risk control belongs to the base layer.**  
-   LLMs and multi-agent committees hold only the **right to propose** trade intents. Before an order touches an exchange socket, it must pass 100% of underlying Python risk gates. If any interceptor raises an exception or times out, position opening is **fail-closed: unconditionally blocked**. This physically eliminates model hallucinations from becoming real-world losses.
-
-2. **Market-regime auto-detection (No curve fitting).**  
-   Trend-following strategies bleed out in chops; mean-reversion grids blow up in single-direction breakouts. AstraQuant continuously derives regime state from calculus velocity $v$, acceleration $a$, integral energy $E$, and multi-timeframe volatility distributions, automatically adapting prompt strategies and leverage bands.
-
-3. **OKX-native by design.**  
-   AstraQuant connects to **OKX only**: one venue, one credential set, one signing path, one order contract to reason about. The former venue-abstraction layer has been removed, so there are no divergent exchange code paths, no parity claims, and no inter-venue arbitrage matrix — every entry carries native attached conditional protection from the same single path.
-
-4. **Full white-box explainability & closed-loop self-evolution.**  
-   Every single decision records its complete Chain-of-Thought (CoT), seat debate transcripts, calculus features, and execution evidence. Every 6 hours, the self-evolution engine mines the real closed-trade ledger, distilling empirical lessons into long-term heuristic memory with anti-bias guardrails and a 7–14 day sharpness half-life.
+Every arrow is observable: the full Chain-of-Thought, each seat's transcript, the calculus snapshot, the interceptor verdicts, and the final `policy_hash` are persisted per decision.
 
 ---
 
-## 📸 Visual showcase
+## 🎯 Design principles
 
-### 1. 🖥️ Live trading workstation & depth chart
-Modern obsidian-emerald terminal (`#00E599` emerald accent on deep obsidian slate). Integrates portfolio equity from OKX, active position tickets with 100% stop-loss protection coverage, and native KLineChart v10 with real-time multi-target TP1/TP2 and trailing stop lines:
+1. **Cognition belongs to the model; physical risk control belongs to the base layer.**
+   LLMs and committees hold only the **right to propose**. Before an order reaches an exchange socket it must pass 100% of the Python risk gates. Any interceptor that raises or times out causes a **fail-closed block**. Model hallucinations cannot become losses.
 
-![Trading workstation](docs/images/v840_live_dashboard.png)
+2. **Market-regime auto-detection, not curve fitting.**
+   Trend-following bleeds in chop; mean-reversion grids blow up in breakouts. Regime is derived continuously from calculus and volatility structure, and the active prompt strategy and leverage band adapt with it.
 
----
+3. **OKX-native by design.**
+   One venue, one credential set, one signing path, one order contract. The old venue-abstraction layer is gone: no divergent exchange code paths, no parity claims, no inter-venue matrix. Every entry carries native attached conditional protection from the same single path.
 
-### 2. 🌊 Chain-of-Thought (CoT) deep reasoning drawer
-Press `⌘J` or click **决策轨迹** to inspect the live multi-seat deliberations: kinematic velocity $v$, acceleration $a$, ADX momentum, probability distributions, and the raw CoT drafts:
-
-![Decision trajectory and CoT](docs/images/v840_trajectory_cot.png)
-
----
-
-### 3. 🌐 Causal calculus dynamics matrix
-Live mathematical monitoring across the entire instrument universe: real-time prices, 24h price action, 1H velocity $v$, acceleration $a$, ADX trend strength, long/short ratios, and AI consensus recommendations:
-
-![Causal calculus matrix](docs/images/v840_calculus_factors.png)
+4. **White-box explainability and closed-loop evolution.**
+   Every decision records its reasoning chain, debate transcripts, calculus features, and execution evidence. Four times a day the self-evolution engine mines the **real closed-trade ledger** and distils lessons into long-term heuristic memory — under strict anti-fabrication rules (see [Prompt system](#-prompt-system)).
 
 ---
 
-### 4. ⚙️ Enterprise admin control plane & telemetry
-Real-time operational dashboard monitoring FastAPI engine PID, LLM reasoning latency, the OKX connection heartbeat, memory usage, and the fail-closed physical risk checkpoint status:
+## ⏱ Scheduling
 
-![Admin control plane](docs/images/v840_admin_overview.png)
+All cadences are declared in one place (`astra_gateway/scheduler.py`), so this table is the contract:
 
----
-
-### 5. 🎨 Visual Prompt Studio & dynamic semantic variable slots
-Visually compose system core rules and market feature prompts with 9 real-time semantic variable slots (`{{market_regime}}`, `{{market_matrix}}`, `{{risk_budget}}`, `{{news_intelligence}}`, `{{trading_memory}}`, `{{account_positions}}`, …):
-
-![Prompt Studio](docs/images/v840_prompt_studio.png)
-
----
-
-### 6. 👥 Multi-model investment committee
-Seats are 100% user-defined. Independently bind different providers and models to individual seats (e.g. Trend Officer on Claude 3.7, Quant Math on DeepSeek-R1, Arbitrator on Gemini), configure voting weights, and choose Standard, Cross-Examination, or Debate consensus modes:
-
-![Multi-model committee](docs/images/v840_council_board.png)
+| Job | Cadence | Timeout | What it does |
+|---|---|---|---|
+| `trader` | **every 15 min** | 1260 s | Full brain cycle: market data → committee → risk gates → OKX execution |
+| `news` | every 10 min | 300 s | Harvests and weights macro/crypto headlines for the news seat |
+| `factor_library` | every 60 s | 55 s | Refreshes the technical-factor library |
+| `self_improvement` | **02:00 / 08:00 / 14:00 / 20:00** | 1200 s | Closed-trade attribution → long-term memory update |
+| `daily_briefing` | 08:00 / 20:00 | 600 s | Daily summary and backup |
 
 ---
 
-### 7. 🛡️ Fail-closed physical interceptor pipeline
-A non-bypassable Python plugin pipeline. Four factory gates: 4H macro-trend filter, confidence gatekeeper, 1H ADX chop filter, and true risk-reward gatekeeper. Test any plugin interactively in the sandbox:
+## 🎨 Prompt system
 
-![Fail-closed interceptor pipeline](docs/images/v840_interceptors_failclosed.png)
+> **This is the part most people get wrong about AstraQuant, so it is stated plainly.**
 
----
+**All prompt text lives in one file** — `data/prompt_library.json` (the shipped baseline, git-tracked; your edits go to `data/prompt_library.local.json`). There is **no prompt prose in Python**.
 
-### 8. 📦 Unified policy snapshots & fast rollback
-Bundles prompts, interceptors, committee seats, and instrument pools into a single SHA-256 fingerprint (e.g. `v8.4.0@f34844fc`). Supports 0.5-second atomic rollbacks and attaches the active `policy_version` and `policy_hash` to every order:
+| Piece | Owned by | Editable? |
+|---|---|---|
+| **Output JSON schema** — the machine contract for the model's reply | **Code** (`scripts/ai_brain_trader.py`) | ❌ **Read-only**: the studio disables it, the API rejects changes, and the renderer re-inserts it if deleted |
+| Role, doctrine, entry rules, rhythm rules, task lists, review rules | `data/prompt_library.json` | ✅ Fully editable in the visual Prompt Studio |
+| Live data (price matrix, positions, budget, memory, news) | Code, regenerated each cycle | injected through `{{slot}}` variables |
 
-![Unified policy snapshots](docs/images/v840_policy_snapshot.png)
+**Why the schema is read-only.** It is not documentation — it is the contract the parser depends on. Renaming one field can make an entire decision cycle fail to parse. It therefore ships with the code and moves only by release, never by a studio edit.
 
----
+**Why prose left Python.** The same text used to exist in three copies (Python constants, the JSON baseline, and your local edits). Changing one left the others stale, which surfaced as *"I edited it in the studio but the live prompt never changed."* One source of truth removes that whole failure class.
 
-### 9. 🎛️ Execution risk control center
-Tune all 26 execution risk knobs with three one-click presets (🛡️ Conservative / ⚖️ Balanced / 🚀 Aggressive Hunter). Supports pure proportional equity scaling with zero hardcoded USD ceilings:
+**Live variable slots** — 8 semantic slots carry the runtime state: `{{decision_timestamp}}` `{{account_balance}}` `{{risk_budget}}` `{{account_positions}}` `{{pending_orders}}` `{{market_matrix}}` `{{news_intelligence}}` `{{trading_memory}}` (24 variables in total across all pipelines, including the evolution pipeline's ledger slots).
 
-![Execution risk control center](docs/images/v840_risk_control.png)
-
----
-
-### 10. 🤖 LLM gateway & reasoning config
-Connect to OpenAI, Claude, Gemini, DeepSeek, Qwen, and custom OpenAI-compatible gateways. Configure thinking budgets (10s to 1800s for deep CoT models), reasoning effort, and automatic provider failover:
-
-![LLM gateway and reasoning config](docs/images/v840_llm_hub.png)
-
----
-
-### 11. 🧬 Closed-loop self-evolution engine
-Every 6 hours, the engine mines the real closed-trade ledger, calculating profit factor, win rates, and attribution slices. Lessons learned are distilled into prompt memory with outlier rejection and a 7–14 day half-life:
-
-![Self-evolution engine](docs/images/v840_self_evolution.png)
-
----
-
-### 12. 🔐 Security & Strategy Plaza sharing
-Manage OKX credentials, toggle between Demo and Live environments with preflight safety checks, and configure privacy-safe Strategy Plaza sharing:
-
-![Security and Strategy Plaza sharing](docs/images/v840_security_plaza.png)
-
----
-
-### 13. 📋 Consolidated system logs & 3-channel Error Center
-Unified observability across trading cycles, backend API requests, and scheduler daemons, with a dedicated Error Center for rapid diagnostics:
-
-![System logs and error center](docs/images/v840_decisions_errors.png)
+📖 Full authoring guide, slot dictionary, and the shipped doctrine: **[`docs/PROMPT_GUIDE.md`](docs/PROMPT_GUIDE.md)**
 
 ---
 
 ## 🧩 Strategy configuration centers
 
-> **"The right to define trading strategy always belongs to the trader, never to hardcoded system logic."**
-
-AstraQuant decouples strategy into nine visual control centers accessible directly from the web admin:
+> *The right to define strategy belongs to the trader, never to hardcoded logic.*
 
 | # | Module | What it governs |
 |---|---|---|
-| 1 | 🎨 **Prompt Studio** | Visually edit System Rules and User Templates; inject 9 live semantic variables; duplicate profiles, import/export JSON, with anti-prompt-poisoning guardrails |
-| 2 | 👥 **Multi-Model Committee** | User-defined seats; independently bind model providers (Claude, DeepSeek, GPT, Gemini); configure voting weights, cross-examination, and CIO arbitration |
-| 3 | 🛡️ **Fail-Closed Interceptors** | Non-bypassable Python plugin gates: 4H macro trend, entry confidence, 1H ADX chop filter, 2.0R risk-reward floor; any plugin fault halts position entry |
-| 4 | 🧬 **Self-Evolution Engine** | 6-hour closed-trade ledger attribution mining; distils operational insights into prompt memory; outlier rejection, anti-bias rules, 7–14 day sharpness half-life |
-| 5 | 📦 **Policy Snapshots** | Hashes prompts + interceptors + committee seats + instrument parameters into SHA-256 fingerprints; 0.5s atomic rollbacks; audits `policy_hash` per trade |
-| 6 | 🎛️ **Risk Control Center** | All 26 physical execution knobs configurable via UI; Conservative / Balanced / Aggressive presets; destructive actions require typed confirmation |
-| 7 | 🤖 **LLM Gateway** | Multi-provider direct connections; thinking budget from 10s to 1800s for reasoning models; sub-second failover on rate-limits (HTTP 429) or outages |
-| 8 | 🌐 **OKX Connectivity** | Native OKX V5 connectivity with separate Demo/Live credential profiles; funding fee, open interest, and momentum analytics |
-| 9 | 🧪 **Backtest & Sandboxing** | Multi-instrument portfolio backtesting and sandbox replays executing the exact same Python risk and sizing code paths as live trading |
+| 1 | 🎨 **Prompt Studio** | Edit the four prompt pipelines as ordered modules; inject live slots; duplicate / import / export profiles; anti-poisoning guardrails; the output schema stays locked |
+| 2 | 👥 **Multi-Model Committee** | User-defined seats bound to any OpenAI- or Anthropic-compatible provider; voting weights, cross-examination rounds, CIO arbitration |
+| 3 | 🛡️ **Fail-Closed Interceptors** | Non-bypassable Python plugin gates (4H macro direction, entry confidence, ADX chop filter, R:R floor). Any plugin fault halts entry |
+| 4 | 🧬 **Self-Evolution Engine** | 6-hourly closed-trade attribution; distils operational lessons into prompt memory with outlier rejection and anti-fabrication rules |
+| 5 | 📦 **Policy Snapshots** | Hashes prompts + interceptors + committee seats + instrument parameters into fingerprints; sub-second atomic rollback; audit `policy_hash` per trade |
+| 6 | 🎛️ **Risk Control Center** | All **27** physical execution knobs configurable from the UI, with conservative / balanced / aggressive presets and typed confirmation on destructive actions |
+| 7 | 🤖 **LLM Gateway** | Multi-provider connections; thinking budget up to 1800 s for reasoning models; failover on rate limits (HTTP 429) or outages |
+| 8 | 🌐 **OKX Connectivity** | Native OKX V5 with separate demo / live credential profiles; funding, open interest, and momentum analytics |
+| 9 | 🧪 **Backtest & Sandbox** | Multi-instrument portfolio backtests and sandbox replays that execute the **same** Python risk and sizing code paths as live trading |
 
 ---
 
-## 💰 Capital scaling and tiered risk
+## 💰 Risk model
 
-Every risk parameter scales **dynamically with account equity** — eliminating rigid dollar floors so that a 20 USDT demo test and a 10,000+ USDT institutional desk execute with identical precision:
+Every parameter scales with **account equity** — a 20 USDT demo and a 10,000 USDT desk run identical logic. Values below are the shipped *balanced* baseline and are the same constants the executor enforces (`scripts/risk_constants.py`):
 
-| Metric | Rule (Default Balanced Baseline) | 20 USDT Demo Account | 4,000 USDT Live Account |
+| Rule | Formula / value | 20 USDT demo | 4,000 USDT live |
 | :--- | :--- | ---: | ---: |
-| **1R Risk Per Trade** | `min(per-asset cap, equity × 2.0%)` | 0.40 USDT | 80.0 USDT |
-| **Max Margin Per Trade** | `equity × 20.0%` | 4.00 USDT | 800.0 USDT |
-| **Cumulative Margin Limit** | `equity × 40.0%` | 8.00 USDT | 1,600.0 USDT |
-| **Daily Drawdown Circuit Breaker** | `min(500, equity × 5.0%)` | 1.00 USDT | 200.0 USDT |
-| **Leverage Clamping Band** | Dynamic by tier (default 3x – 8x) | Clamped to 3x | Clamped to 6x |
+| Risk per trade (1R) | `min(per-asset cap, equity × 4.5%)` | 0.90 USDT | 180 USDT |
+| Max margin per trade | `equity × 40%` | 8.00 USDT | 1,600 USDT |
+| Single-asset cumulative margin | `equity × 48%` | 9.60 USDT | 1,920 USDT |
+| Daily drawdown circuit breaker | `min(500 USDT, equity × 10%)` | 2.00 USDT | 400 USDT |
+| Leverage clamp band | `6x – 12x`, tightened per instrument | clamped | clamped |
+| Reward:risk floor / cap | `≥ 2.0`, `≤ 5.0` | — | — |
+| Stop-loss distance | `2.0 × ATR(1H)` | — | — |
+| Take-profit distance cap | `≤ 4.5 × ATR` | — | — |
+| Scale-out | `35%` of the base position at `2.0 × ATR` | — | — |
+| Time stop | `8 h` | — | — |
+| Post-stop cooldown (per instrument) | `15 min` | — | — |
+| Max same-direction positions | `5` | — | — |
+| Pyramiding | `≤ 2` adds, each `≥ 68%` confidence and `≥ 0.6%` in profit | — | — |
+| Minimum entry confidence | `68%` | — | — |
+
+> ⚙️ These are defaults, not dogma: every one of them is editable in the Risk Control Center and takes effect on the next cycle.
 
 ---
 
-## 📊 Observability and logging architecture
+## 📸 Visual tour
 
-| Logger | Log File Path | Generating Process | Scope & Coverage |
+| | |
+|---|---|
+| **Live trading workstation**<br>![Live trading workstation](docs/images/v840_live_dashboard.png) | **Chain-of-Thought reasoning drawer**<br>![Chain-of-Thought](docs/images/v840_trajectory_cot.png) |
+| **Causal calculus dynamics**<br>![Calculus factors](docs/images/v840_calculus_factors.png) | **Multi-model committee board**<br>![Committee](docs/images/v840_council_board.png) |
+| **Visual Prompt Studio**<br>![Prompt Studio](docs/images/v840_prompt_studio.png) | **Self-evolution engine**<br>![Self-evolution](docs/images/v840_self_evolution.png) |
+| **Fail-closed interceptors**<br>![Interceptors](docs/images/v840_interceptors_failclosed.png) | **Policy snapshots & rollback**<br>![Policy snapshot](docs/images/v840_policy_snapshot.png) |
+| **Execution risk control**<br>![Risk control](docs/images/v840_risk_control.png) | **LLM gateway & reasoning config**<br>![LLM hub](docs/images/v840_llm_hub.png) |
+| **Admin control plane**<br>![Admin overview](docs/images/v840_admin_overview.png) | **Security & Strategy Plaza**<br>![Security](docs/images/v840_security_plaza.png) |
+
+---
+
+## 📊 Observability
+
+| Logger | Path | Emitted by | Scope |
 | :--- | :--- | :--- | :--- |
-| `trader` | `logs/ai_factor_trader.log` | Brain cycle daemon | Quotes, committee debate, confidence grading, order placement, bracket orders, and trailing stop ratchets |
-| `backend` | `logs/uvicorn.log` | FastAPI / Uvicorn | REST request/response lifecycles, authentication, CORS, exception traces, and telemetry feeds |
-| `scheduler` | `logs/astra_gateway.log` | Scheduler daemon | Distributed lock leases, cron dispatch, heartbeat checks, and log fragment cleanup |
-| `audit` | `logs/astra_admin_audit.jsonl` | Security audit subsystem | Append-only JSONL: timestamp, IP, actor, action (logins, password updates, risk tuning, emergency closes) |
+| `trader` | `logs/ai_factor_trader.log` | Brain cycle daemon | Quotes, debate, confidence grading, orders, brackets, trailing ratchets |
+| `backend` | `logs/uvicorn.log` | FastAPI / Uvicorn | Request lifecycle, auth, CORS, exceptions, telemetry |
+| `scheduler` | `logs/astra_gateway.log` | Scheduler daemon | Lock leases, cron dispatch, heartbeats, log pruning |
+| `audit` | `logs/astra_admin_audit.jsonl` | Security subsystem | Append-only JSONL: time, IP, actor, action |
 
-> 📈 **Prometheus & Grafana**: See [`deploy/observability/README.md`](deploy/observability/README.md) for pre-built dashboards that visualize `/api/v1/admin/metrics`.
+Both Docker containers run an in-container watchdog and expose health checks, because `restart:` only covers *exits* — a hung-but-alive process would otherwise go unnoticed.
+
+> 📈 **Prometheus & Grafana**: pre-built dashboards in [`deploy/observability/README.md`](deploy/observability/README.md) visualise `/api/v1/admin/metrics`.
 
 ---
 
-## 🧪 Tests and verification gates
+## 🧪 Tests
 
-Every metric and path documented in this repository is enforced by automated test suites. We treat passing gates as an essential deliverable:
+Documentation claims in this repository are backed by automated gates; passing them is part of the deliverable.
 
 ```bash
-# 1) Backend: Audit, LLM, UI, and OKX venue contract checks
-.venv/bin/pytest tests/audit tests/llm tests/ui tests/venues -q
-
-# 2) Backend: Full Offline Regression Suite
+# 1) Backend — full offline regression (structural gates, LLM contract, venue contract, UI)
 .venv/bin/pytest tests/ -q
 
-# 3) Frontend: Type Check, Production Bundle Build & Component Tests
+# 2) Frontend — type check, production bundle, component tests
 cd frontend
 npx vue-tsc --noEmit -p tsconfig.app.json
 npm run build
 node --test tests/*.test.mjs
-cd ..
 ```
 
-> ⚠️ **Python Virtual Environment**: Always execute with `.venv/bin/python` and `.venv/bin/pytest`.
-
----
-
-<a id="code-map"></a>
-## 🗂️ Code map (for developers / handoff agents)
-
-> ⚠️ **Note**: This repository has **never contained an `OPENCODE.md`** — any external prompts pointing to that non-existent file are erroneous. The authoritative entry points are:
-
-| To learn about | Read | Purpose |
-|---|---|---|
-| **Backend layering** | `astra_backend/README.md` | L0 facade / L1 wiring / L2 routers / L3 domain / L4 subpackages and module extraction guidelines |
-| **Runtime scripts & daemons** | `scripts/README.md` | Which file is an entry point vs. a background daemon, root module directory, and dual-spelling import rules |
-| **Frontend components & state** | `frontend/src/components/admin/README.md` | Vue 3 components, composables, pinia stores, and trading workstation state machines |
-| **Standalone deployment** | `STANDALONE.md` | Local bare-metal deployment, environment variable configuration, and manual service startup |
-| **Emergency recovery** | `RECOVERY_GUIDE.md` | Emergency stop procedures, cold data restoration, and process reset playbooks |
-| **Prompt engineering** | `docs/PROMPT_GUIDE.md` | Live semantic variable dictionary, band-breathing rules, and investment committee seat templates |
-| **Observability** | `deploy/observability/README.md` | Prometheus scrape targets, alert rules, and Grafana dashboard provisioning |
-
-**Architectural gates watching this repository:**
-1. `tests/audit/test_directory_docs_current.py`: Ensures every newly created module in subpackages is registered in its `__init__.py` and corresponding `README.md`.
-2. `tests/core/test_readme_baseline_numbers.py`: Prevents documented test numbers from rotting by ensuring documented test counts align with AST discovery.
-3. `tests/audit/test_doc_paths_are_committed.py`: Verifies that every source path backticked in markdown documentation actually exists and is committed to git.
-4. `tests/audit/test_brand_strings_are_consistent.py`: Ensures brand terminology and internal namespaces remain completely consistent across the repository.
+> ⚠️ Always use `.venv/bin/python` and `.venv/bin/pytest` — this repository deliberately does **not** rely on a global Python.
 
 ---
 
 ## 🚀 Deploy
 
-### Option A: 🐳 Docker (Recommended, Zero Host Dependencies)
+### Option A 🐳 Docker (recommended — zero host dependencies)
 
-Packages Python 3.11, compiles the Vue 3 frontend bundle, and orchestrates the web application and background scheduler:
+Packages Python 3.11, compiles the Vue 3 bundle, and runs the web app plus the scheduler:
 
 ```bash
 git clone https://github.com/0xethanq/astra-quant-agent.git
 cd astra-quant-agent
-cp env.example .env && vim .env        # Configure LLM and OKX credentials
-./deploy/docker-start.sh               # Equivalent to: docker compose up -d --build
+cp env.example .env && vim .env      # configure LLM + OKX credentials
+./deploy/docker-start.sh             # == docker compose up -d --build
 
-docker compose ps                      # View container status
-docker compose logs -f                 # Follow aggregated logs
+docker compose ps                    # status
+docker compose logs -f               # aggregated logs
 ```
 
-Both containers configure `restart: unless-stopped` with in-container supervision and internal heartbeats.
+> 💡 The launcher pre-flight-checks for the classic Docker trap where a missing host `./.env` gets silently created as a **directory**, which would make every config save fail. If it happens, the entrypoint refuses to start and prints the exact fix.
 
-### Option B: Bare-Metal / Host Install
+### Option B Bare metal
 
 ```bash
 git clone https://github.com/0xethanq/astra-quant-agent.git
 cd astra-quant-agent
-sh deploy/install.sh                   # Creates .venv and installs Python dependencies
+sh deploy/install.sh                 # creates .venv and installs dependencies
 vim .env
 
-source .venv/bin/activate
 cd frontend && npm install && npm run build && cd ..
-
-./start.sh                             # Starts Uvicorn on 0.0.0.0:8080 and background daemons
+./start.sh                           # starts Uvicorn on 0.0.0.0:8080
 ```
 
-*For Windows PowerShell users, run `start.ps1`. Systemd unit templates are located in `deploy/astra-quant.service`.*
+Windows: `start.ps1`. Systemd units: `deploy/astra-quant.service`, `deploy/astra-gateway.service`, `deploy/astra-scheduler.service`.
 
 ---
 
-## 🏷️ Brand and internal codename (read before renaming)
+<a id="code-map"></a>
+## 🗂 Code map
 
-- **Public Brand**: **AstraQuant** (Official website: <https://www.astraquant.tech>; documentation in [README.md](README.md) and [README.zh-CN.md](README.zh-CN.md)).
-- **Internal Namespace**: **`astra`** (Python packages `astra_backend`, `astra_gateway`, configuration prefix `ASTRA_*`).
+> ⚠️ This repository has **never contained an `OPENCODE.md`** — external prompts pointing at that path are erroneous. The authoritative entry points are:
 
-### Intentional legacy markers (Do Not Rename)
+| To learn about | Read |
+|---|---|
+| **Architecture & module layout** | [`docs/STRUCTURE_OVERVIEW.md`](docs/STRUCTURE_OVERVIEW.md) |
+| **Backend layering (L0→L4)** | [`astra_backend/README.md`](astra_backend/README.md) |
+| **Runtime scripts & daemons** | [`scripts/README.md`](scripts/README.md) |
+| **Prompt engineering** | [`docs/PROMPT_GUIDE.md`](docs/PROMPT_GUIDE.md) |
+| **Failure semantics (why each gate exists)** | [`docs/FAILURE_SEMANTICS.md`](docs/FAILURE_SEMANTICS.md) |
+| **Beijing-time contract** | [`docs/BEIJING_TIME_CONTRACT.md`](docs/BEIJING_TIME_CONTRACT.md) |
+| **Frontend components & state** | [`frontend/src/components/admin/README.md`](frontend/src/components/admin/README.md) |
+| **Standalone deployment** | [`STANDALONE.md`](STANDALONE.md) |
+| **Emergency recovery** | [`RECOVERY_GUIDE.md`](RECOVERY_GUIDE.md) |
+| **Observability** | [`deploy/observability/README.md`](deploy/observability/README.md) |
 
-Three historical elements are intentionally retained to protect running production data and live user positions (`tests/audit/test_brand_strings_are_consistent.py`):
-1. **Exchange leg tags `t-r20sl*` / `t-r20tp*`**: Conditional orders placed before the namespace upgrade remain live on exchange matching engines. `scripts/tag_markers.py` preserves them so the cloud ratchet continues managing them; new orders use `astrasl` / `astratp`.
-2. **Encrypted backup archive magic (`R20GCM2` + NUL)**: Existing encrypted backup archives held by users must remain decryptable. New archives are created with `ASTRAGCM`.
-3. **`cpa.r20.cn` in test fixtures**: Represents the maintainer's dedicated upstream DNS gateway for LLM endpoints, not a repository namespace.
+**Gates watching this repository:**
+
+| Gate | What it prevents |
+|---|---|
+| `tests/audit/test_directory_docs_current.py` | A module existing without being registered in its `__init__.py` **and** its `README.md` |
+| `tests/core/test_readme_baseline_numbers.py` | Documented test counts rotting away from reality |
+| `tests/audit/test_doc_paths_are_committed.py` | Documentation pointing at paths that do not exist or are not committed |
+| `tests/audit/test_brand_strings_are_consistent.py` | Brand / namespace drift that would break live production data |
+| `tests/audit/test_deployment_scripts_are_sound.py` | Startup or Docker scripts that cannot actually start the project |
 
 ---
 
-## 🤝 Community & acknowledgements
+## 🏷 Brand and internal codename (read before renaming)
 
-AstraQuant officially links to and endorses the **[LINUX DO (linux.do)](https://linux.do/)** open-source community:
+- **Public brand**: **AstraQuant** — <https://www.astraquant.tech>
+- **Internal namespace**: **`astra`** (packages `astra_backend`, `astra_gateway`; config prefix `ASTRA_*`)
 
-- 🐧 **Technical soil** — Special thanks to LINUX DO for technical discussions, strategy inspiration, and community feedback.
-- 💬 **Join the conversation** — Discuss multi-agent prompt engineering, risk parameters, and live crypto quant execution on [linux.do](https://linux.do/).
+### Intentional legacy markers — do not rename
+
+Three historical markers are retained to protect live production data and open positions (`tests/audit/test_brand_strings_are_consistent.py`):
+
+1. **Exchange leg tags `t-r20sl*` / `t-r20tp*`** — conditional orders placed before the namespace upgrade are still live on the matching engine. `scripts/tag_markers.py` preserves them so cloud ratchets keep managing them; new orders use `astrasl` / `astratp`.
+2. **Encrypted backup magic `R20GCM2` + NUL** — existing user archives must remain decryptable. New archives use `ASTRAGCM`.
+3. **`cpa.r20.cn` in test fixtures** — the maintainer's upstream DNS gateway for LLM endpoints, not a repository namespace.
+
+---
+
+## 🤝 Community
+
+AstraQuant officially links to and endorses the **[LINUX DO (linux.do)](https://linux.do/)** open-source community.
+
+- 🐧 **Technical soil** — thanks to LINUX DO for discussion, strategy inspiration, and feedback.
+- 💬 **Join in** — multi-agent prompt engineering, risk parameters, live crypto quant execution.
 
 ---
 
 ## ⚠️ Disclaimer
 
-1. This project is **open-source algorithmic trading software and a quantitative research framework**, provided for research, education, and simulation testing only.
-2. Cryptocurrency derivatives trading involves substantial risk of capital loss and extreme volatility. Past performance and simulated backtest results do not guarantee future returns.
-3. Users must possess adequate risk management knowledge and should thoroughly evaluate strategies in a **DEMO / Paper Trading** environment before deploying real funds.
-4. The authors and open-source contributors assume no liability for any financial losses or damages incurred through the use of this software.
+1. This project is **open-source algorithmic trading software and a quantitative research framework**, for research, education, and simulation only.
+2. Crypto derivatives trading carries substantial risk of loss and extreme volatility. Past performance and backtests do not guarantee future returns.
+3. Users must understand risk management and should validate strategies in a **DEMO / paper** environment before deploying real funds.
+4. The authors and contributors accept no liability for financial losses arising from use of this software.
 
 ---
 
 ## 📄 License
 
-Distributed under the [MIT License](LICENSE). Free and open-source.
+Distributed under the [MIT License](LICENSE).

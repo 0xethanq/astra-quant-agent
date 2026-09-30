@@ -1,5 +1,7 @@
 /** 操作审计页文案 */
 export const zhAdminAudit = {
+  tabsLabel: '账号与审计分区',
+  tabAudit: '操作审计',
   intro: "只追加的操作审计流水；登录、配置变更、交易动作全部留痕。",
   badge: "治理 · 1/3",
   searchPlaceholder: "搜索动作 / 状态 / 账号 / 详情...",

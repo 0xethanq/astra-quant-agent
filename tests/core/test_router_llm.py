@@ -80,7 +80,11 @@ class LlmRoutesTest(unittest.TestCase):
         out = A.admin_get_llm_models(x_astra_session="t")
         self.admin.assert_called_once_with(x_astra_session="t")
         self.load_llm_config.assert_called_once_with(mask_keys=True)
-        self.assertEqual(out, {"providers": [], "models": []})
+        # 2026-09-29：响应里多带一份**结构自检**（界面给每条模型打可用性徽标，
+        # 否则"三条并列显示、其中两条是死的"看不出来）。空配置 ⇒ 三态计数全 0。
+        self.assertEqual(out["providers"], [])
+        self.assertEqual(out["models"], [])
+        self.assertEqual(out["model_health"]["counts"], {"ok": 0, "warn": 0, "dead": 0})
         self.assertEqual(self.audits, [], "读操作不写审计")
 
     def test_failover_events_wraps_and_passes_limit(self):

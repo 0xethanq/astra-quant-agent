@@ -20,7 +20,7 @@ export const zhLanding = {
     tag: 'AI AUTOMATED QUANT · CALCULUS & PROBABILITY · MATHEMATICAL RISK',
     titlePart1: '新一代加密货币量化交易系统',
     titleHighlight: '24/7 AI 全自动量化交易',
-    subtitle: '以因果微积分动能学与概率统计模型为决策内核，严守 R:R ≥ 2.0 真实盈亏比与 1R 恒定风险预算。全天候 24/7 无人值守自动化运行，内置 17 项 Fail-Closed 物理风控闸门与两阶段阶梯锁利体系，100% 本地私有化自部署，零第三方资金托管。',
+    subtitle: '以因果微积分动能学与动态正期望博弈（E > 0）为决策内核，融合置信度弹性风险预算与两阶段阶梯锁利体系。全天候 24/7 无人值守自动化运行，内置 17 项 Fail-Closed 物理风控闸门，100% 本地私有化自部署，零第三方资金托管。',
     ctaPrimary: '启动交易终端',
     ctaSecondary: '查阅系统架构',
     ctaGithub: 'GitHub 开源仓库',
@@ -121,7 +121,7 @@ export const zhLanding = {
   },
   cta: {
     title: '开启 24/7 AI 自动化量化交易',
-    subtitle: '因果微积分动能学 · R:R ≥ 2.0 正期望收益 · 17 项物理风控闸门 · 100% 本地私有化非托管。',
+    subtitle: '因果微积分动能学 · 动态正期望博弈 · 17 项物理风控闸门 · 100% 本地私有化非托管。',
     launchBtn: '启动交易终端',
     docsBtn: '查看系统架构文档',
     githubBtn: 'GitHub 开源仓库',

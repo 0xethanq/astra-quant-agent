@@ -46,6 +46,10 @@ SANDBOXED_MODULES = (
     'astra_backend.routers.dashboard',
     'astra_backend.routers.strategy',
     'astra_backend.schedule_store',
+    # 2026-09-30：交易时段配置（`data/trading_session.json`）。不重定向的话，
+    # 用例里的 `save_trading_session` 会写生产文件 ⇒ 用户的时段设置随测试漂移，
+    # 而这份配置**直接决定交易进程跑不跑**（比通知时间严重一个量级）。
+    'astra_backend.trading_session_store',
     'scripts.archive_ledger',
     'astra_gateway.agents',
     'astra_gateway.publisher',

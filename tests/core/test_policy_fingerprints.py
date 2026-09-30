@@ -186,8 +186,8 @@ class ExtractPromptProfileTests(unittest.TestCase):
 
     def test_defaults_when_profile_lacks_fields(self):
         fp = extract_prompt_profile_fingerprint(Path("/nonexistent"), {})
-        self.assertEqual(fp["active_profile_id"], "stable")
-        self.assertEqual(fp["active_profile_name"], "全维度波段强化版")
+        self.assertEqual(fp["active_profile_id"], "allpattern_swing")
+        self.assertEqual(fp["active_profile_name"], "全形态波段策略(提示词样板)")
         self.assertEqual(fp["editor_mode"], "modules")
 
     def test_loads_active_profile_when_not_given(self):
@@ -209,8 +209,8 @@ class ExtractPromptProfileTests(unittest.TestCase):
     def test_unloadable_library_yields_documented_default(self):
         with patch.dict(sys.modules, {"prompt_library": None}):
             fp = extract_prompt_profile_fingerprint(Path("/nonexistent"))
-        self.assertEqual(fp["active_profile_id"], "stable")
-        self.assertEqual(fp["active_profile_name"], "全维度波段强化版")
+        self.assertEqual(fp["active_profile_id"], "allpattern_swing")
+        self.assertEqual(fp["active_profile_name"], "全形态波段策略(提示词样板)")
         self.assertEqual(fp["editor_mode"], "modules")
 
     def test_active_profile_raising_is_also_caught(self):
@@ -219,7 +219,7 @@ class ExtractPromptProfileTests(unittest.TestCase):
             load_active_profile=lambda: {"id": "x"})
         with patch.dict(sys.modules, {"prompt_library": fake}):
             fp = extract_prompt_profile_fingerprint(Path("/nonexistent"))
-        self.assertEqual(fp["active_profile_id"], "stable")
+        self.assertEqual(fp["active_profile_id"], "allpattern_swing")
 
     def test_scripts_dir_is_removed_again_from_sys_path(self):
         before = list(sys.path)

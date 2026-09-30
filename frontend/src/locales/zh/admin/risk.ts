@@ -1,5 +1,7 @@
 /** 执行层硬风控页模板文案 */
 export const zhAdminRisk = {
+  tabsLabel: '风控与拦截分区',
+  tabParams: '风控参数配置',
   engineDrift: '以下参数文件值 ≠ 进程内值（重启后台后同步）',
   engineEquityUnknown: '权益未知（未传）',
   engineEquityUsed: '派生所用权益',

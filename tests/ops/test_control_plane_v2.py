@@ -90,13 +90,39 @@ class ChannelBusinessCodeTests(unittest.TestCase):
 
 class PromptModuleTests(unittest.TestCase):
     def test_layout_reorders_and_overrides_editable_base(self):
+        """排序照旧生效；"改写基座"的**新契约**（2026-09-30）是"降级为覆盖层后生效"。
+
+        ## 契约为什么变了
+
+        `source=="base"` 的产品承诺是**跟随代码发版**（前端 `source.baseTip`：
+        "与代码基座逐字相同：代码升级后会自动同步到本方案"）。旧契约让
+        `apply_module_layout` 直接采用布局里那段被改过的 base 正文，等于**冻结**了它：
+        代码升级再也到不了这个方案，且工坊显示存档、实发用存档，两边都偏离基座却无人知道。
+
+        新契约把职责切两半（`normalize_base_modules` ⨯ `demote_edited_base_modules`）：
+        `source=="base"` 一律等于现网基座；用户改动由**保存路径**降级为 `legacy`
+        覆盖层后原样生效。故本用例分两段断言，两段都必须绿：
+        （1）未降级的改写 base ⇒ 被治愈成现网基座（跟随发版）；
+        （2）经保存路径降级的同一改写 ⇒ 真的出现在实发文本里（改动不丢）。
+        """
         base="【A】\none\n\n【B】\ntwo"
         view=prompts.pipeline_view(base,{"pipelines":{}},"trading_system")
         self.assertEqual([x["title"] for x in view],["A","B"])
         view[0]["content"]="【A】\nchanged"
         profile={"pipelines":{"trading_system":[view[1],view[0]]}}
-        compiled=prompts.apply_module_layout(base,profile,"trading_system","x")
-        self.assertLess(compiled.index("【B】"),compiled.index("【A】")); self.assertIn("changed",compiled)
+
+        # （1）裸改写：排序生效，正文被治愈为现网基座
+        healed=prompts.apply_module_layout(base,profile,"trading_system","x")
+        self.assertLess(healed.index("【B】"),healed.index("【A】"))
+        self.assertNotIn("changed",healed)
+        self.assertIn("【A】\none",healed)
+
+        # （2）走保存路径降级后：排序生效且改动真的到达实发
+        demoted=prompts.demote_edited_base_modules([view[1],view[0]], base, "trading_system")
+        self.assertEqual([m["source"] for m in demoted], ["base","legacy"])
+        compiled=prompts.apply_module_layout(base,{"pipelines":{"trading_system":demoted}},"trading_system","x")
+        self.assertIn("changed",compiled)
+        self.assertIn("【A】\none",compiled)  # 基座分节仍在（实发 = 基座 + 覆盖层）
 
     def test_unknown_live_base_section_is_preserved(self):
         old={"pipelines":{"trading_user":[{"id":"a","title":"旧模块","content":"old","enabled":True,"source":"base"}]}}
@@ -139,11 +165,38 @@ class PromptModuleTests(unittest.TestCase):
         self.assertIn("目标 R:R ≥ 2.2",compiled)
         self.assertNotIn("ADX < 20 必须 WAIT",compiled)
 
-    def test_stable_preset_balances_participation_without_weakening_p0(self):
-        preset=prompts.PRESETS["stable"]
-        self.assertIn("不得把“稳健”解释为长期空仓",preset["trading_system"])
-        self.assertIn("P0 硬约束保持不变",preset["trading_system"])
-        self.assertIn("普通回抽优先作为限价入场定位",preset["trading_user"])
+    def test_allpattern_preset_keeps_p0_and_patience_is_not_permanent_flatness(self):
+        """出厂样板必须覆盖"全形态"，同时**不许削弱 P0**（2026-09-30 换预设后重写）。
+
+        旧用例钉的是「全维度波段强化版」的措辞（"不得把稳健解释为长期空仓"等），
+        那条预设已被淘汰。新判据守住同一件事：① P0 硬约束仍由执行层强制；
+        ② 耐心（允许 WAIT）不得被写成"长期空仓"；③ 招式必须覆盖多形态而非只认一种。
+
+        ★ 2026-09-30 提示词来源迁移后重钉：`prompts.PRESETS` 已是**结构-only stub**
+        （pipelines 为空，只承担"出厂方案 id"的身份职责），正文只存
+        `data/prompt_library.json`。旧判据读 `PRESETS["allpattern_swing"]["trading_system"]`
+        只会读到空串 —— 那不是"样板没覆盖 P0"，而是读错了事实源。故改为读基线方案
+        （`get_profile`；隔离渲染沙箱已把真基线复制进沙箱，普通运行走会话级沙箱副本）。
+        旧锚点"允许空仓/不是保守"在新正文里的同义表述是「空仓 = 待命状态」与
+        「减速不等于反转」「这是纪律，不是保守」，一并按同一意图钉住。
+        """
+        profile = prompts.get_profile("allpattern_swing")
+        ts = prompts.compile_modules(profile["pipelines"]["trading_system"])
+        tu = prompts.compile_modules(profile["pipelines"]["trading_user"])
+        self.assertGreater(len(ts), 500, "基线 trading_system 为空 —— 又读到了结构-only stub")
+        self.assertGreater(len(tu), 500, "基线 trading_user 为空 —— 又读到了结构-only stub")
+        self.assertIn("P0 不可覆盖硬约束", ts)
+        self.assertIn("执行层强制", ts)
+        for shape in ("顺势回踩", "顺势反弹", "假突破", "均值回归"):
+            self.assertIn(shape, ts, f"样板未覆盖「{shape}」⇒ 又变成只认一种招式")
+        self.assertIn("三件套", ts, "每单必须自证：形态命名·触发条件·失效位")
+        self.assertNotIn("长期空仓", ts, "耐心不等于长期空仓")
+        # 旧锚点「允许空仓 / 不是保守」的同一意图（耐心允许 WAIT，但不是永久平坦）
+        self.assertIn("减速不等于反转", ts)
+        self.assertIn("待命状态", ts)
+        self.assertIn("这是纪律，不是保守", ts)
+        self.assertIn("宁缺毋滥", tu)
+        self.assertIn("不允许因怕亏而放掉已达标的机会", tu)
 
     def test_trading_decision_contract_cannot_be_replaced_by_editor_summary(self):
         base="【推演与决策任务】:\n必须输出严格 JSON，包含 position_management 与 decisions"

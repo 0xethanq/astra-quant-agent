@@ -1,5 +1,6 @@
 /** 系统安全页（管理员账号）文案 */
 export const zhAdminAdminSys = {
+  title: '管理员账号',
   securityNote: 'PBKDF2-SHA256 加盐哈希 · 连续失败 5 次锁定 15 分钟 · 会话 12 小时。',
   governanceBadge: '治理 · 2/3',
   password: {

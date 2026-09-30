@@ -1,14 +1,26 @@
 """Unit tests for Scale-Out Execution Engine (scripts/trader/scale_out.py)."""
 from __future__ import annotations
 
+import tempfile
 import unittest
-from unittest.mock import MagicMock, patch
+from pathlib import Path
+from unittest.mock import ANY, MagicMock, patch
 
 from scripts.trader.scale_out import execute_scale_out_if_eligible
 
 
 class ScaleOutExecutionTests(unittest.TestCase):
     def setUp(self):
+        # ⚠️ 2026-09-29：分批止盈新增了**事件流水**（`data/scale_out_events.jsonl`）。
+        # 本用例走真实的成功路径 ⇒ 若不重定向落点，跑到哪里就把夹具行灌进**生产**流水。
+        # 实测事故：一份"第一手证据"里混进 50 行假记录（entry 80000/exit 82000 之类）。
+        import scripts.trader.scale_out as _so
+        self._events_tmp = tempfile.TemporaryDirectory(prefix="astra-scaleout-events-")
+        self.addCleanup(self._events_tmp.cleanup)
+        _p = patch.object(_so, "SCALE_OUT_EVENTS_FILE",
+                          Path(self._events_tmp.name) / "scale_out_events.jsonl")
+        _p.start()
+        self.addCleanup(_p.stop)
         self.mock_okx = MagicMock()
         self.mock_record_trade = MagicMock()
         self.mock_notify = MagicMock()
@@ -59,7 +71,9 @@ class ScaleOutExecutionTests(unittest.TestCase):
             self.mock_okx.place_order.assert_not_called()
 
     def test_profit_below_trigger_threshold(self):
-        # cur_px = 80500, entry = 80000 -> profit = 500 < 1.2 * 1000 (1200)
+        # cur_px = 80500, entry = 80000 -> profit = 500 < 2.0 * 1000 (2000)
+        # ⚠️ 阈值来自**代码基线**（测试环境由 pin_baseline_risk_env 钉住，不读用户 .env），
+        #    2026-09-30 起基线 = 2.0×ATR 落袋 35%（用户拍板的盈亏比矫正）
         f_low_profit = dict(self.sample_f_long, price=80500.0)
         actions = []
         ok, reason = execute_scale_out_if_eligible(
@@ -72,8 +86,9 @@ class ScaleOutExecutionTests(unittest.TestCase):
         self.mock_okx.place_order.assert_not_called()
         # 验证未达标时已为操盘手和主脑计算并存入首批止盈位 TP1
         t = self.sample_trackers["BTC-USDT-SWAP_long"]
-        self.assertEqual(t.get("scale_out_tp"), 81200.0)
-        self.assertIn("首批止盈目标 TP1: 81200", t.get("stage_desc", ""))
+        self.assertEqual(t.get("scale_out_tp"), 82000.0)
+        self.assertIn("首批止盈目标 TP1: 82000", t.get("stage_desc", ""))
+        self.assertIn("达标平35%保本", t.get("stage_desc", ""), "文案必须跟着比例走，不许写死 50%")
 
     def test_insufficient_size_graceful_degrade(self):
         # pos = 0.01, minSz = 0.01 -> 0.01 < 2 * 0.01, cannot split
@@ -90,8 +105,11 @@ class ScaleOutExecutionTests(unittest.TestCase):
         self.mock_okx.place_order.assert_not_called()
 
     def test_notification_failure_does_not_change_the_outcome(self):
-        """**通知是 best-effort**：平仓单已经打到交易所 ⇒ 通知（Telegram/邮件等）失败
-        只吞掉，返回值仍是成功。否则上层会误以为平仓失败而重试。
+        """**本路径不再发布金额通知**（2026-09-30 通知单一事实源）。
+
+        打桩一个"必炸"的通知通道，结果必须**完全不变**：平仓单照打、返回值仍是成功。
+        这同时钉住两件事：① 通知不是本路径的职责（改由台账路径发布 —— 它握有交易所
+        真实成交价与手续费）；② 就算有人把调用加回来，通知故障也绝不能影响钱路。
         """
         self.mock_okx.place_order.return_value = [{"ordId": "12345"}]
         self.mock_okx.pending_algo_orders.return_value = [
@@ -111,7 +129,8 @@ class ScaleOutExecutionTests(unittest.TestCase):
         )
         self.assertTrue(ok, f"通知失败不得改变平仓结果：{reason}")
         self.assertEqual(reason, "首批分批平仓成功")
-        boom.assert_called()
+        boom.assert_not_called()
+        self.mock_record_trade.assert_called_once()
 
     def test_trade_recording_failure_currently_propagates(self):
         """⚠️ **实测边界（如实钉住现状，未擅自改）**：与「通知」不同，**台账记账是裸调用**
@@ -162,30 +181,34 @@ class ScaleOutExecutionTests(unittest.TestCase):
         self.assertTrue(ok)
         self.assertEqual(reason, "首批分批平仓成功")
         
-        # 验证下达平仓市价单（reduceOnly=True，卖出 5 张）
+        # 验证下达平仓市价单（reduceOnly=True，卖出 3.5 张 = 10 × 35%）
+        # 2026-09-29：平仓单带 clOrdId 前缀 `SO`（Scale-Out）—— 台账侧据此把
+        # "首批分批止盈"与"AI 主动止盈平仓"分开（旧实现按盈亏金额猜原因，
+        # 于是分批止盈在台账里一直显示成"目标止盈达成"）。
         self.mock_okx.place_order.assert_called_once_with(
-            "BTC-USDT-SWAP", "sell", "5",
-            pos_side="long", td_mode="cross", ord_type="market", reduce_only=True
+            "BTC-USDT-SWAP", "sell", "3.5",
+            pos_side="long", td_mode="cross", ord_type="market", reduce_only=True,
+            cl_ord_id=ANY,
         )
 
         # 验证旧 OCO 被撤销
         self.mock_okx.cancel_algo_orders.assert_called_once_with(["algo_1"], inst_id="BTC-USDT-SWAP")
 
-        # 验证新 OCO 重挂：剩余 5 张，保本止损价 80200 (80000 + 0.25%)
+        # 验证新 OCO 重挂：剩余 6.5 张，保本止损价 80200 (80000 + 0.25%)
         self.mock_ensure_oco.assert_called_once_with(
-            "BTC-USDT-SWAP", "long", 5.0, 85000.0, 80200.0
+            "BTC-USDT-SWAP", "long", 6.5, 85000.0, 80200.0
         )
 
         # 验证 tracker 状态变更与金字塔加仓互斥锁定
         t = self.sample_trackers["BTC-USDT-SWAP_long"]
         self.assertEqual(t["scale_out_phase"], 1)
-        self.assertEqual(t["currentSz"], 5.0)
+        self.assertEqual(t["currentSz"], 6.5)
         self.assertEqual(t["scale_count"], 999)
         self.assertEqual(t["trailingStopPx"], 80200.0)
 
-        # 验证台账双写与通知触发
+        # 验证台账写入；金额通知**不再**由本路径发布（改由台账路径，见其 docstring）
         self.mock_record_trade.assert_called_once()
-        self.mock_notify.assert_called_once()
+        self.mock_notify.assert_not_called()
 
     def test_idempotent_no_duplicate_scale_out(self):
         # scale_out_phase 已为 1 时，再次调用直接拒绝，绝不重复平仓
@@ -302,13 +325,13 @@ class ScaleOutExecutionTests(unittest.TestCase):
     def test_cycle_parts_scale_out_tp_derivation(self):
         from scripts.brain.cycle_parts import _calculate_scale_out_tp, build_history_record
 
-        # 多头：80000 + 1.2 * 1000 = 81200
+        # 多头：80000 + 2.0 * 1000 = 82000（基线 2.0×ATR，见 risk_constants）
         tp_long = _calculate_scale_out_tp(80000.0, "BUY_LONG", 1000.0, precision=2)
-        self.assertEqual(tp_long, 81200.0)
+        self.assertEqual(tp_long, 82000.0)
 
-        # 空头：80000 - 1.2 * 1000 = 78800
+        # 空头：80000 - 2.0 * 1000 = 78000
         tp_short = _calculate_scale_out_tp(80000.0, "SELL_SHORT", 1000.0, precision=2)
-        self.assertEqual(tp_short, 78800.0)
+        self.assertEqual(tp_short, 78000.0)
 
         # WAIT 或无价格返回 None
         self.assertIsNone(_calculate_scale_out_tp(0.0, "WAIT", 1000.0))
@@ -346,7 +369,7 @@ class ScaleOutExecutionTests(unittest.TestCase):
         )
         self.assertEqual(len(rec["top_opportunities"]), 1)
         opp = rec["top_opportunities"][0]
-        self.assertEqual(opp["scale_out_tp"], 81200.0)
+        self.assertEqual(opp["scale_out_tp"], 82000.0)
         self.assertEqual(opp["take_profit_price"], 85000.0)
 
 
@@ -361,7 +384,8 @@ class CrossVenueUnitScaleTests(unittest.TestCase):
     """
 
     def _f(self):
-        return {"instId": "DOGE-USDT-SWAP", "name": "DOGE", "price": 0.1,
+        # 现价 0.101：越过基线门槛 2.0×ATR（0.09615 + 2.0×0.002 = 0.10015）
+        return {"instId": "DOGE-USDT-SWAP", "name": "DOGE", "price": 0.101,
                 "atr": 0.002, "precision": 4, "ctVal": 1000.0, "minSz": 0.01,
                 "market_data_valid": True}
 

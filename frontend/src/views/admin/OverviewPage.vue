@@ -139,7 +139,7 @@ function parseAuditContext(action: string, detail: any): { label: string; tag: s
 <template>
   <div class="ov-deck">
     <!-- 顶部工作台标题与状态 -->
-    <PageHeader :title="t('nav.admin.overview')" :description="t('admin.overview.desc')">
+    <PageHeader :title="t('nav.admin.overview')">
       <template #actions>
         <div class="ov-header-actions">
           <div class="ov-live-pill">

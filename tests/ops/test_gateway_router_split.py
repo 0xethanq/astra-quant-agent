@@ -28,6 +28,26 @@ BASELINE = "astra_backend/routers/gateway.py"
 PKG = ROOT / "astra_backend" / "routers" / "gateway"
 INCLUDE_ORDER = ("channels", "gateway_ops", "notifications", "backups")
 
+#: 拆分**之后**有意新增的路由（**不是**拆分引入的漂移）。
+#:
+#: 本门原本钉"路由表一字不变"，那是**结构整理期**的判据。本仓是活的：新功能加路由
+#: 是合法的（`tests/audit/test_api_surface_monotonic.py` 的 docstring 明写
+#: "不写必须恰好等于 N —— 那会在任何合法的接口新增时误报"）。
+#: 故这里把"新增"变成**必须逐条登记并写明理由**的事件：原有 34 条的路径/方法/处理器名
+#: 与**相对顺序**仍逐字对拍，任何未登记的新增/改名/删除/重排都会翻红。
+#: 登记项若已不存在（功能被删），`test_static_route_table_is_identical_and_ordered`
+#: 的第 ③ 条自检会报"登记过期"。
+POST_SPLIT_ADDITIONS: dict[tuple[str, str, str], str] = {
+    ("/api/v1/admin/gateway/trading-session", "GET", "trading_session_config"):
+        "交易时段配置读取（2026-09-30 新功能：用户自定义运行窗口 —— 交易主脑占全系统"
+        "模型消耗 94%/≈4.2M token 天，窗口外跳过可省绝大部分开销）",
+    ("/api/v1/admin/gateway/trading-session", "PUT", "update_trading_session"):
+        "交易时段配置写入（同上；校验与交易引擎判定共用 scripts/trader/session.py，"
+        "非法输入 400 且不落盘）",
+    ("/api/v1/admin/backups/{filename}", "DELETE", "delete_backup_archive"):
+        "备份存档物理删除（2026-09 新增：从 /admin/backup 页面支持清理历史归档包）",
+}
+
 
 def strip_path_converters(path: str) -> str:
     """`{filename:path}` → `{filename}`（与 OpenAPI 规格的写法对齐）。"""
@@ -60,7 +80,21 @@ class GatewayRouterSplitTest(unittest.TestCase):
         got = []
         for name in INCLUDE_ORDER:
             got.extend(_routes_in((PKG / f"{name}.py").read_text(encoding="utf-8")))
-        self.assertEqual(got, want, "路由表（路径/方法/处理器名/顺序）与拆分前不一致")
+        # ① 原有路由必须**逐条原序**仍在（新增不允许打乱匹配优先级）
+        self.assertEqual([r for r in got if r in want], want,
+                         "拆分前那 34 条路由（路径/方法/处理器名/顺序）被动过")
+        # ② 多出来的必须是**登记过**的新增
+        additions = [r for r in got if r not in want]
+        undeclared = [r for r in additions if r not in POST_SPLIT_ADDITIONS]
+        self.assertEqual(undeclared, [],
+                         f"这些路由既不在拆分基线里、也没登记进 POST_SPLIT_ADDITIONS：{undeclared}")
+        self.assertEqual([r for r in additions if r in POST_SPLIT_ADDITIONS],
+                         [r for r in got if r in POST_SPLIT_ADDITIONS],
+                         "新增路由的顺序应与登记顺序一致（便于人读）")
+        # ③ 登记表不得有幽灵条目（防"功能删了、登记还在"）
+        self.assertEqual(sorted(POST_SPLIT_ADDITIONS), sorted(r for r in additions
+                                                              if r in POST_SPLIT_ADDITIONS),
+                         "POST_SPLIT_ADDITIONS 里有代码里不存在的路由（登记过期）")
 
     def test_live_openapi_route_surface_unchanged(self):
         from astra_backend.app import app
@@ -74,9 +108,11 @@ class GatewayRouterSplitTest(unittest.TestCase):
                 t = tuple(op.get("tags") or [])
                 tags[t] = tags.get(t, 0) + 1
         want = {(p, m) for p, m, _ in _baseline_routes()}
-        self.assertEqual(live, want, "线上接口面（路径×方法）与拆分前不一致")
-        self.assertEqual(len(live), 34)
-        self.assertEqual(tags, {("gateway",): 34},
+        self.assertTrue(want <= live, "拆分前的接口面有缺失（路径×方法）")
+        declared = {(p, m) for (p, m, _name) in POST_SPLIT_ADDITIONS}
+        self.assertEqual(live - want, declared, "线上多出来的接口面与登记表不一致")
+        self.assertEqual(len(live), 34 + len(POST_SPLIT_ADDITIONS))
+        self.assertEqual(tags, {("gateway",): 34 + len(POST_SPLIT_ADDITIONS)},
                          "tags 必须恰好一处 ['gateway']（两处都加会重复）")
 
     def test_shared_helper_still_uses_injection_seam(self):

@@ -18,6 +18,8 @@ from __future__ import annotations
 
 import ast
 import fcntl
+import json
+import os
 import sys
 import tempfile
 import unittest
@@ -348,6 +350,32 @@ class SingleTraderCycleTests(unittest.TestCase):
         self.addCleanup(probe.close)
         fcntl.flock(probe.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
 
+    def test_force_bypasses_the_slot_dedup_but_still_records_the_slot(self):
+        """`ASTRA_SESSION_FORCE=1`（后台「立即运行」）⇒ 不被同槽去重吞掉，但仍写槽文件。
+
+        为什么必须绕过：休市周期会提前 return，槽文件却已经写下 —— 紧接着点
+        「立即运行」就会撞上"同槽重复"而被静默忽略（实测的坑：点两次只有第一次有效）。
+        为什么仍要写槽：写下去才能保证**下一轮定时周期**照旧按同槽去重。
+        """
+        ran = []
+        slot_file = Path(aft.TRADER_SLOT_FILE)
+        def job():
+            ran.append(True)
+            return "DONE"
+        with patch.object(aft, "_slot_guard_should_skip", lambda slot: True), \
+                patch.dict(os.environ, {"ASTRA_SESSION_FORCE": "1"}):
+            self.assertEqual(aft.single_trader_cycle(job)(), "DONE")
+        os.environ.pop("ASTRA_SESSION_FORCE", None)
+        self.assertEqual(ran, [True], "强制运行必须真的跑起来")
+        self.assertTrue(slot_file.exists(), "仍要写槽文件，供下一轮定时周期去重")
+        self.assertIn("slot", json.loads(slot_file.read_text(encoding="utf-8")))
+
+    def test_default_path_still_honours_the_slot_guard(self):
+        with patch.object(aft, "_slot_guard_should_skip", lambda slot: True):
+            ran = []
+            self.assertIsNone(aft.single_trader_cycle(lambda: ran.append(True))())
+        self.assertEqual(ran, [], "不设 ASTRA_SESSION_FORCE 时行为必须逐位不变")
+
 
 class _Frozen:
     mode = "live"
@@ -355,13 +383,12 @@ class _Frozen:
     configured = True
 
 
-class ExecutePortfolioTests(unittest.TestCase):
-    """`execute_portfolio` 的 stage 编排：任何一步返回 None 都必须**立刻中止本轮**。
+class _PortfolioHarness(unittest.TestCase):
+    """`execute_portfolio` 编排用例的**共享夹具**（本身不含用例）。
 
-    ⚠️ OKX 专用化后 stage 序列为：
-    preflight → 形状预检 → phase1（持仓/挂单/余额）→ 标的池与持仓管理 →
-    熔断/主脑扫描 → 入场扫描（条件）→ 行情健康快照 → 状态落盘 →
-    周期披露。原来的跨所保护巡检（watchdog）一步已整体移除。
+    2026-09-30：交易时段闸门需要在**同一套 stage 桩**上再验一遍"窗口外怎么走"，
+    故把夹具提出来给 `ExecutePortfolioTests` 与 `SessionGateTests` 共用 ——
+    复制一份 setUp 迟早会与这边漂移（本仓吃过太多次"同一语义两处写"）。
     """
 
     #: phase1 的 11 项输出（顺序即 `fetch_positions_and_reconcile` 的返回顺序）：
@@ -390,6 +417,7 @@ class ExecutePortfolioTests(unittest.TestCase):
         self._patch("TRADER_LOCK_FILE", str(Path(self.tmp.name) / ".lock"))
         self._patch("TRADER_SLOT_FILE", str(Path(self.tmp.name) / "slot.json"))
         self._patch("_slot_guard_should_skip", lambda slot: False)
+        self._patch("trading_session_state", lambda now_bj=None: {"mode": "full", "active": True, "reason": "test"})
         self._patch("freeze_okx_environment", lambda: _Frozen())
         self._patch("unfreeze_okx_environment", lambda: None)
         self._patch("current_environment", lambda: _Frozen())
@@ -429,6 +457,15 @@ class ExecutePortfolioTests(unittest.TestCase):
 
     def _run(self):
         return aft.execute_portfolio()
+
+class ExecutePortfolioTests(_PortfolioHarness):
+    """`execute_portfolio` 的 stage 编排：任何一步返回 None 都必须**立刻中止本轮**。
+
+    ⚠️ OKX 专用化后 stage 序列为：
+    preflight → 形状预检 → phase1（持仓/挂单/余额）→ 标的池与持仓管理 →
+    熔断/主脑扫描 → 入场扫描（条件）→ 行情健康快照 → 状态落盘 →
+    周期披露。原来的跨所保护巡检（watchdog）一步已整体移除。
+    """
 
     def test_preflight_none_aborts_before_anything_else(self):
         self._patch("preflight_reconcile_and_housekeeping", lambda **kw: None)
@@ -507,6 +544,93 @@ class ExecutePortfolioTests(unittest.TestCase):
         self._patch("preflight_reconcile_and_housekeeping", self._record("preflight_should_not_run"))
         self.assertIsNone(self._run())
         self.assertEqual(self.stages, [])
+
+
+class SessionGateTests(_PortfolioHarness):
+    """交易时段闸门在 `execute_portfolio` 里的编排契约（2026-09-30）。
+
+    三条语义分别对应三种模式，任何一条走错都不是"少跑一点"，而是钱：
+
+    | 模式 | 必须发生 | 绝不能发生 |
+    |---|---|---|
+    | `full`（默认/窗口内/强制） | 与改造前**逐位一致** | 被闸门改动任何一处 |
+    | `manage_only`（窗口外默认） | 跳过主脑调用与入场扫描；持仓/落盘/披露照跑 | 叫大模型、开新仓 |
+    | `off`（窗口外可选） | preflight（含**超时挂单回收**）+ 披露，然后退出 | 查持仓、动追踪止损、覆盖 trading_state |
+    """
+
+    MANAGE = {"mode": "manage_only", "restricted": True, "reason": "休市中（窗口外）：只做机械风控",
+              "errors": [], "next_change_bj": "2026-09-30 21:30", "in_window": False,
+              "matched_index": None, "enabled": True, "window_count": 1}
+    OFF = {**MANAGE, "mode": "off", "reason": "休市中（窗口外）：完全停跑巡检"}
+    FULL = {"mode": "full", "restricted": False, "reason": "未启用交易时段（全天候运行）",
+            "errors": [], "next_change_bj": "", "in_window": False, "matched_index": None,
+            "enabled": False, "window_count": 0}
+
+    def _session(self, state):
+        self._patch("trading_session_state", lambda now_bj=None: state)
+
+    def test_full_mode_passes_the_real_brain_callable(self):
+        self._wire()
+        self._session(self.FULL)
+        self._run()
+        scan = self.calls["scan"]
+        self.assertIs(scan["execute_batch_ai_brain_cycle"], aft.execute_batch_ai_brain_cycle,
+                      "全天候时必须把真函数传下去（既有锚点也钉这一条）")
+        self.assertIs(scan["session_restricted"], False)
+        self.assertIn("entry_scan", self.stages)
+
+    def test_manage_only_keeps_the_mechanical_carers_running(self):
+        self._wire()
+        self._session(self.MANAGE)
+        self._run()
+        scan = self.calls["scan"]
+        self.assertIs(scan["session_restricted"], True)
+        self.assertNotIn("entry_scan", self.stages, "窗口外不许尝试开新仓")
+        for stage in ("persist", "health_snapshot", "write_disclosure"):
+            self.assertIn(stage, self.stages,
+                          f"{stage} 是持仓安全链路的一部分，窗口外必须照跑")
+        self.assertIn("universe", self.calls, "追踪止损/分批止盈依赖因子装配，必须照跑")
+
+    def test_manage_only_discloses_the_degradation(self):
+        self._wire()
+        self._session(self.MANAGE)
+        self._run()
+        self.assertIs(self.calls["disclosure"]["session"], self.MANAGE)
+
+    def test_off_mode_stops_after_preflight_and_never_touches_positions(self):
+        self._wire()
+        self._session(self.OFF)
+        self.assertIsNone(self._run())
+        self.assertIn("preflight", self.calls, "相位 0/0a（含超时挂单回收）必须跑完")
+        for stage in ("shape", "phase1", "universe", "scan", "persist", "health_snapshot"):
+            self.assertNotIn(stage, self.calls, f"off 模式不得进入 {stage}")
+
+    def test_off_mode_still_writes_one_disclosure_row(self):
+        self._wire()
+        self._session(self.OFF)
+        self._run()
+        self.assertIn("write_disclosure", self.stages,
+                      "休市必须每轮留一行披露，否则「为什么什么都没发生」无从解释")
+        self.assertIs(self.calls["disclosure"]["session"], self.OFF,
+                      "离场前必须把时段状态交给披露载荷（session_* 键的单一来源）")
+
+    def test_off_mode_disclosure_carries_the_preflight_block_state(self):
+        self._wire(preflight=("BLOCKED", "TS"))
+        self._session(self.OFF)
+        self._run()
+        self.assertTrue(self.calls["disclosure"]["entries_blocked"])
+
+    def test_force_env_is_read_through_the_session_shell(self):
+        """`trading_session_state` 是壳：`ASTRA_SESSION_FORCE=1` ⇒ 强制 full。
+
+        这里直接验壳（编排侧已由上面几条覆盖），确保"后台立即运行"这条路真的有闸。
+        """
+        self._patch("_load_trading_session",
+                    lambda: {"enabled": True, "mode_outside": "off",
+                             "windows": [{"days": [0], "start": "00:00", "end": "00:01"}]})
+        with patch.dict(os.environ, {"ASTRA_SESSION_FORCE": "1"}):
+            self.assertEqual(aft.trading_session_state()["mode"], "full")
+        os.environ.pop("ASTRA_SESSION_FORCE", None)
 
 
 class MainGuardTests(unittest.TestCase):

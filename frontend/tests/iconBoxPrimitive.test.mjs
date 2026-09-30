@@ -164,7 +164,6 @@ export const BOX_USERS = {
   'views/admin/BackupPage.vue': 1,
   'views/admin/CouncilPage.vue': 2,
   'views/admin/NotifyPage.vue': 1,
-  'views/admin/PluginsPage.vue': 1,
   'views/admin/PolicySnapshotPage.vue': 1,
 };
 
@@ -182,7 +181,8 @@ test('每个图标盒用户都必须挂着 icon-box（清册逐文件钉数量�
   }
 
   assert.deepEqual(bad, [], `图标盒用户在模板上丢了 icon-box：\n  ${bad.join('\n  ')}`);
-  assert.equal(total, 11, `全站图标盒实例应为 11 个（批 87 并入 3 个），实测 ${total} 个`);
+  // 2026-09-30 后台精简：内置插件清单页（PluginsPage）删除，其 1 处图标盒随之移除（11 → 10）。
+  assert.equal(total, 10, `全站图标盒实例应为 10 个（批 87 并入 3 个；2026-09-30 删 PluginsPage 1 处），实测 ${total} 个`);
 });
 
 test('.icon-box 原件必须完整（9 条属性一个不少）', () => {
@@ -223,7 +223,8 @@ test('挂了 icon-box 的元素，盒内图标必须是 14px（.is-lg 大号变�
     });
   }
 
-  assert.ok(checked >= 9, `核对到的图标盒过少（${checked}）`);
+  // 2026-09-30 后台精简：PluginsPage 删除后下限由 9 调到 8（防"空转通过"的下限，不是产品承诺）。
+  assert.ok(checked >= 8, `核对到的图标盒过少（${checked}）`);
   assert.deepEqual(bad, [], `图标盒内图标尺寸不一致：\n  ${bad.join('\n  ')}`);
 });
 

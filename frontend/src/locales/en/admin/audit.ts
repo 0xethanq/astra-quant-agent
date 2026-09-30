@@ -1,5 +1,7 @@
 /** Audit log page copy */
 export const enAdminAudit = {
+  tabsLabel: 'Accounts & audit sections',
+  tabAudit: 'Audit log',
   intro: "Append-only operations audit trail; logins, configuration changes and trading actions are all recorded.",
   badge: "Governance · 1/3",
   searchPlaceholder: "Search action / status / account / detail...",

@@ -345,15 +345,21 @@ def run_interceptor_pipeline(package: dict[str, Any], decision: dict[str, Any], 
         if not is_same:
             return "WAIT", "已有反向或不兼容持仓，禁止借决策通道反向开仓，安全降级为 WAIT。", 0.0
 
-    # 2. Non-Bypassable Core Safety Floor: Finite values, Geometry & Global Minimum RR >= 2.0
-    quote_valid, quote_reason, rr = validate_quote_geometry_and_rr(raw_action, entry, tp, sl)
+    # 2. Non-Bypassable Core Safety Floor: Finite values, Geometry & Minimum RR with Dynamic Expectation
+    raw_conf = decision.get("confidence", 0)
+    try:
+        conf = float(raw_conf or 0)
+        has_valid_conf = True
+    except (TypeError, ValueError):
+        conf = 0.0
+        has_valid_conf = False
+
+    quote_valid, quote_reason, rr = validate_quote_geometry_and_rr(raw_action, entry, tp, sl, confidence=conf)
     if not quote_valid:
         return "WAIT", quote_reason, rr
 
     # 3. Non-Bypassable Core Safety Floor: Confidence threshold (per-instrument conf_floor from pool, global default 75%)
-    try:
-        conf = float(decision.get("confidence", 0) or 0)
-    except (TypeError, ValueError):
+    if not has_valid_conf:
         return "WAIT", "核心风控拦截：置信度必须是有效数字", rr
 
     conf_floor = _conf_floor_for(inst_id)

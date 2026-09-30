@@ -1,5 +1,11 @@
 <script setup lang="ts">
 /**
+ * `embedded`（2026-09-30 后台精简）：本页被吸收为宿主页的一个页签时为真。
+ * 宿主页负责大标题与页签标签，本页 PageHeader 降级为紧凑行（说明收起），
+ * 但 #actions 里的按钮原样渲染 —— 被吸收页的按钮一个都不能丢。
+ */
+const props = withDefaults(defineProps<{ embedded?: boolean }>(), { embedded: false })
+/**
  * AdminSysPage.vue · 管理员账号与权限工位
  * ---------------------------------------------------------------------------
  * 骨架（推倒重来）：
@@ -198,7 +204,7 @@ onMounted(load)
 
 <template>
   <div class="as">
-    <PageHeader :title="t('nav.admin.adminsys')" :description="t('admin.adminsys.securityNote')">
+    <PageHeader :embedded="props.embedded" :title="t('admin.adminsys.title')">
       <template #actions>
         <span class="badge badge-accent mono">{{ t('admin.adminsys.governanceBadge') }}</span>
         <button type="button" class="btn btn-ghost btn-sm" :disabled="!auth.isSuperadmin" @click="load">

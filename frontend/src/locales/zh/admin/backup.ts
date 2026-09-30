@@ -1,5 +1,7 @@
 /** 数据灾备页文案 */
 export const zhAdminBackup = {
+  tabsLabel: '系统与灾备分区',
+  tabBackup: '备份归档',
   intro: "支持本地/云端全量数据灾备、备份打包直接下载、本地备份上传与一键全量恢复。",
   badge: "集成与保障 · 2/3",
   loading: "正在加载灾备配置...",
@@ -77,4 +79,10 @@ export const zhAdminBackup = {
   restoreConfirmDesc: '归档【{file}】将解压覆盖当前系统配置、历史数据与策略',
   restoreOk: '备份 {file} 恢复成功！共解压 {n} 个核心文件。请重启或刷新服务使新状态接管。',
   restoreFailed: '恢复失败：{msg}',
+  deleteTitle: '删除归档',
+  deleteConfirmTitle: '删除备份归档',
+  deleteConfirmDesc: '确定要删除备份归档文件【{file}】吗？此操作无法撤销。',
+  confirmDelete: '确认删除',
+  deleteOk: '已成功删除备份归档 {file}',
+  deleteFailed: '删除归档失败：{msg}',
 };

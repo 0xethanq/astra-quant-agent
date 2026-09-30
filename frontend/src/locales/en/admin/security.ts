@@ -52,6 +52,16 @@ export const enAdminSecurity = {
   orderModeMarketHint: 'Market mode: Executes immediately against market depth to prevent missed fills during fast moves; TP/SL legs remain fully linked.',
   saveOrderMode: 'Save Order Mode',
   toastOrderModeSaved: 'Order execution mode saved and active',
+  scaleOutTitle: 'Exit & Scale-Out Strategy',
+  scaleOutDesc: 'Two-stage profit-taking: locks in cash profit at first target and ratchets remaining position to breakeven.',
+  scaleOutEnabledTag: 'Enabled',
+  scaleOutDisabledTag: 'Disabled',
+  scaleOutSwitchLabel: 'Enable Scale-Out',
+  scaleOutHint: 'When active, once floating profit reaches target × 1H ATR, the system automatically closes the specified ratio to lock profit and ratchets remaining stop to breakeven.',
+  scaleOutCurrentPreset: 'Current Exit Parameters',
+  scaleOutCustomizeInRisk: 'Customize ratio & ATR threshold in Risk Parameters',
+  scaleOutOnToast: 'Scale-Out strategy enabled',
+  scaleOutOffToast: 'Scale-Out strategy disabled',
   optDemo: 'Demo',
   optLive: 'Live',
   liveTrio: 'Live Credentials',
@@ -139,6 +149,10 @@ export const enAdminSecurity = {
   bandVenues: 'Venues connected',
   healthOk: 'All available',
   healthDegraded: 'Partially degraded',
+  // 2026-09-30: health roster is projected from instrument pool x live market evidence.
+  // Missing/stale snapshot => symbols count as unknown; never upgraded to green.
+  healthUnknownBadge: '{count} unverified',
+  healthUnknownNote: 'Market snapshot is missing or stale, so these counts are unverified (not a symbol failure); the next cycle re-checks automatically.',
   routingEffectiveTitle: 'Currently effective',
 
   errLoadFailed: 'Load failed: {msg}',

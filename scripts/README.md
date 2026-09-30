@@ -73,7 +73,7 @@
 
 | 模块 | 行数 | 说明 |
 |---|---|---|
-| `prompt_library.py` | 1233 | 版本化提示词库（Python 交易侧直接使用）；**双文件**：出厂基线 `data/prompt_library.json`（跟踪、只读）⊕ 用户改动 `data/prompt_library.local.json`（忽略、唯一写目标） |
+| `prompt_library.py` | 1255 | 版本化提示词库（Python 交易侧直接使用）；**双文件**：出厂基线 `data/prompt_library.json`（跟踪、只读）⊕ 用户改动 `data/prompt_library.local.json`（忽略、唯一写目标）。2026-09-30 起**提示词正文只存这份 JSON**（Python 里只剩只读输出 JSON Schema）；`validate_profile` 对只读 Schema fail-closed（内容/启停不可改，缺失由渲染边界回插） |
 | `prompt_templates.py` | 193 | 提示词模板编译：文本 ⇄ 模块 ⇄ 管线布局 |
 | `llm_credentials.py` | 93 | LLM 客户端凭据解析单一事实源 |
 

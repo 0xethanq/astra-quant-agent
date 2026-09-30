@@ -508,8 +508,10 @@ class OkxExitReasonTests(unittest.TestCase):
         return o
 
     def test_fallback_branch_classifies_by_pnl(self):
-        # ★ 第 122 行 —— 既无 algoId、clOrdId 也不以 "O" 开头、tag 里没有 "CLI"
-        self.assertIn("目标止盈达成", self._run(close_orders=[self._order()])["exit_reason"])
+        # ★ 第 122 行 —— 既无 algoId、clOrdId 也不以 "O"/"SO" 开头、tag 里没有 "CLI"。
+        # 2026-09-29：这里**查不到平仓单**，只能按盈亏推定，故标签显式写"推定（未匹配）"——
+        # 旧实现直接写"目标止盈达成"，把"查不到"伪装成"止盈成功"。
+        self.assertIn("止盈推定（未匹配平仓单）", self._run(close_orders=[self._order()])["exit_reason"])
 
     def test_fallback_branch_reports_a_loss(self):
         h = self._h(pnl="-50.0")
@@ -530,8 +532,16 @@ class OkxExitReasonTests(unittest.TestCase):
         self.assertIn("移动止损保本出场", self._run(h, [order])["exit_reason"])
 
     def test_algo_prefixed_client_order_id_uses_the_strategy_wording(self):
+        # 2026-09-29 改口径：`O` 前缀 = **AI 主动整仓止盈**（不是云端 TP 成交）。
+        # 旧实现把它与分批止盈、云端止盈都写成"目标止盈达成"，用户看不出谁干的。
         order = self._order(clOrdId="O12345")
-        self.assertIn("移动止盈锁利", self._run(close_orders=[order])["exit_reason"])
+        self.assertIn("AI 主动止盈平仓", self._run(close_orders=[order])["exit_reason"])
+
+    def test_scale_out_prefixed_client_order_id_is_labelled_as_partial_close(self):
+        """clOrdId 前缀 `SO`（分批止盈平仓单）必须与"目标止盈达成"分开 ——
+        这正是"分批止盈是否生效"看得见的关键（旧实现按盈亏金额猜原因）。"""
+        order = self._order(clOrdId="SO1790674346")
+        self.assertIn("首批分批止盈", self._run(close_orders=[order])["exit_reason"])
 
     def test_cli_tag_is_recognised(self):
         order = self._order(clOrdId="x", tag="CLI")

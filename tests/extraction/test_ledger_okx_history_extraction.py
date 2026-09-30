@@ -261,9 +261,17 @@ class ExitReasonTest(unittest.TestCase):
         self.assertEqual(t["exit_reason"], "🛡️ 移动止损保本出场")
 
     def test_client_order_profit_becomes_trailing_tp(self):
+        # 2026-09-29 改口径：`O` 前缀 = **AI 主动整仓止盈**（不再与云端止盈混为一谈）。
         t = _build(_row(pnl=50.0, fee=0.0),
                    close_orders=[self._close_order(clOrdId="O12345")])
-        self.assertEqual(t["exit_reason"], "✨ 移动止盈锁利")
+        self.assertEqual(t["exit_reason"], "🤖 AI 主动止盈平仓")
+
+    def test_scale_out_client_order_id_is_labelled_as_first_batch(self):
+        """`SO` 前缀 = 分批止盈的软件平仓单 —— 与"目标止盈达成"必须分开，
+        否则人从台账**看不出分批止盈发生过**（本轮用户提问的直接起因）。"""
+        t = _build(_row(pnl=50.0, fee=0.0),
+                   close_orders=[self._close_order(clOrdId="SO1790674346")])
+        self.assertEqual(t["exit_reason"], "🎯 首批分批止盈")
 
     def test_client_order_loss_becomes_risk_sl(self):
         t = _build(_row(pnl=-50.0, fee=0.0),
@@ -273,7 +281,7 @@ class ExitReasonTest(unittest.TestCase):
     def test_tag_cli_counts_as_client_order(self):
         t = _build(_row(pnl=50.0, fee=0.0),
                    close_orders=[self._close_order(clOrdId="X", tag="CLI_DO")])
-        self.assertEqual(t["exit_reason"], "✨ 移动止盈锁利")
+        self.assertEqual(t["exit_reason"], "🤖 AI 主动止盈平仓")
 
     def test_client_order_small_pnl_becomes_timeout(self):
         t = _build(_row(pnl=1.0, fee=0.0),
@@ -281,7 +289,7 @@ class ExitReasonTest(unittest.TestCase):
         self.assertEqual(t["exit_reason"], "⏱️ 超时/保本平仓")
 
     def test_unmatched_close_order_generic_reasons(self):
-        for pnl, expected in ((50.0, "🎯 目标止盈达成"),
+        for pnl, expected in ((50.0, "🎯 止盈推定（未匹配平仓单）"),
                               (-50.0, "🛑 止损出场"),
                               (1.0, "🛡️ 保本平仓")):
             t = _build(_row(pnl=pnl, fee=0.0), close_orders=[])
@@ -290,8 +298,8 @@ class ExitReasonTest(unittest.TestCase):
     def test_match_requires_same_instrument(self):
         t = _build(_row(pnl=50.0, fee=0.0),
                    close_orders=[self._close_order(instId="ETH-USDT-SWAP", algoId="A")])
-        self.assertEqual(t["exit_reason"], "🎯 目标止盈达成",
-                         "不匹配时退化为通用文案（止盈仍是止盈）")
+        self.assertEqual(t["exit_reason"], "🎯 止盈推定（未匹配平仓单）",
+                         "不匹配（另一合约）⇒ 只能**推定**，标签必须显式写『未匹配』")
         # 用亏损值才能区分"匹配到 algo"与"未匹配"
         t2 = _build(_row(pnl=-50.0, fee=0.0),
                     close_orders=[self._close_order(instId="ETH-USDT-SWAP", algoId="A")])
@@ -382,7 +390,48 @@ class SourceIdentityTest(unittest.TestCase):
             r"\s*_id_suffix = .*\n", "", t, flags=re.MULTILINE)
         if n != 1:
             raise AssertionError(f"序号块应恰好匹配 1 次，实际 {n}")
-        return t.replace("{_id_suffix}", "{id_suffix}")
+        t = t.replace("{_id_suffix}", "{id_suffix}")
+        # ── 2026-09-29 的**声明式行为变更**（用户可见，单独登记在此）──────────
+        # 出场原因归属改为按**订单身份**判定，不再按盈亏金额猜：
+        #   · 平仓单 clOrdId 前缀 `SO` ⇒ "首批分批止盈"（分批止盈的软件平仓单）；
+        #   · 平仓单 clOrdId 前缀 `O`  ⇒ "AI 主动止盈平仓"（原来是"移动止盈锁利"）；
+        #   · **查不到平仓单** ⇒ 显式标"止盈推定（未匹配平仓单）"，不伪装成"止盈成功"。
+        # 起因：旧口径把分批止盈、云端止盈、AI 主动止盈**全写成"目标止盈达成"**，
+        # 实测用户因此以为分批止盈从未生效（09-22~09-29 实际发生 15 次）。
+        # 口径说明写在 `build_okx_trade` 的注释里，故此处只登记**代码行**的替换。
+        pairs = [
+            (
+                '        if algo_id:\n'
+                '            if net_pnl > 3.0:\n'
+                '                exit_reason = "🎯 目标止盈达成"\n',
+                '        if cl_ord_id.startswith("SO"):\n'
+                '            exit_reason = "🎯 首批分批止盈" if net_pnl >= 0 else "🛑 分批止盈后余仓止损"\n'
+                '        elif algo_id:\n'
+                '            if net_pnl > 3.0:\n'
+                '                exit_reason = "🎯 目标止盈达成"\n',
+            ),
+            (
+                '                exit_reason = "✨ 移动止盈锁利"\n',
+                '                exit_reason = "🤖 AI 主动止盈平仓"\n',
+            ),
+            (
+                '            exit_reason = "🎯 目标止盈达成" if net_pnl > 3.0 '
+                'else ("🛑 止损离场" if net_pnl < -1.0 else "🛡️ 保本平仓")\n',
+                '            exit_reason = (("🎯 止盈推定（未匹配平仓单）" if net_pnl > 3.0\n'
+                '                            else "🛑 止损离场" if net_pnl < -1.0 else "🛡️ 保本平仓"))\n',
+            ),
+            (
+                '        exit_reason = "🎯 目标止盈达成" if net_pnl > 3.0 '
+                'else ("🛑 止损出场" if net_pnl < -1.0 else "🛡️ 保本平仓")\n',
+                '        exit_reason = (("🎯 止盈推定（未匹配平仓单）" if net_pnl > 3.0\n'
+                '                        else "🛑 止损出场" if net_pnl < -1.0 else "🛡️ 保本平仓"))\n',
+            ),
+        ]
+        for old_text, new_text in pairs:
+            if old_text not in t:
+                raise AssertionError(f"未找到待替换的历史片段（形状变了？）: {old_text[:48]!r}")
+            t = t.replace(old_text, new_text, 1)
+        return t
 
     @staticmethod
     def _new_function_body() -> str:
@@ -475,8 +524,11 @@ class SourceIdentityTest(unittest.TestCase):
         """被删掉的只有跨行序号那 4 行（含注释外的那 3 条语句 + id_suffix 赋值）。"""
         old = self._old_loop_body()
         edited = self._mechanical_edits(old)
-        removed = len(self._norm(old)) - len(self._norm(edited))
-        self.assertEqual(removed, 4, f"应恰移除 4 行，实际 {removed}")
+        # 移除的仍只有跨行序号那 4 行；2026-09-29 登记的行为变更有**净增** 4 行
+        # （SO 分支 +2 行、两处"推定（未匹配）"文案各 +1 行）⇒ 两相抵消后差值 0。
+        self.assertEqual(len(self._norm(old)) - len(self._norm(edited)), 0,
+                         "移除 4 行、登记变更净增 4 行 —— 差额必须是 0；"
+                         "若不为 0，说明搬运时夹带了未登记的改动")
 
     def test_id_formula_unchanged_after_removal(self):
         """id 去重键的语义不变：仍是 `posId`（或回退时间戳）+ 传入后缀。"""

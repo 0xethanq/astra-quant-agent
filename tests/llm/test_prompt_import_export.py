@@ -30,9 +30,21 @@ class PromptImportExportTests(unittest.TestCase):
         library.BASELINE_FILE, library.LOCAL_FILE = self.original
         self.temp.cleanup()
 
+    def _seed_real_baseline(self):
+        """把真出厂基线复制进沙箱当种子（2026-09-30 提示词体系重构）。
+
+        正文只存 `data/prompt_library.json`，`PRESETS` 已降为结构-only stub。
+        `create_profile(source_id=...)` 的继承对象是**基线方案**，在空基线上会继承到
+        空管线 —— 那不是隔离，而是把被测对象抽空了（插槽断言会因此失真）。
+        """
+        from tests import allow_real_data_reads
+        real = Path(__file__).resolve().parents[2] / "data" / "prompt_library.json"
+        with allow_real_data_reads():
+            library.BASELINE_FILE.write_text(real.read_text(encoding="utf-8"), encoding="utf-8")
+
     # ------------------------------------------------------------------ export
     def test_export_is_self_describing_v4(self):
-        created = library.create_profile("自描述导出", "说明", source_id="stable")
+        created = library.create_profile("自描述导出", "说明", source_id="allpattern_swing")
         exported = library.export_profile(created["id"])
         self.assertEqual(exported["format"], "astra-prompt-profile")
         self.assertEqual(exported["version"], 4)
@@ -53,7 +65,17 @@ class PromptImportExportTests(unittest.TestCase):
 
     # ------------------------------------------------------------- round trip
     def test_export_import_roundtrip_preserves_base_modules_and_slots(self):
-        created = library.create_profile("往返方案", "往返说明", source_id="stable")
+        """导出/导入往返必须逐字保留管线模块、source 标注与实时插槽。
+
+        ★ 2026-09-30 提示词体系重构后重钉：实时插槽（decision_timestamp /
+        market_matrix / closed_trades_json）与只读 JSON Schema 基座现在全部住在
+        `data/prompt_library.json`，而 `create_profile(source_id="allpattern_swing")`
+        继承的是**基线方案**。旧写法在本用例沙箱化的空基线上跑 ⇒ 继承到空管线，
+        插槽断言必红（看起来像"往返丢了内容"，其实是源头就没有）。故先种上真基线，
+        再按原强度验证往返逐字保留。
+        """
+        self._seed_real_baseline()
+        created = library.create_profile("往返方案", "往返说明", source_id="allpattern_swing")
         exported = library.export_profile(created["id"])
         imported = library.import_profile(exported)
 
@@ -87,7 +109,7 @@ class PromptImportExportTests(unittest.TestCase):
             self.assertEqual(imported[key], library.compile_modules(imported["pipelines"][key]))
 
     def test_import_does_not_overwrite_existing_profile(self):
-        created = library.create_profile("唯一名称方案", "", source_id="stable")
+        created = library.create_profile("唯一名称方案", "", source_id="allpattern_swing")
         active_before = library.load_library()["active_profile_id"]
         exported = library.export_profile(created["id"])
         library.import_profile(exported)
@@ -115,8 +137,8 @@ class PromptImportExportTests(unittest.TestCase):
         self.assertIn("{{market_matrix}}", imported["pipelines"]["trading_system"][0]["content"])
 
     def test_import_accepts_whole_library_export_and_uses_active_profile(self):
-        active = library.create_profile("库内启用方案", "", source_id="stable")
-        library.create_profile("库内备用方案", "", source_id="stable")
+        active = library.create_profile("库内启用方案", "", source_id="allpattern_swing")
+        library.create_profile("库内备用方案", "", source_id="allpattern_swing")
         library.activate_profile(active["id"])
         dump = library.load_library()
         self.assertIn("profiles", dump)
@@ -130,7 +152,7 @@ class PromptImportExportTests(unittest.TestCase):
         )
 
     def test_library_export_without_active_id_falls_back_to_first_profile(self):
-        first = library.create_profile("首个方案", "", source_id="stable")
+        first = library.create_profile("首个方案", "", source_id="allpattern_swing")
         dump = library.load_library()
         dump.pop("active_profile_id", None)
         dump.pop("active_style", None)
@@ -188,7 +210,7 @@ class PromptImportExportTests(unittest.TestCase):
         self.assertEqual(len(library.load_library()["profiles"]), 0)
 
     def test_allowed_variable_set_matches_exported_metadata(self):
-        exported = library.export_profile("stable")
+        exported = library.export_profile("allpattern_swing")
         metadata_keys = {item["key"] for item in exported["variables"]}
         self.assertTrue(metadata_keys.issubset(set(exported["allowed_variables"])))
         self.assertEqual(exported["allowed_variables"], sorted(library.ALLOWED_VARIABLES))
@@ -218,18 +240,18 @@ class PromptImportExportApiTests(unittest.TestCase):
         self.temp.cleanup()
 
     def test_export_endpoint_returns_self_describing_payload(self):
-        response = self.client.get("/api/v1/admin/prompt-profiles/stable/export", headers=self.headers)
+        response = self.client.get("/api/v1/admin/prompt-profiles/allpattern_swing/export", headers=self.headers)
         self.assertEqual(response.status_code, 200, response.text)
         data = response.json()
         self.assertEqual(data["version"], 4)
-        self.assertEqual(data["profile_id"], "stable")
+        self.assertEqual(data["profile_id"], "allpattern_swing")
         self.assertIn("variables", data)
         self.assertIn("allowed_variables", data)
 
     def test_import_endpoint_accepts_all_three_shapes(self):
-        exported = self.client.get("/api/v1/admin/prompt-profiles/stable/export", headers=self.headers).json()
+        exported = self.client.get("/api/v1/admin/prompt-profiles/allpattern_swing/export", headers=self.headers).json()
         bare = exported["profile"]
-        library_dump = {"version": 2, "active_profile_id": "stable", "profiles": {"stable": bare}}
+        library_dump = {"version": 2, "active_profile_id": "allpattern_swing", "profiles": {"allpattern_swing": bare}}
 
         for label, payload in (("wrapped", exported), ("bare", bare), ("library", library_dump)):
             with self.subTest(shape=label):

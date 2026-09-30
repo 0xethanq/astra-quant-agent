@@ -218,7 +218,6 @@ function toggleCoinFilter(sym: string) {
               <Flame class="h-3.5 w-3.5 text-[var(--accent)] shrink-0" />
               {{ t('dash.news.band.title') }}
             </h2>
-            <p class="text-3xs text-[var(--ink-3)] truncate hidden sm:inline">{{ t('dash.news.band.desc') }}</p>
           </div>
 
           <div class="flex items-center gap-1.5 shrink-0">

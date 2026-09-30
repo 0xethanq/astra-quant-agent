@@ -8,6 +8,7 @@ per-instrument 参数、极端值确认、委员会预算、文档漂移。
 from __future__ import annotations
 
 import json
+import re
 import threading
 import unittest
 from pathlib import Path
@@ -211,7 +212,72 @@ class InstrumentPoolTrustTests(_Base):
         from tests.source_scan import combined
         src = combined("scripts/ai_factor_trader.py", pkg_name="trader")
         self.assertIn("pool_is_trustworthy()", src, "开新仓前必须检查池可信度（fail-closed）")
-        self.assertIn("if not cb_active and pool_is_trustworthy():", src)
+        # 2026-09-30：入场闸门新增了一个合取项（交易时段窗口外不开新仓）。
+        # 判据由"字面量整串相等"改为"同一行 if 必须同时含这些条件"：
+        # 既不会因合法的合取项新增而假红，又比原来更严 —— 新合取项也被钉住，
+        # 少任何一项（池可信度 / 熔断未生效 / 时段未受限）都会翻红。
+        gate = re.search(r"^\s*if not cb_active and pool_is_trustworthy\(\)[^\n]*:$", src, re.M)
+        self.assertIsNotNone(gate, "入场扫描的开闸条件行找不到（判据锚点失效，须人工复核）")
+        self.assertIn("not session_restricted", gate.group(0),
+                      "交易时段窗口外必须同样禁止开新仓（否则休市周期仍会入场）")
+
+
+class DefaultRosterIntegrityTests(_Base):
+    """出厂默认标的清单的完整性（2026-09-30 收敛到 6 标的后补的门）。
+
+    为什么需要它：`data/instrument_pool.json` 被 `.gitignore` 忽略（`data/*.json`），
+    于是「默认标的」**唯一可持久化**的定义就是 `scripts/instrument_pool.py::DEFAULT_INSTRUMENTS`
+    —— 池文件缺失/损坏时 `load_instruments()` 走的就是它。旧版这份常量是 10 条、
+    含已从池内移除的 LINK/UNI，等于「重建一次就会复活淘汰标的，并把并发上限从 6 顶到 10」。
+    （2026-09-30 真机：面板显示 9/9 币的僵尸健康名单里同样残留 UNI。）
+    """
+
+    def setUp(self):
+        super().setUp()
+        import scripts.instrument_pool as ip
+        self.ip = ip
+
+    def test_defaults_are_all_valid_entries(self):
+        kept, dropped = self.ip._validate_pool_items([dict(i) for i in self.ip.DEFAULT_INSTRUMENTS])
+        self.assertEqual(dropped, [], "出厂默认里混入了非法条目 ⇒ 重建时会静默丢标的")
+        self.assertEqual(len(kept), len(self.ip.DEFAULT_INSTRUMENTS))
+
+    def test_defaults_are_usdt_perps_with_numeric_contract_value(self):
+        for item in self.ip.DEFAULT_INSTRUMENTS:
+            with self.subTest(inst=item.get("instId")):
+                self.assertTrue(str(item["instId"]).endswith("-USDT-SWAP"))
+                self.assertIsInstance(float(item["ctVal"]), float)
+                self.assertGreater(float(item["ctVal"]), 0.0, "面值 0 会让盈亏/保证金算式全零")
+                self.assertIn(item["tier"], self.ip.TIER_PROFILES)
+
+    def test_no_duplicate_bases_in_the_defaults(self):
+        from collections import Counter
+        bases = Counter(str(i["instId"]).split("-", 1)[0] for i in self.ip.DEFAULT_INSTRUMENTS)
+        self.assertEqual([b for b, n in bases.items() if n > 1], [], "同一币种出现两次")
+
+    def test_sentinel_is_always_in_the_fallback_pool(self):
+        """兜底池必须含 BTC：池文件坏掉时若连哨兵都没了，基准与黑天鹅守卫会一起失明。"""
+        self.assertIn("BTC-USDT-SWAP", {i["instId"] for i in self.ip.DEFAULT_INSTRUMENTS})
+
+    def test_size_respects_the_pool_bounds(self):
+        from astra_backend.dependencies import MAX_POOL_SIZE, MIN_POOL_SIZE
+        n = len(self.ip.DEFAULT_INSTRUMENTS)
+        self.assertGreaterEqual(n, MIN_POOL_SIZE)
+        self.assertLessEqual(n, MAX_POOL_SIZE)
+
+    def test_documented_example_roster_is_covered_by_the_defaults(self):
+        """`docs/PROMPT_GUIDE.md` 里 `{{active_instruments}}` 的示例名单不得出现默认池外的标的。
+
+        文档示例是给人看的"当前在管清单"，若它列了默认池里没有的币，读者会以为池里有它
+        （2026-09-30 之前它就列着 LINK/UNI —— 两个早已移出池的标的）。反向不设约束：
+        "默认池 ⊆ 文档"会把每次增删都变成文档债，而"文档 ⊆ 默认池"正是防腐烂那一侧。
+        """
+        doc = (ROOT / "docs" / "PROMPT_GUIDE.md").read_text(encoding="utf-8")
+        m = re.search(r"\{\{active_instruments\}\}.*?`([A-Z0-9,]+)`", doc)
+        self.assertIsNotNone(m, "PROMPT_GUIDE 的 active_instruments 示例名单不见了")
+        documented = {f"{s}-USDT-SWAP" for s in m.group(1).split(",") if s}
+        missing = documented - {i["instId"] for i in self.ip.DEFAULT_INSTRUMENTS}
+        self.assertEqual(missing, set(), f"文档示例列了默认池外的标的：{sorted(missing)}")
 
 
 class CrossVenueAggregationTests(_Base):

@@ -9,8 +9,15 @@
 | 输入 | 行为 |
 |---|---|
 | `pipelines` 不是字典 / `pipeline` 项不是列表 | 旧文本经 `text_to_modules` 转模块，与 base 模板合并后渲染 |
-| 列表里**一个 base 源模块都没有** | 同上（**空列表/全是 custom 也算旧式**）|
-| 列表里有 base 源模块 | **不走**退路（不得顺手把旧文本也塞进来）|
+| 列表（**任何**列表） | **不走**退路：先做基座归一，再按模块编排渲染 |
+| `pipelines` 是列表但 profile 另有旧文本 | 以**列表**为准（旧文本不再被并进来）|
+
+⚖️ 2026-09-30 契约变更：旧判据是「列表里**一个 base 源模块都没有** ⇒ 算旧式」。
+基座归一落地后该判据必须改 —— 归一本身就会把 base 源模块**补进**列表，若还按旧判据，
+同一个列表会一会儿算旧式一会儿算新式（自相矛盾）。现判据只看**形状**（是不是列表），
+于是一个只有 custom 项的列表走模块编排：基座按规范顺序回插、custom 项原位保留。
+**结果正文与旧退路等价**（都是 base + custom，且 base 在前）—— 见
+`test_a_custom_only_list_is_module_shaped_and_still_renders_base_first`。
 
 ★ 退路也必须**带上 context**：否则旧档案的变量会退回成字面量（正是席位提示词那次事故的形态）。
 """
@@ -25,7 +32,7 @@ class CompatPathTest(unittest.TestCase):
     def setUp(self):
         self.compile = patch.object(PL, "compile_modules",
                                     side_effect=lambda mods: "编译:" + repr(mods))
-        self.compile.start()
+        self.compile_mock = self.compile.start()
         self.addCleanup(self.compile.stop)
         self.text_to_modules = patch.object(PL, "text_to_modules",
                                             return_value=[{"title": "旧模块",
@@ -33,8 +40,12 @@ class CompatPathTest(unittest.TestCase):
                                                            "content": "旧文本"}])
         self.ttm = self.text_to_modules.start()
         self.addCleanup(self.text_to_modules.stop)
+        # ⚠️ 替身必须**带 content**：生产里基座模块来自 `text_to_modules`，一定含 content。
+        # 早先这里给的是没有 content 的裸 dict，基座归一接手后会在 `live["content"]` 上炸
+        # KeyError —— 那是替身不真实，不是实现缺陷（实测踩过）。
         self.base = patch.object(PL, "base_template_modules",
-                                 return_value=[{"title": "base-1", "source": "base"}])
+                                 return_value=[{"title": "base-1", "source": "base",
+                                                "content": "base 原文"}])
         self.base_mock = self.base.start()
         self.addCleanup(self.base.stop)
         self.render = patch.object(PL, "render_variables", return_value="渲染结果")
@@ -54,23 +65,36 @@ class CompatPathTest(unittest.TestCase):
                                "trading_main", "标签", self.ctx)
         self.assertTrue(self.ttm.called)
 
-    def test_list_without_any_base_source_is_still_legacy(self):
-        """★ 关键判据是「**有没有 base 源模块**」，不是「是不是列表」。"""
+    def test_a_custom_only_list_is_module_shaped_and_still_renders_base_first(self):
+        """★ 新判据：**是不是列表**（不是"有没有 base 源模块"）。
+
+        只有 custom 项的列表也走模块编排 —— 基座归一按规范顺序把 `base-1` 回插到最前，
+        custom 项原位保留。**结果与旧退路等价**（base + custom，且 base 在前），
+        区别只在"由谁保证顺序"：以前靠 `base_modules + custom` 拼接，现在靠归一。
+        """
         out = PL.apply_module_layout("BASE", {"pipelines": {"trading_main": [
             {"title": "自定义", "source": "custom", "content": "x"}]}},
             "trading_main", "标签", self.ctx)
         self.assertEqual(out, "渲染结果")
         self.assertFalse(self.ttm.called,
                          "已经是列表 ⇒ 直接用它，不该再去解析旧文本")
+        compiled = self.compile_mock.call_args.args[0]
+        self.assertEqual([m["title"] for m in compiled], ["base-1", "自定义"],
+                         "基座必须排在 custom 之前（顺序与旧退路一致）")
 
     def test_a_base_source_module_does_not_take_the_legacy_path(self):
+        """有 base 源模块 ⇒ 走模块编排，**完全不需要**解析旧文本。
+
+        旧实现靠"这条分支里恰好没调用 `text_to_modules`"来间接证明；基座归一接手后
+        更直接：整条模块路径**根本不碰**它，故把 `text_to_modules` 换成会爆炸的替身，
+        正常返回即可证明没走退路（比原来"允许后续分支出错"的钉法更严）。
+        """
         with patch.object(PL, "text_to_modules", side_effect=AssertionError("不该走退路")):
-            with self.assertRaises(Exception) as ctx:
-                PL.apply_module_layout("BASE", {"pipelines": {"trading_main": [
-                    {"title": "base-1", "source": "base", "enabled": True}]}},
-                    "trading_main", "标签", self.ctx)
-        self.assertNotIsInstance(ctx.exception, AssertionError,
-                                 "有 base 源模块 ⇒ 不得调用 text_to_modules（允许后续分支出错，但不许走退路）")
+            out = PL.apply_module_layout("BASE", {"pipelines": {"trading_main": [
+                {"title": "base-1", "source": "base", "enabled": True}]}},
+                "trading_main", "标签", self.ctx)
+        self.assertEqual(out, "渲染结果")
+        self.assertFalse(self.ttm.called, "模块路径不得解析旧文本")
 
     def test_legacy_path_without_profile_pipeline_text(self):
         """旧档案里连这一段文本都没有 ⇒ 只编 base 模板（不炸）。"""

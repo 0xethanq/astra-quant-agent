@@ -22,10 +22,13 @@
 
 1. 非 dict 项直接丢弃；
 2. `instId` 必须**在白名单 `active_inst_ids` 里**，且**同标的只取第一条**；
-3. `action` 只允许 `HOLD` / `CLOSE_MARKET` / `UPDATE_SL`，其余一律降级 `HOLD`；
+3. `action` 只允许 `HOLD` / `CLOSE_MARKET` / `UPDATE_SL` / `UPDATE_TP`，其余一律降级 `HOLD`；
 4. `confidence` 夹到 `[0, 100]`；
-5. `suggested_sl_price` **仅在 `UPDATE_SL` 时才保留**，其余强制 `0.0`
-   （防止模型在 HOLD/CLOSE 上夹带止损价）；
+5. `suggested_sl_price` **仅在 `UPDATE_SL` 时才保留**，其余强制 `0.0`；
+   `suggested_tp1_price` / `suggested_tp2_price` **仅在 `UPDATE_TP` 时才保留**，
+   其余强制 `0.0`（防止模型在 HOLD/CLOSE 上夹带价位）；
+   两者**互斥**：各自动作不匹配就清零 —— "既改止损又改止盈"要模型分两条指令表达，
+   执行层才能对每一处变更分别做几何校验与留痕；
 6. `reason` 截断到 120 字符；
 7. **模型遗漏的持仓**按 `sorted()` 补一条安全 `HOLD`（顺序确定，便于审计对拍）。
 
@@ -51,16 +54,23 @@ def normalize_position_management(pos_mgmt_list, active_inst_ids, *, safe_float)
             continue
         seen_positions.add(inst_id)
         action = str(item.get("action", "HOLD")).upper()
-        if action not in {"HOLD", "CLOSE_MARKET", "UPDATE_SL"}:
+        if action not in {"HOLD", "CLOSE_MARKET", "UPDATE_SL", "UPDATE_TP"}:
             action = "HOLD"
         confidence = max(0.0, min(100.0, safe_float(item.get("confidence"))))
         suggested_sl = safe_float(item.get("suggested_sl_price"))
         if action != "UPDATE_SL":
             suggested_sl = 0.0
+        suggested_tp1 = safe_float(item.get("suggested_tp1_price"))
+        suggested_tp2 = safe_float(item.get("suggested_tp2_price"))
+        if action != "UPDATE_TP":
+            suggested_tp1 = 0.0
+            suggested_tp2 = 0.0
         validated.append({
             "instId": inst_id,
             "action": action,
             "suggested_sl_price": suggested_sl,
+            "suggested_tp1_price": suggested_tp1,
+            "suggested_tp2_price": suggested_tp2,
             "confidence": confidence,
             "reason": str(item.get("reason", "模型未提供持仓理由"))[:120]
         })
@@ -70,6 +80,8 @@ def normalize_position_management(pos_mgmt_list, active_inst_ids, *, safe_float)
             "instId": inst_id,
             "action": "HOLD",
             "suggested_sl_price": 0.0,
+            "suggested_tp1_price": 0.0,
+            "suggested_tp2_price": 0.0,
             "confidence": 0.0,
             "reason": "模型遗漏该持仓，安全降级为 HOLD"
         })

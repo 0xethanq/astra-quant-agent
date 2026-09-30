@@ -61,8 +61,6 @@ FAIL_CLOSED_EMPTY: "dict[str, str]" = {
 #: 这些是"运维调参"类配置。继承生产值会让用例随**你的**线上调参而红/绿，
 #: 违背本仓"把形状/常量抄成固定夹具，而不是每次去读生产"的既定政策。
 DETERMINISTIC_DEFAULTS_EMPTY: "dict[str, str]" = {
-    "prompt_library.json": "出厂基线。为空好让 `load_library()` 走 `_default()` 的确定性回退；"
-                           "要断言线上模板的用例必须自带夹具。",
     "prompt_library.local.json": "用户改动落点（写入目标）。为空正是「未改过」的正确初态，"
                                  "且绝不能落回生产的 `.local.json`。",
     "llm_models.json": "模型注册表。为空 ⇒ 走内置模型清单，用例不随你的线上模型配置漂移。",
@@ -70,6 +68,9 @@ DETERMINISTIC_DEFAULTS_EMPTY: "dict[str, str]" = {
     "council_config.json": "投委会席位配置。为空 ⇒ 内置席位；不随线上调参漂移。",
     "backup_methods.json": "备份作业清单。为空 ⇒ 内置默认作业；不随你的存储目标漂移。",
     "interceptor_plugins.json": "拦截器插件清单。为空 ⇒ 无自定义拦截器。",
+    "trading_session.json": "交易时段配置。为空 ⇒ 内置默认（enabled=false = 全天候运行），"
+                            "正好让用例跑在「未启用时段」这个确定性初态上；"
+                            "继承生产值会让用例随你私人的时段设置而红/绿。",
 }
 
 #: ── 桶 C：**可再生记录**型 —— 缓存 / 记忆 / 报告，空了只表示"还没有历史" ──
@@ -99,6 +100,9 @@ CONDITIONALLY_ABSENT: "dict[str, str]" = {
     "prompt_library.local.json":
         "用户改动落点：本机没有本地改动时它就不存在。一旦存在，沙箱里同样必须为空——"
         "否则用例会随你私人的提示词改动漂移。",
+    "trading_session.json":
+        "交易时段配置：从没配过时它就不存在（默认未启用），一旦配过就必须在沙箱里同样为空——"
+        "否则用例会随你私人的时段设置漂移，而这份配置决定交易进程跑不跑。",
 }
 
 #: 三个桶的并集。本门要求"每一个被清空的配置都在、且仅在一个桶里"。
@@ -109,7 +113,14 @@ DELIBERATE_EMPTY: "dict[str, str]" = {
 }
 
 #: 会话沙箱提供的夹具里，**必须**被按测试沙箱继承的那些（缺一个就会出现上表那种默认漂移）。
-REQUIRED_INHERITED = ("venue_routing.json", "instrument_pool.json")
+#:
+#: ⚠️ 2026-09-30 加入 `prompt_library.json`：提示词体系重构后，**正文只存这份 JSON**
+#: （Python 里只剩只读 Schema）。旧做法是把它"清空"、让 `load_library()` 走空库回退 ——
+#: 那时正文在代码常量（`SYSTEM_PROMPT`/`EVOLUTION_SYSTEM_PROMPT`/`PRESETS`）里，
+#: 空库照样有内容。现在再清空就是把**被测对象抽空**：所有提示词用例会拿到空提示词，
+#: 其中一批还会因此**真空通过**（对空串的 `assertNotIn` 恒真）。故改为像
+#: `venue_routing.json` 一样，把真基线复制进会话沙箱当只读种子。
+REQUIRED_INHERITED = ("venue_routing.json", "instrument_pool.json", "prompt_library.json")
 
 
 class FixturesAreInheritedTest(unittest.TestCase):

@@ -157,6 +157,10 @@ def audit_proposed_lesson(rule_text: str, sample_size: int = 1) -> Tuple[bool, s
         if re.search(_RISK_CHANGE_VERBS, remainder) and re.search(_RISK_NOUNS, remainder, re.IGNORECASE):
             return False, "触发宪法红线拦截: RISK_PARAMETER_TAMPERING (疑似修改杠杆/保证金/风控阈值/拦截器)"
 
+    # 1c. 严禁硬编码绝对资金金额：资金量必须以动态风险预算或相对 R 表达
+    if re.search(r"\b\d+(?:\.\d+)?\s*(?:USDT|USD|美元|美金|万\s*U)\b", rule_text, re.IGNORECASE) or re.search(r"\b(?:USDT|USD)\s*\d+", rule_text, re.IGNORECASE):
+        return False, "触发量化原则拦截: HARDCODED_ABSOLUTE_CAPITAL (心法严禁硬编码绝对资金金额，资金预算必须取自【本周期风险预算】或以 R/百分比相对表达)"
+
     # 2. Outlier / Single-Event Rejection Gate
     if sample_size < 2:
         return False, "样本量不足 (单笔偶发事件或极端插针噪点，拒绝写入长期心法)"
@@ -399,11 +403,18 @@ def _review_candidates(texts, old, sample_size, strict, change_status=None):
     by_text = {i["rule_text"].strip(): i for i in old}
     result = []
     seen = set()
+    seen_titles = set()
     for text in texts:
         text = text.strip()
         if text in seen:
             continue
+        title_match = re.match(r"^\s*【([^】]+)】", text)
+        title = title_match.group(1).strip() if title_match else ""
+        if title and title in seen_titles:
+            continue
         seen.add(text)
+        if title:
+            seen_titles.add(title)
         # Unchanged entries retain identity, audit metadata and disabled state.
         if text in by_text:
             result.append(copy.deepcopy(by_text[text]))

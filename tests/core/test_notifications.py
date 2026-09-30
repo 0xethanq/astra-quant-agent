@@ -317,6 +317,47 @@ class SendChannelWechatTests(unittest.TestCase):
         self.assertIn("HTTP 500", detail)
 
 
+class SendChannelFeishuTests(unittest.TestCase):
+    def test_feishu_native_send_with_sign(self):
+        with mock.patch.object(N, "validate_outbound_url", side_effect=lambda u, **k: u), \
+                mock.patch.object(N, "_post_json", return_value=(True, "HTTP 200", {"code": 0})) as poster:
+            ok, detail = N.send_channel("feishu", "msg", {
+                "ASTRA_FEISHU_WEBHOOK": "https://open.feishu.cn/open-apis/bot/v2/hook/xyz",
+                "ASTRA_FEISHU_SECRET": "sec123",
+            })
+        self.assertTrue(ok)
+        self.assertIn("code=0", detail)
+        payload = poster.call_args[0][1]
+        self.assertEqual(payload["msg_type"], "text")
+        self.assertEqual(payload["content"]["text"], "msg")
+        self.assertIn("sign", payload)
+        self.assertIn("timestamp", payload)
+
+    def test_feishu_native_send_rejected(self):
+        with mock.patch.object(N, "validate_outbound_url", side_effect=lambda u, **k: u), \
+                mock.patch.object(N, "_post_json", return_value=(True, "HTTP 200", {"code": 9999, "msg": "bad sign"})):
+            ok, detail = N.send_channel("feishu", "msg", {
+                "ASTRA_FEISHU_WEBHOOK": "https://open.feishu.cn/open-apis/bot/v2/hook/xyz",
+            })
+        self.assertFalse(ok)
+        self.assertIn("9999", detail)
+
+
+class SendChannelDingtalkTests(unittest.TestCase):
+    def test_dingtalk_native_send_with_sign(self):
+        with mock.patch.object(N, "validate_outbound_url", side_effect=lambda u, **k: u), \
+                mock.patch.object(N, "_post_json", return_value=(True, "HTTP 200", {"errcode": 0})) as poster:
+            ok, detail = N.send_channel("dingtalk", "msg", {
+                "ASTRA_DINGTALK_WEBHOOK": "https://oapi.dingtalk.com/robot/send?access_token=xyz",
+                "ASTRA_DINGTALK_SECRET": "sec456",
+            })
+        self.assertTrue(ok)
+        self.assertIn("errcode=0", detail)
+        target_url = poster.call_args[0][0]
+        self.assertIn("timestamp=", target_url)
+        self.assertIn("sign=", target_url)
+
+
 class SendChannelTelegramTests(unittest.TestCase):
     _OK_BODY = {"ok": True, "result": {"message_id": 1}}
 

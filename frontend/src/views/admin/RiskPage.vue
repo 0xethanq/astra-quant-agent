@@ -23,13 +23,37 @@ import { useToast } from '../../composables/useToast';
 import { useConfirm } from '../../composables/useConfirm';
 const toast = useToast();
 const { ask } = useConfirm();
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted, watch } from 'vue';
 import { useI18n } from '../../composables/useI18n';
+import { useRoute } from 'vue-router';
 const { t } = useI18n();
+
+/**
+ * 风控与拦截页签（2026-09-30 后台精简）：本页是宿主页，吸收了「拦截管线」页 ——
+ *   params   风控参数与套件（本页原有内容）
+ *   pipeline 拦截管线（InterceptorsPage；其沙箱/新建/排序/刷新按钮全部保留）
+ * 两者同属"交易意图触达交易所前的物理门禁"，故合并为一页的两个页签。
+ * 旧路径 /admin/interceptors 带 `?tab=pipeline` 重定向到这里。
+ */
+type RkTab = 'params' | 'pipeline';
+function resolveRkTab(raw: unknown): RkTab {
+  const v = Array.isArray(raw) ? raw[0] : raw;
+  return String(v) === 'pipeline' ? 'pipeline' : 'params';
+}
+const route = useRoute();
+const activeTab = ref<RkTab>(resolveRkTab(route.query.tab));
+watch(() => route.query.tab, (v) => { activeTab.value = resolveRkTab(v); });
+const tabs = computed(() => [
+  { key: 'params', label: t('admin.risk.tabParams') },
+  { key: 'pipeline', label: t('admin.interceptors.title') },
+]);
 import { useApi } from '../../composables/useApi';
 import { useAsyncAction } from '../../composables/useAsyncAction';
 import { useDashboardStore } from '../../stores/dashboard';
 import PageHeader from '../../components/admin/PageHeader.vue';
+import BaseTabs from '../../components/base/BaseTabs.vue';
+import InterceptorsPage from './InterceptorsPage.vue';
+
 import DangerZone from '../../components/admin/page-parts/DangerZone.vue';
 import BaseEmpty from '../../components/base/BaseEmpty.vue';
 import BaseSwitch from '../../components/base/BaseSwitch.vue';
@@ -359,7 +383,7 @@ onMounted(loadData)
 
 <template>
   <div class="rk">
-    <PageHeader :title="t('nav.admin.risk')" :description="t('admin.risk.pageDesc')">
+    <PageHeader :title="t('nav.admin.risk')">
       <template #actions>
         <span class="badge" :class="dirtyKeys.length ? 'badge-warn' : 'badge-up'">
           {{ dirtyKeys.length ? t('admin.risk.pendingSave', undefined, { n: dirtyKeys.length }) : t('admin.risk.inSync') }}
@@ -375,6 +399,10 @@ onMounted(loadData)
         </button>
       </template>
     </PageHeader>
+
+    <BaseTabs v-model="activeTab" :items="tabs" :label="t('admin.risk.tabsLabel')" baseId="rk" />
+
+    <div v-if="activeTab === 'params'" id="rk-panel-params" role="tabpanel" aria-labelledby="rk-tab-params" tabindex="0">
 
     <!-- 生效说明条 -->
     <div class="rk-note" :class="{ 'is-warn': driftCount.length || processFresh?.stale }">
@@ -475,7 +503,7 @@ onMounted(loadData)
             role="button"
             tabindex="0"
             :aria-expanded="expandedGroups[group.id] !== false"
-            :aria-controls="'risk-group-' + group.id"
+            :aria-controls="activeTab === 'params' ? 'risk-group-' + group.id : undefined"
             @click="expandedGroups[group.id] = !expandedGroups[group.id]"
             @keydown.enter.prevent="expandedGroups[group.id] = !expandedGroups[group.id]"
             @keydown.space.prevent="expandedGroups[group.id] = !expandedGroups[group.id]"
@@ -638,6 +666,11 @@ onMounted(loadData)
         <Save v-else :size="14" />
         <span>{{ busy === 'save' ? t('admin.risk.saving') : t('admin.risk.saveApply') }}</span>
       </button>
+    </div>
+    </div>
+
+    <div v-else id="rk-panel-pipeline" role="tabpanel" aria-labelledby="rk-tab-pipeline" tabindex="0">
+      <InterceptorsPage embedded />
     </div>
   </div>
 </template>

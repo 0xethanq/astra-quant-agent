@@ -21,6 +21,99 @@ from astra_gateway.secrets import save_secrets
 
 router = APIRouter(tags=["exchanges"])
 
+#: 行情快照可容忍年龄（秒）。超过即视为"未核实" —— 展示面**绝不**把读不到升级成绿。
+#: 取值 = 一个完整交易巡检周期（15 分钟）：周期内写下的行情都算新鲜。
+MARKET_SNAPSHOT_MAX_AGE_S = 900.0
+
+
+def project_pool_health(roster: list[Any], cache: Any) -> dict[str, Any]:
+    """把「标的池」与「实时行情证据」投影成健康名单（**唯一**允许的来源）。
+
+    为什么需要这个投影函数（2026-09-30 真机事故）：
+    容灾卡片此前直接读 `data/venue_health.json` 里的 `venues.okx.ok/failed`，而写
+    这份名单的 `scripts/brain/xvenue.py` 早在 2026-09-28 的「OKX 专用化」提交里
+    被删除 ⇒ 名单**冻结**在 9 个标的（含当时已移出池的 UNI），而两个路由只把
+    `avg_ms/testnet/updated_utc` 叠写在旧 blob 上（读-改-写）⇒ 时间戳看着是今天的、
+    名单却是上个月的：面板整天显示 `9/9 币` 全绿，其中还有一个**根本不在池内**的标的。
+
+    纪律（与 `docs/FAILURE_SEMANTICS.md` 的「读不到 ≠ 没有」同源）：
+      1. 名单**只**来自当前标的池（`load_instruments()`），池不可信 ⇒ 返回 `total: 0`
+         并说明原因，**禁止**编造或复用任何旧名单；
+      2. 每个标的只有在「快照新鲜 且 该标的有有效价格」时才计入 `ok`；
+      3. 快照缺失/过期 ⇒ 全部计入 `unknown`（前端渲染"未核实"，**不是**绿）；
+      4. 有名无据（池内有但行情缺行）计入 `failed`，名字与证据必须一一对应。
+
+    证据来自 `dashboard_cache.CACHE_DATA`（零网络：后台线程每 2s 刷新的同一份缓存，
+    也是持仓守卫用的那份），逐标的 `factors[]` 带 `name/instId/price` 与全局
+    `data_health.cache_age_seconds`。
+    """
+    names: list[str] = []
+    for item in roster or []:
+        if not isinstance(item, dict):
+            continue
+        label = str(item.get("name") or "").strip().upper()
+        if not label:
+            label = str(item.get("instId") or "").split("-", 1)[0].strip().upper()
+        if label:
+            names.append(label)
+    if not names:
+        return {"ok": [], "failed": [], "unknown": [], "total": 0,
+                "source": "instrument_pool", "note": "标的池不可信（缺失/损坏/为空）⇒ 不展示任何健康名单"}
+
+    ages = None
+    rows: dict[str, dict[str, Any]] = {}
+    if isinstance(cache, dict):
+        health_block = cache.get("data_health") if isinstance(cache.get("data_health"), dict) else {}
+        ages = health_block.get("cache_age_seconds")
+        for row in (cache.get("factors") or []):
+            if not isinstance(row, dict):
+                continue
+            key = str(row.get("name") or row.get("instId") or "").split("-", 1)[0].strip().upper()
+            if key:
+                rows[key] = row
+
+    def _stale(age: Any) -> bool:
+        if not isinstance(age, (int, float)):
+            return True                      # 读不到年龄 ⇒ 不可判定 ⇒ 按过期处理
+        return float(age) > MARKET_SNAPSHOT_MAX_AGE_S
+
+    if not rows or _stale(ages):
+        return {"ok": [], "failed": [], "unknown": names, "total": len(names),
+                "source": "pool+dashboard_cache",
+                "note": f"行情快照{'缺失' if not rows else '已过期'}（cache_age_seconds={ages!r}）⇒ 全部标的未核实"}
+
+    ok: list[str] = []
+    failed: list[str] = []
+    for label in names:
+        row = rows.get(label)
+        try:
+            price = float((row or {}).get("price") or 0.0)
+        except (TypeError, ValueError):
+            price = 0.0
+        (ok if price > 0 else failed).append(label)
+    return {"ok": ok, "failed": failed, "unknown": [], "total": len(names),
+            "source": "pool+dashboard_cache", "observed_age_s": ages}
+
+
+def _pool_roster() -> list[Any]:
+    """当前标的池（调用期解析 + 失败即空 ⇒ 投影给出"不可信"而不是编造名单）。"""
+    try:
+        from scripts.instrument_pool import load_instruments, pool_is_trustworthy
+        if not pool_is_trustworthy():
+            return []
+        return load_instruments()
+    except Exception:
+        return []
+
+
+def _market_cache() -> Any:
+    """后台线程每 2s 刷新的行情/持仓缓存（零网络；取不到返回 None ⇒ 全部未核实）。"""
+    try:
+        from astra_backend import dashboard_cache as _dash
+        return getattr(_dash, "CACHE_DATA", None)
+    except Exception:
+        return None
+
 
 @router.get("/api/v1/account/positions")
 def positions(x_astra_admin_token: str | None = Header(default=None)) -> dict[str, Any]:
@@ -182,6 +275,21 @@ def admin_multi_exchange_status(x_astra_admin_token: str | None = Header(default
 
     from astra_backend.exchanges import routing_policy
     pref = routing_policy.load_preferred_venue()
+
+    # ★ 健康名单投影（2026-09-30）：响应里的 `ok/failed/unknown/total` **只**由
+    # 「当前标的池 × 实时行情证据」推导，不再把 venue_health.json 里那份**没有生产者**
+    # 的遗留名单透传给面板（那份名单冻结在 2026-09-28，含已移出池的 UNI ⇒ 面板曾
+    # 整天显示 9/9 币全绿）。文件本身不删不改：`dashboard_payload/health.py`
+    # 的 `_load_cross_venue_data` 对它的"只读容忍透传"语义逐字保留。
+    #
+    # 两个数据源都经**调用期解析**的模块级函数取（本仓测试缝纪律）：测试里
+    # `patch.object(R, "_pool_roster", ...)` 即可完全离线，不会读到生产池/缓存。
+    try:
+        okx_h.update(project_pool_health(_pool_roster(), _market_cache()))
+    except Exception as exc:      # 投影失败 ⇒ 不展示名单（绝不回落到遗留名单）
+        okx_h.update({"ok": [], "failed": [], "unknown": [], "total": 0,
+                      "source": "instrument_pool", "note": f"健康名单投影失败：{type(exc).__name__}: {exc}"})
+
     return {"venues": venues, "health": health, "preferred_venue": pref,
             "routing_mode": routing_policy.load_routing_mode(),
             "accounts_status": accounts_status}

@@ -131,7 +131,7 @@ class LoadLibraryTests(_Sandbox, unittest.TestCase):
         self.assertEqual(pl.load_library()["version"], 2)
 
     def test_a_v1_shape_is_migrated(self):
-        self._write({"version": 1, "active_style": "stable",
+        self._write({"version": 1, "active_style": "allpattern_swing",
                      "custom": {"name": "旧方案", "trading_system": "旧正文"}})
         out = pl.load_library()
         self.assertEqual(out["version"], 2)
@@ -140,15 +140,15 @@ class LoadLibraryTests(_Sandbox, unittest.TestCase):
     def test_an_unknown_active_id_falls_back_to_stable(self):
         # ★ 第 593–595 行
         self._write({"version": 2, "active_profile_id": "nope", "profiles": {}})
-        self.assertEqual(pl.load_library()["active_profile_id"], "stable")
+        self.assertEqual(pl.load_library()["active_profile_id"], "allpattern_swing")
 
     def test_a_known_active_id_is_kept(self):
-        self._write({"version": 2, "active_profile_id": "stable", "profiles": {}})
-        self.assertEqual(pl.load_library()["active_profile_id"], "stable")
+        self._write({"version": 2, "active_profile_id": "allpattern_swing", "profiles": {}})
+        self.assertEqual(pl.load_library()["active_profile_id"], "allpattern_swing")
 
     def test_active_style_is_custom_for_a_user_profile(self):
         out = pl.load_library()
-        self.assertIn(out["active_style"], ("stable", "wide_oscillation", "custom"))
+        self.assertIn(out["active_style"], ("allpattern_swing", "custom"))
 
     def test_the_custom_key_mirrors_the_active_profile(self):
         out = pl.load_library()
@@ -156,7 +156,7 @@ class LoadLibraryTests(_Sandbox, unittest.TestCase):
         self.assertTrue(out["custom"]["editable"])
 
     def test_revisions_are_capped(self):
-        self._write({"version": 2, "active_profile_id": "stable", "profiles": {},
+        self._write({"version": 2, "active_profile_id": "allpattern_swing", "profiles": {},
                      "revisions": [{"id": f"r{i}"} for i in range(pl.MAX_REVISIONS + 50)]})
         self.assertEqual(len(pl.load_library()["revisions"]), pl.MAX_REVISIONS)
 
@@ -270,7 +270,7 @@ class CreateProfileTests(_Sandbox, unittest.TestCase):
         self.assertIn(out["id"], pl.load_library()["profiles"])
 
     def test_the_source_preset_is_copied(self):
-        out = pl.create_profile("副本", source_id="wide_oscillation")
+        out = pl.create_profile("副本", source_id="allpattern_swing")
         self.assertEqual(out["name"], "副本")
 
     def test_a_revision_is_recorded(self):
@@ -295,7 +295,7 @@ class CreateProfileTests(_Sandbox, unittest.TestCase):
         # ★ 第 764/765 行 —— 正常来源（预设/已存方案）都在此前被校验过，
         #   所以要触发这个闸门必须注入一个**本身非法**的来源。
         #   用**清理器不会修、且与 editor_mode 无关**的非法项：未声明的模板变量。
-        broken = copy.deepcopy(pl.PRESETS["stable"])
+        broken = copy.deepcopy(pl.PRESETS["allpattern_swing"])
         broken["pipelines"] = {"trading_system": [{"id": "m1",
                                                    "content": "{{NOT_A_VAR}}"}]}
         with patch.dict(pl.PRESETS, {"broken": broken}):
@@ -325,7 +325,7 @@ class UpdateProfileTests(_Sandbox, unittest.TestCase):
 
     def test_a_preset_not_yet_materialised_is_edited_from_the_builtin(self):
         # ★ 第 776–778 行
-        out = pl.update_profile("wide_oscillation", {"description": "改了描述"})
+        out = pl.update_profile("allpattern_swing", {"description": "改了描述"})
         self.assertEqual(out["description"], "改了描述")
         self.assertTrue(out["editable"])
 
@@ -388,7 +388,7 @@ class DeleteProfileTests(_Sandbox, unittest.TestCase):
 
     def test_a_builtin_preset_cannot_be_deleted(self):
         with self.assertRaises(ValueError) as ctx:
-            pl.delete_profile("stable")
+            pl.delete_profile("allpattern_swing")
         self.assertIn("内置预设不可删除", str(ctx.exception))
 
     def test_the_active_profile_cannot_be_deleted(self):
@@ -407,9 +407,9 @@ class DeleteProfileTests(_Sandbox, unittest.TestCase):
 
 class GetActivateTests(_Sandbox, unittest.TestCase):
     def test_a_preset_is_materialised_on_demand_and_editable(self):
-        out = pl.get_profile("stable")
+        out = pl.get_profile("allpattern_swing")
         self.assertTrue(out["editable"])
-        self.assertEqual(out["id"], "stable")
+        self.assertEqual(out["id"], "allpattern_swing")
 
     def test_an_unknown_profile_is_refused(self):
         # ★ 第 858/859 行
@@ -494,20 +494,20 @@ class HistoryAndRollbackTests(_Sandbox, unittest.TestCase):
 # ───────────────────── 导入导出 ─────────────────────
 class ExportImportTests(_Sandbox, unittest.TestCase):
     def test_an_export_is_self_describing(self):
-        out = pl.export_profile("stable")
+        out = pl.export_profile("allpattern_swing")
         self.assertEqual(out["format"], pl.EXPORT_FORMAT)
         self.assertEqual(out["version"], pl.EXPORT_VERSION)
         self.assertIn("allowed_variables", out)
         self.assertIn("variables", out)
 
     def test_a_round_trip_preserves_the_profile(self):
-        source = pl.export_profile("stable")
+        source = pl.export_profile("allpattern_swing")
         imported = pl.import_profile(source)
-        original = pl.PRESETS["stable"]["name"]
+        original = pl.PRESETS["allpattern_swing"]["name"]
         self.assertEqual(imported["name"], f"{original}（导入）"[:60])
 
     def test_an_explicit_name_override_wins(self):
-        pl.import_profile(pl.export_profile("stable"), name_override="我的方案")
+        pl.import_profile(pl.export_profile("allpattern_swing"), name_override="我的方案")
         names = [p["name"] for p in pl.all_profiles()]
         self.assertIn("我的方案", names)
 
@@ -584,7 +584,7 @@ class ExportImportTests(_Sandbox, unittest.TestCase):
         self.assertIn("无效消息管线：bogus", out["errors"])
 
     def test_the_import_revision_names_the_origin_shape(self):
-        pl.import_profile(pl.export_profile("stable"))
+        pl.import_profile(pl.export_profile("allpattern_swing"))
         out = pl.all_profiles()
         pid = out[-1]["id"]
         note = pl.profile_history(pid)[0]["note"]

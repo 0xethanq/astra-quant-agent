@@ -100,7 +100,10 @@ class LlmTransportTailsTests(unittest.TestCase):
         }
         content, reasoning, usage = _parse_llm_response("claude_messages", res_json)
         self.assertEqual(content, "Hi")
-        self.assertEqual(usage, {"total_tokens": 0})
+        # 2026-09-29：usage 现在恒定带两个规范化标注 —— `cache_reported`（上游到底有没有
+        # 上报缓存字段）与 `truncated`（finish/status 是否非完成态）。这里两者都必须为 False：
+        # 没有缓存字段 ≠ 命中 0；没有 finish_reason ≠ 被截断。
+        self.assertEqual(usage, {"total_tokens": 0, "cache_reported": False, "truncated": False})
 
     def test_parse_openai_responses_output_text(self):
         res_json = {
@@ -165,6 +168,75 @@ class LlmTransportTailsTests(unittest.TestCase):
         }
         _, _, u3 = _parse_llm_response("claude_messages", res_claude)
         self.assertEqual(u3.get("cached_tokens"), 1600)
+
+    def test_parse_extracts_openai_responses_cached_tokens_and_reports_presence(self):
+        """Responses 形态：`input_tokens_details.cached_tokens`（2026-09-29 实测缺这条会瞎）。
+
+        上游 `/responses` **始终**返回该字段（0 或 N），而 `/chat/completions` 在无命中时
+        整段省略 `prompt_tokens_details`。故 `cache_reported` 必须把两者分开。
+        """
+        res_hit = {
+            "status": "completed",
+            "output": [{"type": "message", "content": [{"type": "output_text", "text": "ok"}]}],
+            "usage": {"input_tokens": 28432, "output_tokens": 10,
+                      "input_tokens_details": {"cached_tokens": 24544}},
+        }
+        _, _, u = _parse_llm_response("openai_responses", res_hit)
+        self.assertEqual(u.get("cached_tokens"), 24544)
+        self.assertTrue(u.get("cache_reported"))
+        self.assertFalse(u.get("truncated"))
+
+        res_miss = {
+            "status": "completed",
+            "output": [{"type": "message", "content": [{"type": "output_text", "text": "ok"}]}],
+            "usage": {"input_tokens": 5437, "output_tokens": 10,
+                      "input_tokens_details": {"cached_tokens": 0}},
+        }
+        _, _, u_miss = _parse_llm_response("openai_responses", res_miss)
+        self.assertEqual(u_miss.get("cached_tokens"), 0)
+        self.assertTrue(u_miss.get("cache_reported"), "上报为 0 也是上报：不可判定 ≠ 0")
+
+    def test_parse_marks_cache_unreported_when_field_absent(self):
+        """Chat 形态无命中时整段省略 ⇒ `cache_reported=False`（不是 cached=0）。"""
+        res = {"choices": [{"message": {"content": "ok"}}],
+               "usage": {"prompt_tokens": 100, "completion_tokens": 5, "total_tokens": 105}}
+        _, _, u = _parse_llm_response("openai_chat", res)
+        self.assertFalse(u.get("cache_reported"))
+        self.assertNotIn("cached_tokens", u)
+
+    def test_parse_marks_truncation_for_both_protocols(self):
+        """截断必须显性化：Responses 看 status，Chat 看 finish_reason=length。"""
+        _, _, u_resp = _parse_llm_response("openai_responses", {
+            "status": "incomplete",
+            "incomplete_details": {"reason": "max_output_tokens"},
+            "output": [{"type": "message", "content": [{"type": "output_text", "text": "{"}]}],
+            "usage": {"input_tokens": 10, "output_tokens": 2},
+        })
+        self.assertTrue(u_resp.get("truncated"))
+
+        _, _, u_chat = _parse_llm_response("openai_chat", {
+            "choices": [{"message": {"content": "{"}, "finish_reason": "length"}],
+            "usage": {"prompt_tokens": 10, "completion_tokens": 2},
+        })
+        self.assertTrue(u_chat.get("truncated"))
+
+        _, _, u_ok = _parse_llm_response("openai_chat", {
+            "choices": [{"message": {"content": "{}"}, "finish_reason": "stop"}],
+            "usage": {"prompt_tokens": 10, "completion_tokens": 2},
+        })
+        self.assertFalse(u_ok.get("truncated"))
+
+    def test_parse_extracts_anthropic_cache_creation_tokens(self):
+        """Anthropic 写缓存（cache_creation）≠ 读命中（cache_read），两者都要留痕。"""
+        res = {
+            "content": [{"type": "text", "text": "ok"}],
+            "usage": {"input_tokens": 2000, "output_tokens": 10,
+                      "cache_read_input_tokens": 0, "cache_creation_input_tokens": 1800},
+        }
+        _, _, u = _parse_llm_response("claude_messages", res)
+        self.assertEqual(u.get("cached_tokens"), 0)
+        self.assertTrue(u.get("cache_reported"))
+        self.assertEqual(u.get("cache_creation_tokens"), 1800)
 
     # -------------------------------------------------------------------------
     # 3. 请求规约构建 (build_request_spec & build_chat_payload)

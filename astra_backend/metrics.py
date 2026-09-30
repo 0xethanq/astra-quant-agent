@@ -219,6 +219,85 @@ def collect_cycle_disclosure(path: Path) -> Optional[Dict[str, Any]]:
     return payload if isinstance(payload, dict) else None
 
 
+def collect_scale_out_events(path: Path) -> Optional[Dict[str, Any]]:
+    """读**分批止盈事件流水**（`data/scale_out_events.jsonl`，交易进程追加写）。
+
+    为什么单独统计：台账只记"整笔持仓的最终结果"，2026-09-29 实测它在后台一直显示
+    "目标止盈达成" —— 分批止盈是否真的发生**看不出来**（09-22~09-29 实际发生 15 次）。
+    这份流水是"分批止盈生效性"的第一手证据。
+
+    文件不存在 → None（调用方标 `source_ok=0`，且**不发**任何计数）：
+    "还没发生过"与"读不到"必须分开。
+    """
+    try:
+        raw = Path(path).read_text(encoding="utf-8")
+    except Exception:
+        return None
+    rows: List[Dict[str, Any]] = []
+    for line in raw.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            item = json.loads(line)
+        except Exception:
+            continue
+        if isinstance(item, dict):
+            rows.append(item)
+    by_mode: Dict[str, int] = {}
+    for item in rows:
+        mode = str(item.get("mode") or "unknown")
+        by_mode[mode] = by_mode.get(mode, 0) + 1
+    # ── 口径更正（2026-09-30）─────────────────────────────────────────────
+    # 分批腿收尾曾把合约面值退化成 1（OKX 持仓记录没有 `ctVal`），ETH 的盈亏与
+    # 手续费被放大 10×（+24.33U 报成 +243.28U）、ARB 被缩小 10×（+17.10U 报成
+    # 1.84U）。历史行**不重写**（流水只追加），而是追加 `mode: "correction"` 行，
+    # 这里按 `fixes`（被更正行的 `ts`+`instId`）把原行**净掉**：原行不再计入
+    # `realized_pnl`，改计入 `corrected` 计数（可观测"更正发生过几次"）。
+    corrected_keys = set()
+    for item in rows:
+        if str(item.get("mode") or "") != "correction":
+            continue
+        fixes = item.get("fixes") or {}
+        key = _event_key(fixes)
+        if key:
+            corrected_keys.add(key)
+    realized = 0.0
+    corrected = 0
+    for item in rows:
+        if str(item.get("mode") or "") == "correction":
+            corrected += 1
+            try:
+                realized += float(item.get("realized_pnl") or 0.0)
+            except (TypeError, ValueError):
+                pass
+            continue
+        if _event_key(item) in corrected_keys:
+            continue
+        try:
+            realized += float(item.get("realized_pnl") or 0.0)
+        except (TypeError, ValueError):
+            continue
+    return {
+        "total": len(rows),
+        "by_mode": by_mode,
+        "realized_pnl": round(realized, 4),
+        "corrected": corrected,
+        "last": (rows[-1] if rows else None),
+    }
+
+
+def _event_key(item: Dict[str, Any]) -> Optional[Tuple[str, str]]:
+    """事件身份 = (`ts`, `instId`) —— 更正行用它指向被更正的原行。"""
+    if not isinstance(item, dict):
+        return None
+    ts = str(item.get("ts") or "")
+    inst = str(item.get("instId") or item.get("inst") or "")
+    if not ts or not inst:
+        return None
+    return (ts, inst)
+
+
 def collect_market_stream_health(path: Path) -> Optional[Dict[str, Any]]:
     """读行情流健康快照（`data/market_stream_health.json`，探测进程写、这里读）。
 
@@ -287,6 +366,7 @@ def collect_protection_orphans(cache_payload: Optional[Dict[str, Any]]) -> Optio
 def build_snapshot(*, data_dir: Optional[Path] = None,
                    venue_health: Optional[Dict[str, Any]] = None,
                    model_stats: Optional[Dict[str, Any]] = None,
+                   scale_out_events: Optional[Dict[str, Any]] = None,
                    risk_limits: Optional[Dict[str, float]] = None,
                    market_data_health: Optional[Dict[str, Any]] = None,
                    market_stream_health: Optional[Dict[str, Any]] = None,
@@ -344,6 +424,15 @@ def build_snapshot(*, data_dir: Optional[Path] = None,
             cd_base = Path(data_dir or "data")
         cycle_disclosure = collect_cycle_disclosure(cd_base / "cycle_disclosure.json")
     sources["cycle_disclosure"] = cycle_disclosure is not None
+    if scale_out_events is None:
+        try:
+            from astra_backend.dependencies import DATA_DIR as _SO_DATA_DIR
+            so_base = Path(data_dir) if data_dir is not None else Path(_SO_DATA_DIR)
+        except Exception:
+            so_base = Path(data_dir or "data")
+        scale_out_events = collect_scale_out_events(so_base / "scale_out_events.jsonl")
+    sources["scale_out"] = scale_out_events is not None
+
     if protection_orphans is None:
         # 面板缓存由后端进程持有；取不到 ⇒ 不发任何序列（不可判定≠0）
         try:
@@ -358,6 +447,7 @@ def build_snapshot(*, data_dir: Optional[Path] = None,
         "sources": sources,
         "venue_health": venue_health or {},
         "model_stats": model_stats or {},
+        "scale_out": scale_out_events or {},
         "risk_limits": risk_limits or {},
         "market_data_health": market_data_health or {},
         "market_stream_health": market_stream_health or {},
@@ -427,6 +517,28 @@ def render_prometheus(snapshot: Dict[str, Any]) -> str:
          help_text="大模型调用平均耗时（毫秒）")
     emit("astra_model_tokens_total", stats.get("total_tokens"),
          help_text="累计 token 消耗（成本观测）", type_text="counter")
+    # 前缀缓存（2026-09-29）：上游按 ~4092 token 块上报，命中量必须能算，
+    # 而「上游没上报」与「上报为 0」必须分开 —— 故 reporting 计数与命中率各自独立，
+    # 且 `cache_hit_rate is None`（无任何上报样本）时该指标直接不出现。
+    emit("astra_llm_cached_tokens_total", stats.get("cached_tokens_total"),
+         help_text="命中前缀缓存的累计 token 数（上游上报口径）", type_text="counter")
+    emit("astra_llm_cache_hit_calls_total", stats.get("cache_hit_calls"),
+         help_text="上报到缓存命中的调用次数", type_text="counter")
+    emit("astra_llm_cache_reporting_calls_total", stats.get("cache_reporting_calls"),
+         help_text="上游确实上报了缓存字段的调用次数（命中率分母；无上报则不可判定）", type_text="counter")
+    emit("astra_llm_cache_hit_rate", stats.get("cache_hit_rate"),
+         help_text="缓存命中率（%，仅统计上游有上报的调用）")
+
+    scale_out = snapshot.get("scale_out") or {}
+    emit("astra_scale_out_executions_total", scale_out.get("total"),
+         help_text="分批止盈执行次数（交易所侧腿成交 + 软件平仓，见 data/scale_out_events.jsonl）",
+         type_text="counter")
+    emit("astra_scale_out_realized_pnl_total", scale_out.get("realized_pnl"),
+         help_text="分批止盈首批落袋的累计已实现盈亏（U）", type_text="counter")
+    for _mode, _count in sorted((scale_out.get("by_mode") or {}).items()):
+        emit("astra_scale_out_executions_by_mode", _count, [("mode", _mode)],
+             help_text="分批止盈执行次数（按执行方式：exchange_leg=交易所侧腿 / software=15 分钟巡检平仓）",
+             type_text="counter")
 
     for name in sorted((snapshot.get("risk_limits") or {})):
         emit("astra_risk_limit", (snapshot.get("risk_limits") or {}).get(name), [("name", name)],
@@ -502,6 +614,12 @@ def render_prometheus(snapshot: Dict[str, Any]) -> str:
              help_text="本轮生产数据形状违规条数（读得到但形状不对）")
         emit("astra_cycle_disclosure_entries_blocked", 1 if cd.get("entries_blocked") else 0,
              help_text="本轮是否因对账失败禁止新开仓（1=是）")
+        # 交易时段闸门（2026-09-30）：窗口外降级是本轮的**事实**，必须能在面板上看见。
+        # ⚠️ 只在键存在时发：键缺失 = 快照来自旧版本或本轮未评估 ⇒ **不可判定 ≠ 0**
+        # （发 0 会被读成"跑了全功能"，与本文件既有的"不可判定≠0"先例同向）。
+        if "session_restricted" in cd:
+            emit("astra_cycle_session_restricted", 1 if cd.get("session_restricted") else 0,
+                 help_text="本轮是否因交易时段窗口外而降级（1=只做机械风控/完全停跑）")
         emit("astra_cycle_disclosure_watchdog_enabled", 1 if cd.get("watchdog_enabled") else 0,
              help_text="跨所保护巡检本轮是否开闸（0=没在跑的保护，属应当被看见的事实）")
         # 未开闸时**不发**错误计数：没跑就没有"错误数"，发 0 会被读成"跑了且没问题"

@@ -1,5 +1,7 @@
 /** Execution-layer hard-risk page template copy */
 export const enAdminRisk = {
+  tabsLabel: 'Risk & interceptor sections',
+  tabParams: 'Risk Parameters',
   engineDrift: 'These parameters differ between the file and the running process (syncs after backend restart)',
   engineEquityUnknown: 'equity unknown (not provided)',
   engineEquityUsed: 'Equity used for derivation',

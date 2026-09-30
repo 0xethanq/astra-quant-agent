@@ -118,9 +118,16 @@ def retain_local_archive(source: Path, retention: int, destination_dir: Path | N
     # 审计③(2026-09-13)：prune 必须按 job 隔离——旧实现对整个目录的 astra_backup_*
     # 排序截断，任务 B（retention=1）一跑就把任务 A 刚生成的最新归档裁掉，
     # manifest 还报 success（灾备覆盖静默塌陷）。归档名 astra_backup_{safe_id}_{日期}_{时间}，
-    # 取前三段作本 job 专属前缀。
+    # 取前三段作本 job 专属前缀。同时兼容历史前缀 r20_backup_{safe_id}_*。
     _prefix = "_".join(source.name.split("_")[:3])
-    prune((p for p in destination_dir.glob(f"{_prefix}_*") if p.is_file()), retention)
+    parts = source.name.split("_")
+    job_id = parts[2] if len(parts) >= 3 else ""
+    if job_id:
+        targets = [p for p in destination_dir.glob("*.tar.gz") if p.is_file() and f"_{job_id}_" in p.name]
+    else:
+        targets = [p for p in destination_dir.glob(f"{_prefix}_*") if p.is_file()]
+    unique_targets = list({p.resolve(): p for p in targets}.values())
+    prune(unique_targets, retention)
     return destination
 
 

@@ -98,7 +98,7 @@ test('页面不得再自带 band 规则（原件已覆盖；例外须登记）',
   assert.deepEqual(bad, [], `以下页面仍自带 band 规则：\n  ${bad.join('\n  ')}`);
 });
 
-test('统计带模板必须用 `card band`（15 处基线）', () => {
+test('统计带模板必须用 `card band`（14 处基线）', () => {
   const bad = [];
   let n = 0;
   for (const { rel, text } of FILES) {
@@ -112,7 +112,8 @@ test('统计带模板必须用 `card band`（15 处基线）', () => {
     n += (tpl.match(/class="card band"/g) || []).length;
   }
   assert.deepEqual(bad, [], `统计带仍用页面前缀类：\n  ${bad.join('\n  ')}`);
-  assert.equal(n, 15, `\`card band\` 应为 15 处，实测 ${n}`);
+  // 2026-09-30 后台精简：内置插件清单页（PluginsPage）删除，其 1 处统计带随之移除（15 → 14）。
+  assert.equal(n, 14, `\`card band\` 应为 14 处，实测 ${n}`);
 });
 
 test('.field-stack 原件：竖排 + gap 6px + min-width: 0', () => {

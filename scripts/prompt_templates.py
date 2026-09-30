@@ -57,6 +57,74 @@ from typing import Any, Callable
 # 故随簇搬来；门面里那份同名副本已因"读点随函数一起搬走"而删除。
 _SECTION_RE = re.compile(r"(?m)(?=^={0,30}\s*【[^\n】]+】[^\n]*$)")
 
+#: 语义变量插槽的语法（与 `scripts/prompt_library.py::_VAR_RE` **同形**：
+#: 门面那份带 `ALLOWED_VARIABLES` 校验，本模块只做"这段文本带不带插槽"的结构判定，
+#: 故不引入门面的白名单（否则纯模块反向依赖配置面）。
+_PLACEHOLDER_RE = re.compile(r"\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}")
+
+
+def _base_module_id(module: dict[str, Any]) -> str:
+    """基座模块的 id：有就用，没有就按**标题**确定性派生（与 `_module` 同一派生器）。"""
+    return str(module.get("id") or stable_base_module_id(str(module.get("title") or "")))
+
+
+def _base_index(out: list[dict[str, Any]], title: str) -> int:
+    """在已排好的模块序列里定位某条**基座**模块的下标（供稳定插入使用）。
+
+    ⚠️ 刻意做成**模块级**函数而不是 `normalize_base_modules` 里的嵌套闭包：
+    `tests/extraction/test_prompt_templates_extraction.py::test_shared_module_has_no_free_names`
+    用 AST 只收集**模块级** FunctionDef 作为绑定名，嵌套闭包会被算成"未定义自由名"当场报错
+    （2026-09-30 实测：`_index_of` 被判自由名）。
+    """
+    return next(i for i, m in enumerate(out)
+                if str(m.get("title") or "") == title
+                and str(m.get("source") or "") == "base")
+
+
+def overlay_module_id(title: str, content: str) -> str:
+    """`legacy` 覆盖层的**确定性** id（由标题 + 正文派生）。
+
+    ⚠️ 为什么不能沿用被降级基座模块的 id（2026-09-30 实测撞车）：用户改过的基座降级成
+    覆盖层后，读路径的 `normalize_base_modules` 会按标题回插现网基座，而基座 id 是
+    `stable_base_module_id(title)` **确定性**的 ⇒ 覆盖层与回插的基座**同 id**，
+    `validate_profile` 当场判「模块 ID 缺失或重复」，保存直接失败。
+
+    用内容派生即可稳定（同一改动反复保存不churn）且与基座 id 天然不同。
+    """
+    digest = hashlib.sha1(f"astra-overlay::{title}::{content}".encode("utf-8")).hexdigest()[:10]
+    return f"module-overlay-{digest}"
+
+
+def _carries_unique_slot(stored: str, canonical: str) -> bool:
+    """存档内容带着**基座文本没有**的插槽吗？
+
+    ⚠️ 这条判定救回过一次真实回归（2026-09-30，本次改动自身引入），而且**差点没被发现**：
+
+    `trading_user` 的代码基座登记在 `astra_backend/prompt_views.py::TRADING_USER_TEMPLATE`，
+    但那是**给编辑器看的说明版**（"实时插槽：自进化引擎沉淀的可审计长期记忆…"）；
+    真正实发的主脑用户消息基座是 `scripts/brain/prompt.py` 逐周期生成的 f-string，
+    而**实时数据是靠这些插槽注入的**。`trading_user` 的 7 条基座里有 **6 条**是插槽载体：
+
+    | 基座分节 | 存档携带的插槽 | 说明版长度差 |
+    |---|---|---|
+    | AstraQuant 启发式实战认知与长期记忆 | `{{trading_memory}}` | 92 → 105 |
+    | 全网实时重大快讯与宏观情报 | `{{news_intelligence}}` | 85 → 82 |
+    | 账户当前持仓与风险敞口全景 | `{{account_positions}}` | 85 → 93 |
+    | 在途未成交限价挂单 | `{{pending_orders}}` | 101 → 112 |
+    | 全标的池原生行情、技术指标与筹码矩阵 | `{{market_matrix}}` | 86 → 110 |
+    | 当前决策时间戳与市场时效 | `{{decision_timestamp}}`/`{{account_balance}}`/`{{risk_budget}}` | 121 → 80 |
+
+    ★ 危险之处在于**总长度只差 +12 字符**（有增有减互相抵消）：一旦被说明文本覆盖，
+    模型将**收不到任何实时账户数据**，而字符数看起来只是"多了十几个字"。
+    故这里必须按**插槽集合**判定，不能按长度或文本相似度判定。
+
+    判定规则：存档带着基座没有的插槽 ⇒ 存档是**插槽载体**，不得被基座说明文本覆盖。
+    """
+    stored_slots = set(_PLACEHOLDER_RE.findall(str(stored or "")))
+    if not stored_slots:
+        return False
+    return bool(stored_slots - set(_PLACEHOLDER_RE.findall(str(canonical or ""))))
+
 
 def stable_base_module_id(title: str) -> str:
     """基座模块的**确定性** id（由标题派生）。
@@ -111,6 +179,157 @@ def base_template_modules(text: str, pipeline: str, *,
     for module in modules:
         module["locked"] = False
     return modules
+
+def normalize_base_modules(modules: list[dict[str, Any]], base_text: str, pipeline: str, *,
+                           max_template_chars: int,
+                           canonical_modules: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
+    """把方案里的基座模块与**现网代码基座**对齐（基座只读 + 缺失回插）。
+
+    ## 为什么必须存在
+
+    出厂方案若在 `trading_system` / `evolution_system` 上**一个 base 模块都不登记**，
+    `apply_module_layout` 会走「无 base ⇒ 基座整段前置」的兜底：模型收到的提示词完好，
+    但提示词工坊只列出方案自己那几段覆盖层（实测 1356 字符 vs 实发 9700 字符）——
+    用户在工坊里既**看不到**也**改不动**真正的系统军规与 JSON 契约，且工坊的排序/启停
+    对那几条管线**完全无效**。反过来，`source=="base"` 却存着陈旧快照时，工坊显示的是
+    存档内容而运行期用的是现网基座（两条相反的静默路径）。
+
+    本函数把「方案里的基座」变成**现网基座的显式登记**，让工坊所见即实发所见。
+
+    ## 三条语义（都属"绝不静默"族）
+
+    1. `source=="base"` 且标题命中现网基座 ⇒ **内容恒取现网基座**（基座只读），
+       保留原 `id` 与 `enabled`、位置不变；
+    2. `source=="base"` 但标题已不在现网基座（代码改了分节标题，实测
+       `逐笔历史交易明细 (按时间排序)` → `逐笔历史交易明细`）⇒ **先按内容认亲**：
+       内容与某个现网基座模块逐字相同的，就地认作那个基座模块（用现网标题/id，位置不变）；
+       内容也对不上的（代码真删了该分节）才降级为 `legacy` 并**保留内容** ——
+       用户库里那份不许无声消失。若这里直接降级 + 回插，同一段文本会**出现两遍**
+       （实测 evolution_user 模板重复 34 字符分节）；
+    3. 现网基座里尚未出现的标题 ⇒ 按**基座规范顺序稳定插入**（插到"其后第一个已存在的
+       基座项"之前；其后没有基座项时插到"其前最后一个已存在的基座项"之后；都没有则置首）。
+       绝不整体追加到末尾 —— 那会把自定义覆盖层挤到基座前面。
+
+    ⚠️ 取不到基座文本（空串）或模块为空 ⇒ **原样返回**，绝不臆造（与
+    `align_pipeline_sources` 同一纪律）。本函数**幂等**：归一后的结果再跑一遍不变。
+    """
+    if not isinstance(modules, list):
+        return []
+    items = [m for m in modules if isinstance(m, dict)]
+    if not items or not str(base_text or "").strip():
+        return items
+    # `canonical_modules` 快路径：`apply_module_layout` / `pipeline_view` 已经算过同一份
+    # 基座模块，直接复用可省掉每个交易周期两次 9.7k 字符的正则切分。
+    canonical = canonical_modules if isinstance(canonical_modules, list) and canonical_modules else \
+        text_to_modules(base_text, "base", locked=False, max_template_chars=max_template_chars)
+    if not canonical:
+        return items
+    by_title = {str(m.get("title") or ""): m for m in canonical}
+    by_content: dict[str, dict[str, Any]] = {}
+    for module in canonical:
+        by_content.setdefault(str(module.get("content") or ""), module)
+
+    kept: list[dict[str, Any]] = []
+    for item in items:
+        title = str(item.get("title") or "")
+        if str(item.get("source") or "") != "base":
+            kept.append(item)
+            continue
+        live = by_title.get(title)
+        if live is None:
+            # 标题对不上：先按**内容**认亲（改标题不改正文的基座升级）
+            live = by_content.get(str(item.get("content") or ""))
+        if live is not None:
+            stored_content = str(item.get("content") or "")
+            # ⚠️ 基座模块的 `id` 一律用 `_base_module_id` 兜底，**不得**直接索引 `live["id"]`：
+            # `canonical_modules` 是调用方传进来的（门面传 `base_template_modules` 的结果，
+            # 但测试替身/未来调用点可能给的是**裸 dict**）。实测 `KeyError: 'id'` 让
+            # `tests/core/test_apply_module_layout_main.py` 连红 12 例 —— 单元测试的价值所在。
+            live_id = _base_module_id(live)
+            if _carries_unique_slot(stored_content, str(live.get("content") or "")):
+                # 插槽载体（如 {{trading_memory}}）：基座文本只是说明版，不得覆盖
+                kept.append({**item, "source": "base",
+                             "id": str(item.get("id") or live_id),
+                             "enabled": bool(item.get("enabled", True))})
+            else:
+                kept.append({**live,
+                             "id": str(item.get("id") or live_id),
+                             "enabled": bool(item.get("enabled", True))})
+        else:
+            kept.append({**item, "source": "legacy",
+                         "id": overlay_module_id(title, str(item.get("content") or ""))})
+
+    out = list(kept)
+    present = {str(m.get("title") or "") for m in out
+               if str(m.get("source") or "") == "base"}
+
+    for idx, live in enumerate(canonical):
+        title = str(live.get("title") or "")
+        if title in present:
+            continue
+        later = next((str(m.get("title") or "") for m in canonical[idx + 1:]
+                      if str(m.get("title") or "") in present), None)
+        if later is not None:
+            pos = _base_index(out, later)
+        else:
+            earlier = next((str(m.get("title") or "") for m in reversed(canonical[:idx])
+                            if str(m.get("title") or "") in present), None)
+            pos = 0 if earlier is None else _base_index(out, earlier) + 1
+        out.insert(pos, {**live, "id": _base_module_id(live), "enabled": True})
+        present.add(title)
+    return out
+
+
+def demote_edited_base_modules(modules: list[dict[str, Any]], base_text: str, pipeline: str, *,
+                               max_template_chars: int) -> list[dict[str, Any]]:
+    """**保存路径**：把"被改过的基座模块"降级为 `legacy` 覆盖层，让改动真正生效。
+
+    ## 为什么必须与 `normalize_base_modules` 配对
+
+    读路径的归一会把 `source=="base"` 的内容**无条件治愈成现网基座**（基座只读）。
+    于是若保存时不先把"用户改过的基座"降级，用户的改动会在下一次读到时被**静默抹掉** ——
+    从"运行期丢弃"变成"读路径抹除"，问题只是换了个地方。
+
+    故职责切分成两半，且**只有这两半合起来**才自洽：
+
+    | 时机 | 函数 | 语义 |
+    |---|---|---|
+    | 保存 | 本函数 | 内容偏离基座（且不带独有插槽）⇒ 降级 `legacy`，改动落为覆盖层 |
+    | 读取 | `normalize_base_modules` | `source=="base"` 一律等于现网基座，缺失则回插 |
+
+    降级后，读路径会把它当普通覆盖层原位保留，同时把该分节的现网基座按规范顺序回插 ⇒
+    实发 = 基座 + 你的覆盖层，工坊同时看到两者（覆盖层带「已改写」徽标）。
+
+    ⚠️ 内容与基座**逐字相同**的不降级（照旧是 base，继续跟随发版更新）；
+    带着基座没有的插槽的（如 `{{trading_memory}}`）也不降级 —— 它是插槽载体，
+    基座里那份只是给编辑器看的说明文本。
+    """
+    if not isinstance(modules, list):
+        return []
+    items = [m for m in modules if isinstance(m, dict)]
+    if not items or not str(base_text or "").strip():
+        return items
+    canonical = text_to_modules(base_text, "base", locked=False,
+                                max_template_chars=max_template_chars)
+    if not canonical:
+        return items
+    by_title = {str(m["title"]): m for m in canonical}
+    out: list[dict[str, Any]] = []
+    for item in items:
+        if str(item.get("source") or "") != "base":
+            out.append(item)
+            continue
+        live = by_title.get(str(item.get("title") or ""))
+        content = str(item.get("content") or "")
+        if (live is not None
+                and content != str(live.get("content") or "")
+                and not _carries_unique_slot(content, str(live.get("content") or ""))):
+            out.append({**item, "source": "legacy",
+                        "id": overlay_module_id(str(item.get("title") or ""), content)})
+        else:
+            out.append(item)
+    return out
+
 
 def base_template_text(pipeline: str, *,
                        sources: dict[str, Any],
@@ -190,7 +409,14 @@ def pipeline_view(base: str, profile: dict[str, Any], pipeline: str, *,
                                         base_text_resolver=base_text_resolver)
     current = ((profile.get("pipelines") or {}).get(pipeline) if isinstance(profile.get("pipelines"), dict) else [])
     if isinstance(current, list) and current:
-        view = copy.deepcopy(current)
+        # 基座归一（2026-09-30）：**预览侧**与渲染侧同款，否则工坊仍看不到基座。
+        # 出厂方案若在 trading_system / evolution_system 上一个 base 模块都没登记，
+        # 这里原本只返回方案自己那几段覆盖层（实测 1356 字符 vs 实发 9700 字符）⇒
+        # 用户在工坊里既看不到也改不动真正的系统军规与 JSON 契约。
+        # 归一后预览 = 渲染侧拿到的那份编排，"工坊所见 = 实发所见"。
+        view = normalize_base_modules(copy.deepcopy(current), base, pipeline,
+                                      max_template_chars=max_template_chars,
+                                      canonical_modules=base_modules)
         for m in view:
             m["locked"] = False
         return view

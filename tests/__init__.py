@@ -11,6 +11,7 @@
 import builtins
 import json
 import os
+import shutil
 import sys
 import tempfile
 from pathlib import Path
@@ -60,6 +61,11 @@ _atexit.register(_cleanup_test_sandbox)
 
 os.environ.setdefault("ASTRA_AUDIT_FILE", os.path.join(_TEST_SANDBOX, "astra_admin_audit.jsonl"))
 os.environ.setdefault("ASTRA_SELF_IMPROVEMENT_LOG", os.path.join(_TEST_SANDBOX, "self_improvement.log"))
+# 自进化"回退模型计费冷却"状态（2026-09-30）：任何跑到 402 回退分支的测试都会写这个文件。
+# 本刀实测：它一度把 `glm-5.3-flash` 的冷却状态写进了**生产** data/ 目录，且会让后续
+# 用例互相污染（一个用例标了冷却，下一个用例的回退链就被静默过滤掉）。同款隔离。
+os.environ.setdefault("ASTRA_EVOLUTION_MODEL_COOLDOWN_FILE",
+                      os.path.join(_TEST_SANDBOX, "evolution_model_cooldown.json"))
 # 批E(2026-09-13)：仪表盘载荷构建在台账 >60s 未更新时会 spawn 真实台账同步子进程
 # （打三所接口 + 重写 data/trading_ledger.json）。仪表盘相关测试走真实 DATA_DIR，
 # 于是测试会打真网络并改写生产台账——同款隔离：默认禁用该触发点。生产不设此变量。
@@ -136,6 +142,21 @@ _PROTECTED_CONFIG_FILES = {
     (_PROJECT_ROOT / "data" / "llm_models.json").resolve(),
     (_PROJECT_ROOT / "data" / "account_baseline.json").resolve(),
     (_PROJECT_ROOT / "data" / "position_trackers.json").resolve(),
+    # 「分批止盈是否真的发生」的**第一手证据**（只追加的事件流水）。2026-09-29 实测：
+    # 一次没重定向落点的用例就把 50 行夹具记录灌进了生产流水（`entry_px: 80000` 之类），
+    # 这份流水当场失去可信度 —— 故按运维配置同级保护：用例写入直接拦下。
+    # 正确的隔离方式：`patch.object(scripts.trader.scale_out, "SCALE_OUT_EVENTS_FILE", tmp)`。
+    (_PROJECT_ROOT / "data" / "scale_out_events.jsonl").resolve(),
+    # 交易时段配置（2026-09-30）：它是**用户设置**，且直接决定交易进程跑不跑。
+    # 用例写它就等于改用户的运行时段（比改通知时间严重一个量级）—— 同级硬保护。
+    # 正确的隔离方式：`patch.object(astra_backend.trading_session_store, "TRADING_SESSION_FILE", tmp)`，
+    # 或直接用 `tests.config_sandbox.isolate_config`（该模块已在 SANDBOXED_MODULES 里）。
+    (_PROJECT_ROOT / "data" / "trading_session.json").resolve(),
+    # 平仓通知去重集（2026-09-30）：它决定"哪些平仓已经通知过用户" —— 被夹具 id 污染
+    # 后，真实的平仓行会被当成"已通知"而**静默不发**（用户直接收不到卡片）。
+    # 事故现场：本模块刚落地的第一次 `pytest` 就把夹具 id（`new-2`/`g1`）写了进来。
+    # 正确的隔离方式：`patch.object(scripts.ledger.notify, "CLOSE_NOTIFY_STATE_FILE", tmp)`。
+    (_PROJECT_ROOT / "data" / "close_notify_state.json").resolve(),
 }
 _DATA_DIR = (_PROJECT_ROOT / "data").resolve()
 _ALLOW_REAL_WRITES = os.environ.get("ASTRA_TESTS_ALLOW_REAL_DATA", "") == "1"
@@ -465,13 +486,26 @@ def _install_session_config_sandbox() -> None:
     }, ensure_ascii=False), encoding="utf-8")
     for name in ("astra_backend.exchanges.routing_policy",):
         targets[name] = ("ROUTING_FILE", routing, False)
-    # 提示词库：**双文件都要钉**（2026-09 拆分）——出厂基线指向沙箱里**不存在**的路径
-    # ⇒ `load_library()` 走 `_default()` 确定性回退（不读生产、也不随线上模板漂移）；
-    # 用户改动同样钉到沙箱路径（它是写入目标，绝不能落回生产的 `.local.json`）。
-    # 要断言"线上模板内容"的用例必须自带夹具。
+    # 提示词库：**双文件都要钉**（2026-09 拆分）。用户改动钉到沙箱路径
+    # （它是写入目标，绝不能落回生产的 `.local.json`）。
+    #
+    # ⚠️ 2026-09-30 变更（提示词体系重构）：出厂基线**改为复制真基线进沙箱**。
+    # 旧做法是把它指向沙箱里一个**不存在**的路径，让 `load_library()` 走 `_default()`
+    # 空库回退 —— 那时提示词正文在**代码常量**里（`SYSTEM_PROMPT` /
+    # `EVOLUTION_SYSTEM_PROMPT` / `PRESETS`），空库回退照样能拿到正文。
+    # 现在正文**只存 `data/prompt_library.json`**：再留空路径，全部提示词测试都会
+    # 拿到空提示词 —— 那不是"隔离生产"，而是把被测对象抽空了（会红一大片，
+    # 更糟的是有些断言会**真空通过**）。故改为把真基线复制进沙箱当只读种子。
+    _baseline_src = _PROJECT_ROOT / "data" / "prompt_library.json"
+    _baseline_seed = root / "prompt_library.json"
+    try:
+        if _baseline_src.exists():
+            shutil.copy2(_baseline_src, _baseline_seed)
+    except OSError:
+        pass
     for name in ("prompt_library", "scripts.prompt_library"):
         targets[name] = [
-            ("BASELINE_FILE", root / "prompt_library.json", True),
+            ("BASELINE_FILE", _baseline_seed, True),
             ("LOCAL_FILE", root / "prompt_library.local.json", True),
         ]
 

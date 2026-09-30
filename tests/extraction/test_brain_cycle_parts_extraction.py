@@ -177,7 +177,14 @@ class NormalizePositionManagementParityTest(unittest.TestCase):
 
     @staticmethod
     def _legacy(pos_mgmt_list, active_inst_ids, safe_float):
-        """搬走前门面里的内联循环（逐字原样）。"""
+        """搬走前门面里的内联循环（逐字原样），外加 2026-09-29 的**声明式行为变更**。
+
+        ⚠️ 本轮新增 `UPDATE_TP`（持仓中调整止盈）：词表加一个动作、并让
+        `suggested_tp1_price`/`suggested_tp2_price` 只在 `UPDATE_TP` 下保留
+        （其余动作一律清零，与 `suggested_sl_price` 同一纪律）。
+        本用例的职责是"抽取本身没改行为"，故这份内联副本**同步**到新语义；
+        变更点只有下面标注的两处。
+        """
         validated_pos_mgmt = []
         seen_positions = set()
         for item in pos_mgmt_list:
@@ -188,16 +195,25 @@ class NormalizePositionManagementParityTest(unittest.TestCase):
                 continue
             seen_positions.add(inst_id)
             action = str(item.get("action", "HOLD")).upper()
-            if action not in {"HOLD", "CLOSE_MARKET", "UPDATE_SL"}:
+            # ← 变更点 1：新增 UPDATE_TP
+            if action not in {"HOLD", "CLOSE_MARKET", "UPDATE_SL", "UPDATE_TP"}:
                 action = "HOLD"
             confidence = max(0.0, min(100.0, safe_float(item.get("confidence"))))
             suggested_sl = safe_float(item.get("suggested_sl_price"))
             if action != "UPDATE_SL":
                 suggested_sl = 0.0
+            # ← 变更点 2：止盈价只在 UPDATE_TP 下保留
+            suggested_tp1 = safe_float(item.get("suggested_tp1_price"))
+            suggested_tp2 = safe_float(item.get("suggested_tp2_price"))
+            if action != "UPDATE_TP":
+                suggested_tp1 = 0.0
+                suggested_tp2 = 0.0
             validated_pos_mgmt.append({
                 "instId": inst_id,
                 "action": action,
                 "suggested_sl_price": suggested_sl,
+                "suggested_tp1_price": suggested_tp1,
+                "suggested_tp2_price": suggested_tp2,
                 "confidence": confidence,
                 "reason": str(item.get("reason", "模型未提供持仓理由"))[:120]
             })
@@ -207,6 +223,8 @@ class NormalizePositionManagementParityTest(unittest.TestCase):
                 "instId": inst_id,
                 "action": "HOLD",
                 "suggested_sl_price": 0.0,
+                "suggested_tp1_price": 0.0,
+                "suggested_tp2_price": 0.0,
                 "confidence": 0.0,
                 "reason": "模型遗漏该持仓，安全降级为 HOLD"
             })
@@ -216,7 +234,8 @@ class NormalizePositionManagementParityTest(unittest.TestCase):
         import random
         rng = random.Random(20260919)
         universe = ["BTC-USDT-SWAP", "ETH-USDT-SWAP", "SOL-USDT-SWAP", "DOGE-USDT-SWAP", ""]
-        actions = ["HOLD", "CLOSE_MARKET", "UPDATE_SL", "BUY_LONG", "hold", "junk", ""]
+        actions = ["HOLD", "CLOSE_MARKET", "UPDATE_SL", "UPDATE_TP", "update_tp",
+                   "BUY_LONG", "hold", "junk", ""]
         for _ in range(5000):
             active = set(rng.sample(universe, rng.randint(0, 3)))
             items = []
@@ -229,6 +248,8 @@ class NormalizePositionManagementParityTest(unittest.TestCase):
                     "action": rng.choice(actions),
                     "confidence": rng.choice([None, 0, 50, 99.5, 100, 150, -3, "abc", "77"]),
                     "suggested_sl_price": rng.choice([None, 0, 12.5, -1, "9"]),
+                    "suggested_tp1_price": rng.choice([None, 0, 12.5, -1, "9"]),
+                    "suggested_tp2_price": rng.choice([None, 0, 20.0, "abc"]),
                     "reason": rng.choice([None, "", "r" * 200, "正常理由", 123]),
                 })
             got = cycle_parts.normalize_position_management(items, active, safe_float=_safe_float)

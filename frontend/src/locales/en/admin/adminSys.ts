@@ -1,5 +1,6 @@
 /** Admin & security page copy */
 export const enAdminAdminSys = {
+  title: 'Administrators',
   securityNote: 'PBKDF2-SHA256 salted hashing · locked for 15 minutes after 5 consecutive failures · sessions last 12 hours.',
   governanceBadge: 'Governance · 2/3',
   password: {

@@ -2,11 +2,11 @@
 ASTRA 物理拦截插件规范
 ====================
 id: 04_risk_reward_gatekeeper
-name: 真实 2.0R 盈亏比门禁
-version: 1.0.0
+name: 动态正期望与弹性盈亏比门禁
+version: 2.0.0
 author: ASTRA Official
-description: 执行层真实风险收益比校验。入场点、止盈目标与云端止损线计算的 R:R 必须 ≥ 2.0，拒绝赔率不足的劣质交易。
-tags: 盈亏比, 赔率保障, 官方预设
+description: 执行层真实风险收益比校验。结合入场点、止盈目标与云端止损线计算真实 R:R，并协同 AI 置信度进行动态数学期望评估，严守绝对底线，放行高胜率优质结构。
+tags: 盈亏比, 动态数学期望, 赔率保障, 官方预设
 """
 
 def check_risk(package: dict, decision: dict, context: dict) -> tuple[bool, str]:
@@ -38,7 +38,22 @@ def check_risk(package: dict, decision: dict, context: dict) -> tuple[bool, str]
     elif action == "SELL_SHORT" and sl > entry > tp > 0:
         rr = (entry - tp) / (sl - entry)
 
+    # 绝对系统安全底线：任何情况下盈亏比不得低于 1.2:1（防手续费与滑点倒挂）
+    ABS_MIN_RR = 1.2
+    if rr < ABS_MIN_RR:
+        return False, f"模型报价盈亏比 {rr:.2f}R 低于系统绝对安全底线 {ABS_MIN_RR:.1f}R，执行层降级为 WAIT。"
+
     if rr < min_rr:
+        try:
+            conf = float(decision.get("confidence", 0) or 0)
+        except (ValueError, TypeError):
+            conf = 0.0
+
+        p_win = conf / 100.0
+        expected_r = p_win * rr - (1.0 - p_win) * 1.0
+        if conf >= 80.0 and expected_r >= 0.30:
+            return True, ""
+
         return False, f"模型报价盈亏比 {rr:.2f}R 未满足全局风控 {min_rr:.1f}R 门禁，执行层降级为 WAIT。"
 
     return True, ""

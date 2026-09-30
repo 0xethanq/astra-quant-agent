@@ -1,4 +1,5 @@
 export const enAdminInterceptors = {
+  title: 'Pre-Trade Interceptors',
   desc: 'Per-layer pre-trade interceptor rules and failure actions',
   testing: 'Running regression tests...',
   runSandbox: 'Run live sandbox regression test',
@@ -26,7 +27,7 @@ export const enAdminInterceptors = {
   filenamePlaceholder: 'e.g. my_volatility_filter.py',
   filenameRequired: 'Please enter the plugin file name',
   codeLabel: 'Plugin Python source',
-  createAndAdd: 'Create and add to pipeline',
+  createAndAdd: 'Create and enable rule',
   reportTitle: 'Sandbox interception regression test report',
   reportSummary: '{enabled}/{total} interceptor plugins active · total runtime {ms}ms',
   intercepted: 'Physically intercepted (WAIT)',
@@ -38,7 +39,7 @@ export const enAdminInterceptors = {
   closeReport: 'Close test report',
 
   // ── added by the rebuild (batch 6) ──
-  pipelineTitle: 'Interceptor pipeline',
+  pipelineTitle: 'Pre-Trade Interceptor Rules',
   pipelineDesc: 'Ordered by execution priority, highest first; plugins higher up intervene earlier',
   empty: 'No interceptor plugins yet. Add one with the New plugin button at the top right',
   editorTitle: 'Plugin source',  // ── batch 38: localize strings previously hardcoded in InterceptorsPage.vue ──
@@ -46,7 +47,7 @@ export const enAdminInterceptors = {
   toggleOn: 'Enabled interceptor plugin “{name}”',
   toggleOff: 'Disabled interceptor plugin “{name}”',
   opFailed: 'Action failed: {msg}',
-  reorderOk: 'Interceptor pipeline priority order updated',
+  reorderOk: 'Interceptor rules priority order updated',
   reorderFailed: 'Failed to update order: {msg}',
   readSourceFailed: 'Failed to read plugin source: {msg}',
   saveCodeOk: 'Plugin “{file}” saved and hot-reloaded',

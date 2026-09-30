@@ -509,7 +509,6 @@ const truncation = computed<{ kept: number; total: number } | null>(() => {
           <span class="flex items-center gap-2 text-xs font-semibold text-[var(--ink-strong)]">
             <ScrollText class="h-3.5 w-3.5 text-[var(--accent)]" />
             {{ t('dash.ledger.logs.title') }}
-            <span class="text-3xs text-[var(--ink-3)] font-normal">{{ t('dash.ledger.logs.desc') }}</span>
           </span>
         </template>
         <div class="scroll-y max-h-80 p-2">

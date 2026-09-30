@@ -179,7 +179,10 @@ class ExitFailureBranchTest(unittest.TestCase):
         self.assertTrue(ok)
         self.assertEqual(detail, "保护失效安全退出")
         self.assertNotIn(key, trackers)
-        self.assertTrue(rig.notifies, "安全退出也要通知（不能悄悄平掉）")
+        # 2026-09-30（通知单一事实源）：安全退出**不由本路径发金额通知** —— 同一笔此前
+        # 会被本路径与台账路径各发一张卡片（实测两条金额互相矛盾）。退出动作本身仍留痕：
+        # tracker 已清、台账已记（断言在上方），金额卡片由台账路径按交易所真值发布。
+        self.assertFalse(rig.notifies, "本路径不得再发金额通知（改由台账路径）")
 
     # ── 149：缺 takeProfitPx 时补默认 ─────────────────────────────────
     def test_missing_take_profit_gets_a_default(self):
@@ -196,14 +199,14 @@ class ExitFailureBranchTest(unittest.TestCase):
         # 持仓超过 TIME_STOP_HOURS 且价格几乎没动（|cur_profit| < 0.5*atr）
         return _Rig(entry_ts=int(time.time()) - int(25 * HOUR), **kw)
 
-    def test_time_stop_closes_records_notifies_and_clears(self):
+    def test_time_stop_closes_records_and_clears_without_publishing_a_card(self):
         rig = self._time_stop_rig()
         ok, detail, trackers, key = self._run(rig)
         self.assertTrue(ok)
         self.assertEqual(detail, "时间止损")
         self.assertNotIn(key, trackers)
         self.assertEqual(len(rig.trades), 1)
-        self.assertTrue(rig.notifies, "时间止损要通知")
+        self.assertFalse(rig.notifies, "本路径不得再发金额通知（改由台账路径）")
         self.assertTrue(any("时间止损" in a for a in rig.actions), rig.actions)
 
     def test_time_stop_close_failure_keeps_the_position(self):
@@ -229,7 +232,7 @@ class ExitFailureBranchTest(unittest.TestCase):
         self.assertEqual(detail, "已阶梯锁利")
         self.assertNotIn(key, trackers)
         self.assertEqual(len(rig.trades), 1)
-        self.assertTrue(rig.notifies, "锁利平仓要通知")
+        self.assertFalse(rig.notifies, "本路径不得再发金额通知（改由台账路径）")
         self.assertTrue(rig.synced, "锁利线上移必须同步到云端 OCO")
 
     def test_ratchet_floor_stop_close_failure_keeps_the_position(self):
@@ -283,7 +286,7 @@ class ExitFailureBranchTest(unittest.TestCase):
         self.assertEqual(detail, "已移动止盈")
         self.assertNotIn(key, trackers, "平仓确认后要清 tracker")
         self.assertEqual(len(rig.trades), 1)
-        self.assertTrue(rig.notifies, "动能止盈要通知")
+        self.assertFalse(rig.notifies, "本路径不得再发金额通知（改由台账路径）")
 
     def test_long_momentum_pullback_close_failure_keeps_the_position(self):
         rig = _Rig(floor=69000.0, high_water=71750.0, close=(False, "交易所拒绝"))
@@ -303,7 +306,7 @@ class ExitFailureBranchTest(unittest.TestCase):
         self.assertNotIn(key, trackers)
         self.assertTrue(rig.synced, "空头的锁利线下移必须同步云端 OCO")
         self.assertEqual(rig.synced[0][0][1], "short", f"方向必须是 short：{rig.synced}")
-        self.assertTrue(rig.notifies)
+        self.assertFalse(rig.notifies)
 
     def test_short_momentum_rebound_exit(self):
         """峰值利润 >= 2*ATR 后从低点反弹 ⇒ 动能止盈（空）。"""

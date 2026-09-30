@@ -1,5 +1,6 @@
 /** 策略版本快照页文案 */
 export const zhAdminPolicySnapshot = {
+  title: '策略快照与回滚',
   desc: '归档当前策略整包；回滚时逐单元校验，含风控/路由',
   loading: '正在计算并聚合四大策略单元实时指纹...',
   notRecorded: '未记录',

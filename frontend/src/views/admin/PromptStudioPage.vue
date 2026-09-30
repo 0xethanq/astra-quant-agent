@@ -30,7 +30,7 @@
  */
 import {
   renderSourceBadge, cloneModulesForEditing, compileWorkingModules,
-  buildTemplatePreview, computeInsertTarget, appendVariableSlot, deriveImportName,
+  buildTemplatePreview, computeInsertTarget, appendVariableSlot, appendOrderJsonTemplate, deriveImportName,
 } from './promptStudioLogic';
 import { fmtDate, fmtDateTime } from '../../utils/format';
 import { useToast } from '../../composables/useToast';
@@ -51,7 +51,7 @@ import { useAuthStore } from '../../stores/auth';
 import {
   Plus, ArrowUp, ArrowDown, Eye, CheckCircle2, Save, AlertTriangle,
   History, RotateCcw, Trash2, Copy, Download, Upload, FileUp,
-  Sparkles, BookOpen, Layers, Loader2 } from 'lucide-vue-next';
+  Sparkles, BookOpen, Layers, Loader2, Code2 } from 'lucide-vue-next';
 import BaseLoadingAnnounce from '../../components/base/BaseLoadingAnnounce.vue';
 
 const { api } = useApi();
@@ -79,7 +79,17 @@ const importing = ref(false);
 const variableGuideVisible = ref(false);
 const showVarRibbon = ref(false);
 const activeEditingIdx = ref<number>(0);
-const previewMode = ref<'rendered' | 'template'>('rendered');
+/**
+ * 预览模式（2026-09-30 新增 `effective`）。
+ *
+ * ⚠️ 用户报障：「提示词工坊的提示词怎么和决策透视的提示词不一样，是不是有什么 bug」——
+ * 根因是出厂方案在 trading_system 上**一个 base 模块都没登记**，工坊只列出覆盖层
+ * （实测 1356 字符 vs 实发 9700 字符）：既看不到真军规，排序/启停也无效。
+ * 后端已把基座归一（缺登记就按规范顺序回插、陈旧快照治愈为现网基座），
+ * 前端这里再补上「生效视图」= 后端 `effective_templates`（基座 + 方案，与实发同源），
+ * 并**设为默认**，让工坊第一眼就是实发口径。
+ */
+const previewMode = ref<'effective' | 'rendered' | 'template'>('effective');
 
 /** 模块来源徽标。三种来源的可信度由后端 update_profile 的逐模块对齐保证。
  * 纯逻辑见 ./promptStudioLogic.ts。 */
@@ -95,6 +105,13 @@ function badgeTone(m: any): string {
   return '';
 }
 
+/** 预览提示语（三模式各自的口径说明）。 */
+const previewHint = computed(() => {
+  if (previewMode.value === 'effective') return t('admin.promptStudio.preview.hintEffective');
+  if (previewMode.value === 'template') return t('admin.promptStudio.preview.hintTemplate');
+  return t('admin.promptStudio.preview.hintRendered');
+});
+
 const pipelines = computed(() => [
   { id: 'trading_system', label: t('admin.promptStudio.pipelines.tradingSystem'), desc: t('admin.promptStudio.pipelines.tradingSystemDesc') },
   { id: 'trading_user', label: t('admin.promptStudio.pipelines.tradingUser'), desc: t('admin.promptStudio.pipelines.tradingUserDesc') },
@@ -105,6 +122,24 @@ const templateVariables = computed(() => lib.value?.template_variables || []);
 
 /** 当前编辑中的模块（activeEditingIdx 越界时为 null） */
 const selectedModule = computed<any>(() => workingModules.value[activeEditingIdx.value] || null);
+/**
+ * 基座模块是**代码所有**（`source.baseTip` 的承诺：代码升级后自动同步）。
+ * 在工坊里直接改它不会丢 —— 后端保存路径会把偏离基座的内容降级为 `legacy` 覆盖层，
+ * 于是实发 = 基座 + 你的覆盖层。这里把这条规则显式告诉用户，避免"改了却以为没生效"。
+ */
+const selectedIsBase = computed(() => selectedModule.value?.source === 'base');
+/**
+ * **只读**基座模块（2026-09-30 重构）：目前是「严格 JSON 规范契约与完整输出骨架」。
+ *
+ * 与 `selectedIsBase` 的区别：基座是"代码所有、可被覆盖层改写"（`baseEditNote` 那套）；
+ * 只读是"代码所有、**一个字符都不许改**" —— 它是模型输出的机器契约，字段名与取值枚举
+ * 必须与 `scripts/brain/dispatch.py` 的解析器逐字对齐，改一个字段名就可能让整轮决策
+ * 解析失败。后端 `validate_profile` 会 fail-closed 拒绝任何改动，这里只是**不给你点**。
+ */
+function isLockedModule(m: any): boolean {
+  return !!m && (m.locked === true || (m.source === 'base' && m.locked === true));
+}
+const selectedIsLocked = computed(() => isLockedModule(selectedModule.value));
 const enabledCount = computed(() => workingModules.value.filter((m) => m.enabled).length);
 const activePipelineLabel = computed(
   () => pipelines.value.find((p) => p.id === activePipeline.value)?.label || '--',
@@ -112,6 +147,11 @@ const activePipelineLabel = computed(
 const isActiveProfile = computed(() => selectedProfileId.value === lib.value?.active_profile_id);
 
 const compiledPreview = computed(() => {
+  // 生效视图：**后端装配**的 基座 + 方案（与实发同一份编排口径）。
+  // 只差实时数据代入（`{{account_positions}}` 等仍是插槽标记）—— 这是预演的本质。
+  if (previewMode.value === 'effective') {
+    return lib.value?.effective_templates?.[activePipeline.value] || '';
+  }
   if (previewMode.value === 'template') {
     return buildTemplatePreview(workingModules.value);
   }
@@ -174,7 +214,7 @@ const { setRef: setPipeRef, onKeydown: onPipeKey, roving: pipeRoving } = useRovi
   (i) => { switchPipeline(pipelines.value[i].id) },
 )
 
-const PREVIEW_MODES = ['rendered', 'template'] as const
+const PREVIEW_MODES = ['effective', 'rendered', 'template'] as const
 const { setRef: setPrevRef, onKeydown: onPrevKey, roving: prevRoving } = useRovingTabs(
   () => PREVIEW_MODES.length,
   (i) => { previewMode.value = PREVIEW_MODES[i] },
@@ -215,6 +255,16 @@ function insertVarIntoActiveModule(key: string) {
   activeEditingIdx.value = idx;
   dirty.value = true;
   toast.ok(t('admin.promptStudio.varInserted', undefined, { tag, title: m.title }));
+}
+
+function insertOrderJsonIntoActiveModule() {
+  const idx = computeInsertTarget(workingModules.value, activeEditingIdx.value);
+  if (idx === null) return;
+  const m = workingModules.value[idx];
+  m.content = appendOrderJsonTemplate(m.content);
+  activeEditingIdx.value = idx;
+  dirty.value = true;
+  toast.ok(t('admin.promptStudio.toolbar.jsonTemplateInserted'));
 }
 
 async function saveProfile() {
@@ -293,7 +343,10 @@ async function submitNameDialog() {
       body: JSON.stringify({
         name,
         description: '',
-        source_id: mode === 'duplicate' ? selectedProfileId.value : 'stable',
+        // 2026-09-30：出厂预设改为单条「全形态波段策略(提示词样板)」（旧的 stable /
+        // wide_oscillation 已淘汰）。"新建空白方案"以它作为结构来源 ⇒ 后端
+        // `create_profile(source_id=...)` 必须能查到这条 id，否则报"提示词方案不存在"。
+        source_id: mode === 'duplicate' ? selectedProfileId.value : 'allpattern_swing',
       }),
     });
     toast.ok(mode === 'duplicate'
@@ -470,7 +523,7 @@ onMounted(loadLib)
 
 <template>
   <div class="ps">
-    <PageHeader :title="t('nav.admin.prompts')" :description="t('admin.promptStudio.pageDesc')">
+    <PageHeader :title="t('nav.admin.prompts')">
       <template #actions>
         <button type="button"
           class="btn btn-sm"
@@ -486,6 +539,10 @@ onMounted(loadLib)
         <button type="button" class="btn btn-ghost btn-sm" :title="t('admin.promptStudio.toolbar.dictTitle')" @click="variableGuideVisible = true">
           <BookOpen :size="14" />
           <span>{{ t('admin.promptStudio.toolbar.dictionary') }}</span>
+        </button>
+        <button type="button" class="btn btn-ghost btn-sm" :title="t('admin.promptStudio.toolbar.insertJsonTemplateTitle')" @click="insertOrderJsonIntoActiveModule">
+          <Code2 :size="14" />
+          <span>{{ t('admin.promptStudio.toolbar.insertJsonTemplate') }}</span>
         </button>
         <button type="button" class="btn btn-ghost btn-sm" :title="t('admin.promptStudio.toolbar.importTitle')" @click="importVisible = true">
           <Upload :size="14" />
@@ -675,25 +732,31 @@ onMounted(loadLib)
                 <span class="ps-mod-n mono">#{{ idx + 1 }}</span>
                 <BaseSwitch
                   :model-value="m.enabled"
-                  :disabled="!auth.isSuperadmin"
-                  :label="m.enabled ? t('admin.promptStudio.modules.enabledTip') : t('admin.promptStudio.modules.disabledTip')"
-                  @update:model-value="() => toggleModule(m)"
+                  :disabled="!auth.isSuperadmin || isLockedModule(m)"
+                  :label="isLockedModule(m)
+                    ? t('admin.promptStudio.modules.lockedTip')
+                    : (m.enabled ? t('admin.promptStudio.modules.enabledTip') : t('admin.promptStudio.modules.disabledTip'))"
+                  @update:model-value="() => !isLockedModule(m) && toggleModule(m)"
                 />
                 <span class="ps-mod-title truncate" :title="m.title">{{ m.title }}</span>
                 <span v-if="sourceBadge(m)" class="badge" :class="badgeTone(m)" :title="sourceBadge(m)!.tone === 'base' ? t('admin.promptStudio.source.baseTip') : t('admin.promptStudio.source.otherTip')">
                   {{ sourceBadge(m)!.text }}
                 </span>
+                <span v-if="isLockedModule(m)" class="badge badge-warn" :title="t('admin.promptStudio.modules.lockedTip')">
+                  <Lock :size="11" />
+                  {{ t('admin.promptStudio.modules.lockedBadge') }}
+                </span>
                 <span class="ps-mod-actions">
-                  <button type="button" class="btn btn-quiet btn-icon btn-sm" :disabled="idx === 0" :title="t('admin.promptStudio.modules.moveUp')" @click.stop="moveModule(idx, -1)">
+                  <button type="button" class="btn btn-quiet btn-icon btn-sm" :disabled="idx === 0 || isLockedModule(m)" :title="t('admin.promptStudio.modules.moveUp')" @click.stop="moveModule(idx, -1)">
                     <ArrowUp :size="13" />
                   </button>
-                  <button type="button" class="btn btn-quiet btn-icon btn-sm" :disabled="idx === workingModules.length - 1" :title="t('admin.promptStudio.modules.moveDown')" @click.stop="moveModule(idx, 1)">
+                  <button type="button" class="btn btn-quiet btn-icon btn-sm" :disabled="idx === workingModules.length - 1 || isLockedModule(m)" :title="t('admin.promptStudio.modules.moveDown')" @click.stop="moveModule(idx, 1)">
                     <ArrowDown :size="13" />
                   </button>
-                  <button type="button" class="btn btn-quiet btn-icon btn-sm" :title="t('admin.promptStudio.modules.duplicate')" @click.stop="duplicateModule(idx)">
+                  <button type="button" class="btn btn-quiet btn-icon btn-sm" :disabled="isLockedModule(m)" :title="t('admin.promptStudio.modules.duplicate')" @click.stop="duplicateModule(idx)">
                     <Copy :size="13" />
                   </button>
-                  <button type="button" class="btn btn-quiet btn-icon btn-sm ps-del" :title="t('admin.promptStudio.modules.delete')" @click.stop="removeModule(idx)">
+                  <button type="button" class="btn btn-quiet btn-icon btn-sm ps-del" :disabled="isLockedModule(m)" :title="t('admin.promptStudio.modules.delete')" @click.stop="removeModule(idx)">
                     <Trash2 :size="13" />
                   </button>
                 </span>
@@ -719,17 +782,23 @@ onMounted(loadLib)
                 v-model="selectedModule.title"
                 :aria-label="t('admin.promptStudio.modules.titlePlaceholder')"
                 class="field ps-title-input"
-                :readonly="!auth.isSuperadmin"
+                :readonly="!auth.isSuperadmin || selectedIsLocked"
                 :placeholder="t('admin.promptStudio.modules.titlePlaceholder')"
                 @input="dirty = true"
               />
+              <p v-if="selectedIsLocked" class="ps-base-note" role="note">
+                {{ t('admin.promptStudio.modules.lockedNote') }}
+              </p>
+              <p v-else-if="selectedIsBase" class="ps-base-note" role="note">
+                {{ t('admin.promptStudio.source.baseEditNote') }}
+              </p>
               <textarea
                 v-model="selectedModule.content"
                 rows="24"
                 spellcheck="false"
                 :aria-label="t('admin.promptStudio.moduleEditor')"
                 class="field ps-textarea"
-                :readonly="!auth.isSuperadmin"
+                :readonly="!auth.isSuperadmin || selectedIsLocked"
                 :placeholder="t('admin.promptStudio.modules.contentPlaceholder')"
                 @input="dirty = true"
               />
@@ -780,23 +849,35 @@ onMounted(loadLib)
                   type="button"
                   role="tab"
                   :ref="setPrevRef(0)"
+                  :aria-selected="previewMode === 'effective'"
+                  :tabindex="prevRoving(previewMode === 'effective')"
+                  :class="{ 'seg-on': previewMode === 'effective' }"
+                  @click="previewMode = 'effective'"
+                  @keydown="onPrevKey($event, 0)"
+                >
+                  {{ t('admin.promptStudio.preview.effective') }}
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  :ref="setPrevRef(1)"
                   :aria-selected="previewMode === 'rendered'"
                   :tabindex="prevRoving(previewMode === 'rendered')"
                   :class="{ 'seg-on': previewMode === 'rendered' }"
                   @click="previewMode = 'rendered'"
-                  @keydown="onPrevKey($event, 0)"
+                  @keydown="onPrevKey($event, 1)"
                 >
                   {{ t('admin.promptStudio.preview.rendered') }}
                 </button>
                 <button
                   type="button"
                   role="tab"
-                  :ref="setPrevRef(1)"
+                  :ref="setPrevRef(2)"
                   :aria-selected="previewMode === 'template'"
                   :tabindex="prevRoving(previewMode === 'template')"
                   :class="{ 'seg-on': previewMode === 'template' }"
                   @click="previewMode = 'template'"
-                  @keydown="onPrevKey($event, 1)"
+                  @keydown="onPrevKey($event, 2)"
                 >
                   {{ t('admin.promptStudio.preview.template') }}
                 </button>
@@ -806,7 +887,7 @@ onMounted(loadLib)
           </header>
 
           <div class="ps-prev-meta">
-            <span>{{ previewMode === 'rendered' ? t('admin.promptStudio.preview.hintRendered') : t('admin.promptStudio.preview.hintTemplate') }}</span>
+            <span>{{ previewHint }}</span>
             <span class="num ps-prev-count">{{ t('admin.promptStudio.preview.charCount', undefined, { n: compiledPreview.length }) }}</span>
           </div>
 
@@ -1231,6 +1312,16 @@ onMounted(loadLib)
   width: 100%;
   font-weight: 600;
   margin-bottom: var(--ds-space-3);
+}
+/* 基座模块的"只读承诺"说明条：告诉用户改了不会丢，而是落成 legacy 覆盖层。 */
+.ps-base-note {
+  margin: 0 0 var(--ds-space-3);
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border-left: 3px solid var(--ds-accent, currentColor);
+  background: var(--ds-surface-2, transparent);
+  color: var(--ds-text-muted);
+  font-size: var(--ds-text-xs);
+  line-height: 1.5;
 }
 .ps-textarea {
   width: 100%;

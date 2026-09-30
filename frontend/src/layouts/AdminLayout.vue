@@ -64,31 +64,25 @@ function logout() {
   router.push('/admin/login');
 }
 
-/* 后台 chunk 空闲预取 */
+/* 后台 chunk 空闲预取（2026-09-30：组件名改由 `config/nav.ts` 单一来源提供，
+   删除本文件原先手写的 key → 组件名映射 —— 那份副本在页面增删后必然漂移） */
 onMounted(() => {
-  const prefetch = () => adminGroups.flatMap((g) => g.items).forEach((i) => import(`../views/admin/${pageFile(i.key)}.vue`).catch(() => {}));
+  const prefetch = () =>
+    adminGroups
+      .flatMap((g) => g.items)
+      .forEach((i) => {
+        if (i.component) import(`../views/admin/${i.component}.vue`).catch(() => {});
+      });
   if ('requestIdleCallback' in window) (window as any).requestIdleCallback(prefetch);
   else setTimeout(prefetch, 400);
 });
-
-function pageFile(key: string): string {
-  const map: Record<string, string> = {
-    'admin-overview': 'OverviewPage', 'admin-decisions': 'DecisionsPage', 'admin-gateway': 'GatewayPage',
-    'admin-council': 'CouncilPage', 'admin-promptlib': 'PromptStudioPage', 'admin-evolution': 'EvolutionPage',
-    'admin-policy': 'PolicySnapshotPage', 'admin-risk': 'RiskPage', 'admin-interceptors': 'InterceptorsPage',
-    'admin-plugins': 'PluginsPage', 'admin-security': 'SecurityPage', 'admin-llm': 'LlmPage',
-    'admin-notify': 'NotifyPage', 'admin-agents': 'AgentsPage', 'admin-backup': 'BackupPage',
-    'admin-audit': 'AuditPage', 'admin-adminsys': 'AdminSysPage', 'admin-about': 'AboutPage',
-  };
-  return map[key] || 'OverviewPage';
-}
 
 watch(() => route.path, () => (drawerOpen.value = false));
 </script>
 
 <template>
   <div class="wb">
-    <!-- 键盘用户的第一个 Tab 落点：跳过 18 项侧边导航直达正文（批 45） -->
+    <!-- 键盘用户的第一个 Tab 落点：跳过侧边导航直达正文（批 45；2026-09-30 起 11 项） -->
     <SkipLink />
 
     <!-- ═══ 侧边导航 ═══ -->

@@ -352,8 +352,10 @@ class AiFactorTraderPositionProtectionTest(unittest.TestCase):
                       'autoCxl': True, 'tag': okx_rest.DEFAULT_OKX_BROKER_TAG})])
         self.assertNotIn("SOL-USDT-SWAP_long",trackers)
         self.assertTrue(any("触发硬止损" in item for item in actions))
-        if notify_close is not None:
-            notify_close.assert_called_once_with(inst="SOL", pnl=-18.0, stage="硬止损平仓", exit_px=99.0, venue="okx")
+        # 2026-09-30（通知单一事实源）：本路径**不再发布**金额通知 —— 同一笔此前会被
+        # 本路径与台账路径各发一张卡片，实测出现两条矛盾金额（XRP −30.73 对 −32.63）。
+        # 金额由台账路径发布（交易所真实成交价/手续费）；本路径只留动作行与台账记录。
+        notify_close.assert_not_called()
 
     def test_losing_position_above_hard_stop_remains_open(self):
         position={"pos":4.0,"side":"long","avgPx":103.55,"upl":-4.0}
@@ -408,8 +410,8 @@ class AiFactorTraderPositionProtectionTest(unittest.TestCase):
             ('POST', {'instId': 'SOL-USDT-SWAP', 'mgnMode': 'cross', 'posSide': 'long',
                       'autoCxl': True, 'tag': okx_rest.DEFAULT_OKX_BROKER_TAG})])
         self.assertNotIn("SOL-USDT-SWAP_long",trackers)
-        if notify_close is not None:
-            notify_close.assert_called_once_with(inst="SOL", pnl=-4.0, stage="云端保护失效退出", exit_px=102.5, venue="okx")
+        # 同上：金额通知不再由本路径发布（单一事实源 = 台账路径）
+        notify_close.assert_not_called()
 
 
 if __name__ == "__main__":

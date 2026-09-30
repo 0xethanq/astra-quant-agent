@@ -120,19 +120,24 @@ def execute_ai_position_management(real_pos_dict, trackers, timestamp_full, exec
             # 第一百八十六刀：同 cloud_protection —— 净持仓账户的云端单 `posSide` 是
             # `"net"`，精确相等会永远找不到 ⇒ 只会打印"未找到真实云端止损单"，
             # 云端止损上移静默不生效。统一为 net 容错。
-            live_algo = next((o for o in algo_orders
-                              if str(o.get("state", "")).lower() == "live"
-                              and str(o.get("posSide", "net")).lower() in {pos_side, "net"}
-                              and o.get("slTriggerPx")), None)
-            if not live_algo:
+            # ⚠️ 2026-09-29：双腿方案下一个持仓挂着 [TP1 腿, 余仓腿] 两条保护单，
+            # 旧实现用 `next(...)` **只挑一条** amend ⇒ 另一条腿保留旧止损
+            # （覆盖率统计照样说 100%，人从面板上看不出来）。此处改为**逐条** amend。
+            live_algos = [o for o in algo_orders
+                          if str(o.get("state", "")).lower() == "live"
+                          and str(o.get("posSide", "net")).lower() in {pos_side, "net"}
+                          and o.get("slTriggerPx")]
+            if not live_algos:
                 executed_actions.append(f"[{name}] 未找到真实云端止损单，无法更新")
                 continue
-            old_sl = float(live_algo.get("slTriggerPx", 0) or 0)
-            try:
-                okx_rest.amend_algo_sl(live_algo["algoId"], new_sl, inst_id=inst_id, new_sl_ord_px="-1")
-                amend_ok = True
-            except Exception:
-                amend_ok = False
+            old_sl = float(live_algos[0].get("slTriggerPx", 0) or 0)
+            failed_legs = []
+            for _leg in live_algos:
+                try:
+                    okx_rest.amend_algo_sl(_leg["algoId"], new_sl, inst_id=inst_id, new_sl_ord_px="-1")
+                except Exception:
+                    failed_legs.append(str(_leg.get("algoId") or ""))
+            amend_ok = not failed_legs
 
             if amend_ok:
                 executed_actions.append(f"[{name}] 云端止损收紧至 {new_sl} ({pos_venue.upper()}): {reason}")
@@ -146,3 +151,71 @@ def execute_ai_position_management(real_pos_dict, trackers, timestamp_full, exec
                     pass
             else:
                 executed_actions.append(f"[{name}] 云端止损更新失败，原保护单保持不变")
+
+        elif action == "UPDATE_TP":
+            # 持仓中调整止盈（2026-09-29）。三条纪律缺一不可：
+            #   ① 认腿靠建仓登记的 leg_algo_ids（不靠比价猜，改错腿 = 半仓错价成交）；
+            #   ② 分批已发生 ⇒ 只允许改 tp2（tp1 那一半已经落袋）；
+            #   ③ 失败**不回写真源**（tracker 只记录真的改成功的价格）。
+            tracker = trackers.get(f"{inst_id}_{pos_side}")
+            if tracker is None:
+                executed_actions.append(f"[{name}] UPDATE_TP 未执行：无持仓跟踪器（无法确定 TP1 与阶段）")
+                continue
+            _is_long = "long" in str(pos_side).lower()
+            _phase = int(tracker.get("scale_out_phase", 0) or 0)
+            new_tp1 = float(instruction.get("suggested_tp1_price", 0) or 0)
+            new_tp2 = float(instruction.get("suggested_tp2_price", 0) or 0)
+            if new_tp1 <= 0 and new_tp2 <= 0:
+                executed_actions.append(f"[{name}] UPDATE_TP 未执行：未提供任何有效止盈价")
+                continue
+            if _phase >= 1 and new_tp1 > 0:
+                executed_actions.append(f"[{name}] UPDATE_TP：分批已完成，忽略 tp1（只允许调整 tp2）")
+                new_tp1 = 0.0
+            # 几何硬闸（拒绝而非夹取）：止盈必须仍在"尚未到达"的一侧。
+            _tp2_effective = new_tp2 or float(tracker.get("takeProfitPx") or 0.0)
+            _geom_msg = ""
+            if new_tp2 > 0:
+                if (_is_long and new_tp2 <= current_px) or (not _is_long and new_tp2 >= current_px):
+                    _geom_msg = f"tp2 {new_tp2:g} 已在现价 {current_px:g} 的到达侧（应改用 CLOSE_MARKET）"
+            if not _geom_msg and new_tp1 > 0:
+                from scripts.trader.tp1 import tp1_geometry_ok
+                if not tp1_geometry_ok(new_tp1, _tp2_effective, current_px, _is_long):
+                    _geom_msg = (f"tp1 {new_tp1:g} 与 现价 {current_px:g}/tp2 {_tp2_effective:g} "
+                                 f"几何不合法（须 现价{'<' if _is_long else '>'}tp1"
+                                 f"{'<' if _is_long else '>'}tp2）")
+            if _geom_msg:
+                executed_actions.append(f"[{name}] UPDATE_TP 被拒：{_geom_msg}")
+                continue
+            try:
+                from scripts.trader.tp_sync import sync_cloud_algo_tp
+                _ok, _detail, _applied = sync_cloud_algo_tp(
+                    inst_id, pos_side, is_long=_is_long,
+                    tp1_px=new_tp1 or None, tp2_px=new_tp2 or None,
+                    sl_px=float(tracker.get("trailingStopPx") or 0.0) or None,
+                    phase=_phase, leg_algo_ids=tracker.get("leg_algo_ids"),
+                    tracker=tracker, okx_rest=okx_rest,
+                    atr=float(position.get("atr") or 0.0) if isinstance(position, dict) else 0.0,
+                    # ⚠️ 必须传**价格**精度：张数精度（ARB=0、BTC=1）会把 0.2236 取整成 0.22。
+                    cur_px=current_px, px_prec=int(tracker.get("px_prec", 2) or 2),
+                )
+            except Exception as exc:
+                _ok, _detail, _applied = False, f"异常: {type(exc).__name__}: {exc}", {}
+            if _ok:
+                _dirs = (tracker.get("last_tp_amend") or {}).get("directions") or {}
+                _adverse = any(v == "下调" for v in _dirs.values())
+                _flag = "⚠️ 止盈下调" if _adverse else "止盈上移"
+                executed_actions.append(
+                    f"[{name}] {_flag} ({pos_venue.upper()}): {_detail}｜理由: {reason}")
+                try:
+                    from qq_notifier import _publish
+                    _publish("trade.tp_updated", f"{'⚠️' if _adverse else '🎯'} 【止盈调整】{name}",
+                             f"标的: {name}｜方向: {pos_side}\n"
+                             f"调整: {_detail}\n"
+                             f"当前止盈: TP1={tracker.get('scale_out_tp')} / TP2={tracker.get('takeProfitPx')}\n"
+                             f"理由: {reason}",
+                             {"instrument": inst_id, "venue": pos_venue, "applied": _applied},
+                             priority=80)
+                except Exception:
+                    pass
+            else:
+                executed_actions.append(f"[{name}] 止盈调整未生效（原挂单与真源保持不变）: {_detail}")

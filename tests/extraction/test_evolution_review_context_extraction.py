@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import ast
 import builtins
+import json
 import subprocess
 import sys
 import unittest
@@ -237,6 +238,53 @@ class ParseReviewJsonTest(unittest.TestCase):
         """不得在这里吞异常：门面靠 except 把它变成 `__llm_error__` 上报。"""
         with self.assertRaises(Exception):
             self._parse("not json at all")
+
+    def test_a_raw_control_char_inside_a_string_is_repaired(self):
+        """★ 真实事故（2026-09-30 08:02）：模型在字符串里写了裸换行。
+
+        日志原文：`Invalid control character at: line 26 column 126 (char 1923)`。
+        修复成本为零，不该让整轮复盘零产出（当时唯一回退模型还欠费 402）。
+        """
+        cleaned, obj = self._parse('{"macro": "第一行\n第二行", "n": 1}')
+        self.assertEqual(obj, {"macro": "第一行\n第二行", "n": 1})
+        self.assertIn("\n", cleaned, "返回的 cleaned 是**原始**文本，不做修复（门面按 len 记 output_chars）")
+
+    def test_other_raw_control_chars_and_tabs_are_repaired(self):
+        self.assertEqual(self._parse('{"a": "x\ty"}')[1], {"a": "x\ty"})
+        self.assertEqual(self._parse('{"a": "x\ry"}')[1], {"a": "x\ry"})
+
+    def test_trailing_commas_are_repaired(self):
+        self.assertEqual(self._parse('{"a": 1, "b": [1, 2,],}')[1], {"a": 1, "b": [1, 2]})
+
+    def test_json_wrapped_in_prose_is_extracted(self):
+        """模型爱写"好的，以下是结论：{...} 希望有帮助"。"""
+        self.assertEqual(self._parse('好的，结论如下：\n{"a": 1}\n希望有帮助！')[1], {"a": 1})
+
+    def test_a_newline_outside_a_string_is_legal_and_untouched(self):
+        self.assertEqual(self._parse('{\n  "a": 1\n}')[1], {"a": 1})
+
+    def test_a_brace_inside_a_string_does_not_confuse_extraction(self):
+        self.assertEqual(self._parse('前言 {"a": "含 } 与 { 的正文"} 结语')[1],
+                         {"a": "含 } 与 { 的正文"})
+
+    def test_unbalanced_or_truncated_json_still_raises(self):
+        """★ 反向牙齿：修复不许把"真坏"变成"成功"。
+
+        门面靠这个异常上报 `__llm_error__`；若这里吞掉，用户会看到"复盘成功但无洞察"，
+        比报错更难排查。
+        """
+        for broken in ('{"a": ', '{"a": 1', 'not json at all', '{"a": }'):
+            with self.subTest(broken=broken):
+                with self.assertRaises(Exception):
+                    self._parse(broken)
+
+    def test_repair_diagnostics_never_contain_response_content(self):
+        """隐私纪律：诊断只报结构化计数（遥测层明确"never stores prompt or response content"）。"""
+        from scripts.evolution.review_context import repair_json_object
+        _obj, report = repair_json_object(content='{"secret": "第一行\n第二行"}')
+        self.assertEqual(set(report), {"extracted_object", "escaped_control_chars",
+                                       "dropped_trailing_commas"})
+        self.assertNotIn("secret", json.dumps(report, ensure_ascii=False))
 
 
 class NormalizeAssetMultipliersTest(unittest.TestCase):

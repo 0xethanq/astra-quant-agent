@@ -24,7 +24,7 @@ patch 面（batch5_d_tails / batch6 / three_tier_ratchet_and_cloud_sync）
 from __future__ import annotations
 
 import time
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 try:
     from scripts.tag_markers import normalize_legacy_markers
@@ -69,49 +69,86 @@ def _lookup_inst_min_sz(inst_id: str) -> float:
 def ensure_cloud_position_protection(inst_id: str, pos_side: str, size: float, tp_px: float, sl_px: float,
                               *,
                               okx_rest,
-                              _live_oco_coverage) -> Tuple[bool, str]:
-    """Verify 100% live cloud OCO coverage, repair any gap, and verify again."""
+                              _live_oco_coverage,
+                              tp1_px: Any = None,
+                              scale_out_ratio: float = 0.5,
+                              leg_min_sz: float = 0.0,
+                              prec: int = 2,
+                              px_prec: Optional[int] = None,
+                              legs_state: Optional[Dict[str, Any]] = None,
+                              simulated: bool = False,
+                              split_enabled: bool = True) -> Tuple[bool, str]:
+    """Verify 100% live cloud OCO coverage, repair any gap, and verify again.
+
+    2026-09-29 增补：覆盖率达标后，若给了 `tp1_px` 且尚未分批
+    （`split_enabled`），把"一条全量腿"升级成 **[TP1 腿, 余仓腿]** 两条 sized 腿，
+    让首批止盈由交易所瞬时执行而不是等 15 分钟巡检。所有成败都**不改变**
+    "覆盖率必须 100%"这一先决条件 —— 拆腿失败时旧保护单原样保留。
+    """
     try:
         algo_rows = okx_rest.pending_algo_orders(inst_id)
     except Exception as exc:
         return False, f"unable to verify cloud OCO: {exc}"
     coverage = _live_oco_coverage(algo_rows, pos_side)
     missing = max(0.0, float(size) - coverage)
+    verified_detail = ""
     if missing <= max(1e-12, float(size) * 0.001):
-        return True, f"cloud OCO coverage verified ({coverage:g}/{size:g})"
-
-    # 量化 missing 补单张数至最小步长，防止 OKX 51121 lot size 报错误杀盈利余仓
-    min_sz = _lookup_inst_min_sz(inst_id)
-    try:
-        from astra_backend.execution.sizing import quantize_size
-        missing_to_place = quantize_size(missing, min_sz)
-    except Exception:
-        import math
-        missing_to_place = math.floor(missing / min_sz + 1e-9) * min_sz if min_sz > 0 else missing
-
-    if missing_to_place <= 0:
-        return True, f"cloud OCO coverage verified ({coverage:g}/{size:g})"
-
-    close_side = "sell" if pos_side == "long" else "buy"
-    try:
-        okx_rest.place_algo_oco(
-            inst_id, close_side, missing_to_place, pos_side=pos_side, td_mode="cross",
-            tp_trigger_px=tp_px, tp_ord_px="-1", sl_trigger_px=sl_px, sl_ord_px="-1",
-            reduce_only=True, cxl_on_close_pos=True,
-        )
-    except Exception as exc:
-        return False, f"cloud OCO repair failed: {exc}"
-
-    for _ in range(4):
-        time.sleep(0.5)
+        verified_detail = f"cloud OCO coverage verified ({coverage:g}/{size:g})"
+    else:
+        # 量化 missing 补单张数至最小步长，防止 OKX 51121 lot size 报错误杀盈利余仓
+        min_sz = _lookup_inst_min_sz(inst_id)
         try:
-            verify_rows = okx_rest.pending_algo_orders(inst_id)
+            from astra_backend.execution.sizing import quantize_size
+            missing_to_place = quantize_size(missing, min_sz)
         except Exception:
-            continue
-        verified_coverage = _live_oco_coverage(verify_rows, pos_side)
-        if verified_coverage + max(1e-12, float(size) * 0.001, min_sz * 0.5) >= float(size):
-            return True, f"cloud OCO repaired and verified ({verified_coverage:g}/{size:g})"
-    return False, "cloud OCO repair was submitted but full coverage could not be verified"
+            import math
+            missing_to_place = math.floor(missing / min_sz + 1e-9) * min_sz if min_sz > 0 else missing
+
+        if missing_to_place <= 0:
+            verified_detail = f"cloud OCO coverage verified ({coverage:g}/{size:g})"
+        else:
+            close_side = "sell" if pos_side == "long" else "buy"
+            try:
+                okx_rest.place_algo_oco(
+                    inst_id, close_side, missing_to_place, pos_side=pos_side, td_mode="cross",
+                    tp_trigger_px=tp_px, tp_ord_px="-1", sl_trigger_px=sl_px, sl_ord_px="-1",
+                    reduce_only=True, cxl_on_close_pos=True,
+                )
+            except Exception as exc:
+                return False, f"cloud OCO repair failed: {exc}"
+
+            for _ in range(4):
+                time.sleep(0.5)
+                try:
+                    verify_rows = okx_rest.pending_algo_orders(inst_id)
+                except Exception:
+                    continue
+                verified_coverage = _live_oco_coverage(verify_rows, pos_side)
+                if verified_coverage + max(1e-12, float(size) * 0.001, min_sz * 0.5) >= float(size):
+                    verified_detail = f"cloud OCO repaired and verified ({verified_coverage:g}/{size:g})"
+                    break
+            else:
+                return False, "cloud OCO repair was submitted but full coverage could not be verified"
+
+    # ── 覆盖率已 100%：把"一条全量腿"升级成 [TP1 腿, 余仓腿] ──────────────
+    # 先决条件已满足才拆腿；拆腿失败**不改变**上面的成功结论（旧腿仍在保护），
+    # 但会把失败如实写在返回说明里，交给下一轮幂等重试。
+    if split_enabled and tp1_px and float(tp1_px or 0.0) > 0:
+        try:
+            from scripts.trader.legs import sync_position_legs
+            ok_legs, leg_detail = sync_position_legs(
+                inst_id, pos_side, size,
+                tp1_px=tp1_px, tp2_px=tp_px, sl_px=sl_px,
+                ratio=scale_out_ratio, min_sz=leg_min_sz or _lookup_inst_min_sz(inst_id),
+                prec=prec, px_prec=px_prec,
+                okx_rest=okx_rest, simulated=simulated, state=legs_state,
+            )
+            if ok_legs:
+                return True, f"{verified_detail}；{leg_detail}"
+            return True, f"{verified_detail}；双腿未就位: {leg_detail}"
+        except Exception as exc:
+            return True, f"{verified_detail}；双腿编排异常: {type(exc).__name__}: {exc}"
+    return True, verified_detail
 
 
 

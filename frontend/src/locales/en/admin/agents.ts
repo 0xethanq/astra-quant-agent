@@ -1,4 +1,5 @@
 export const enAdminAgents = {
+  title: 'Workers & telemetry',
   desc: 'Managed worker liveness, secret vault status and LLM call telemetry.',
   policyChip: 'Policy config · 3/3',
   loading: 'Loading runtime units...',
@@ -39,6 +40,17 @@ export const enAdminAgents = {
   callsTitle: 'Call stream',
   emptyCalls: 'No calls recorded',
   promptPolicy: 'Prompt policy',
+
+  // ── prompt-cache observability (2026-09-29) ──
+  // Three states must stay separate: `unreported` means the upstream never
+  // reported a cache field (undecidable) — it used to print as "cache: 0".
+  cacheHitRate: 'Cache hit rate',
+  cacheHit: 'Hit',
+  cacheMiss: 'Miss',
+  cacheUnreported: 'Not reported',
+  cacheHitTitle: 'Prompt-cache hit, {n} tokens',
+  cacheMissTitle: 'Upstream reported a miss (0 cached tokens)',
+  cacheUnreportedTitle: 'Upstream reported no cache field on this route; hit/miss is undecidable',
 
   status: {
     healthy: 'Healthy',
