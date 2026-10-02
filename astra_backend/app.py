@@ -234,18 +234,24 @@ def toggle_admin_memory_lesson(lesson_id: str, expected_version: str | None = No
         raise HTTPException(status_code=500, detail=f"心法切换失败: {exc}") from exc
 
 
-@app.post("/api/v1/admin/memory/rollback")
-def rollback_admin_memory_lessons(expected_version: str | None = None, x_astra_admin_token: str | None = Header(default=None), x_astra_session: str | None = Header(default=None, alias="X-Astra-Session")) -> dict[str, Any]:
+@app.post("/api/v1/admin/memory/reset")
+def reset_admin_memory_lessons(expected_version: str | None = None, x_astra_admin_token: str | None = Header(default=None), x_astra_session: str | None = Header(default=None, alias="X-Astra-Session")) -> dict[str, Any]:
+    """**清空心法库**（2026-10 起取代 `/memory/rollback`）。
+
+    原端点是"防污染回滚至官方基准心法库"。用户已要求取消全部预设心法，
+    故语义改为"清空到空白"，路径与文案同步改 —— 避免"点回滚却被清空"这种
+    最反直觉、也最危险的按钮形态。
+    """
     refresh_settings()
     actor = require_admin_header(x_astra_admin_token, x_astra_session)
     try:
-        res = _memory_service_call("rollback_to_baseline", expected_version=expected_version)
-        audit_record("memory.rollback_baseline", "success", {"actor": actor.get("username", "admin"), "count": len(res)})
-        return {"ok": True, "message": "已成功防污染回滚至官方基准心法库", "structured_lessons": res}
+        res = _memory_service_call("reset_all_lessons", expected_version=expected_version)
+        audit_record("memory.reset_all", "success", {"actor": actor.get("username", "admin"), "count": len(res)})
+        return {"ok": True, "message": "已清空心法库（系统不再预设任何心法）", "structured_lessons": res}
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"回滚失败: {exc}") from exc
+        raise HTTPException(status_code=500, detail=f"清空心法库失败: {exc}") from exc
 
 
 @app.post("/api/v1/admin/memory")

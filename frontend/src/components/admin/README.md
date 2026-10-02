@@ -10,7 +10,7 @@
 | 组件 | 引用者数 | 说明 |
 | --- | --- | --- |
 | `DataTable.vue` | **1** | F1 之前只有 `AuditPage` 1 个消费者（"假共享"）。已升级为真原语。**批 7–8 计数下降**：`PluginsPage`（页已删）/ `AgentsPage` / `AboutPage` 的登记表先后改为行式清单，故 8 → 1（`SecurityPage`/`AuditPage`/`AdminSysPage`/`BackupPage` 的登记表先后改为行式清单，现仅剩 `GatewayPage`） |
-| `PageHeader.vue` | **17** | 一直是共享的（2026-09-30 后台精简：PluginsPage 删除后 18 → 17）。嵌入宿主页页签时传 `embedded`，只收起标题与说明，动作插槽照渲染 |
+| `PageHeader.vue` | **16** | 一直是共享的（2026-09-30 后台精简：PluginsPage 删除后 18 → 17；2026-10 策略插件系统裁撤、InterceptorsPage 删除后 17 → 16）。嵌入宿主页页签时传 `embedded`，只收起标题与说明，动作插槽照渲染 |
 
 ## `page-parts/` = 单页专用
 
@@ -55,9 +55,9 @@ F7 的另一种解法（推广）对这两个组件目前**不成立**，理由�
 | --- | --- | --- |
 | `base/BaseDrawer` | 4 | `dashboard/` 的 FactorDrawer · LedgerDrawer · PeekDrawer · RadarDrawer |
 | `base/CopyButton` | 7 | `base/BaseCodeBlock` · `dashboard/AboutModal` · `dashboard/FirstRunGuide` · `dashboard/PeekDrawer` · `views/admin/AboutPage` · `views/admin/DecisionsPage` · `views/admin/PromptStudioPage` |
-| `base/BaseDialog` | 15 | `base/ConfirmHost` · `dashboard/AboutModal` · `views/admin/GatewayPage` · `views/admin/CouncilPage` · `views/admin/PromptStudioPage` · `views/admin/PolicySnapshotPage` · `views/admin/EvolutionPage` · `views/admin/InterceptorsPage` · `views/admin/NotifyPage` · `views/admin/AboutPage` · `views/admin/llm/ModelEditDialog` · `views/admin/llm/RemoteFetchDialog` · `views/admin/SecurityPage` · `views/admin/BackupPage` |
-| `base/BaseSwitch` | 11 | `dashboard/SettingsPopover` · `views/admin/CouncilPage` · `views/admin/PromptStudioPage` · `views/admin/EvolutionPage` · `views/admin/InterceptorsPage` · `views/admin/NotifyPage` · `views/admin/llm/ProviderListView` · `views/admin/llm/ProviderDetailView` · `views/admin/SecurityPage` · `views/admin/RiskPage` |
-| `base/BaseTabs` | 5 | `dashboard/RadarDrawer` · `views/admin/GatewayPage` · `views/admin/RiskPage` · `views/admin/DecisionsPage` · `views/admin/BackupPage`（后四个是后台宿主页的页签栏） |
+| `base/BaseDialog` | 15 | `base/ConfirmHost` · `dashboard/AboutModal` · `dashboard/QuickSetupModal` · `views/admin/GatewayPage` · `views/admin/CouncilPage` · `views/admin/PromptStudioPage` · `views/admin/PolicySnapshotPage` · `views/admin/EvolutionPage` · `views/admin/NotifyPage` · `views/admin/AboutPage` · `views/admin/llm/ModelEditDialog` · `views/admin/llm/RemoteFetchDialog` · `views/admin/SecurityPage` · `views/admin/BackupPage` |
+| `base/BaseSwitch` | 10 | `dashboard/SettingsPopover` · `views/admin/CouncilPage` · `views/admin/PromptStudioPage` · `views/admin/EvolutionPage` · `views/admin/NotifyPage` · `views/admin/llm/ProviderListView` · `views/admin/llm/ProviderDetailView` · `views/admin/SecurityPage` · `views/admin/RiskPage` |
+| `base/BaseTabs` | 4 | `dashboard/RadarDrawer` · `views/admin/GatewayPage` · `views/admin/DecisionsPage` · `views/admin/BackupPage`（后三个是后台宿主页的页签栏） |
 | `dashboard/DataStatus` | 1 | `dashboard/KpiRibbon` |
 | `dashboard/SettingsPopover` | 1 | `dashboard/TopBar` |
 | `dashboard/FactorDrawer` | 1 | `dashboard/FactorMatrix` |
@@ -84,7 +84,7 @@ F7 的另一种解法（推广）对这两个组件目前**不成立**，理由�
 这两个目录**没有** README，结构靠文件名自明；此处给一份实测导航：
 
 - `components/base/` —— 原语组件。`BaseDrawer`/`CopyButton`/`BaseDialog` 是多消费者，
-  其余（`BaseSwitch`/`BaseSparkline`）目前单消费者；`BaseTabs` 自 2026-09-30 起有 5 个消费者（`RadarDrawer` + 四个后台宿主页的页签栏）。
+  其余（`BaseSwitch`/`BaseSparkline`）目前单消费者；`BaseTabs` 自 2026-09-30 起有 4 个消费者（`RadarDrawer` + 三个后台宿主页的页签栏）。
 - `components/dashboard/` —— 仪表盘。其中 **7 个 `.ts` 是纯逻辑模块**，
   与本目录的 `.vue` 组件分开：`chartCandles.ts`（蜡烛取数与归一）、
   `chartCountdown.ts`（周期倒计时）、`chartIndicators.ts`（指标目录）、

@@ -44,6 +44,12 @@ ALLOWLIST = {
         "intent 的 posSide 取自同一份持仓快照（net↔net）",
     ("astra_backend/okx_trade_service.py", "fast_close_confirmed"):
         "那是**判断侧向是否显式**（`in {long, short}`）的分支，不是与交易所 posSide 的兼容比较",
+    ("scripts/factors/okx_quant_factors.py", "summarize_liquidations"):
+        "★★ 2026-10 新增，理由与上面三类**不同**：这里比的是 OKX `liquidation-orders` "
+        "**成交明细行**自带的 `posSide` —— 那是「这笔强平爆的是多头还是空头仓」的历史"
+        "记录字段，取值**只可能是 long/short**（强平记录没有 net 语义）。改成 net 容错"
+        "反而会把两个方向合并、丢掉「多空清算比」这个因子本身；它也不与任何持仓快照比较，"
+        "不存在「净持仓模式下匹配不上」的场景",
 }
 
 SCAN_DIRS = ("scripts", "astra_backend", "astra_gateway", "plugins")

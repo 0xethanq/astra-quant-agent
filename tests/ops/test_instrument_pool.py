@@ -766,3 +766,46 @@ class SyncPoolLeverageCapsTests(_Sandbox, unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class NewCoinBaselineHasNoMarketReadingsTest(_Sandbox):
+    """★ 2026-10「不许假数据」：池里新增标的的基线**只写系统状态，不写市场观测值**。
+
+    原实现给新币写入 `rsi=50.0 / rsi_7=50.0 / vwap_bias=0.0 / macd_hist=0.0 /
+    obv_flow="NEUTRAL" / bb_bandwidth=0.0 / vol_ratio=1.0 / market_regime="CHOP" /
+    trend_1h="震荡"` —— 这份 `trading_state.json` 会被看板载荷当成池条目（`ins`）
+    直接渲染，于是"这个币还没取过数"显示成"RSI 中性 / 量能正常 / 区间震荡"。
+    """
+
+    MARKET_FIELDS = ("rsi", "rsi_7", "vwap_bias", "macd_hist", "macd_accel",
+                     "obv_flow", "bb_bandwidth", "vol_ratio", "market_regime",
+                     "structure_1h", "trend_1h", "trend_4h")
+
+    def test_new_instrument_gets_system_state_but_no_market_readings(self):
+        self.pool.write_text(json.dumps([
+            {"name": "NEWC", "instId": "NEWC-USDT-SWAP", "type": "crypto",
+             "ctVal": 1.0, "precision": 4, "max_leverage": 10}
+        ]), encoding="utf-8")
+        ip.sync_instruments_state()
+        row = json.loads(self.state.read_text(encoding="utf-8"))["instruments"][0]
+        for field in self.MARKET_FIELDS:
+            self.assertIsNone(row.get(field),
+                              f"{field} 不得在基线里编造（应缺失，等行情与因子引擎填）")
+        # 系统状态类字段保留 —— 它们描述的是"还没有决策"这件事本身
+        self.assertEqual(row["action"], "WAIT")
+        self.assertEqual(row["strategy"], "⚪ 观望")
+        self.assertIn("雷达", row["desc"])
+
+    def test_existing_instrument_row_is_left_alone(self):
+        """已有条目照旧原样保留（基线只用于**新增**标的）。"""
+        existing = [{"name": "BTC", "instId": "BTC-USDT-SWAP", "rsi": 61.2,
+                     "market_regime": "BULL_TREND", "action": "WAIT"}]
+        self.state.write_text(json.dumps({"instruments": existing}), encoding="utf-8")
+        self.pool.write_text(json.dumps([
+            {"name": "BTC", "instId": "BTC-USDT-SWAP", "type": "crypto",
+             "ctVal": 0.01, "precision": 1, "max_leverage": 100}
+        ]), encoding="utf-8")
+        ip.sync_instruments_state()
+        row = json.loads(self.state.read_text(encoding="utf-8"))["instruments"][0]
+        self.assertEqual(row["rsi"], 61.2)
+        self.assertEqual(row["market_regime"], "BULL_TREND")

@@ -75,25 +75,39 @@ class RemainingFieldsTest(unittest.TestCase):
                 self.assertEqual(row["strategy_tag"], tag)
                 self.assertEqual(row["action"], action, "原始动作原样带出，供下游分类")
 
-    def test_calculus_missing_library_yields_none_not_zero(self):
-        """★ **正面对照**：calculus 子字典缺库 ⇒ 各字段 **None**（不伪造成 0）。"""
-        row = self._run()
-        self.assertEqual(row["calculus"],
-                         {"velocity_1h": None, "accel_1h": None, "jerk_1h": None,
-                          "impulse_1h": None}, "缺数据一律 None，不编造 0")
-        row2 = self._run(lib={"instruments": [{"instId": "BTC-USDT-SWAP",
-                                              "calculus_dynamics": {"velocity": 1.5}}]})
-        self.assertEqual(row2["calculus"]["velocity_1h"], 1.5)
+    def test_factor_tiers_missing_library_yield_none_not_zero(self):
+        """★ **正面对照**（2026-10 重钉）：梯队子字典缺库 ⇒ 数值字段 **None**（不伪造成 0）。
 
-    def test_fabricated_neutral_defaults_when_nothing_is_available(self):
-        """★ 无库回退的伪中性默认值（并入待议 11 一族，只钉现状）。"""
+        原来这条守的是 `calculus` 四件套；数理链退场后，同一"缺失 ≠ 0"的纪律
+        改钉 7 梯队因子块 —— 枚举类字段给 `--`，数值类给 `None`。
+        """
         row = self._run()
-        self.assertEqual(row["rsi_7"], 50.0)
-        self.assertEqual(row["vwap_bias"], 0.0)
-        self.assertEqual(row["macd_hist"], 0.0)
-        self.assertEqual(row["trend_1h"], "震荡")
-        self.assertEqual(row["market_regime"], "CHOP")
-        self.assertEqual(row["leverage"], 3, "没有 AI 决策 ⇒ 杠杆显示 3（**编造的**，列待议）")
+        self.assertIsNone(row["momentum"]["macd_hist_1h"], "缺数据一律 None，不编造 0")
+        self.assertIsNone(row["orderflow"]["cvd_5m_usd"])
+        self.assertIsNone(row["microstructure"]["obi_pct"])
+        self.assertEqual(row["momentum"]["macd_momentum_state"], "--")
+        self.assertEqual(row["derivatives"]["oi_price_quadrant"], "--")
+        self.assertNotIn("calculus", row)
+        row2 = self._run(lib={"instruments": [{"instId": "BTC-USDT-SWAP",
+                                              "trend_momentum": {"macd_hist": 1.5}}]})
+        self.assertEqual(row2["momentum"]["macd_hist_1h"], 1.5)
+
+    def test_no_fabricated_defaults_when_nothing_is_available(self):
+        """★ 2026-10「不许假数据」：无库/无 AI 决策时**一个结论都不许编**。
+
+        原实现（本用例原名叫 `test_fabricated_neutral_defaults_...`）给的是
+        `rsi_7=50.0`（"中性"）、`vwap_bias=0.0`（"贴着 VWAP"）、`macd_hist=0.0`、
+        `trend_1h="震荡"`、`market_regime="CHOP"`、`leverage=3`（连测试自己都注明
+        "编造的"）。这些都会被看板当成**已观测的市场状态**显示。现在一律缺失：
+        数值 `None`（前端渲染 `--`）、文本 `None`、杠杆 `None`。
+        """
+        row = self._run()
+        self.assertIsNone(row["rsi_7"])
+        self.assertIsNone(row["vwap_bias"])
+        self.assertIsNone(row["macd_hist"])
+        self.assertIsNone(row["trend_1h"])
+        self.assertIsNone(row["market_regime"])
+        self.assertIsNone(row["leverage"], "没有 AI 决策 ⇒ 杠杆必须缺失，不许显示 3")
         self.assertEqual(row["risk_reward_ratio"], "--")
 
     def test_time_string_falls_back_three_levels_and_timestamp_is_not_faked(self):
@@ -113,8 +127,10 @@ class RemainingFieldsTest(unittest.TestCase):
         self.assertEqual(row["obv_flow"], "INFLOW")
         self.assertEqual(row["vol_ratio"], 2.5)
         row2 = self._run()
-        self.assertEqual(row2["obv_flow"], "NEUTRAL", "都缺 ⇒ NEUTRAL（保守中性）")
-        self.assertEqual(row2["vol_ratio"], 1.0)
+        # ★「不许假数据」：`NEUTRAL`（"资金中性"）与 `1.0`（"量能正常"）都是**结论**，
+        #   两处都缺时必须显式缺失。
+        self.assertIsNone(row2["obv_flow"])
+        self.assertIsNone(row2["vol_ratio"])
 
 
 if __name__ == "__main__":

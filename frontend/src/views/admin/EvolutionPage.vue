@@ -909,8 +909,10 @@ onMounted(loadData);
               :class="{ 'is-off': !item.enabled }"
             >
               <div class="evo-lesson-head">
-                <span class="badge" :class="item.is_baseline ? 'badge-accent' : 'badge-up'">
-                  {{ item.is_baseline ? t('admin.evolution.baselineBadge') : t('admin.evolution.aiBadge') }}
+                <!-- 2026-10：基准机制已拆除，不再有"官方黄金基准"徽章（系统不预设心法）。
+                     所有条目一律是 AI 实战自进化或手工录入的产物。 -->
+                <span class="badge badge-up">
+                  {{ t('admin.evolution.aiBadge') }}
                 </span>
                 <span class="badge">{{ item.category }}</span>
                 <span class="badge badge-up mono">{{ t('admin.evolution.score') }} {{ item.health_score }}</span>

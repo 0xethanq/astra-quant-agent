@@ -12,6 +12,7 @@ from __future__ import annotations
 import unittest
 
 from astra_backend.execution.indicators import (
+    calc_ema,
     calc_atr,
     calc_bollinger_squeeze,
     calc_macd_histogram_acceleration,
@@ -24,15 +25,51 @@ class ExecutionIndicatorsTailsTests(unittest.TestCase):
     # -------------------------------------------------------------------------
     # 1. RSI 边界分支
     # -------------------------------------------------------------------------
-    def test_calc_rsi_insufficient_samples_returns_neutral(self):
-        # 价格列表长度 <= period 时返回 50.0 中性值 (lines 17-18)
-        self.assertEqual(calc_rsi([], period=14), 50.0)
-        self.assertEqual(calc_rsi([100.0] * 10, period=14), 50.0)
-        self.assertEqual(calc_rsi([100.0] * 14, period=14), 50.0)
+    def test_calc_ema_insufficient_samples_is_missing_not_last_close(self):
+        """★ 2026-10「不许假数据」：周期不足 ⇒ **None（缺失）**，不是"最后一根收盘价"。
 
-    # -------------------------------------------------------------------------
-    # 2. ATR 真实波幅边界分支
-    # -------------------------------------------------------------------------
+        原实现 `return prices[-1]` 让 `EMA55` 在只有 45 根 15M K 线时**等于现价**，
+        于是 `signals.py` 的 `px >= ema55*0.994`（顺势回踩闸的**下限**）几何上恒真 ——
+        实测 22.4% 的 K 线上，价格其实已跌破 EMA55 价值区却仍被当成"在价值区内"。
+        """
+        self.assertIsNone(calc_ema([], 9))
+        self.assertIsNone(calc_ema([1.0, 2.0], 9))
+        self.assertIsNone(calc_ema([100.0] * 20, 21))     # 20 根 < 21
+        self.assertIsNone(calc_ema([100.0] * 54, 55))     # 54 根 < 55（旧实盘取 45 根正是这种）
+
+    def test_calc_ema_with_enough_samples_still_returns_a_real_value(self):
+        """反向钉子：周期够了就必须给真值（缺失语义不能把正常路径也吃掉）。"""
+        flat = [100.0] * 21
+        self.assertAlmostEqual(calc_ema(flat, 21), 100.0, places=9)
+        rising = [float(i) for i in range(1, 61)]
+        ema55 = calc_ema(rising, 55)
+        self.assertIsNotNone(ema55)
+        # ⚠️ 本仓 EMA 用 `prices[0]` 播种（既有约定，改了会动实盘取值），故对"1..60"
+        #    这种序列它会明显滞后于末值：只要求落在首末之间，不臆断具体水位。
+        self.assertGreater(ema55, rising[0])
+        self.assertLess(ema55, rising[-1])
+
+    def test_calc_rsi_insufficient_samples_is_missing_not_neutral(self):
+        """★ 2026-10「不许假数据」：样本不足 ⇒ **None（缺失）**，不再是 50.0。
+
+        原实现返回 50.0 —— 而 50 恰好落在做多形态的 `38~56` 命中带里，
+        等于用"没数据"去满足一个入场条件。缺失必须显式，让上游 fail-closed。
+        """
+        self.assertIsNone(calc_rsi([]))
+        self.assertIsNone(calc_rsi([100.0]))
+        self.assertIsNone(calc_rsi([100.0 + i for i in range(14)]))   # 恰 14 根：还差 1 个差分
+
+    def test_calc_rsi_with_enough_samples_still_returns_a_real_value(self):
+        """反向钉子：样本够了就必须给真值（缺失语义不能把正常路径也吃掉）。"""
+        rising = [100.0 + i for i in range(20)]
+        self.assertEqual(calc_rsi(rising, 14), 100.0)                # 单调上涨 ⇒ avg_loss=0 ⇒ 100.0
+        mixed = [100.0, 101.0, 100.5, 102.0, 101.5, 103.0, 102.5, 104.0,
+                 103.5, 105.0, 104.5, 106.0, 105.5, 107.0, 106.5, 108.0]
+        rsi = calc_rsi(mixed, 14)
+        self.assertIsInstance(rsi, float)
+        self.assertGreater(rsi, 50.0)
+
+
     def test_calc_atr_insufficient_candles_returns_zero(self):
         # K 线不足 2 根返回 0.0 (lines 44-45)
         self.assertEqual(calc_atr([]), 0.0)

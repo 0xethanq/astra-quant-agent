@@ -21,7 +21,6 @@ import {
   Cpu,
   Wallet,
   Braces,
-  Crosshair,
   Landmark,
   RefreshCw,
   ArrowRight,
@@ -95,7 +94,6 @@ const showSkeleton = computed(() => loading.value && !loaded.value);
 const quickNavs = computed(() => [
   { to: '/admin/promptlib', icon: Braces, title: t('admin.overview.quick.prompts'), desc: t('admin.overview.quickPromptsDesc') },
   { to: '/admin/council', icon: Landmark, title: t('admin.overview.quick.council'), desc: t('admin.overview.quickCouncilDesc') },
-  { to: '/admin/interceptors', icon: Crosshair, title: t('admin.overview.quick.interceptors'), desc: t('admin.overview.quickInterceptorsDesc') },
   { to: '/admin/llm', icon: Cpu, title: t('admin.overview.quick.llm'), desc: t('admin.overview.quickLlmDesc') },
 ]);
 
@@ -117,14 +115,6 @@ function parseAuditContext(action: string, detail: any): { label: string; tag: s
       tag: 'NOTIFY',
       tagType: 'neutral',
       summary: t('admin.overview.auditChannel', undefined, { c: d.channel || t('admin.overview.auditSystemChannel'), r: d.result?.accepted ? t('admin.overview.auditAccepted') : t('admin.overview.auditDispatched') })
-    };
-  }
-  if (act.includes('interceptor')) {
-    return {
-      label: t('admin.overview.auditRuleLabel'),
-      tag: 'RULE',
-      tagType: 'warn',
-      summary: t('admin.overview.auditRule', undefined, { f: d.filename || d.actor || t('admin.overview.auditRuleConfig'), s: d.enabled ? t('admin.overview.auditEnabled') : t('admin.overview.auditDisabled') })
     };
   }
   return {
@@ -232,16 +222,16 @@ function parseAuditContext(action: string, detail: any): { label: string; tag: s
         </div>
       </RouterLink>
 
-      <!-- 指标 4：物理安全防线 -->
-      <RouterLink to="/admin/interceptors" class="ov-hud-card is-interactive">
+      <!-- 指标 4：风控熔断（策略插件系统 2026-10 整套裁撤后，这里只讲熔断与物理校验） -->
+      <RouterLink to="/admin/risk" class="ov-hud-card is-interactive">
         <div class="ov-hud-head">
           <span class="ov-hud-icon"><ShieldCheck :size="14" /></span>
           <span class="ov-hud-label">{{ t('admin.overview.hudRiskLine') }}</span>
           <span class="ov-hud-badge is-shield">FAIL-CLOSED</span>
         </div>
         <div class="ov-hud-body">
-          <div class="ov-hud-val is-up">{{ t('admin.overview.hudPhysicalBlock', undefined, { n: 100 }) }}</div>
-          <div class="ov-hud-sub">{{ t('admin.overview.hudPipeReady', undefined, { a: 4, b: 4 }) }}</div>
+          <div class="ov-hud-val is-up">{{ t('admin.overview.hudPhysicalBlock') }}</div>
+          <div class="ov-hud-sub">{{ t('admin.overview.hudPipeReady') }}</div>
         </div>
         <div class="ov-hud-foot">
           <span class="ov-hud-pill">{{ t('admin.overview.hudBreakerReady') }}</span>

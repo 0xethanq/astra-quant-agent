@@ -140,6 +140,13 @@ def _build_factors_from_local_files(factor_file: str | os.PathLike[str], decisio
         inst_id = target.get("instId")
         ins = inst_map.get(inst_id) or {}
         lib_item = factor_lib_map.get(inst_id) or {}
+        # 7 梯队因子块（2026-10 起替代原 calculus 块）：逐块取，缺失即空 dict，
+        # 下游一律用 `.get(k)` 读 —— **不给中性默认值冒充真因子**。
+        _tm = lib_item.get("trend_momentum") or {}
+        _flow = lib_item.get("volume_money_flow") or {}
+        _micro = lib_item.get("microstructure") or {}
+        _vp = lib_item.get("volume_profile") or {}
+        _smd = lib_item.get("smart_money_derivatives") or {}
         ai_info = ai_decisions.get(inst_id, {})
         ai_dec = ai_info.get("decision", {})
         ai_thought = ai_info.get("thought_process", {})
@@ -149,14 +156,19 @@ def _build_factors_from_local_files(factor_file: str | os.PathLike[str], decisio
         v_decision = ai_info.get("venue_decision") or ai_dec.get("venue_decision")
         strategy_val = "🟢 建议做多" if action_val == "BUY_LONG" else ("🔴 建议做空" if action_val == "SELL_SHORT" else "⚪ AI观望")
         score_val = 2.5 if action_val == "BUY_LONG" else (-2.5 if action_val == "SELL_SHORT" else 0.0)
-        m_struct = ai_thought.get("market_structure", f"{ins.get('market_regime', 'CHOP')} ({ins.get('trend_1h', '震荡')})")
-        v_oi = ai_thought.get("volume_and_oi", f"OBV: {ins.get('obv_flow', 'NEUTRAL')}, 量能: {ins.get('vol_ratio', 1.0)}x")
+        # ★「不许假数据」：没有 AI 论述时**不再编**"CHOP (震荡)"这种结构结论
+        _mr, _t1 = ins.get("market_regime"), ins.get("trend_1h")
+        m_struct = ai_thought.get("market_structure") or (
+            f"{_mr} ({_t1})" if (_mr or _t1) else "--")
+        v_oi = ai_thought.get("volume_and_oi") or "--"
         rr_ratio = ai_thought.get("risk_reward_evaluation", "盈亏比评估中")
         raw_t = ai_info.get("raw_ticker", {})
         chg_val = raw_t.get("chg24h") if raw_t.get("chg24h") is not None else lib_item.get("chg24h")
         raw_ticker_vol = raw_t.get("vol24h")
         price_val = ins.get("price") if ins.get("price") not in (None, "--") else lib_item.get("price", "--")
-        rsi_val = ins.get("rsi") if ins.get("rsi") is not None else lib_item.get("trend_momentum", {}).get("rsi_14", 50.0)
+        # ★ 2026-10「不许假数据」：缺 `rsi_14` 时**不给 50.0 兜底** —— 看板会把它显示成
+        #   "RSI=50 中性"这个结论；前端 `fmtNum(null)` 本来就会渲染 `--`。
+        rsi_val = ins.get("rsi") if ins.get("rsi") is not None else lib_item.get("trend_momentum", {}).get("rsi_14")
         adx_val = ai_info.get("adx_1h") if ai_info.get("adx_1h") not in (None, "--") else lib_item.get("trend_momentum", {}).get("adx_1h", "--")
         sm_val = ai_info.get("smart_money") or lib_item.get("smart_money_derivatives", {})
         factors_list.append({
@@ -174,36 +186,82 @@ def _build_factors_from_local_files(factor_file: str | os.PathLike[str], decisio
             "takerNetUsd": ai_info.get("raw_taker_vol") or lib_item.get("volume_money_flow", {}).get("taker_net_usd", "--"),
             "lsRatio": ai_info.get("raw_ls_ratio") or lib_item.get("smart_money_derivatives", {}).get("long_short_ratio", "--"),
             "rsi": rsi_val,
-            "rsi_7": ins.get("rsi_7", 50.0),
-            "vwap_bias": ins.get("vwap_bias", 0.0),
-            "macd_hist": ins.get("macd_hist", 0.0),
-            "macd_accel": ins.get("macd_accel", 0.0),
-            "obv_flow": ins.get("obv_flow", lib_item.get("volume_money_flow", {}).get("obv_flow", "NEUTRAL")),
-            "bb_bandwidth": ins.get("bb_bandwidth", lib_item.get("volatility_channel", {}).get("bb_width_1h", 0.0)),
-            "vol_ratio": ins.get("vol_ratio", lib_item.get("volume_money_flow", {}).get("vol_ratio_15m", 1.0)),
-            "trend_1h": ins.get("trend_1h", "震荡"),
-            "trend_4h": ins.get("trend_4h", "震荡"),
-            "market_regime": ins.get("market_regime", "CHOP"),
+            "rsi_7": ins.get("rsi_7"),
+            "vwap_bias": ins.get("vwap_bias"),
+            "macd_hist": ins.get("macd_hist"),
+            "macd_accel": ins.get("macd_accel"),
+            "obv_flow": ins.get("obv_flow", lib_item.get("volume_money_flow", {}).get("obv_flow")),
+            "bb_bandwidth": ins.get("bb_bandwidth", lib_item.get("volatility_channel", {}).get("bb_width_1h")),
+            "vol_ratio": ins.get("vol_ratio", lib_item.get("volume_money_flow", {}).get("vol_ratio_15m")),
+            "trend_1h": ins.get("trend_1h"),
+            "trend_4h": ins.get("trend_4h"),
+            "market_regime": ins.get("market_regime"),
             "strategy_tag": strategy_val,
             "action": action_val,
             "confidence": confidence,
             "smart_money": sm_val,
             "adx_1h": adx_val,
-            "atr_1h": lib_item.get("volatility_channel", {}).get("atr_1h", 0.0),
-            "atr_pct": lib_item.get("volatility_channel", {}).get("atr_1h_pct", lib_item.get("volatility_channel", {}).get("atr_pct", 0.0)),
-            "calculus": {
-                "velocity_1h": lib_item.get("calculus_dynamics", {}).get("velocity"),
-                "accel_1h": lib_item.get("calculus_dynamics", {}).get("acceleration"),
-                "jerk_1h": lib_item.get("calculus_dynamics", {}).get("jerk"),
-                "impulse_1h": lib_item.get("calculus_dynamics", {}).get("impulse"),
+            "atr_1h": lib_item.get("volatility_channel", {}).get("atr_1h"),
+            "atr_pct": lib_item.get("volatility_channel", {}).get("atr_1h_pct",
+                        lib_item.get("volatility_channel", {}).get("atr_pct")),
+            # ★ 2026-10：原 `calculus` 块（velocity/accel/jerk/impulse）随数理系统退场，
+            # 换成 7 梯队里**前端真正会看**的那几个因子（列在 FactorMatrix/FactorDrawer）。
+            "momentum": {
+                "macd_hist_1h": _tm.get("macd_hist"),
+                "macd_accel_1h": _tm.get("macd_accel"),
+                # 归一化口径（占现价 %）：跨标可比、且低价币不会被两位小数抹成 0.00
+                "macd_hist_pct_1h": _tm.get("macd_hist_pct"),
+                "macd_accel_pct_1h": _tm.get("macd_accel_pct"),
+                "macd_momentum_state": _tm.get("macd_momentum_state", "--"),
+                "macd_divergence": _tm.get("macd_divergence", "--"),
+                "rsi_1h": _tm.get("rsi_1h"),
+                "rsi_15m": _tm.get("rsi_15m"),
+                "rsi_zone": _tm.get("rsi_zone", "NEUTRAL"),
             },
-            "leverage": ai_dec.get("leverage", 3),
+            "orderflow": {
+                "cvd_5m_usd": _flow.get("cvd_5m_usd"),
+                "cvd_1h_usd": _flow.get("cvd_1h_usd"),
+                "taker_buy_sell_ratio": _flow.get("taker_buy_sell_ratio"),
+                "cvd_divergence": _flow.get("cvd_divergence", "--"),
+            },
+            "microstructure": {
+                "obi_pct": _micro.get("obi_pct"),
+                "depth_bias": _micro.get("depth_bias", "NEUTRAL"),
+                "bid_ask_depth_ratio": _micro.get("bid_ask_depth_ratio"),
+                "spread_bps": _micro.get("spread_bps"),
+            },
+            "value_area": {
+                "vwap_24h": _vp.get("vwap_24h"),
+                "vwap_bias_pct": _tm.get("vwap_bias_pct"),
+                "vah": _vp.get("vah"),
+                "val": _vp.get("val"),
+                "vpvr_poc": _vp.get("vpvr_poc"),
+                "value_area_position": _vp.get("value_area_position", "--"),
+                "vwap_extreme_band": _vp.get("vwap_extreme_band", "--"),
+            },
+                        "derivatives": {
+                "funding_rate_pct": _smd.get("funding_rate_pct"),
+                "next_funding_rate_pct": _smd.get("next_funding_rate_pct"),
+                "funding_crowding": _smd.get("funding_crowding", "--"),
+                "oi_chg_1h_pct": _smd.get("oi_chg_1h_pct"),
+                "oi_price_quadrant": _smd.get("oi_price_quadrant", "--"),
+                "elite_divergence": _smd.get("elite_divergence", "--"),
+                "liquidation_bias": _smd.get("liquidation_bias", "--"),
+                "basis_annualized_pct": _smd.get("basis_annualized_pct"),
+            },
+            "leverage": ai_dec.get("leverage"),
             "margin_usdt": ai_dec.get("margin_usdt", 0.0),
             "entry_price": ai_dec.get("entry_price", 0.0),
             "take_profit_price": ai_dec.get("take_profit_price", 0.0),
             "stop_loss_price": ai_dec.get("stop_loss_price", 0.0),
             "risk_reward_ratio": ai_dec.get("risk_reward_ratio", "--"),
             "reason": reason,
+            # 三态可观测性（2026-10）：与 `scripts/brain/decisions.py` 同源，
+            # 前端据此把「模型主动观望 / 物理层拦单 / 模型漏答」分开显示。
+            "decision_source": ai_dec.get("decision_source", "model"),
+            "gate_blocked": bool(ai_dec.get("gate_blocked", False)),
+            "gate_reason": ai_dec.get("gate_reason", ""),
+            "model_reason": ai_dec.get("model_reason", reason),
             "market_structure": m_struct,
             "volume_and_oi": v_oi,
             "rr_ratio": rr_ratio,

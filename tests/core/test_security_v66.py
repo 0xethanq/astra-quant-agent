@@ -2,7 +2,6 @@ import unittest
 from fastapi.testclient import TestClient
 from astra_backend.app import app
 from astra_backend.settings_store import mask_url
-from astra_backend.interceptor_manager import get_plugin_detail, save_plugin_code, create_plugin, delete_plugin
 
 class SecurityFixesTestCase(unittest.TestCase):
     def setUp(self):
@@ -22,15 +21,6 @@ class SecurityFixesTestCase(unittest.TestCase):
         self.assertNotIn("693a91f6", masked)
         self.assertTrue(masked.startswith("https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key="))
 
-    def test_interceptor_path_traversal_prevention(self):
-        with self.assertRaises((FileNotFoundError, ValueError)):
-            get_plugin_detail("../../../etc/passwd")
-        with self.assertRaises(ValueError):
-            save_plugin_code("../../malicious.py", "print('hack')")
-        with self.assertRaises(ValueError):
-            create_plugin("../../malicious.py", "print('hack')")
-        with self.assertRaises(ValueError):
-            delete_plugin("../../malicious.py")
 
 if __name__ == "__main__":
     unittest.main()

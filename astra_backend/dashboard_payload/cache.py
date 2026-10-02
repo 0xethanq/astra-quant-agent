@@ -57,8 +57,9 @@ def _inject_local_data_into_stale(load_factor_lib: Callable[..., Any], load_cros
     news_sentiment.json and the review report do NOT depend on OKX private API
     and should always reflect their latest on-disk state.
     """
-    # Factor library — the source of calculus_dynamics, definite_integrals,
-    # smart_money_derivatives, probability_theory, microstructure, etc.
+    # Factor library — 2026-10 起是 **7 梯队因子**的唯一事实源
+    # （trend_momentum / volume_money_flow / microstructure / volume_profile /
+    #  smart_money_derivatives / options_structure；原数理 Pillar 已整体剥离）。
     stale["factor_library"] = load_factor_lib()
 
     # US-007：行情/健康快照同为本地文件（venue_health + decisions），STALE 下保持新鲜

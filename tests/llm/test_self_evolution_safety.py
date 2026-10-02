@@ -13,6 +13,17 @@ from tempfile import TemporaryDirectory
 from types import ModuleType
 from unittest.mock import Mock, patch
 
+# ⚠️ 必须在此显式把 `scripts/` 补上 sys.path（2026-10 修复的**测试脆弱性**）：
+# `setUp` 用 `spec_from_file_location` 直接 exec 引擎源码，而引擎只把**仓库根**
+# 加进 sys.path，裸兄弟导入 `from llm_credentials import ...` 便找不到 —— 它此前
+# 是靠**别的测试文件**顺手插入 `scripts/` 才侥幸可导入。于是本文件单独跑、或与
+# `tests/ops` 一起跑（收集顺序不同）时会整片 `ModuleNotFoundError`，而跑
+# `tests/llm` 整目录却全绿 —— 典型的顺序依赖式假绿。
+_ROOT = Path(__file__).resolve().parents[2]
+for _p in (str(_ROOT), str(_ROOT / "scripts")):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
 from scripts import evolution_shield as shield
 
 
@@ -151,14 +162,20 @@ class SelfEvolutionSafetyTests(unittest.TestCase):
         self.assert_preserved(self.run_cycle())
         self.assertFalse(shield.STRUCTURED_MEMORY_FILE.exists())
 
-    def test_no_change_during_rollback_reports_current_authority(self):
+    def test_no_change_during_reset_reports_current_authority(self):
+        """★ 2026-10：`rollback_to_baseline` → `reset_all_lessons`（清空到空白）。
+
+        并发清空发生在复盘进行中时，NO_CHANGE 必须报告**清空后的**权威（空清单），
+        而不是把自己开始时读到的旧清单又写回去（那会把"清空"撤销掉）。
+        """
         def review(*args, **kwargs):
-            shield.rollback_to_baseline(expected_version=shield.read_memory_snapshot()["version"])
+            shield.reset_all_lessons(expected_version=shield.read_memory_snapshot()["version"])
             return {"change_status": "NO_CHANGE"}
         self.llm.side_effect = review
         report = self.run_cycle()
         self.assertTrue(report["memory_preserved"])
-        self.assertEqual(report["core_lessons"], [i["rule_text"] for i in shield.BASELINE_LESSONS])
+        self.assertEqual(report["core_lessons"], [])
+        self.assertEqual(shield.load_structured_memory(), [])
 
     def test_llm_empty_fallback_preserves_both_files(self):
         self.llm.return_value = {}
@@ -187,14 +204,15 @@ class SelfEvolutionSafetyTests(unittest.TestCase):
         self.assertEqual(report["core_lessons"], [])
         self.assertEqual(len(shield.load_structured_memory()), 1)
 
-    def test_rollback_then_no_change_preserves_authority(self):
-        shield.rollback_to_baseline(expected_version=shield.read_memory_snapshot()["version"])
+    def test_reset_then_no_change_preserves_authority(self):
+        shield.add_safe_lesson(SAFE)
+        shield.reset_all_lessons(expected_version=shield.read_memory_snapshot()["version"])
         before = shield.STRUCTURED_MEMORY_FILE.read_bytes()
         self.llm.return_value["change_status"] = "NO_CHANGE"
         report = self.run_cycle()
         self.assertTrue(report["memory_preserved"])
         self.assertEqual(shield.STRUCTURED_MEMORY_FILE.read_bytes(), before)
-        self.assertEqual(report["core_lessons"], [i["rule_text"] for i in shield.BASELINE_LESSONS])
+        self.assertEqual(report["core_lessons"], [])
 
     def test_empty_authority_no_change_ignores_legacy(self):
         shield.STRUCTURED_MEMORY_FILE.write_text("[]")
@@ -260,7 +278,7 @@ class UnifiedMemoryTests(unittest.TestCase):
                    lambda v: shield.admin_mutate('replace', texts=[], expected_version=v),
                    lambda v: shield.admin_mutate('delete', lesson_id=lesson_id, expected_version=v),
                    lambda v: shield.toggle_lesson(lesson_id, expected_version=v),
-                   lambda v: shield.rollback_to_baseline(expected_version=v)]
+                   lambda v: shield.reset_all_lessons(expected_version=v)]
         before = shield.STRUCTURED_MEMORY_FILE.read_bytes()
         with patch.object(shield, '_memory_lock', checked_lock), patch.object(shield, '_check_version', side_effect=checked_version) as check:
             for action in actions:
@@ -287,7 +305,7 @@ class UnifiedMemoryTests(unittest.TestCase):
                 shield.STRUCTURED_MEMORY_FILE.write_text(text)
                 before = shield.STRUCTURED_MEMORY_FILE.stat().st_mtime_ns
                 for action in (shield.load_structured_memory, shield.render_trading_memory,
-                               shield.rollback_to_baseline):
+                               shield.reset_all_lessons):
                     with self.assertRaises(shield.MemoryCorruptError):
                         action()
                 self.assertEqual(shield.STRUCTURED_MEMORY_FILE.read_text(), text)
@@ -336,10 +354,10 @@ class UnifiedMemoryTests(unittest.TestCase):
         queue.join_thread()
         self.assertEqual(len(shield.load_structured_memory()), 1)
 
-    def test_rollback_revision_rejects_old_snapshot_even_same_content(self):
-        shield.rollback_to_baseline(expected_version=shield.read_memory_snapshot()["version"])
+    def test_reset_revision_rejects_old_snapshot_even_same_content(self):
+        shield.reset_all_lessons(expected_version=shield.read_memory_snapshot()["version"])
         version = shield.read_memory_snapshot()["version"]
-        shield.rollback_to_baseline(expected_version=shield.read_memory_snapshot()["version"])
+        shield.reset_all_lessons(expected_version=shield.read_memory_snapshot()["version"])
         with self.assertRaises(shield.MemoryConflictError):
             shield.publish_review([SAFE], expected_version=version, sample_size=3, change_status="ADD")
 
@@ -349,7 +367,7 @@ class UnifiedMemoryTests(unittest.TestCase):
         tree = ast.parse(source.read_text())
         names = {"_memory_service_call", "get_admin_memory", "add_admin_memory_item",
                  "delete_admin_memory_item", "update_admin_memory_all",
-                 "toggle_admin_memory_lesson", "rollback_admin_memory_lessons"}
+                 "toggle_admin_memory_lesson", "reset_admin_memory_lessons"}
         nodes = []
         for node in tree.body:
             if isinstance(node, ast.FunctionDef) and node.name in names:
@@ -381,8 +399,9 @@ class UnifiedMemoryTests(unittest.TestCase):
         self.assertFalse(shield.load_structured_memory()[0]["enabled"])
         scope["toggle_admin_memory_lesson"](item["id"], expected_version=shield.read_memory_snapshot()["version"])
         self.assertEqual(scope["delete_admin_memory_item"](0, lesson_id=item["id"], expected_version=shield.read_memory_snapshot()["version"])["items"], [])
-        scope["rollback_admin_memory_lessons"](expected_version=shield.read_memory_snapshot()["version"])
-        self.assertEqual(len(scope["get_admin_memory"]()["structured_lessons"]), len(shield.BASELINE_LESSONS))
+        scope["reset_admin_memory_lessons"](expected_version=shield.read_memory_snapshot()["version"])
+        self.assertEqual(scope["get_admin_memory"]()["structured_lessons"], [],
+                         "清空端点必须把心法库清到空白（系统不预设心法）")
         scope["require_admin_header"].assert_called()
 
     def test_delete_id_does_not_use_active_list_index(self):

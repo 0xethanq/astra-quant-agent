@@ -3,9 +3,16 @@ from __future__ import annotations
 from typing import List, Tuple, Any
 
 
-def calc_ema(prices: List[float], period: int) -> float:
+def calc_ema(prices: List[float], period: int) -> float | None:
+    """`period` 根不够 ⇒ **None（缺失）**，绝不退化返回最后一根收盘价。
+
+    ⚠️ 2026-10 修：原实现 `return prices[-1]` 会让 `EMA55` 在只有 45 根 15M K 线时
+    **等于现价** —— 于是 `signals.py` 里 `px >= ema55*0.994` 恒真、
+    `ema9 > ema21 > ema55` 被扭曲成 `ema9 > ema21 > price`。这是"算了个数"，
+    不是"算出了指标"：宁可显式缺失，交给上游 fail-closed。
+    """
     if not prices or len(prices) < period:
-        return prices[-1] if prices else 0.0
+        return None
     k = 2.0 / (period + 1)
     ema = prices[0]
     for p in prices[1:]:
@@ -13,9 +20,14 @@ def calc_ema(prices: List[float], period: int) -> float:
     return ema
 
 
-def calc_rsi(prices: List[float], period: int = 14) -> float:
+def calc_rsi(prices: List[float], period: int = 14) -> float | None:
+    """样本不足 ⇒ **None（缺失）**，绝不返回 50.0。
+
+    ⚠️ 2026-10 修：原实现返回 50.0 —— 而 50 恰好落在做多形态的 `38~56` 命中带里，
+    等于用"没数据"去满足一个入场条件。缺失必须显式，不能伪装成"中性"。
+    """
     if not prices or len(prices) <= period:
-        return 50.0
+        return None
     gains, losses = [], []
     for i in range(1, len(prices)):
         chg = prices[i] - prices[i - 1]
@@ -27,7 +39,7 @@ def calc_rsi(prices: List[float], period: int = 14) -> float:
             losses.append(abs(chg))
 
     if len(gains) < period:
-        return 50.0
+        return None
     avg_gain = sum(gains[:period]) / period
     avg_loss = sum(losses[:period]) / period
     for i in range(period, len(gains)):

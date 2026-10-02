@@ -23,7 +23,7 @@
 
 下列取值在长/空两侧**逐字相同**（只有 tracker 后缀差方向），故留在调用方，
 避免为纯搬运多传参数：`pos_upl` / `pos_upl_ratio` / `pos_avg_px` / `curr_margin` /
-`scale_count` / `trailing_sl` / `c_dyn` / `c_accel` / `p_th`。
+`scale_count` / `trailing_sl` / `c_accel`（MACD 柱加速度）/ `oi_quadrant`（OI 四象限）。
 
 ## ⚠️ 两处方向必须各测一侧（翻转方式不同）
 
@@ -47,7 +47,7 @@
 
 
 def pyramiding_gate(*, is_long, f, pos_upl, pos_upl_ratio, pos_avg_px, curr_margin,
-                    trailing_sl, scale_count, c_accel, p_th, ai_margin, actual_sz,
+                    trailing_sl, scale_count, c_accel, oi_quadrant, ai_margin, actual_sz,
                     ct_val, ai_lever, ai_conf, min_scale_in_profit_ratio,
                     max_scale_in_count, min_scale_in_confidence, asset_margin_cap):
     """五条加仓门禁；返回 `(allow_entry, is_scale_in)`。
@@ -65,13 +65,15 @@ def pyramiding_gate(*, is_long, f, pos_upl, pos_upl_ratio, pos_avg_px, curr_marg
         planned_margin = ai_margin if ai_margin > 0 else (actual_sz * ct_val * f["price"] / max(1.0, ai_lever))
         within_margin_cap = (curr_margin + planned_margin) <= asset_margin_cap
 
-        p_cont = float(p_th.get("continuation_prob_pct", 50.0) or 50.0)
-        calculus_accel_ok = (c_accel >= -0.25 and p_cont >= 40.0)
+        # 2026-10 重钉：原「微积分加速度 ≥ -0.25 且 延续概率 ≥ 40%」。
+        # 数理链退场后，同一"动能未衰竭且资金没在反向"的门禁改由
+        # **T4 MACD 柱加速度 + T0 的 OI 四象限**承载（都是可观测、可复核的因子）。
+        momentum_accel_ok = (c_accel >= -0.25 and oi_quadrant != "LONG_LIQUIDATION")
 
-        if is_profit_or_breakeven and scale_count < max_scale_in_count and within_margin_cap and ai_conf >= min_scale_in_confidence and calculus_accel_ok:
+        if is_profit_or_breakeven and scale_count < max_scale_in_count and within_margin_cap and ai_conf >= min_scale_in_confidence and momentum_accel_ok:
             allow_entry = True
             is_scale_in = True
-            print(f"[Pyramiding] {f['name']} 满足顺势浮盈加多条件: 底仓浮盈={pos_upl:+.2f}U ({pos_upl_ratio*100:+.1f}%), 已加仓{scale_count}次, 微积分加速度={c_accel:+.2f}, 延续概率={p_cont:.1f}%, 计划加仓保证金 {planned_margin:.2f}U")
+            print(f"[Pyramiding] {f['name']} 满足顺势浮盈加多条件: 底仓浮盈={pos_upl:+.2f}U ({pos_upl_ratio*100:+.1f}%), 已加仓{scale_count}次, MACD柱加速度={c_accel:+.2f}, OI四象限={oi_quadrant or '--'}, 计划加仓保证金 {planned_margin:.2f}U")
         else:
             if not is_profit_or_breakeven:
                 print(f"[Pyramiding 拦截] {f['name']} 底仓未达浮盈保本门禁 (浮盈={pos_upl:+.2f}U ROI={pos_upl_ratio*100:+.1f}%), 严禁逆势加仓")
@@ -81,24 +83,21 @@ def pyramiding_gate(*, is_long, f, pos_upl, pos_upl_ratio, pos_avg_px, curr_marg
                 print(f"[Pyramiding 拦截] {f['name']} 加仓后总保证金将超限 ({curr_margin + planned_margin:.1f} > {asset_margin_cap}U)")
             elif ai_conf < min_scale_in_confidence:
                 print(f"[Pyramiding 拦截] {f['name']} AI加仓置信度不足 ({ai_conf:.0f}% < {min_scale_in_confidence}%)")
-            elif not calculus_accel_ok:
-                print(f"[Pyramiding 拦截] {f['name']} 数理动能衰竭或延续概率偏低 (加速度={c_accel:+.2f}, 概率={p_cont:.1f}%)，禁止追多加仓")
+            elif not momentum_accel_ok:
+                print(f"[Pyramiding 拦截] {f['name']} 动能衰竭或持仓量已在反向瓦解 (MACD加速度={c_accel:+.2f}, OI四象限={oi_quadrant or '--'})，禁止追多加仓")
 
     else:
         is_profit_or_breakeven = (pos_upl > 0 and pos_upl_ratio >= min_scale_in_profit_ratio) or (trailing_sl > 0 and trailing_sl <= pos_avg_px)
         planned_margin = ai_margin if ai_margin > 0 else (actual_sz * ct_val * f["price"] / max(1.0, ai_lever))
         within_margin_cap = (curr_margin + planned_margin) <= asset_margin_cap
 
-        # c_dyn 由调用方给出
-        # c_accel 由调用方给出
-        # p_th 由调用方给出
-        p_break = float(p_th.get("breakdown_prob_pct", 50.0) or 50.0)
-        calculus_accel_ok = (c_accel <= 0.25 and p_break >= 40.0)
+        # c_accel（MACD 柱加速度）与 oi_quadrant（OI 四象限）由调用方给出
+        momentum_accel_ok = (c_accel <= 0.25 and oi_quadrant != "SHORT_COVERING")
 
-        if is_profit_or_breakeven and scale_count < max_scale_in_count and within_margin_cap and ai_conf >= min_scale_in_confidence and calculus_accel_ok:
+        if is_profit_or_breakeven and scale_count < max_scale_in_count and within_margin_cap and ai_conf >= min_scale_in_confidence and momentum_accel_ok:
             allow_entry = True
             is_scale_in = True
-            print(f"[Pyramiding] {f['name']} 满足顺势浮盈加空条件: 底仓浮盈={pos_upl:+.2f}U ({pos_upl_ratio*100:+.1f}%), 已加仓{scale_count}次, 微积分加速度={c_accel:+.2f}, 击穿概率={p_break:.1f}%, 计划加仓保证金 {planned_margin:.2f}U")
+            print(f"[Pyramiding] {f['name']} 满足顺势浮盈加空条件: 底仓浮盈={pos_upl:+.2f}U ({pos_upl_ratio*100:+.1f}%), 已加仓{scale_count}次, MACD柱加速度={c_accel:+.2f}, OI四象限={oi_quadrant or '--'}, 计划加仓保证金 {planned_margin:.2f}U")
         else:
             if not is_profit_or_breakeven:
                 print(f"[Pyramiding 拦截] {f['name']} 底仓未达浮盈保本门禁 (浮盈={pos_upl:+.2f}U ROI={pos_upl_ratio*100:+.1f}%), 严禁逆势加仓")
@@ -108,6 +107,6 @@ def pyramiding_gate(*, is_long, f, pos_upl, pos_upl_ratio, pos_avg_px, curr_marg
                 print(f"[Pyramiding 拦截] {f['name']} 加仓后总保证金将超限 ({curr_margin + planned_margin:.1f} > {asset_margin_cap}U)")
             elif ai_conf < min_scale_in_confidence:
                 print(f"[Pyramiding 拦截] {f['name']} AI加仓置信度不足 ({ai_conf:.0f}% < {min_scale_in_confidence}%)")
-            elif not calculus_accel_ok:
-                print(f"[Pyramiding 拦截] {f['name']} 数理动能失速企稳或击穿概率偏低 (加速度={c_accel:+.2f}, 概率={p_break:.1f}%)，禁止追空加仓")
+            elif not momentum_accel_ok:
+                print(f"[Pyramiding 拦截] {f['name']} 动能失速企稳或空头已在拥挤 (MACD加速度={c_accel:+.2f}, OI四象限={oi_quadrant or '--'})，禁止追空加仓")
     return allow_entry, is_scale_in

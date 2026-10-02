@@ -31,6 +31,11 @@ except Exception:
     SCALE_OUT_TRIGGER_ATR = 1.20
 
 
+def _size_precision_of(step: float) -> int:
+    s = f"{step:.8f}".rstrip("0")
+    return len(s.split(".")[1]) if "." in s else 0
+
+
 def execute_scale_out_if_eligible(
     f: Dict[str, Any],
     curr_pos: Dict[str, Any],
@@ -131,6 +136,7 @@ def execute_scale_out_if_eligible(
                 ensure_cloud_position_protection=ensure_cloud_position_protection,
                 okx_rest=okx_rest,
                 ct_val=ct_val,
+                min_sz=min_sz,
             )
 
     # 2. 计算首批止盈目标价位（TP1）——**冻结**（已有值就用已有值）。
@@ -347,7 +353,7 @@ def _finalize_scale_out_after_leg_fill(
     ratio: float, px_prec: int, timestamp_full: str, executed_actions: List[str],
     record_trade, notify_trade_close, close_fee, close_trade_payload,
     TAKER_FEE_RATE: float, ensure_cloud_position_protection, okx_rest,
-    ct_val: float,
+    ct_val: float, min_sz: float = 0.01,
 ) -> Tuple[bool, str]:
     """交易所侧 TP1 腿**已成交**后的收尾（不再市价平仓）。
 
@@ -364,9 +370,15 @@ def _finalize_scale_out_after_leg_fill(
     文案写成 ETH ~2273.85U（真值 ~228U）、ARB ~15.32U（真值 ~151U）。
     """
     tp1_px = float(t.get("scale_out_tp") or 0.0)
-    close_sz = round(entry_sz * ratio, px_prec)
+    # 尺寸精度按 min_sz 派生，绝不用价格精度 px_prec（BTC tickSz=0.1 精度为 1，会把 0.015 张抹成 0）
+    sz_prec = _size_precision_of(min_sz)
+    close_sz = round(entry_sz * ratio, sz_prec)
+    if min_sz > 0:
+        close_sz = math.floor(close_sz / min_sz + 1e-9) * min_sz
+        close_sz = round(close_sz, sz_prec)
     if close_sz <= 0:
         close_sz = max(entry_sz - pos_sz, 0.0)
+        close_sz = round(close_sz, sz_prec)
     _cv = float(ct_val or 0.0)
     if _cv <= 0:
         # 读不到 ≠ 没有：不静默用 1.0 假装正确，先吼一声再按 1.0 兜底继续。
@@ -389,6 +401,14 @@ def _finalize_scale_out_after_leg_fill(
             ensure_cloud_position_protection(inst_id, pos_side, pos_sz, take_profit_px, breakeven_sl)
         except Exception as exc:
             print(f"[Scale-Out] 腿成交后云端保护更新异常: {exc}")
+
+    # 余仓止损同步：若交易所仍挂着已建立的余仓保护单，将止损触发价同步推进至保本位
+    if okx_rest:
+        try:
+            from scripts.trader.cloud_protection import sync_cloud_algo_stop
+            sync_cloud_algo_stop(inst_id, pos_side, breakeven_sl, reason="首批止盈后余仓移损保本", okx_rest=okx_rest)
+        except Exception as sync_exc:
+            print(f"[Scale-Out] 腿成交后余仓云端保本止损修改异常: {sync_exc}")
 
     t["scale_out_phase"] = 1
     t["scale_out_tp"] = None

@@ -39,17 +39,6 @@ export const enAdminPolicySnapshot = {
       concurrencyValue: 'CAS optimistic lock · 428/409 reject stale overwrites',
       note: 'Structured atomic publishing + optimistic version lock; NO_CHANGE and errors must not rewrite the trading doctrine.',
     },
-    interceptor: {
-      title: 'Physical Interceptor Plugins',
-      core: 'Core non-disableable floor:',
-      coreValue: 'Data completeness / side collision / quote geometry & finiteness / R:R floor (thresholds from live risk config)',
-      pluginsHash: 'Plugin pipeline fingerprint Plugins Hash:',
-      enabled: 'Enabled optional plugins:',
-      enabledValue: '{n} / {t} plugins',
-      recheck: 'Final order re-validation:',
-      recheckValue: 'Re-validated after effective quote scaling/rounding',
-      note: 'Core safety fully decoupled from optional plugins; plugin params are deep-copied and tamper-isolated; missing files fail closed.',
-    },
     council: {
       title: 'Model Council',
       status: 'Mechanism state:',
@@ -68,7 +57,7 @@ export const enAdminPolicySnapshot = {
   archive: {
     title: 'Policy Archive Vault',
     count: '{n} archived policy packages',
-    hint: 'Restores prompt, memory, interceptors, council and risk/routing to the archived moment; verified per unit with auto-revert on failure',
+    hint: 'Restores prompt, memory, council and risk/routing to the archived moment; verified per unit with auto-revert on failure',
     empty: 'No archived policy versions yet. Click "Archive as policy version" in the top-right corner to permanently freeze the current policy package.',
     running: '● Currently running',
     archivedAt: 'Archived at',
@@ -95,7 +84,7 @@ export const enAdminPolicySnapshot = {
     deletedOk: 'Policy version {name} deleted',
   },
   confirm: {
-    restore: 'Atomically roll the current policy back to [{name}] (#{hash})?\nThe prompts, doctrine, interceptors and council config will be restored together!',
+    restore: 'Atomically roll the current policy back to [{name}] (#{hash})?\nThe prompts, doctrine and council config will be restored together!',
     delete: 'Permanently delete the archived policy version [{name}] (#{hash})?\nDeletion cannot be undone!',
   },
   err: {

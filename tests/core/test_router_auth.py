@@ -77,6 +77,21 @@ class AuthRoutesTest(unittest.TestCase):
         self.store.has_users.return_value = False
         self.assertIs(A.admin_auth_status()["initialized"], False)
 
+    # ── POST /auth/init ───────────────────────────────────
+    def test_init_success_when_uninitialized(self):
+        self.store.has_users.return_value = False
+        self.store.create_user.return_value = {"username": "admin", "role": "superadmin"}
+        self.store.login.return_value = {"user": {"username": "admin"}, "session": "tok_init"}
+        out = A.admin_auth_init(mock.Mock(), AdminLoginRequest(username="admin", password="password123A"))
+        self.assertEqual(out["session"], "tok_init")
+        self.store.create_user.assert_called_once_with("admin", "password123A", role="superadmin")
+
+    def test_init_forbidden_when_already_has_users(self):
+        self.store.has_users.return_value = True
+        with self.assertRaises(HTTPException) as ctx:
+            A.admin_auth_init(mock.Mock(), AdminLoginRequest(username="admin", password="password123A"))
+        self.assertEqual(ctx.exception.status_code, 403)
+
     # ── POST /login ───────────────────────────────────────
     def test_login_success_audits_canonical_username_and_resolved_origin(self):
         self.store.login.return_value = {"user": {"username": "Root"}, "session": "tok"}

@@ -21,17 +21,19 @@
  * ⚠️ 与订单上的经纪商 `tag` 是两件事：`tag` 随每笔订单发出、负责把成交归属到作者
  * （与用户是否点过这里的链接**无关**）；本处的链接只是给用户**开户**用的入口。
  */
-import { computed, onMounted } from 'vue';
-import { KeyRound, BookOpen, Github, ExternalLink, RefreshCw } from 'lucide-vue-next';
+import { computed, onMounted, ref } from 'vue';
+import { KeyRound, BookOpen, Github, ExternalLink, RefreshCw, Sparkles } from 'lucide-vue-next';
 import { useDashboardStore } from '../../stores/dashboard';
 import { useI18n } from '../../composables/useI18n';
 import { useReferralChannels } from '../../composables/useReferralChannels';
 import { OFFICIAL_REPO } from '../../config/version';
 import CopyButton from '../base/CopyButton.vue';
+import QuickSetupModal from './QuickSetupModal.vue';
 
 const store = useDashboardStore();
 const { t, tm } = useI18n();
 const { channels, load: loadChannels } = useReferralChannels();
+const showWizard = ref(false);
 
 onMounted(loadChannels);
 
@@ -103,7 +105,11 @@ const steps = computed(() => tm('dash.firstRun.steps'));
     </div>
 
     <div class="flex flex-wrap items-center gap-2">
-      <a href="/admin/security" class="btn btn-primary btn-sm">
+      <button type="button" class="btn btn-primary btn-sm" @click="showWizard = true">
+        <Sparkles class="h-3.5 w-3.5 text-amber-300" aria-hidden="true" />
+        <span>{{ t('dash.firstRun.wizardBtn') }}</span>
+      </button>
+      <a href="/admin/security" class="btn btn-quiet btn-sm">
         <KeyRound class="h-3.5 w-3.5" aria-hidden="true" />
         {{ t('dash.firstRun.ctaAccount') }}
       </a>
@@ -130,5 +136,12 @@ const steps = computed(() => tm('dash.firstRun.steps'));
     <p class="mt-2 text-3xs leading-body" style="color: var(--ink-3)">
       {{ t('dash.firstRun.disclosure') }}
     </p>
+
+    <!-- 开箱极速接入向导弹窗 -->
+    <QuickSetupModal
+      :open="showWizard"
+      @close="showWizard = false"
+      @saved="store.fetchDashboard?.()"
+    />
   </section>
 </template>

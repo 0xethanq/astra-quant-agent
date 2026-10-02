@@ -160,12 +160,14 @@ class PolicyRestoreTailsTests(unittest.TestCase):
                 self.assertIn("策略回滚失败且已恢复原状态: 恢复后哈希 mismatched_hash 与目标 target_hash 不一致", str(ctx.exception))
 
     def test_restore_archived_policy_unit_diff_triggers_rollback(self):
-        # 四单元哈希相同，但规范化投影核对发现单元缺失 -> 触发回滚并报错
+        # 整包哈希相同，但规范化投影核对发现单元缺失 -> 触发回滚并报错
+        # （2026-10：示例单元名改用仍然存在的 council_config —— interceptor_config
+        #  已随策略插件系统裁撤而消失）
         pkg = {"package": {}, "policy_hash": "target_hash"}
         self.archive_file.write_text(json.dumps(pkg), encoding="utf-8")
         with patch("astra_backend.policy.restore.capture_full_strategy_package", return_value={"package": {}}):
             with patch("astra_backend.policy.restore.generate_policy_snapshot", return_value={"policy_hash": "target_hash"}):
-                with patch("astra_backend.policy.restore.package_restore_diff", return_value=["interceptor_config", "risk_config"]):
+                with patch("astra_backend.policy.restore.package_restore_diff", return_value=["council_config", "risk_config"]):
                     with self.assertRaises(RuntimeError) as ctx:
                         restore_archived_policy(
                             lambda a, h: self.archive_file,
@@ -173,7 +175,7 @@ class PolicyRestoreTailsTests(unittest.TestCase):
                             "target_hash",
                             archive_dir=self.tmp_path,
                         )
-                    self.assertIn("策略回滚失败且已恢复原状态: 以下单元未恢复到归档值 — interceptor_config、risk_config", str(ctx.exception))
+                    self.assertIn("策略回滚失败且已恢复原状态: 以下单元未恢复到归档值 — council_config、risk_config", str(ctx.exception))
 
 
 if __name__ == "__main__":

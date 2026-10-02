@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -137,7 +138,8 @@ class DefaultShapeTests(_Base, unittest.TestCase):
         self.assertEqual(pkg["instId"], "BTC-USDT-SWAP")
         self.assertEqual(pkg["price"], 0.0)
         self.assertEqual(pkg["rsi"], 50.0)               # 中性，不是 0
-        self.assertEqual(pkg["vol_ratio"], 1.0)          # 中性
+        # ★「不许假数据」：全源挂掉 ⇒ 量比缺失（1.0 会被读成"量能正常"这个结论）
+        self.assertIsNone(pkg["vol_ratio"])
         self.assertEqual(pkg["obv_flow"], "NEUTRAL")
         self.assertEqual(pkg["lsRatio"], "N/A")
         self.assertEqual(pkg["takerNetUsd"], "N/A")
@@ -149,18 +151,27 @@ class DefaultShapeTests(_Base, unittest.TestCase):
         pkg = self._run()
         sm = pkg["smart_money"]
         self.assertFalse(sm["available"])
-        # 缺省理由必须说清"为什么没有"，而不是留空或写 0
-        self.assertIn("OKX CLI 已移除", sm["reason"])
+        # 缺省理由必须说清"为什么没有"，而不是留空或写 0。
+        # ★ 2026-10 改口径：旧文案说"OKX CLI 已移除 ⇒ 无等价接口"，但**持仓方向的
+        # 等价证据其实有**（OKX 官方 top-trader 的精英账户比/精英持仓比，已在 T0 里
+        # 真实取到）—— 旧文案会让模型以为"聪明钱完全不可观测"。故改为
+        # 指明缺的是哪一项 + 指向真实可得的替代证据。
+        self.assertIn("Top100", sm["reason"])
+        self.assertIn("精英账户比", sm["reason"])
         for key in ("weighted_long_pct", "net_flow_usdt", "avg_long_entry",
                     "avg_short_entry", "top_win_rate"):
             self.assertEqual(sm[key], "--", key)
 
-    def test_calculus_default_is_explicitly_unreliable(self):
-        with patch.dict(sys.modules, {"calculus_engine": None}):
-            pkg = self._run()
-        self.assertFalse(pkg["calculus"]["valid"])
-        self.assertEqual(pkg["calculus"]["regime"], "DATA_UNRELIABLE")
-        self.assertIn("error", pkg["calculus"])
+    def test_calculus_is_completely_stripped_from_package(self):
+        """★ 反向守卫（2026-10）：数理系统退役后，pkg 中不得再出现 calculus 占位键。"""
+        pkg = self._run()
+        self.assertNotIn("calculus", pkg, "calculus 键必须彻底剥离")
+
+    def test_quant_factor_tiers_are_attached_from_the_snapshot(self):
+        """正方向：7 梯队因子必须真的挂上（否则提示词里全是"缺失"）。"""
+        pkg = self._run()
+        self.assertIn("quant_factors", pkg)
+        self.assertIsInstance(pkg["quant_factors"], dict)
 
     def test_missing_required_item_fields_raise(self):
         for missing in ("instId", "name", "type", "precision"):
@@ -243,7 +254,25 @@ class MicrostructureTests(_Base, unittest.TestCase):
         # ★ 跨源比较：VWAP 用**K线**算（均值≈111.5），而现价来自 **ticker**（100.0）
         #   ⇒ 这里必然是负的。钉住"它比的是两个不同来源"，不是同源自洽
         self.assertLess(pkg["vwap_bias"], 0)
-        self.assertEqual(pkg["vol_ratio"], 1.0)          # 量恒定
+        self.assertEqual(pkg["vol_ratio"], 1.0)   # 成交量恒定 ⇒ 真值 1.0（不是缺失）
+
+    def test_volume_ratio_ignores_the_still_forming_bar(self):
+        """⭐ 2026-10 实盘修复：量比必须用**已收盘**的那根，不能用正在跳动的当前根。
+
+        实盘症状：提示词里长期是 `15M量比=0.01x`（模型读成"成交量枯竭"），
+        因为 OKX 返回的第一根是**刚开盘、成交量接近 0** 的未完成 K 线，
+        原实现 `vols[-1] / mean(vols[-6:-1])` 直接把它算进去了。
+        本用例：未完成根量 ≈0、已收盘的 6 根量恒定 ⇒ 量比必须 ≈1.0。
+        """
+        rows = _candles(24, vol=10.0, newest_first=False)   # 时间正序，量恒定
+        rows[-1][5] = 0.05                                  # 最后一根 = 正在跳动的当前根
+        rows[-2][5] = 11.0                                  # 最近一根已收盘
+        rows[-3][5] = 9.0
+        pkg = self._run(candles={"15m": list(reversed(rows)),
+                                 "1H": _candles(24, step=2.0),
+                                 "4H": _candles(16, step=4.0)})
+        # 11.0 / mean(9,10,10,10,10)=9.8 ⇒ 1.12（若误用未完成根则是 0.01）
+        self.assertAlmostEqual(pkg["vol_ratio"], 1.12, places=2)
 
     def test_vwap_bias_skipped_when_total_volume_is_zero(self):
         pkg = self._run(candles={"15m": _candles(24, vol=0.0),
@@ -440,39 +469,56 @@ class DataQualityTests(_Base, unittest.TestCase):
         self.assertIn("instId", pkg)
 
 
-class CalculusIntegrationTests(_Base, unittest.TestCase):
-    def test_calculus_receives_newest_first_rows_under_tf_keys(self):
-        import calculus_engine
-        seen = {}
+class QuantFactorTierIntegrationTests(_Base, unittest.TestCase):
+    """7 梯队因子来自**因子引擎快照**（单一事实源），本模块不重算、不外呼。"""
 
-        def fake(mapping):
-            seen.update(mapping)
-            return {"valid": True, "regime": "BULL_STABLE"}
+    def _snapshot(self, tmp_path, inst_id="BTC-USDT-SWAP"):
+        payload = {"instruments": [
+            {"instId": inst_id, "trend_momentum": {"macd_hist": 1.5},
+             "volume_profile": {"vwap_24h": 100.0},
+             "smart_money_derivatives": {"elite_account_ratio": 1.4}},
+            {"instId": "OTHER-USDT-SWAP", "trend_momentum": {"macd_hist": 9.9}},
+        ]}
+        p = tmp_path / "factor_library_snapshot.json"
+        p.write_text(json.dumps(payload), encoding="utf-8")
+        return str(p)
 
-        with patch.object(calculus_engine, "calculate_multi_timeframe", fake):
-            pkg = self._run()
-        self.assertEqual(sorted(seen), ["15M", "1H", "4H"])
-        # ★ 传进去的就是原样的 new→旧 列表（本函数**不翻转**，翻转是 calculus 自己的事）
-        self.assertEqual(seen["15M"], pkg["recent_15m"])
-        self.assertEqual(pkg["calculus"]["regime"], "BULL_STABLE")
+    def test_tiers_are_read_for_the_matching_instrument(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        tiers = bp.load_quant_factor_tiers(
+            "BTC-USDT-SWAP", path=self._snapshot(Path(tmp.name)))
+        self.assertEqual(tiers["trend_momentum"]["macd_hist"], 1.5)
+        self.assertEqual(tiers["volume_profile"]["vwap_24h"], 100.0)
+        self.assertAlmostEqual(tiers["smart_money_derivatives"]["elite_account_ratio"], 1.4)
 
-    def test_calculus_exception_is_captured_with_the_message(self):
-        import calculus_engine
+    def test_an_absent_instrument_yields_an_empty_mapping(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.assertEqual(
+            bp.load_quant_factor_tiers("NOPE-USDT-SWAP",
+                                       path=self._snapshot(Path(tmp.name))), {})
 
-        def boom(mapping):
-            raise RuntimeError("math exploded")
+    def test_a_missing_or_broken_snapshot_never_raises(self):
+        """它在每分钟一轮的主脑循环里 —— 抛一次就毁掉整轮决策。"""
+        self.assertEqual(bp.load_quant_factor_tiers("BTC-USDT-SWAP",
+                                                    path="/nonexistent/x.json"), {})
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        bad = Path(tmp.name) / "factor_library_snapshot.json"
+        bad.write_text("{not json", encoding="utf-8")
+        self.assertEqual(bp.load_quant_factor_tiers("BTC-USDT-SWAP", path=str(bad)), {})
+        bad.write_text(json.dumps({"instruments": "垃圾"}), encoding="utf-8")
+        self.assertEqual(bp.load_quant_factor_tiers("BTC-USDT-SWAP", path=str(bad)), {})
 
-        with patch.object(calculus_engine, "calculate_multi_timeframe", boom):
-            pkg = self._run()
-        self.assertFalse(pkg["calculus"]["valid"])
-        self.assertEqual(pkg["calculus"]["regime"], "DATA_UNRELIABLE")
-        self.assertIn("math exploded", pkg["calculus"]["error"])
-
-    def test_import_failure_of_calculus_engine_is_also_captured(self):
-        with patch.dict(sys.modules, {"calculus_engine": None}):
-            pkg = self._run()
-        self.assertFalse(pkg["calculus"]["valid"])
-        self.assertEqual(pkg["calculus"]["quality"], 0.0)
+    def test_the_router_does_not_call_the_calculus_engine(self):
+        """⚠️ 用 AST 而不是裸串判据：文档串里**必须**能说明"这段被删了"。"""
+        import ast
+        tree = ast.parse(Path(bp.__file__).read_text(encoding="utf-8"))
+        self.assertNotIn("calculus_engine", {n.module for n in ast.walk(tree)
+                                             if isinstance(n, ast.ImportFrom)})
+        names = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name)}
+        self.assertNotIn("calculate_multi_timeframe", names)
 
 
 class InjectionTests(_Base, unittest.TestCase):

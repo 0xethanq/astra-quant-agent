@@ -44,4 +44,14 @@ export const enEvolution = {
   autoIterateBadge: '6h Iteration Cycle',
   snapshotAuditTitle: 'Snapshot Data Audit',
   actText: '[{type}] {text}',
+  // ── 2026-10 (direction 1: evidence-chain observability) ──
+  evidenceChainTitle: 'Evidence Chain Health',
+  // ⚠️ This measures *tier-factor observability*, NOT "snapshot is non-empty":
+  // in production, 100% of rows had a non-empty snapshot while 0% had tier factors
+  // (legacy snapshots carry price-only observations). Mislabeling it would show
+  // "entry coverage 100%" and hide the very gap it exists to expose.
+  evidenceEntryCoverage: 'Entry tier-factor observability',
+  evidenceExitCoverage: 'Mechanism-confirmed exit reasons',
+  evidenceGapsTitle: 'Evidence gaps (disclosed honestly)',
+  evidenceNoGaps: 'Evidence chain intact: no entry-context or exit-reason gaps',
 };

@@ -211,6 +211,9 @@ def execute_llm_request(get_active_runtime: Callable[[], Dict[str, Any]], resolv
     response_format: Optional[Dict[str, Any]] = None,
     timeout: Optional[float] = None,
     allow_fallback: bool = True,
+    *,
+    use_cache: bool = False,
+    cache_ttl: float = 0.0,
 ) -> Tuple[str, str, Dict[str, Any], int]:
     """Unified resilient executor for LLM calls across all 3 protocols.
 
@@ -231,6 +234,16 @@ def execute_llm_request(get_active_runtime: Callable[[], Dict[str, Any]], resolv
     target_effort = reasoning_effort or runtime.get("reasoning_effort") or "high"
     target_rtype = runtime.get("reasoning_type", "auto")
     effective_timeout = float(timeout) if (timeout is not None and float(timeout) > 0) else float(runtime.get("thinking_timeout") or 120.0)
+
+    # 2026 L1 精确哈希查询缓存检查
+    ckey = None
+    if use_cache and cache_ttl > 0:
+        from astra_backend.llm.query_cache import compute_cache_key, get_cached_query
+        ckey = compute_cache_key(target_model, target_url, messages, temperature, response_format)
+        cached_result = get_cached_query(ckey)
+        if cached_result is not None:
+            c_content, c_reasoning, c_usage, c_latency = cached_result
+            return c_content, c_reasoning, c_usage, c_latency
 
     try:
         attempts = int(runtime.get("request_attempts") or DEFAULT_REQUEST_ATTEMPTS)
@@ -297,6 +310,9 @@ def execute_llm_request(get_active_runtime: Callable[[], Dict[str, Any]], resolv
                         "elapsed_seconds": round(time.perf_counter() - call_started, 1),
                         "succeeded": True,
                     })
+                if ckey and use_cache and cache_ttl > 0:
+                    from astra_backend.llm.query_cache import put_cached_query
+                    put_cached_query(ckey, cand["model"], cand["base_url"], content, reasoning, usage, latency, cache_ttl)
                 return content, reasoning, usage, latency
             except _LLMHardError as exc:
                 failures.append(str(exc))

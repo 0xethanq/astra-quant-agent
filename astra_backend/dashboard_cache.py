@@ -445,15 +445,14 @@ def update_cache_cycle():
             "reasoning_effort": os.getenv("LLM_REASONING_EFFORT", "high"),
             "api_format": "openai_chat",
         }
-    try:
-        from scripts.calculus_engine import detect_macro_market_regime
-        CACHE_DATA["market_regime"] = detect_macro_market_regime(factors_list)
-    except Exception:
-        try:
-            from calculus_engine import detect_macro_market_regime
-            CACHE_DATA["market_regime"] = detect_macro_market_regime(factors_list)
-        except Exception:
-            pass
+    # ★ 2026-10 用户拍板：**停止**计算全市场宏观体制。
+    #
+    # 它与提示词里被移除的那块同源（已退役数理引擎 `calculus_engine` →
+    # `calculus/regime.py`），且缺数据时凭空编结论（函数内写死 `atr_pct=1.5` /
+    # `adx=20.0`；实盘 `calculus` 块已不存在 ⇒ 震荡/冲击分源自假零）。
+    # 看板本不该比提示词更"确定"：既然决策侧已移除，展示侧也一并停算 ——
+    # 前端 `TrajectoryPanel` 对 `market_regime` 缺失本来就走 `v-if` 不渲染。
+    CACHE_DATA.pop("market_regime", None)
     try:
         from scripts.okx_runtime import current_environment
         _okx_mode = str(current_environment().mode or "demo").lower()

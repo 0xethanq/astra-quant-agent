@@ -18,7 +18,7 @@
 | `cycle_parts.py` | `normalize_position_management` / `build_effective_prompt_text` / `build_history_record`（周期内纯组装，108 行） | 门面 `execute_batch_ai_brain_cycle` 内联段 |
 | `prompt.py` | `construct_full_market_prompt` 全市场提示词装配（269 行，**注入面最宽：15 项**） | 门面 L654-922 |
 | `runtime.py` | `capture_policy_snapshot`（策略快照冻结 + 派生 version/hash/summary，两级 import 兜底）；`resolve_llm_runtime`（环境变量 → `get_active_llm_runtime()` 覆盖，失败置 `execute_llm_request=None`）—— 两处 **in-out**：`policy_snapshot`、`api_key`/`base_url`（段内 `... or base_url` 会读旧值）（B3 第一百刀） | 门面 `execute_batch_ai_brain_cycle` 前置段 |
-| `snapshots.py` | `update_factor_library_snapshot`（因子库自更新）/ `write_calculus_snapshot`（演算快照原子落盘）/ `write_prompt_snapshot`（实时提示词快照，Web 透明检视用）—— **三段皆纯副作用**（0 输出、0 return，失败仅告警）（B3 第九十九刀） | 门面 `execute_batch_ai_brain_cycle` 内联段（3/5/6 项同名注入） |
+| `snapshots.py` | `update_factor_library_snapshot`（因子库自更新）/ `write_prompt_snapshot`（实时提示词快照，Web 透明检视用；原 `write_calculus_snapshot` 随数理退役拆除）—— **皆纯副作用**（0 输出、0 return，失败仅告警）（B3 第九十九刀） | 门面 `execute_batch_ai_brain_cycle` 内联段 |
 | `dispatch.py` | `dispatch_llm_and_persist_decisions` —— `execute_batch_ai_brain_cycle` **末尾 173 行**：LLM 请求派发 → 决策解析/校验 → 决策缓存·历史·持仓指令三份落盘（flock 包裹）→ 周期健康记录；段内两处 `return` 即函数终返，调用点 `return helper(...)` **直接透传**（B3 第九十八刀） | 门面 `execute_batch_ai_brain_cycle` 尾块（36 项同名注入） |
 | `account_text.py` | `build_position_lines` 在途持仓文本 + `build_pending_order_lines` 在途挂单文本（**三态语义**：`None`=缺上下文 / `[]`=确定空仓 / 非空=逐条） | `prompt.py` 内联段 |
 

@@ -144,10 +144,13 @@ export function confTier(v: number | null | undefined): { tier: 'high' | 'mid' |
   return { tier: 'low' };
 }
 
-/** 去掉文本前导装饰性 emoji（后端台账 exit_reason 等历史数据带 🛑/✨/🛡 前缀，设计语言不再使用装饰 emoji） */
+/** 去掉文本前导装饰性 emoji 与技术后缀 */
 export function cleanReason(v: string | null | undefined): string {
   if (!v) return '--'
-  return v.replace(/^[\p{Extended_Pictographic}\uFE0F\u200D\s]+/u, '').trim() || '--'
+  return v
+    .replace(/^[\p{Extended_Pictographic}\uFE0F\u200D\s]+/u, '')
+    .replace(/[\(（]未匹配平仓单[\)）]/g, '')
+    .trim() || '--'
 }
 
 /** Explicitly UTC legacy feed fields; offset-aware inputs preserve their instant. */

@@ -30,7 +30,7 @@ SANDBOXED_MODULES = (
     'astra_backend.llm_manager',
     'astra_backend.council_manager',
     'astra_backend.policy_snapshot',
-    'astra_backend.interceptor_manager',
+    # 2026-10：'astra_backend.interceptor_manager' 随策略插件系统整套裁撤而移除
     'scripts.prompt_library',
     'scripts.evolution_shield',
     'astra_gateway.secrets',

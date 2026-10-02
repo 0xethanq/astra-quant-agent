@@ -92,8 +92,20 @@ class ObservabilityClassifyTests(unittest.TestCase):
         self.assertEqual(sie.classify_snapshot_observability(full), "DYNAMICS_OBSERVED")
 
     def test_partial_chain(self):
-        partial = _dyn(velocity=0.5, acceleration=0.4, jerk=0.3)
+        """★ 2026-10 重钉：`DYNAMICS_FIELDS` 已由 17 项微积分字段换成
+        18 项 7 梯队因子字段 —— 判据仍按"真实非空计数"，只是字段集换了。
+
+        原来这里给的是 velocity/acceleration/jerk（已退役）；现在给同样 3 个
+        **现行因子**，语义（3 < 门槛 16 ⇒ PARTIAL）完全一致。
+        """
+        partial = _dyn(macd_hist=0.5, macd_accel=0.4, obi_pct=12.0)
         self.assertEqual(sie.classify_snapshot_observability(partial), "PARTIAL")
+
+    def test_retired_dynamics_fields_no_longer_count_as_evidence(self):
+        """⚠️ 反向断言：把**已退役**的动力学字段填满，也不得判成可观测 ——
+        否则新快照（这些键恒为 None）会与历史空壳混为一谈。"""
+        legacy = _dyn(**{k: 0.5 for k in sie.RETIRED_DYNAMICS_FIELDS})
+        self.assertEqual(sie.classify_snapshot_observability(legacy), "PRICE_ONLY")
 
     def test_none_and_empty(self):
         self.assertEqual(sie.classify_snapshot_observability(None), "NONE")
@@ -118,33 +130,43 @@ class ObservabilityClassifyTests(unittest.TestCase):
         self.assertEqual(audit["NONE"], 2)  # 标签为 NONE + 完全缺失标签各一
 
 
-class ConstitutionMergeTests(unittest.TestCase):
+class MergeLessonTextsTests(unittest.TestCase):
+    """心法合并（2026-10 起只做追加与去重；原「基准心法宪法级保护」已整体拆除）。
+
+    ⚠️ 本类原名 `ConstitutionMergeTests`，钉的是"被省略的基准心法由宿主补回"。
+    用户已要求系统不再预设任何心法，故补回行为不复存在 —— 改为钉"通用合并契约"，
+    并加一条**反向判据**确保补回行为没有被偷偷加回来。
+    """
+
     EXISTING = [
-        {"rule_text": "【A基准】趋势", "enabled": True, "is_baseline": True},
-        {"rule_text": "【B基准】宽止损", "enabled": True, "is_baseline": True},
-        {"rule_text": "【C战术】短线", "enabled": True, "is_baseline": False},
+        {"rule_text": "【A】趋势", "enabled": True},
+        {"rule_text": "【B】宽止损", "enabled": True},
+        {"rule_text": "【C】短线", "enabled": True},
     ]
 
     def test_add_is_pure_append(self):
-        final, readded = sie.merge_memory_with_constitution("ADD", ["【D新】经验"], self.EXISTING)
-        self.assertEqual(final, ["【A基准】趋势", "【B基准】宽止损", "【C战术】短线", "【D新】经验"])
-        self.assertEqual(readded, [])
+        final = sie.merge_lesson_texts("ADD", ["【D新】经验"], self.EXISTING)
+        self.assertEqual(final, ["【A】趋势", "【B】宽止损", "【C】短线", "【D新】经验"])
 
     def test_add_never_drops_existing_even_if_model_omits(self):
-        final, _ = sie.merge_memory_with_constitution("ADD", [], self.EXISTING)
-        self.assertIn("【A基准】趋势", final)
+        final = sie.merge_lesson_texts("ADD", [], self.EXISTING)
+        self.assertIn("【A】趋势", final)
 
-    def test_invalidate_cannot_delete_baseline(self):
-        final, readded = sie.merge_memory_with_constitution("INVALIDATE", ["【B基准】宽止损"], self.EXISTING)
-        self.assertIn("【A基准】趋势", final)   # 被省略的基准由宿主补回
-        self.assertEqual(readded, ["【A基准】趋势"])
-        self.assertNotIn("【C战术】短线", final)  # 非基准战术层可由模型整理
+    def test_invalidate_takes_only_what_the_model_kept(self):
+        """★ 拆掉基准特权后：INVALIDATE 下模型保留谁就只剩谁，宿主不补任何一个。"""
+        final = sie.merge_lesson_texts("INVALIDATE", ["【B】宽止损"], self.EXISTING)
+        self.assertEqual(final, ["【B】宽止损"])
 
-    def test_revise_keeps_omitted_baselines(self):
-        final, readded = sie.merge_memory_with_constitution("REVISE", ["【C战术】改版"], self.EXISTING)
-        self.assertIn("【A基准】趋势", final)
-        self.assertIn("【B基准】宽止损", final)
-        self.assertEqual(len(readded), 2)
+    def test_revise_keeps_only_the_revised_list(self):
+        final = sie.merge_lesson_texts("REVISE", ["【C】改版"], self.EXISTING)
+        self.assertEqual(final, ["【C】改版"])
+
+    def test_no_lesson_is_ever_readded(self):
+        """★ 反向判据：不许再出现任何"宿主强制补回"。"""
+        for status in ("REVISE", "INVALIDATE", "NO_CHANGE"):
+            with self.subTest(status=status):
+                final = sie.merge_lesson_texts(status, [], self.EXISTING)
+                self.assertEqual(final, [])
 
     def test_resolve_no_change_preserves(self):
         status, mem, preserve = sie.resolve_memory_update("NO_CHANGE", ["新东西"], ["旧A", "旧B"])
@@ -222,14 +244,14 @@ class EngineEndToEndTests(unittest.TestCase):
     def _env(self, tmp):
         data = Path(tmp) / "data"
         data.mkdir(parents=True, exist_ok=True)
-        # 从真实库复制 4 条基准心法（验证的是保护逻辑，不依赖条目内容是否真基准）
+        # 两条普通心法（2026-10：`is_baseline` 已随基准机制拆除，系统不预设心法）
         lessons = [
-            {"id": "l1", "category": "RISK", "rule_text": "【基准1】宽止损抗噪", "health_score": 95.0,
-             "enabled": True, "created_at": "2026-09-01 00:00:00", "ttl_days": 14,
-             "sample_size": 38, "is_baseline": True, "shield_status": "PASSED"},
-            {"id": "l2", "category": "PORTFOLIO", "rule_text": "【基准2】禁止同向共振", "health_score": 92.0,
-             "enabled": True, "created_at": "2026-09-04 12:00:00", "ttl_days": 14,
-             "sample_size": 15, "is_baseline": True, "shield_status": "PASSED"},
+            {"id": "l1", "category": "RISK", "rule_text": "【既有1】宽止损抗噪", "health_score": 95.0,
+             "enabled": True, "created_at": "2026-09-01 00:00:00", "ttl_days": 3650,
+             "sample_size": 38, "shield_status": "PASSED"},
+            {"id": "l2", "category": "PORTFOLIO", "rule_text": "【既有2】禁止同向共振", "health_score": 92.0,
+             "enabled": True, "created_at": "2026-09-04 12:00:00", "ttl_days": 3650,
+             "sample_size": 15, "shield_status": "PASSED"},
         ]
         payload = {"schema_version": 1, "revision": "0" * 32, "lessons": lessons}
         mem_file = data / "structured_trading_memory.json"
@@ -284,30 +306,40 @@ class EngineEndToEndTests(unittest.TestCase):
             final_mem = json.loads(env["shield_mem"].read_text(encoding="utf-8"))
             return report, [l["rule_text"] for l in final_mem["lessons"]], final_mem
 
-    def test_no_change_preserves_all_baseline_memory(self):
+    def test_no_change_preserves_all_existing_memory(self):
         report, texts, _ = self._run("NO_CHANGE", ["【新】不该被采纳的孤证"])
         self.assertEqual(report["change_status"], "NO_CHANGE")
         self.assertTrue(report["memory_preserved"])
-        self.assertEqual(texts, ["【基准1】宽止损抗噪", "【基准2】禁止同向共振"])
+        self.assertEqual(texts, ["【既有1】宽止损抗噪", "【既有2】禁止同向共振"])
         self.assertEqual(report["snapshot_audit"]["total"], 2)
         self.assertEqual(report["snapshot_audit"]["math_observable"], 0)
 
-    def test_add_proposal_cannot_delete_baselines(self):
-        # 模型 ADD 时只给 1 条新心法、省略全部基准：旧行为会清空权威库，现在必须补回
-        report, texts, final_mem = self._run("ADD", ["【新3】多标的共振需单边敞口熔断"])
-        self.assertIn("【基准1】宽止损抗噪", texts)
-        self.assertIn("【基准2】禁止同向共振", texts)
+    def test_add_proposal_keeps_existing_lessons(self):
+        """ADD 是纯追加：模型只给 1 条新心法，既有条目一条都不许丢。"""
+        _report, texts, final_mem = self._run("ADD", ["【新3】多标的共振需单边敞口熔断"])
+        self.assertIn("【既有1】宽止损抗噪", texts)
+        self.assertIn("【既有2】禁止同向共振", texts)
         self.assertIn("【新3】多标的共振需单边敞口熔断", texts)
-        # ADD 为纯追加语义：基准在合并中天然保留，无需「强制补回」计数
-        self.assertEqual(report["baseline_memory_protected"], 0)
-        # 基准条目保留原始 id/metadata（身份未被重写）
+        # 既有条目保留原始 id/metadata（身份未被重写）
         ids = {l["rule_text"]: l.get("id") for l in final_mem["lessons"]}
-        self.assertEqual(ids["【基准1】宽止损抗噪"], "l1")
+        self.assertEqual(ids["【既有1】宽止损抗噪"], "l1")
 
-    def test_invalidate_attempt_on_baseline_is_readded(self):
-        report, texts, _ = self._run("INVALIDATE", ["【基准1】宽止损抗噪"])  # 想删掉基准2
-        self.assertIn("【基准2】禁止同向共振", texts)
-        self.assertEqual(report["baseline_memory_protected"], 1)
+    def test_invalidate_drops_the_lesson_but_keeps_it_as_a_tombstone(self):
+        """★ 2026-10 语义变更后的关键判据：不再"补回"，但**也绝不蒸发**。
+
+        旧行为：模型 INVALIDATE 时省略的那条被宿主强制补回（因为它是"宪法级"）。
+        新行为：它从**生效清单**里去掉，但 `_review_candidates` 把它落成
+        **停用存档**（`enabled=False` + 退役留痕）—— 不注入提示词、面板可见、
+        可人工复核恢复。这比"补回"更符合用户意图（系统不再有不可动的心法），
+        同时不丢知识。
+        """
+        report, _texts, final_mem = self._run("INVALIDATE", ["【既有1】宽止损抗噪"])
+        by_text = {l["rule_text"]: l for l in final_mem["lessons"]}
+        self.assertTrue(by_text["【既有1】宽止损抗噪"]["enabled"], "模型保留的仍在生效")
+        dropped = by_text["【既有2】禁止同向共振"]
+        self.assertFalse(dropped["enabled"], "被省略的必须停用，而不是继续生效")
+        self.assertIn("retired_reason", dropped, "必须留退役痕迹（可人工复核恢复）")
+        self.assertIn("【既有2】禁止同向共振", report["retired_lessons"], "报告要如实披露")
 
     def _run_with_llm_responses(self, responses, fallback_model):
         """直连 run_self_evolution，call_llm_evolution_review 按序吐出 responses。"""
@@ -421,7 +453,7 @@ class EngineEndToEndTests(unittest.TestCase):
         self.assertTrue(report["memory_preserved"])
         self.assertIn("504", report["llm_error"])
         self.assertEqual([l["rule_text"] for l in final_mem["lessons"]],
-                         ["【基准1】宽止损抗噪", "【基准2】禁止同向共振"])
+                         ["【既有1】宽止损抗噪", "【既有2】禁止同向共振"])
 
 
 if __name__ == "__main__":

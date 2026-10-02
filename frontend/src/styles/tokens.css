@@ -1,26 +1,24 @@
 /* =========================================================================
-   ASTRA Design Tokens · DeepSeek Harness 开发者工作台视觉基座
+   ASTRA Design Tokens · AstraQuant 专业量化交易终端视觉基座
    -------------------------------------------------------------------------
-   来源：https://www.deepseek.com/harness/ 的 --ds-* 令牌体系，逐条对照抄录。
-
-   本文件是**唯一视觉事实源**。页面与组件只允许消费令牌，禁止硬编码色值。
+   本文件是唯一视觉事实源。页面与组件只允许消费设计令牌，禁止硬编码色值。
 
    结构：
      1. 与主题无关的令牌（字体 / 间距 / 圆角 / 层级 / 动效）
-     2. --ds-* 规范令牌（暗色 :root 为默认，浅色 :root[data-theme=light]）
-     3. --astra-* 自有扩展（DSH 无金融语义色与数据密集尺度）
+     2. 核心设计令牌（暗色 :root 为默认，浅色 :root[data-theme=light]）
+     3. --astra-* 量化衍生品自有扩展（金融语义色与数据密集尺度）
      4. 兼容别名层（旧变量名 → 令牌，页面零改动即可继承新外观）
 
-   与 DSH 的两处**有意偏离**（均为数据密集工作台的必然取舍，已于 5/6 节标注）：
-     · 圆角：DSH --ds-radius-card:24px（营销页亲和感）→ 卡片 10px（仪器感）
-     · 字阶：DSH 正文 16px/160%（滚动叙事）→ 控制台正文 13px（信息密度）
+   设计准则（高频交易终端物理感）：
+     · 圆角：微件 6px / 控件 10px / 卡片 16px / 浮层 20px（仪器感与层级明确）
+     · 字阶：控制台正文 14px 黄金标准（兼顾信息密度与视网膜高分屏易读性）
    ========================================================================= */
 
 /* =========================================================================
    1 · 与主题无关
    ========================================================================= */
 :root {
-  /* —— 字体（DSH --ds-font-display / body / mono）——
+  /* —— 字体（--ds-font-display / body / mono）——
      已由 index.html 正确加载 Inter 与 JetBrains Mono */
   --ds-font-display: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
     'PingFang SC', 'Noto Sans SC', sans-serif;
@@ -29,8 +27,8 @@
   --ds-font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas,
     'PingFang SC', 'Microsoft YaHei', monospace;
 
-  /* —— 间距（DSH --ds-space-1..13 原值）——
-     控制台只消费 1..7；8..13 属营销页滚动节奏，保留以备文档页使用 */
+  /* —— 间距（--ds-space-1..13 标准阶梯）——
+     控制台主要消费 1..7；8..13 备用于全景展示与文档排版 */
   --ds-space-1: 4px;
   --ds-space-2: 8px;
   --ds-space-3: 12px;
@@ -72,7 +70,7 @@
   --sp-9: 24px;
   --sp-10: 32px;
 
-  /* —— 圆角（DSH 原值，card 见第 5 节偏离说明）——
+  /* —— 圆角标准体系 ——
 
      半径阶梯（刻意只有 4 档 + 胶囊，每一档都必须肉眼可分）：
 
@@ -99,11 +97,11 @@
   --ds-radius-card: 16px;
   --ds-radius-pill: 100px;
 
-  /* —— 玻璃（DSH --ds-blur-glass）—— */
-  --ds-blur-glass: 12px;
+  /* —— 玻璃磨砂令牌 —— */
+  --ds-blur-glass: 16px;
 
-  /* —— 字阶 · 控制台尺度（对应 DSH heading1 28/36 · subtitle 20 · title 18 · body 16 · caption 14）——
-     控制台整体下移两档，字距沿用 DSH 的负字距梯度。
+  /* —— 字阶 · 控制台尺度 ——
+     字距沿用负字距梯度。
 
      批 28：地板从 9.5px 抬到 11px（方案 §3.2 的目标下限）。
      起因是实测发现：`text-3xs / text-4xs / text-2xs` 三个 Tailwind 工具类
@@ -126,26 +124,34 @@
      （密排小字 / 次级小字 / 正文小号 / 略大正文），删名要动大量模板。
      若将来要给其中某个单独改值，`tests/typeScale.test.mjs` 的
      「同值别名组」断言会先翻红，提醒这可能破坏刚统一好的字阶。 */
-  --text-4xs: 11px;
-  --text-3xs: 12px;
-  --text-2xs: 12px;
-  --text-xs: 12px;
-  --text-sm: 12px;
-  --text-base: 13px;
-  --text-md: 14px;
-  --text-lg: 15px;
-  --text-xl: 18px;
-  --text-2xl: 22px;
-  --text-3xl: 26px;
+  /* 批 89 → 2026-10 升级：高分屏舒适字阶优化。
+     地板从 11px 抬到 12px，同值别名组（3xs/2xs/xs/sm）从 12px 抬到 13px，
+     正文 base 从 13px 抬至专业 SaaS/量化终端黄金标准 14px，大标题与展示字号全面舒展。
+     生效字阶去重后：12 / 13 / 14 / 15 / 16 / 20 / 24 / 30 / 36 / 48 / 60 / 76。 */
+  --text-4xs: 12px;
+  --text-3xs: 13px;
+  --text-2xs: 13px;
+  --text-xs: 13px;
+  --text-sm: 13px;
+  --text-base: 14px;
+  --text-md: 15px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+  --text-3xl: 30px;
+  --text-4xl: 36px;
+  --text-5xl: 48px;
+  --text-6xl: 60px;
+  --text-7xl: 76px;
 
-  /* —— 字距梯度（DSH：标题 -0.02em / 副标 -0.01em / 小标签 +0.09em）—— */
+  /* —— 字距梯度（标题 -0.025em / 副标 -0.01em / 小标签 +0.09em）—— */
   --track-display: -0.025em;
   --track-title: -0.01em;
   --track-body: 0;
   --track-label: 0.09em;
 
   --leading-tight: 1.25;
-  --leading-body: 1.6;   /* = DSH 160% */
+  --leading-body: 1.6;
   --leading-dense: 1.45; /* 表格行专用 */
 
   /* —— 控件尺寸 —— */
@@ -170,7 +176,7 @@
   --z-dialog: 70;
   --z-toast: 80;
 
-  /* —— 动效（DSH 仅一条 .8s ease-out 入场，此处按控件尺度细分）—— */
+  /* —— 动效（按控件尺度细分过渡曲线与时长）—— */
   --dur-fast: 120ms;
   --dur-base: 180ms;
   --dur-slow: 240ms;
@@ -178,8 +184,7 @@
 }
 
 /* =========================================================================
-   2 · 规范令牌 · 暗色（默认）
-   —— 与 DSH [data-theme=dark] 逐条一致；仅 --ds-color-bg-surface-card 见第 5 节
+   2 · 核心规范令牌 · 暗色（默认）
    ========================================================================= */
 :root,
 :root[data-theme='dark'] {
@@ -189,12 +194,7 @@
   --ds-color-text-primary: #f8fafc;
   --ds-color-text-secondary: #cbd5e1;
   --ds-color-text-description: #94a3b8;
-  /* 批 19：placeholder 原为 DSH 的 #64748b，但本仓把它当"第三级正文色"在用
-     （表头 / 卡片副标题 / 时间戳 / 表单标签…全站 300+ 处）。实测它在
-     卡片 #151821 上只有 3.73:1、在 surface-2 #212634 上 3.17:1、
-     在选中态 #20293e 上 3.05:1 —— **全站第三级文字都不达 AA(4.5:1)**。
-     改为 #8894a7：在上述全部实测底色上 ≥4.72:1，且与 description
-     (#94a3b8, ≥5.66:1) 仍差 1.2 倍，第三级/第四级层级不塌。 */
+  /* placeholder：实测在卡片与 surface 底色上均满足 AA(≥4.5:1) 易读标准 */
   --ds-color-text-placeholder: #8894a7;
   --ds-color-text-inverse: #09090b;
 
@@ -204,8 +204,8 @@
   --ds-color-bg-surface-3: #171b26;
   --ds-color-bg-surface-4: #202636;
   --ds-color-bg-surface-5: #2c344a;
-  --ds-color-bg-overlay: rgba(7, 8, 12, 0.85);
-  --ds-color-bg-surface-raised: #11141c;
+  --ds-color-bg-overlay: rgba(7, 8, 12, 0.78);
+  --ds-color-bg-surface-raised: rgba(17, 20, 28, 0.85);
   --ds-color-bg-hover: rgba(255, 255, 255, 0.04);
   --ds-color-bg-input: #090b10;
   --ds-color-bg-input-hover: #0e1118;
@@ -234,16 +234,15 @@
   --ds-btn-ghost-hover-bg: rgba(255, 255, 255, 0.05);
   --ds-btn-ghost-hover-border: rgba(255, 255, 255, 0.12);
 
-  --ds-shadow-card: 0 1px 0 0 rgba(255, 255, 255, 0.08) inset, 0 12px 32px -4px rgba(0, 0, 0, 0.55);
-  /* 浮层阴影：DSH 暗色未定义，此处为可用性必需扩展（下拉/弹窗需要脱离层叠感） */
-  --astra-shadow-float: 0 1px 0 0 rgba(255, 255, 255, 0.1) inset, 0 20px 48px -8px rgba(0, 0, 0, 0.75);
-  --astra-shadow-dialog: 0 1px 0 0 rgba(255, 255, 255, 0.12) inset, 0 24px 64px -12px rgba(0, 0, 0, 0.85);
+  --ds-shadow-card: inset 0 1px 0 0 rgba(255, 255, 255, 0.09), inset 0 0 0 1px rgba(255, 255, 255, 0.02), 0 8px 32px -4px rgba(0, 0, 0, 0.55);
+  /* 浮层阴影：多阶柔化与微发丝倒角，弹窗与下拉脱离层叠感 */
+  --astra-shadow-float: inset 0 1px 0 0 rgba(255, 255, 255, 0.12), 0 20px 48px -8px rgba(0, 0, 0, 0.75);
+  --astra-shadow-dialog: inset 0 1px 0 0 rgba(255, 255, 255, 0.15), inset 0 0 0 1px rgba(255, 255, 255, 0.04), 0 24px 64px -12px rgba(0, 0, 0, 0.85);
   --astra-overlay-scrim: rgba(0, 0, 0, 0.8);
 }
 
 /* =========================================================================
-   3 · 规范令牌 · 浅色
-   —— 与 DSH :root 逐条一致
+   3 · 核心规范令牌 · 浅色
    ========================================================================= */
 :root[data-theme='light'] {
   --ds-color-brand: #10b981;
@@ -297,9 +296,8 @@
 }
 
 /* =========================================================================
-   4 · ASTRA 自有扩展 · 语义色
-   —— DSH 无金融语义色，此为主要色彩扩展，独立 --astra-* 命名空间
-      色相向 DSH 品牌蓝靠拢：低饱和、可长时间注视
+   4 · ASTRA 金融语义色彩扩展
+   —— 专业永续衍生品盈亏与警示色系：低饱和、长时间盯盘舒适
    ========================================================================= */
 :root,
 :root[data-theme='dark'] {
@@ -376,7 +374,7 @@
   --chart-wr: #4f46e5;
 }
 
-/* —— 色盲友好模式（红绿对 → 蓝橙对，保留 DSH 品牌蓝作上行色）—— */
+/* —— 色盲友好模式（红绿对 → 蓝橙对，保留清澈蓝作上行色）—— */
 :root[data-cvd='true'] {
   /* 批 105：全站回归审计抓到 /news 的「做多」小标签只有 **4.40:1**（AA 要 4.5）。
      根因是色觉辅助的蓝 #6799fe 作为 11px 文字**落在自己的 13% 淡色底上**时不够亮：
@@ -412,12 +410,11 @@
 }
 
 /* =========================================================================
-   5 · 数据密集尺度扩展
-   —— DSH 是营销页尺度（24px 圆角 / 16px 正文 / 大留白）。
-      工作台需要在 1440×900 内承载 60+ 数据点，故：
-        · 卡片圆角 24 → 10（仪器感，非消费级亲和）
-        · 正文 16 → 13（密度）
-        · 卡片表面取 surface-3(.02) 与 surface-1(.06) 之间的中间值
+   5 · 数据密集尺度与材质扩展
+   —— 专业量化工作台需要在 1440×900 内承载 60+ 数据点，故：
+        · 卡片圆角 16px（兼顾科技感与现代工业微倒角）
+        · 正文 14px 黄金标准（信息密度与舒适度平衡）
+        · 卡片表面半透微磨砂（营造 Ethereal Glass 通透感）
 
    ⚠️ 批次 16 补：**表面材质渐变 `--grad-surface`**
 
@@ -435,16 +432,16 @@
    ========================================================================= */
 :root,
 :root[data-theme='dark'] {
-  --ds-color-bg-surface-card: #0d0f15;
-  --ds-color-bg-surface-inset: #090b10;
-  --grad-surface: linear-gradient(180deg, rgba(255, 255, 255, 0.02) 0%, rgba(255, 255, 255, 0) 100%);
-  --ds-shadow-card: 0 1px 0 0 rgba(255, 255, 255, 0.05) inset, 0 12px 32px -4px rgba(0, 0, 0, 0.55);
+  --ds-color-bg-surface-card: rgba(13, 15, 21, 0.76);
+  --ds-color-bg-surface-inset: rgba(9, 11, 16, 0.6);
+  --grad-surface: linear-gradient(180deg, rgba(255, 255, 255, 0.035) 0%, rgba(255, 255, 255, 0.005) 100%);
+  --ds-shadow-card: inset 0 1px 0 0 rgba(255, 255, 255, 0.09), inset 0 0 0 1px rgba(255, 255, 255, 0.02), 0 8px 32px -4px rgba(0, 0, 0, 0.55);
 }
 :root[data-theme='light'] {
-  --ds-color-bg-surface-card: #ffffff;
-  --ds-color-bg-surface-inset: #f8f9fa;
-  --grad-surface: linear-gradient(180deg, rgba(255, 255, 255, 1) 0%, rgba(250, 250, 250, 1) 100%);
-  --ds-shadow-card: 0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 12px -2px rgba(0, 0, 0, 0.04);
+  --ds-color-bg-surface-card: rgba(255, 255, 255, 0.85);
+  --ds-color-bg-surface-inset: rgba(248, 249, 250, 0.75);
+  --grad-surface: linear-gradient(180deg, rgba(255, 255, 255, 0.6) 0%, rgba(250, 250, 250, 0.2) 100%);
+  --ds-shadow-card: inset 0 1px 0 0 rgba(255, 255, 255, 0.8), 0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 14px -2px rgba(0, 0, 0, 0.05);
 }
 
 /* =========================================================================
@@ -474,7 +471,7 @@
   --ink-2: var(--ds-color-text-description);
   --ink-3: var(--ds-color-text-placeholder);
 
-  /* 强调 = 反色单色主按钮（DSH 规范）；品牌蓝单独走 --brand */
+  /* 强调色与品牌色 */
   --accent: var(--ds-btn-primary-bg);
   --accent-ink: var(--ds-btn-primary-text);
   --accent-hover: var(--ds-btn-primary-hover-bg);

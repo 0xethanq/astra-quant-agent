@@ -173,58 +173,6 @@ def extract_evolution_mind_fingerprint(
     }
 
 
-def extract_interceptors_fingerprint(
-    root: Path,
-    interceptor_plugins: Optional[List[Dict[str, Any]]] = None,
-    plugins_dir: Optional[Path] = None,
-    root_dir: Optional[Path] = None,
-) -> Dict[str, Any]:
-    """Extracts immutable fingerprint of the physical interceptors pipeline."""
-    p_dir = plugins_dir or ((root_dir or root) / "plugins" / "interceptors")
-    plugins = interceptor_plugins
-
-    if plugins is None:
-        try:
-            from astra_backend.interceptor_manager import list_plugins
-            plugins = list_plugins(create_if_missing=False)
-        except Exception as e:
-            logger.warning("Failed to list plugins: %s", e)
-            plugins = []
-
-    pipeline_info: List[Dict[str, Any]] = []
-    enabled_plugins: List[str] = []
-
-    for idx, item in enumerate(plugins if isinstance(plugins, list) else []):
-        if not isinstance(item, dict):
-            continue
-        filename = str(item.get("filename", ""))
-        enabled = bool(item.get("enabled", False))
-        f_hash = str(item.get("file_hash") or "")
-        if not f_hash:
-            file_path = p_dir / filename
-            f_hash = compute_file_hash(file_path)
-
-        if enabled:
-            enabled_plugins.append(filename)
-            pipeline_info.append({
-                "order": idx,
-                "filename": filename,
-                "file_hash": f_hash,
-            })
-
-    sorted_pipeline = sorted(pipeline_info, key=lambda x: x["order"])
-    pipe_str = ";".join([f"{p['order']}:{p['filename']}:{p['file_hash']}" for p in sorted_pipeline])
-    plugins_hash = hashlib.sha256(pipe_str.encode("utf-8")).hexdigest()[:8]
-
-    return {
-        "plugins_hash": plugins_hash,
-        "enabled_count": len(enabled_plugins),
-        "total_count": len(plugins) if isinstance(plugins, list) else 0,
-        "enabled_plugins": enabled_plugins,
-        "pipeline": sorted_pipeline,
-    }
-
-
 def extract_council_fingerprint(
     council_config: Optional[Dict[str, Any]] = None,
     root_dir: Optional[Path] = None,
@@ -241,7 +189,12 @@ def extract_council_fingerprint(
 
     enabled = bool(cfg.get("enabled", False))
     raw_mode = str(cfg.get("consensus_mode", "standard")).lower()
-    consensus_mode = "cross_examination" if raw_mode in {"cross_examination", "cross-exam", "cross"} else "standard"
+    if raw_mode in {"cross_examination", "cross-exam", "cross"}:
+        consensus_mode = "cross_examination"
+    elif raw_mode in {"debate"}:
+        consensus_mode = "debate"
+    else:
+        consensus_mode = "standard"
     roles = cfg.get("roles") or {}
     if not isinstance(roles, dict):
         roles = {}
@@ -297,7 +250,9 @@ def _canon_evolution_memory(mem: Any) -> Any:
     out = []
     for item in lessons:
         if isinstance(item, dict):
-            out.append({k: item.get(k) for k in ("id", "category", "rule_text", "enabled", "is_baseline")})
+            # 2026-10：`is_baseline` 随基准机制拆除，指纹不再包含该字段
+            # （系统不再预设任何心法，"宪法级"这一维没有对象了）。
+            out.append({k: item.get(k) for k in ("id", "category", "rule_text", "enabled")})
         else:
             out.append(str(item))
     return out
@@ -319,12 +274,14 @@ def _canon_council_config(cfg: Any) -> Any:
 
 
 def canonical_package_projection(payload: Mapping[str, Any]) -> Dict[str, Any]:
-    """归档包的规范化投影：只保留「策略身份」字段，剔除每次写都会变的易变字段。"""
+    """归档包的规范化投影：只保留「策略身份」字段，剔除每次写都会变的易变字段。
+
+    2026-10：策略插件系统裁撤后 `interceptor_config` 单元不再存在。
+    """
     src = payload if isinstance(payload, Mapping) else {}
     return {
         "prompt_config": _canon_prompt_config(src.get("prompt_config")),
         "evolution_memory": _canon_evolution_memory(src.get("evolution_memory")),
-        "interceptor_config": src.get("interceptor_config") or {},
         "council_config": _canon_council_config(src.get("council_config")),
         "risk_config": {str(k): v for k, v in sorted((src.get("risk_config") or {}).items())}
         if isinstance(src.get("risk_config"), Mapping) else {},
@@ -348,14 +305,16 @@ def package_restore_diff(archived_payload: Mapping[str, Any],
 
     - 归档**没装**的单元（空/None）无从承诺，一律跳过——不能因为「当前有、归档没有」
       就判恢复失败（旧包无法清空它诞生之后才出现的内容）；
-    - 已装的顺序性单元（提示词/心法/拦截器/委员会）要求全等；
+    - 已装的顺序性单元（提示词/心法/委员会）要求全等；
     - 已装的字典类单元（风控）只核对归档里出现过的键；归档之后新增的键由
       `restore_archived_policy` 以 `uncovered_risk_keys` 如实披露。
+
+    2026-10：策略插件系统裁撤，`interceptor_config` 不再参与核对。
     """
     archived = canonical_package_projection(archived_payload)
     current = canonical_package_projection(current_payload)
     bad: List[str] = []
-    for unit in ("prompt_config", "evolution_memory", "interceptor_config", "council_config"):
+    for unit in ("prompt_config", "evolution_memory", "council_config"):
         want = archived.get(unit)
         if not want:
             continue

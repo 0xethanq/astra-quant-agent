@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * LedgerView.vue · DeepSeek Harness 风格交易台账与订单生命周期中枢
+ * LedgerView.vue · AstraQuant 交易台账与订单生命周期中枢
  * 包含：汇总指标 HUD、多维实时筛选工具栏、高密度等宽订单流表格、生命周期穿透抽屉与底层巡检日志
  */
 import { computed, ref, watch, onMounted } from 'vue';
@@ -135,6 +135,24 @@ const wins = computed(() => filtered.value.filter((x) => Number(x.net_pnl) > 0).
 const winRate = computed(() => (filtered.value.length ? Math.round((wins.value / filtered.value.length) * 1000) / 10 : null));
 
 const detail = ref<any>(null);
+
+function formatExitReason(row: any): string {
+  if (!row) return '--';
+  const cause = String(row.exit_cause || '');
+  if (cause === 'time_stop' || cause.includes('时间止损')) return t('dash.ledger.exitReasons.timeout');
+  if (cause === 'ratchet_lock' || cause.includes('阶梯锁利')) return t('dash.ledger.exitReasons.ratchetLock');
+  if (cause === 'momentum_tp' || cause.includes('移动止盈')) return t('dash.ledger.exitReasons.momentumTp');
+  if (cause === 'scale_out' || cause.includes('分批止盈')) return t('dash.ledger.exitReasons.scaleOut');
+  if (cause === 'hard_stop' || cause.includes('硬止损')) return t('dash.ledger.exitReasons.sl');
+  if (cause === 'breakeven' || cause.includes('保本平仓')) return t('dash.ledger.exitReasons.be');
+  if (cause === 'ai_close' || cause.includes('AI 主动')) return t('dash.ledger.exitReasons.aiClose');
+  if (cause === 'protection_fail' || cause.includes('保护失效')) return t('dash.ledger.exitReasons.protectionFail');
+  if (cause === 'exchange_closed') return Number(row.net_pnl || 0) > 0 ? t('dash.ledger.exitReasons.tp') : t('dash.ledger.exitReasons.sl');
+  const raw = cleanReason(row.exit_reason);
+  if (raw === '止盈推定' || raw.includes('止盈推定')) return t('dash.ledger.exitReasons.inferredTp');
+  if (raw === '止损推定' || raw.includes('止损推定')) return t('dash.ledger.exitReasons.inferredSl');
+  return raw;
+}
 
 function exportCsv() {
   const head = ['inst', 'venue', 'account_mode', 'side', 'lever', 'open_time', 'open_px', 'close_time', 'close_px', 'margin', 'fee', 'funding_fee', 'net_pnl', 'roi_pct', 'duration', 'exit_reason', 'strategy'];
@@ -486,8 +504,8 @@ const truncation = computed<{ kept: number; total: number } | null>(() => {
                     </span>
                   </td>
                   <td class="num font-mono text-3xs text-[var(--ink-2)]">{{ x.duration || '--' }}</td>
-                  <td class="text-3xs text-[var(--ink-2)] max-w-48 truncate" :title="cleanReason(x.exit_reason)">
-                    {{ cleanReason(x.exit_reason) }}
+                  <td class="text-3xs text-[var(--ink-2)] max-w-48 truncate" :title="formatExitReason(x)">
+                    {{ formatExitReason(x) }}
                   </td>
                   <td class="num font-mono text-3xs text-right text-[var(--ink-3)]">
                     {{ fmtDateTime(x.close_time).slice(5, 16) }}

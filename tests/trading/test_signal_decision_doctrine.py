@@ -32,8 +32,19 @@ class _Base(unittest.TestCase):
         self._is_cd = _is_cd
 
     def _eval(self, **over):
+        # ★ 2026-10：`evaluate_asset_signal` 现在要求核心指标**真的存在**
+        #   （缺失 ⇒ fail-closed HOLD，不再拿"现价当 EMA / 50 当 RSI"顶替）。
+        #   夹具因此显式给一组**平盘中性**的真实输入 —— 这是单测的正当入参，
+        #   不是生产默认值；各用例再用 over 覆盖出自己需要的形态。
         f = {"market_data_valid": True, "instId": "BTC-USDT-SWAP", "name": "BTC",
-             "price": 100.0}
+             "price": 100.0,
+             "rsi": 50.0, "rsi_7": 50.0,
+             "ema9": 100.0, "ema21": 100.0, "ema55": 99.0, "ema21_slope_pct": 0.0,
+             "vwap_bias": 0.0, "macd_hist": 0.0, "macd_accel": 0.0,
+             "obv_flow": "NEUTRAL", "vol_ratio": 1.0,
+             "market_regime": "CHOP", "structure_1h": "CHOP",
+             "is_bull_candle_15m": False, "is_bear_candle_15m": False,
+             "lower_wick_ratio": 0.0, "upper_wick_ratio": 0.0}
         f.update(over)
         return signals.evaluate_asset_signal(
             f, asset_class_profiles={"crypto": {"entry_threshold": 2.2}},
@@ -156,6 +167,46 @@ class StrategyWeightTest(_Base):
             score, _, _, _, _ = self._eval(**self._long_setup())
         self.assertTrue(m.called, "接缝必须仍然可打桩")
         self.assertEqual(score, 2.3, "权重被桩成 1.0 ⇒ 原始 2.3")
+
+
+
+class MissingCoreIndicatorsFailClosedTest(_Base):
+    """★ 2026-10「不许假数据」：核心指标缺失 ⇒ **HOLD（fail-closed）**。
+
+    旧写法 `f.get("ema9", px)` / `f.get("rsi", 50.0)` 会把"没读到"变成
+    "EMA 等于现价、RSI 中性 50" —— 而 50 恰好落在做多形态的 38~56 命中带里，
+    等于用缺失的数据去满足一个入场条件。现在缺失必须显式禁止生成信号。
+    """
+
+    def test_missing_core_indicator_blocks_the_signal(self):
+        for missing in ("rsi", "ema9", "ema21", "ema55"):
+            with self.subTest(missing=missing):
+                f = {"market_data_valid": True, "instId": "BTC-USDT-SWAP", "name": "BTC",
+                     "price": 100.0, "rsi": 50.0, "ema9": 100.0, "ema21": 100.0,
+                     "ema55": 99.0, "vwap_bias": -0.9, "is_bull_candle_15m": True}
+                f[missing] = None
+                score, action, reasons, tag, desc = signals.evaluate_asset_signal(
+                    f, asset_class_profiles={"crypto": {"entry_threshold": 2.2}},
+                    is_in_stop_cooldown=lambda i, s: False, load_adaptive_config=lambda: {})
+                self.assertEqual(score, 0.0)
+                self.assertEqual(action, "HOLD")
+                self.assertIn(missing, " ".join(reasons))
+
+    def test_missing_optional_evidence_does_not_fabricate_the_setup(self):
+        """非核心证据（VWAP 乖离/量比/MACD）缺失 ⇒ 对应证据不成立，不得凭空命中形态。"""
+        # 缺 VWAP 乖离：均值回归形态不成立
+        score, action, _, _, _ = self._eval(rsi=25.0, vwap_bias=None,
+                                            is_bull_candle_15m=True)
+        self.assertEqual(action, "HOLD")
+        # 缺量比：动量爆发形态不成立
+        score, action, _, _, _ = self._eval(rsi=60.0, vol_ratio=None, macd_accel=1.0,
+                                            is_bull_candle_15m=True)
+        self.assertEqual(action, "HOLD")
+        # 缺影线：两个"收阳/收阴或长影线"的形态闸不得靠缺失过关
+        score, action, _, _, _ = self._eval(rsi=25.0, vwap_bias=-0.9,
+                                            is_bull_candle_15m=False,
+                                            lower_wick_ratio=None)
+        self.assertEqual(action, "HOLD")
 
 
 if __name__ == "__main__":

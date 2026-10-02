@@ -435,6 +435,33 @@ class CrossVenueUnitScaleTests(unittest.TestCase):
         self.assertEqual(fee.call_args[0][1], 1000.0,
                          "OKX 无覆盖值 ⇒ 沿用合约池面值")
 
+    def test_btc_small_position_scale_out_size_precision_not_zero(self):
+        """BTC 价格精度为 1 (tickSz=0.1) 而张数精度为 2 (minSz=0.01)；分批平仓不得被抹为 0。"""
+        f = {
+            "instId": "BTC-USDT-SWAP", "name": "BTC", "price": 90000.0, "atr": 1000.0,
+            "precision": 1, "ctVal": 0.01, "minSz": 0.01, "market_data_valid": True,
+        }
+        # entry_sz = 0.03, 剩余 0.01 (已成交 0.02)
+        pos = {"side": "long", "avgPx": 85000.0, "pos": 0.01, "venue": "okx", "minSz": 0.01}
+        tracker = {
+            "scale_out_phase": 0, "entry_sz": 0.03, "scale_out_tp": 87000.0,
+            "takeProfitPx": 95000.0, "trailingStopPx": 80000.0,
+        }
+        record_trade = MagicMock()
+        close_payload = MagicMock(return_value={})
+        ok, reason = execute_scale_out_if_eligible(
+            f, pos, {"BTC-USDT-SWAP_long": tracker},
+            "2026-10-01 12:00:00", [],
+            okx_rest=MagicMock(),
+            record_trade=record_trade,
+            close_trade_payload=close_payload,
+            close_fee=MagicMock(return_value=0.5),
+        )
+        self.assertTrue(ok, reason)
+        self.assertEqual(tracker["scale_out_phase"], 1)
+        # 验证 record_trade 里的 pos_sz 是 0.01 或 0.02，绝非 0.0
+        self.assertGreater(close_payload.call_args[1]["pos_sz"], 0.0)
+
 
 if __name__ == "__main__":
     unittest.main()

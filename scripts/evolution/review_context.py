@@ -49,13 +49,14 @@ def build_host_constitution(*,
     host_constitution = (
         "\n\n======================= 【宿主宪章·代码层硬约束（任何提示词风格档案不可覆盖）】 =======================\n"
         f"1. 数理快照可观测性审计（宿主确定性统计，非模型推断）：{observability_brief}。\n"
-        "2. 逐单标注含义：DYNAMICS_OBSERVED=开仓动力学/积分/概率链完整，可作数理因果归因；"
-        "PARTIAL=仅可引用 entry_snapshot 中实际非空字段；PRICE_ONLY / NONE=数理快照不可观测，"
-        "严禁编造或倒推 v/a/j/I、energy_integral、deviation_area_integral、延续/击穿概率、VaR/CVaR 因果，"
-        "字段缺失本身不得解读为任何证据。\n"
-        "3. ai_long_term_memory 给出生效后完整清单时必须原样包含全部现有基准心法（is_baseline）："
-        "省略条目会被宿主原样补回并留痕；认定基准失效只能写入 diagnosis_insights 交人工复核，禁止静默删除。\n"
-        "4. 证据不足必须 NO_CHANGE；NO_CHANGE 永不覆盖或清空长期记忆。\n"
+        "2. 逐单标注含义：DYNAMICS_OBSERVED=开仓梯队因子快照完整，可作因子因果归因；"
+        "PARTIAL=仅可引用 entry_snapshot 中实际非空字段；PRICE_ONLY / NONE=因子快照不可观测，"
+        "严禁编造或倒推任何**未提供**的因子数值（MACD 柱/加速度、RSI 区间、CVD、Taker 买卖比、"
+        "OBI、VWAP/POC、资金费率、ΔOI 等），字段缺失本身不得解读为任何证据。\n"
+        "3. 证据不足必须 NO_CHANGE；NO_CHANGE 永不覆盖或清空长期记忆。\n"
+        "4. 长期记忆库**不含任何系统预设心法**（2026-10 起）：清单里每一条都是系统从\n"
+        "   真实平仓证据中学出来或管理员录入的。故你必须按证据而非资历对待每一条：\n"
+        "   无证据支持就提出 INVALIDATE，证据不足则 NO_CHANGE，不得因为'它一直在'而保留。\n"
     )
     return (host_constitution)
 

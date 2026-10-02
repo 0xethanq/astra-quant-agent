@@ -35,6 +35,8 @@ JOBS = (
     JobSpec("trader", "ai_factor_trader.py", 15 * 60, 1260),
     JobSpec("factor_library", "factor_library.py", 60, 55),
     JobSpec("news", "news_sentiment_harvester.py", 10 * 60, 300, offset_seconds=180),
+    # 而 OI 重建本身是 5m 粒度、提示词每 15 分钟才消费一次 ⇒ 10 分钟足够新鲜（引擎侧
+    # 30 分钟才算 stale，留 3 倍余量）。超时 300s 给慢网络留头。
     JobSpec("daily_briefing", "daily_summary_and_backup.py", None, 600, "briefing_times", ("08:00", "20:00")),
     JobSpec("self_improvement", "self_improvement_engine.py", None, 1200, "self_improvement_times", ("02:00", "08:00", "14:00", "20:00")),
 )

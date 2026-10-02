@@ -44,7 +44,7 @@ export const zhAdminNotify = {
   catRisk: '黑天鹅避险熔断',
   catRiskDesc: '全网舆情暴跌或流动性枯竭触发全自动熔断时，以 P0 最高优先级向全部通道进行声光告警。',
   catBriefing: '每日晨/晚报',
-  catBriefingDesc: '按下方指定时间自动汇总在手仓位、资金净值、当日累计盈亏与宏观市场因果微积分综述。',
+  catBriefingDesc: '按下方指定时间自动汇总在手仓位、资金净值、当日累计盈亏与宏观市场因子综述。',
   scheduleLabel: '每日量化简报时间 (北京时间，多个用逗号隔开)',
   saveAll: '保存全部通知通道',
   saveSchedule: '保存通知时间',

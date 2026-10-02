@@ -248,11 +248,16 @@ def execute_llm_request(
     response_format: Optional[Dict[str, Any]] = None,
     timeout: Optional[float] = None,
     allow_fallback: bool = True,
+    *,
+    use_cache: bool = False,
+    cache_ttl: float = 0.0,
 ) -> Tuple[str, str, Dict[str, Any], int]:
     """薄壳：调用时解析门面模块全局（常量与函数），使测试的 patch / 直接赋值生效。
 
     实现已迁往 astra_backend.llm（结构优化阶段 2 / B4）。
     """
+    if use_cache:
+        return _core_execute_llm_request(get_active_llm_runtime, resolve_model_runtime, record_failover_event, messages, model, base_url, api_key, api_format, reasoning_effort, temperature, response_format, timeout, allow_fallback, use_cache=use_cache, cache_ttl=cache_ttl)
     return _core_execute_llm_request(get_active_llm_runtime, resolve_model_runtime, record_failover_event, messages, model, base_url, api_key, api_format, reasoning_effort, temperature, response_format, timeout, allow_fallback)
 
 

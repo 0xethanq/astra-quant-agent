@@ -438,27 +438,29 @@ class MemoryRouteTests(_Base):
         A.toggle_admin_memory_lesson("l")
         self.assertEqual(self.audit.call_args[0][2]["actor"], "admin")
 
-    # -- rollback ----------------------------------------------------------
-    def test_rollback_audits_the_lesson_count(self):
+    # -- reset（2026-10：原 rollback 端点改名为 reset；系统不再预设心法） ----
+    def test_reset_audits_the_lesson_count(self):
         self.service.return_value = [{"id": 1}, {"id": 2}]
-        out = A.rollback_admin_memory_lessons(expected_version="v2")
+        out = A.reset_admin_memory_lessons(expected_version="v2")
         self.assertIs(out["ok"], True)
         self.assertEqual(out["structured_lessons"], [{"id": 1}, {"id": 2}])
-        self.assertIn("回滚", out["message"])
+        self.assertIn("清空", out["message"])
         self.assertEqual(self.audit.call_args[0][2], {"actor": "alice", "count": 2})
+        self.assertEqual(self.service.call_args[0][0], "reset_all_lessons",
+                         "必须调用清空，而不是已拆除的基准回滚")
         self.assertEqual(self.service.call_args[1]["expected_version"], "v2")
 
-    def test_rollback_maps_unexpected_errors_to_500(self):
+    def test_reset_maps_unexpected_errors_to_500(self):
         self.service.side_effect = RuntimeError("炸了")
         with self.assertRaises(HTTPException) as ctx:
-            A.rollback_admin_memory_lessons()
+            A.reset_admin_memory_lessons()
         self.assertEqual(ctx.exception.status_code, 500)
-        self.assertIn("回滚失败", ctx.exception.detail)
+        self.assertIn("清空心法库失败", ctx.exception.detail)
 
-    def test_rollback_reraises_http_exceptions(self):
+    def test_reset_reraises_http_exceptions(self):
         self.service.side_effect = HTTPException(status_code=409, detail="冲突")
         with self.assertRaises(HTTPException) as ctx:
-            A.rollback_admin_memory_lessons()
+            A.reset_admin_memory_lessons()
         self.assertEqual(ctx.exception.status_code, 409)
 
     # -- add / delete / replace -------------------------------------------
@@ -500,7 +502,7 @@ class MemoryRouteTests(_Base):
         for call in (lambda: A.add_admin_memory_item(A.MemoryItemRequest(text="x")),
                      lambda: A.delete_admin_memory_item(0),
                      lambda: A.update_admin_memory_all(A.MemoryUpdateAllRequest(items=[])),
-                     lambda: A.rollback_admin_memory_lessons(),
+                     lambda: A.reset_admin_memory_lessons(),
                      lambda: A.toggle_admin_memory_lesson("l")):
             with self.subTest(call=call):
                 self.admin.reset_mock()
@@ -653,7 +655,7 @@ class AppWiringTests(unittest.TestCase):
         paths = {getattr(r, "path", None) for r in A.app.routes}
         for path in ("/api/v1/admin/memory",
                      "/api/v1/admin/memory/toggle/{lesson_id}",
-                     "/api/v1/admin/memory/rollback",
+                     "/api/v1/admin/memory/reset",
                      "/api/v1/admin/memory/{index}"):
             self.assertIn(path, paths)
 

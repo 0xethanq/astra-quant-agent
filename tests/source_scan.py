@@ -514,7 +514,7 @@ def router_domain_source(router_name: str = "strategy", *, root=None) -> str:
     ## 为什么需要它
 
     路由域可以从单模块**拆成包**（第九十六刀：`routers/strategy.py` →
-    `routers/strategy/{council,interceptors,policy,prompts}.py`）。按旧路径
+    `routers/strategy/{council,policy,prompts}.py`）。按旧路径
     `read_text()` 的判据会在拆分后直接抛 `FileNotFoundError` —— 那是"锚点绑死了
     文件位置"，不是"行为回归"。凡"某段代码必须在路由域里"这类判据，一律用本函数
     取域全文（与 `combined()` 同思路：判据绑**域**，不绑**文件**）。

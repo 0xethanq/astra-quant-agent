@@ -17,7 +17,7 @@ from astra_backend.dependencies import (
     ROOT, DATA_DIR, SCRIPTS_DIR, STARTED_AT,
     app_attr, admin_auth, require_admin_header, require_superadmin, read_json, script_state,
 )
-from astra_backend.schemas import AdminConfigUpdate, UpdateRequest
+from astra_backend.schemas import AdminConfigUpdate, UpdateRequest, SystemSetupRequest
 from astra_backend.llm_manager import get_active_llm_runtime, init_llm_providers, save_llm_config
 from astra_gateway import __version__ as GATEWAY_VERSION
 from astra_gateway.publisher import DB_PATH as GATEWAY_DB_PATH
@@ -470,7 +470,7 @@ def admin_about(
             {"name": "SQLite", "version": __import__("sqlite3").sqlite_version},
         ],
         "repository": {"url": "https://github.com/0xethanq/astra-quant-agent", "branch": app_attr("git", git)(["branch", "--show-current"]), "commit": app_attr("git", git)(["rev-parse", "--short", "HEAD"])},
-        "update": app_attr("update_status", update_status)(),
+        "update": dict(app_attr("update_status", update_status)()),
         # 注册/返佣通道（后台「关于」页渲染成可复制入口）。
         # ⚠️ URL 走 settings（可被 OKX_INVITE_URL 覆盖，便于分发副本替换）。
         # **刻意不含经纪商 code**（2026-09 仓库所有者拍板）：它是随订单发出去的归属
@@ -482,6 +482,122 @@ def admin_about(
     }
 
 
+_SYSTEM_UPDATE_CACHE: dict[str, Any] = {}
+_SYSTEM_UPDATE_CACHE_TIME: float = 0.0
+
+
+@router.get("/api/v1/system/update-status")
+def system_update_status() -> dict[str, Any]:
+    """公开只读版本与更新通知摘要（用于前后台顶栏更新徽标与提醒），走 5 分钟安全缓存。"""
+    global _SYSTEM_UPDATE_CACHE, _SYSTEM_UPDATE_CACHE_TIME
+    now = time.time()
+    if _SYSTEM_UPDATE_CACHE and (now - _SYSTEM_UPDATE_CACHE_TIME < 300):
+        return _SYSTEM_UPDATE_CACHE
+    fn_status = app_attr("update_status", update_status)
+    try:
+        st = fn_status()
+    except Exception as exc:
+        st = {"behind": 0, "ahead": 0, "dirty": False, "error": str(exc)}
+    behind = int(st.get("behind") or 0)
+    commits: list[str] = []
+    if behind > 0 and st.get("branch"):
+        try:
+            fn_git = app_attr("git", git)
+            log_out = fn_git(["log", f"HEAD..origin/{st['branch']}", "--oneline", "-n", "5"])
+            commits = [line.strip() for line in log_out.splitlines() if line.strip()]
+        except Exception:
+            commits = []
+    result = {
+        "version": get_version(),
+        "local": st.get("local", ""),
+        "remote": st.get("remote", ""),
+        "branch": st.get("branch", ""),
+        "behind": behind,
+        "ahead": int(st.get("ahead") or 0),
+        "dirty": bool(st.get("dirty", False)),
+        "update_available": behind > 0,
+        "commits": commits,
+        "checked_at": int(now),
+    }
+    _SYSTEM_UPDATE_CACHE = result
+    _SYSTEM_UPDATE_CACHE_TIME = now
+    return result
+
+
+@router.post("/api/v1/system/setup/apply")
+def system_setup_apply(
+    payload: SystemSetupRequest,
+    x_astra_admin_token: str | None = Header(default=None),
+    x_astra_session: str | None = Header(default=None, alias="X-Astra-Session"),
+) -> dict[str, Any]:
+    """极速部署开箱向导配置应用：若已有管理员账号，必须提供鉴权头；首次启动无需鉴权。"""
+    if admin_auth.has_users():
+        require_admin_header(x_astra_admin_token, x_astra_session)
+
+    env_updates: dict[str, str] = {}
+    is_live = payload.okx_env.lower() == "live"
+    env_updates["ASTRA_OKX_ENV"] = "live" if is_live else "demo"
+
+    prefix = "OKX_LIVE_" if is_live else "OKX_DEMO_"
+    if payload.okx_api_key:
+        env_updates[f"{prefix}API_KEY"] = payload.okx_api_key.strip()
+    if payload.okx_secret_key:
+        env_updates[f"{prefix}SECRET_KEY"] = payload.okx_secret_key.strip()
+    if payload.okx_passphrase:
+        env_updates[f"{prefix}PASSPHRASE"] = payload.okx_passphrase.strip()
+
+    if payload.llm_base_url:
+        env_updates["LLM_BASE_URL"] = payload.llm_base_url.strip()
+    if payload.llm_model:
+        env_updates["LLM_MODEL"] = payload.llm_model.strip()
+    if payload.llm_api_key:
+        env_updates["LLM_API_KEY"] = payload.llm_api_key.strip()
+    if payload.llm_reasoning_effort:
+        env_updates["LLM_REASONING_EFFORT"] = payload.llm_reasoning_effort.strip()
+
+    # 风控配置预设
+    if payload.risk_profile == "conservative":
+        env_updates["ASTRA_MIN_LEVERAGE"] = "2.0"
+        env_updates["ASTRA_MAX_LEVERAGE"] = "3.0"
+        env_updates["ASTRA_RISK_PER_TRADE_RATIO"] = "0.015"
+        env_updates["ASTRA_MAX_CONCURRENT_POSITIONS"] = "2"
+    elif payload.risk_profile == "aggressive":
+        env_updates["ASTRA_MIN_LEVERAGE"] = "6.0"
+        env_updates["ASTRA_MAX_LEVERAGE"] = "9.9"
+        env_updates["ASTRA_RISK_PER_TRADE_RATIO"] = "0.045"
+        env_updates["ASTRA_MAX_MARGIN_EQUITY_RATIO"] = "0.40"
+        env_updates["ASTRA_SINGLE_ASSET_EQUITY_RATIO"] = "0.48"
+        env_updates["ASTRA_MAX_CONCURRENT_POSITIONS"] = "5"
+        env_updates["ASTRA_MIN_ENTRY_CONFIDENCE"] = "68.0"
+        env_updates["ASTRA_MAX_SCALE_IN_COUNT"] = "2"
+        env_updates["ASTRA_MIN_SCALE_IN_CONFIDENCE"] = "68.0"
+        env_updates["ASTRA_STOP_COOLDOWN_MINUTES"] = "15"
+    else:
+        env_updates["ASTRA_MIN_LEVERAGE"] = "3.0"
+        env_updates["ASTRA_MAX_LEVERAGE"] = "8.0"
+        env_updates["ASTRA_RISK_PER_TRADE_RATIO"] = "0.035"
+        env_updates["ASTRA_MAX_MARGIN_EQUITY_RATIO"] = "0.35"
+        env_updates["ASTRA_SINGLE_ASSET_EQUITY_RATIO"] = "0.45"
+        env_updates["ASTRA_MAX_CONCURRENT_POSITIONS"] = "4"
+        env_updates["ASTRA_MIN_ENTRY_CONFIDENCE"] = "70.0"
+        env_updates["ASTRA_MAX_SCALE_IN_COUNT"] = "2"
+        env_updates["ASTRA_MIN_SCALE_IN_CONFIDENCE"] = "68.0"
+        env_updates["ASTRA_STOP_COOLDOWN_MINUTES"] = "15"
+
+    if payload.admin_password and len(payload.admin_password) >= 12:
+        env_updates["ASTRA_ADMIN_TOKEN"] = payload.admin_password.strip()
+        if not admin_auth.has_users():
+            try:
+                admin_auth.create_user("admin", payload.admin_password.strip(), role="superadmin")
+            except Exception:
+                pass
+
+    update_env(env_updates)
+    refresh_settings()
+    audit_record("system.setup_wizard", "success", {"env": env_updates.get("ASTRA_OKX_ENV"), "risk": payload.risk_profile})
+    return {"ok": True, "message": "配置已成功保存并生效，引擎已同步更新"}
+
+
 @router.get("/api/v1/admin/update-status")
 @router.post("/api/v1/admin/update/check")
 @router.get("/api/v1/admin/update/check")
@@ -491,7 +607,15 @@ def admin_update_status(
 ) -> dict[str, Any]:
     refresh_settings()
     require_admin_header(x_astra_admin_token, x_astra_session)
-    return app_attr("update_status", update_status)()
+    st = dict(app_attr("update_status", update_status)())
+    if st.get("behind", 0) > 0 and st.get("branch"):
+        try:
+            fn_git = app_attr("git", git)
+            lines = fn_git(["log", f"HEAD..origin/{st['branch']}", "--oneline", "-n", "5"])
+            st["commits"] = [line.strip() for line in lines.splitlines() if line.strip()]
+        except Exception:
+            st["commits"] = []
+    return st
 
 
 @router.post("/api/v1/admin/update")

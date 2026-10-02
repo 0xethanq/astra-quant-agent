@@ -67,18 +67,21 @@
 路由表对拍门见 `tests/ops/test_gateway_router_split.py`。
 
 `strategy` 已按此手法拆成**包**（第九十六刀）：`strategy/` =
-`strategy/council.py`（议会配置与辩论）/ `strategy/interceptors.py`（拦截器 CRUD）/
-`strategy/policy.py`（策略快照）/ `strategy/prompts.py`（提示词库与档案），
-`strategy/__init__.py` 只做**按原顺序**聚合
-（顺序即匹配优先级）。35 条 URL/方法/处理器名/tags 一字未改，
-路由表对拍门见 `tests/trading/test_strategy_router_split.py`。
+`strategy/council.py`（议会配置与辩论）/ `strategy/policy.py`（策略快照）/
+`strategy/prompts.py`（提示词库与档案），`strategy/__init__.py` 只做**按原顺序**聚合
+（顺序即匹配优先级）。
+
+⚠️ 2026-10：`strategy/interceptors.py`（拦截器 CRUD，8 条路由）随**策略插件系统整套裁撤**
+一并删除（连同根层 `interceptor_manager` 模块与 `plugins/interceptors/` 目录），聚合顺序变为
+council → policy → prompts；路由表对拍门 `tests/trading/test_strategy_router_split.py`
+按前缀显式摘除这 8 条并钉住"不得复活"。
 
 ### L3 领域服务（根层，按域成组）
 
 | 域 | 模块 |
 |---|---|
 | 交易执行 | `okx_trade_service.py`、`okx_client.py`、`close_intent.py`、`risk_reservation.py`、`exchanges/`、`execution/`、`sandbox/` |
-| 风控与安全 | `risk_config.py`、`net_security.py`、`login_guard.py`、`client_ip.py`、`admin_auth.py`、`interceptor_manager.py`、`redact.py` |
+| 风控与安全 | `risk_config.py`、`net_security.py`、`login_guard.py`、`client_ip.py`、`admin_auth.py`、`redact.py` |
 | 通知与外部通道 | `notifications.py`、`qq_bind.py`、`qq_gateway_daemon.py` |
 | 审计与备份 | `audit.py`、`backup_store.py`、`backup_secrets.py`、`file_locks.py` |
 | 组合与账户 | `portfolio_aggregator.py`、`account_baseline.py`、`evolution_config.py`、`plaza_share.py` |

@@ -97,6 +97,28 @@ class Harness:
 
 
 class RefusalGateTest(unittest.TestCase):
+    def test_invalid_market_data_blocks_entry(self):
+        h = Harness()
+        h.factor["market_data_valid"] = False
+        h.brain = {INST: {"decision": {"action": "BUY_LONG", "confidence": 95, "leverage": 3,
+                                       "margin_usdt": 100.0}}}
+        h.run()
+        self.assertEqual(h.submitted, [], "行情无效时禁止开仓")
+        self.assertIn("行情数据不完整或指标缺失", h.printed.getvalue())
+
+    def test_venue_ctx_carries_atr_to_order_submission(self):
+        h = Harness()
+        h.factor["atr"] = 555.0
+        h.brain = {INST: {"decision": {"action": "BUY_LONG", "confidence": 90, "leverage": 3,
+                                       "margin_usdt": 100.0}}}
+        h.sized = 3.0
+        h.run()
+        self.assertEqual(len(h.submitted), 1)
+        _, kwargs = h.submitted[0]
+        ctx = kwargs.get("venue_ctx") or {}
+        self.assertIn("atr", ctx)
+        self.assertEqual(ctx["atr"], 555.0)
+
     def test_illiquid_tradfi_is_skipped(self):
         h = Harness()
         h.factor["type"] = "tradfi"

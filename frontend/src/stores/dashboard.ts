@@ -30,7 +30,11 @@ export const useDashboardStore = defineStore('dashboard', () => {
     }
     return rawFactors.map((f: any) => {
       const lib = libMap.get(f.instId) || {}
-      const calc = lib.calculus_dynamics || {}
+      // ★ 2026-10：原 `lib.calculus_dynamics` 随数理系统退场，改读 7 梯队因子块。
+      const tm = lib.trend_momentum || {}
+      const flow = lib.volume_money_flow || {}
+      const micro = lib.microstructure || {}
+      const vp = lib.volume_profile || {}
       const vol = lib.volatility_channel || {}
       const sm = lib.smart_money_derivatives || f.smart_money || {}
       const trend = lib.trend_momentum || {}
@@ -43,14 +47,48 @@ export const useDashboardStore = defineStore('dashboard', () => {
         atr_14: f.atr_14 ?? vol.atr_14,
         atr_pct: f.atr_pct ?? vol.atr_pct ?? vol.atr_1h_pct,
         volatility_regime: vol.volatility_regime,
-        calculus: {
-          velocity_1h: calc.velocity,
-          accel_1h: calc.acceleration,
-          jerk_1h: calc.jerk,
-          impulse_1h: calc.impulse,
-          energy_1h: (lib.definite_integrals || {}).energy_integral,
-          action_area_1h: (lib.definite_integrals || {}).deviation_area_integral,
-          state_1h: calc.regime,
+        momentum: {
+          macd_hist_1h: tm.macd_hist ?? null,
+          macd_accel_1h: tm.macd_accel ?? null,
+          // 归一化（占现价 %）：跨标的可比，见 types/dashboard.ts 注释
+          macd_hist_pct_1h: tm.macd_hist_pct ?? null,
+          macd_accel_pct_1h: tm.macd_accel_pct ?? null,
+          macd_momentum_state: tm.macd_momentum_state ?? '--',
+          macd_divergence: tm.macd_divergence ?? '--',
+          rsi_1h: tm.rsi_1h ?? f.rsi_1h,
+          rsi_15m: tm.rsi_15m ?? f.rsi_15m,
+          rsi_zone: tm.rsi_zone ?? '--',
+        },
+        orderflow: {
+          cvd_5m_usd: flow.cvd_5m_usd ?? null,
+          cvd_1h_usd: flow.cvd_1h_usd ?? null,
+          taker_buy_sell_ratio: flow.taker_buy_sell_ratio ?? null,
+          cvd_divergence: flow.cvd_divergence ?? '--',
+        },
+        microstructure: {
+          obi_pct: micro.obi_pct ?? null,
+          depth_bias: micro.depth_bias ?? f.depth_bias ?? '--',
+          bid_ask_depth_ratio: micro.bid_ask_depth_ratio ?? null,
+          spread_bps: micro.spread_bps ?? null,
+        },
+        value_area: {
+          vwap_24h: vp.vwap_24h ?? null,
+          vwap_bias_pct: vp.vwap_bias_pct ?? tm.vwap_bias_pct ?? null,
+          vah: vp.vah ?? null,
+          val: vp.val ?? null,
+          vpvr_poc: vp.vpvr_poc ?? null,
+          value_area_position: vp.value_area_position ?? '--',
+          vwap_extreme_band: vp.vwap_extreme_band ?? '--',
+        },
+        derivatives: {
+          funding_rate_pct: sm.funding_rate_pct ?? null,
+          next_funding_rate_pct: sm.next_funding_rate_pct ?? null,
+          funding_crowding: sm.funding_crowding ?? '--',
+          oi_chg_1h_pct: sm.oi_chg_1h_pct ?? null,
+          oi_price_quadrant: sm.oi_price_quadrant ?? '--',
+          elite_divergence: sm.elite_divergence ?? '--',
+          liquidation_bias: sm.liquidation_bias ?? '--',
+          basis_annualized_pct: sm.basis_annualized_pct ?? null,
         },
         smart_money: {
           weighted_long_pct: sm.weighted_long_pct ?? f.smart_money?.weighted_long_pct,
@@ -67,6 +105,12 @@ export const useDashboardStore = defineStore('dashboard', () => {
           stop_loss_price: f.stop_loss_price,
           risk_reward_ratio: f.risk_reward_ratio || f.rr_ratio,
           summary_reason: f.decision?.summary_reason || f.reason,
+          // 三态可观测性（2026-10）：旧载荷没有这几个键 ⇒ 按 model/false 兜底，
+          // 保证老缓存不会把"未知"渲染成"被风控拦了"。
+          decision_source: f.decision?.decision_source ?? f.decision_source ?? 'model',
+          gate_blocked: f.decision?.gate_blocked ?? f.gate_blocked ?? false,
+          gate_reason: f.decision?.gate_reason ?? f.gate_reason ?? '',
+          model_reason: f.decision?.model_reason ?? f.model_reason ?? '',
         },
       }
     })

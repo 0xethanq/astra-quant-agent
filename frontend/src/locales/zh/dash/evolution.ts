@@ -60,4 +60,14 @@ export const zhEvolution = {
   autoIterateBadge: '6小时迭代周期',
   snapshotAuditTitle: '数据快照完整度',
   actText: '【{type}】{text}',
+  // ── 2026-10（方向 1：证据链可观测性）──
+  // 让"台账缺什么"在看板上直接可读，而不是要人去翻 80 行台账散文。
+  evidenceChainTitle: '证据链健康度',
+  // ⚠️ 口径必须是"梯队因子可观测率"，不是"快照非空率"：实测快照非空率 100%
+  // 而梯队因子可观测率 0%（旧格式快照只有价格类观测）。标错口径会让看板
+  // 显示"开仓现场覆盖 100%"，恰好掩盖它本该暴露的缺口。
+  evidenceEntryCoverage: '开仓梯队因子可观测率',
+  evidenceExitCoverage: '离场原因机制确认率',
+  evidenceGapsTitle: '证据缺口（如实披露）',
+  evidenceNoGaps: '证据链完整：开仓现场与离场原因均无缺口',
 };

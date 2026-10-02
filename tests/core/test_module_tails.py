@@ -32,7 +32,6 @@ for _p in (str(ROOT), str(ROOT / "scripts")):
 
 from scripts.backtest import lifecycle  # noqa: E402
 from scripts.brain import account_text, cycle_parts, runtime, snapshots  # noqa: E402
-from scripts.calculus import regime  # noqa: E402
 from scripts.ledger import okx_history  # noqa: E402
 from scripts.news import importance  # noqa: E402
 from scripts.trader import (reservation_reconcile, scale_out,  # noqa: E402
@@ -417,39 +416,6 @@ class SignalSnapshotTests(unittest.TestCase):
         self.assertEqual(snap["funding_rate"], 0.012)
         self.assertEqual(snap["smart_money_net"], -1234.0)
         self.assertEqual(snap["composite_alpha_score"], 0.77)
-
-
-# ───────────────────────── calculus/regime.py ─────────────────────────
-class LowVolChoppyRegimeTests(unittest.TestCase):
-    """体制判定的**兜底档**：既不冲击、也不趋势、也不宽幅震荡 ⇒ 窄幅低波整理。"""
-
-    def _pkg(self, name="BTC-USDT-SWAP"):
-        return {"instId": name, "price": 100.0, "atr_1h": 0.2, "adx_1h": 12.0,
-                "calculus": {"velocity_1h": 0.0, "accel_1h": 0.0, "jerk_1h": 0.0,
-                             "kinematic_regime": "STABLE"},
-                "macro_4h": "NEUTRAL"}
-
-    def test_quiet_market_lands_in_low_vol_choppy(self):
-        # ★ 第 165/166 行
-        out = regime.detect_macro_market_regime([self._pkg()])
-        self.assertEqual(out["regime_id"], regime.REGIME_LOW_VOL_CHOPPY)
-        self.assertIn("窄幅低波整理", out["recommended_action"])
-        self.assertIn("等待放量破位", out["recommended_action"])
-
-    def test_action_text_warns_against_overtrading(self):
-        out = regime.detect_macro_market_regime([self._pkg()])
-        self.assertIn("磨损手续费", out["recommended_action"])
-
-    def test_regime_name_tag_and_profile_come_from_the_tables(self):
-        out = regime.detect_macro_market_regime([self._pkg()])
-        self.assertEqual(out["regime_name"], regime._REGIME_NAMES[regime.REGIME_LOW_VOL_CHOPPY])
-        self.assertEqual(out["regime_tag"], regime._REGIME_TAGS[regime.REGIME_LOW_VOL_CHOPPY])
-
-    def test_high_adx_and_one_sided_flow_is_trend_expansion(self):
-        # 对照：同夹具但 ADX 高 + 全体同向 ⇒ 不该落到兜底档
-        pkgs = [dict(self._pkg(), adx_1h=45.0, macro_4h="BULL") for _ in range(3)]
-        self.assertEqual(regime.detect_macro_market_regime(pkgs)["regime_id"],
-                         regime.REGIME_TREND_EXPANSION)
 
 
 # ───────────────────────── news/importance.py ─────────────────────────

@@ -37,6 +37,11 @@ BASE=cc1666082d34
 
 > ⚠️ 基线是在第六十九刀**实测**出来的（`git show cc1666082d34:…` + AST 扫描），
 > 不是抄的。清单见下方 `BASELINE_ROUTES` / `BASELINE_PUBLIC_NAMES`。
+>
+> ⚠️ 2026-10 策略插件系统整套裁撤：8 条 `/api/v1/admin/interceptors*` 路由被**显式**
+> 移除。`BASELINE_ROUTE_COUNT` 是**下限**（实测 169，仍高于 163），故这次移除不会
+> 让数量门翻红 —— 正因如此，另加 `INTENTIONALLY_REMOVED_ROUTE_PREFIXES` 反面条目，
+> 既写明"这是有意删的"，也防止有人把接口悄悄加回来（前端已无入口 ⇒ 那就是暗门）。
 """
 
 from __future__ import annotations
@@ -95,6 +100,17 @@ INTENTIONALLY_REMOVED_NAMES: set[str] = {
     "RouterConfig",                # 同上
     "RouteDecision",               # 同上
 }
+
+#: 本迁移**显式移除**的路由前缀（2026-10 策略插件系统整套裁撤）。
+#:
+#: ⚠️ 为什么单列一条：`BASELINE_ROUTE_COUNT` 是**下限**（当前实测 169 ≥ 163），
+#: 所以删掉 8 条插件路由并不会让上面那条翻红 —— 也就是说"少了接口"这件事
+#: 在本门里**看不见**。删掉的接口若被谁悄悄加回来（前端已无入口 ⇒ 就是一条
+#: 无界面的暗门，能改写决策链路），同样不会翻红。故正反两面都钉：
+#: 正面靠下限保证"没多丢"，反面靠本清单保证"显式删掉的没回潮"。
+INTENTIONALLY_REMOVED_ROUTE_PREFIXES: tuple[str, ...] = (
+    "/api/v1/admin/interceptors",   # 决策插件 CRUD + 沙箱试跑，共 8 条
+)
 
 
 def _iter_source_files():
@@ -192,6 +208,22 @@ class ApiSurfaceMonotonicTest(unittest.TestCase):
         resurrected = sorted(n for n in INTENTIONALLY_REMOVED_NAMES if n in names)
         self.assertEqual(resurrected, [],
                          f"多所执行路由层的公开名又回来了：{resurrected}（本系统 OKX 专用）")
+
+    def test_intentionally_removed_routes_are_really_gone(self):
+        """有意移除的插件路由（2026-10 策略插件系统裁撤）**不得回潮**。
+
+        与 `test_intentionally_removed_names_are_really_gone` 同一思路：上面的数量
+        下限只保证"没多丢"，删掉的接口回不回来它管不着 —— 而"接口复活"恰恰是
+        更危险的方向（无界面入口 = 暗门）。故按前缀逐条钉住确实不存在。
+        """
+        routes = _routes()
+        resurrected = sorted(
+            f"{m} {p}" for (m, p) in routes
+            if any(p.startswith(pref) for pref in INTENTIONALLY_REMOVED_ROUTE_PREFIXES))
+        self.assertEqual(
+            resurrected, [],
+            f"已裁撤的决策插件接口又出现了：{resurrected}"
+            "（策略插件系统 2026-10 整套删除，前端已无入口）")
 
     def test_scanner_actually_sees_things(self):
         """⚠️ 自检 —— 防止路径写错导致"什么都没扫到"就假绿。"""

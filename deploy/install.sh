@@ -10,6 +10,7 @@ command -v "$PYTHON_BIN" >/dev/null 2>&1 || { echo "ERROR: Python 3 is required"
 # OKX connectivity is V5 API Key direct signing only — no Node.js, no npm,
 # no CLI binary. Market data is zero-process REST (www.okx.com -> aws.okx.com).
 "$PYTHON_BIN" -m venv "$VENV_DIR"
+"$VENV_DIR/bin/pip" install --upgrade pip --quiet
 "$VENV_DIR/bin/pip" install -r "$ROOT/requirements.txt"
 
 if [ ! -f "$ROOT/.env" ]; then

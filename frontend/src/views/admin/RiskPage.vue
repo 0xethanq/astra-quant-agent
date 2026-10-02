@@ -23,42 +23,20 @@ import { useToast } from '../../composables/useToast';
 import { useConfirm } from '../../composables/useConfirm';
 const toast = useToast();
 const { ask } = useConfirm();
-import { ref, reactive, computed, onMounted, watch } from 'vue';
+import { ref, reactive, computed, onMounted } from 'vue';
 import { useI18n } from '../../composables/useI18n';
-import { useRoute } from 'vue-router';
 const { t } = useI18n();
 
-/**
- * 风控与拦截页签（2026-09-30 后台精简）：本页是宿主页，吸收了「拦截管线」页 ——
- *   params   风控参数与套件（本页原有内容）
- *   pipeline 拦截管线（InterceptorsPage；其沙箱/新建/排序/刷新按钮全部保留）
- * 两者同属"交易意图触达交易所前的物理门禁"，故合并为一页的两个页签。
- * 旧路径 /admin/interceptors 带 `?tab=pipeline` 重定向到这里。
- */
-type RkTab = 'params' | 'pipeline';
-function resolveRkTab(raw: unknown): RkTab {
-  const v = Array.isArray(raw) ? raw[0] : raw;
-  return String(v) === 'pipeline' ? 'pipeline' : 'params';
-}
-const route = useRoute();
-const activeTab = ref<RkTab>(resolveRkTab(route.query.tab));
-watch(() => route.query.tab, (v) => { activeTab.value = resolveRkTab(v); });
-const tabs = computed(() => [
-  { key: 'params', label: t('admin.risk.tabParams') },
-  { key: 'pipeline', label: t('admin.interceptors.title') },
-]);
 import { useApi } from '../../composables/useApi';
 import { useAsyncAction } from '../../composables/useAsyncAction';
 import { useDashboardStore } from '../../stores/dashboard';
 import PageHeader from '../../components/admin/PageHeader.vue';
-import BaseTabs from '../../components/base/BaseTabs.vue';
-import InterceptorsPage from './InterceptorsPage.vue';
 
 import DangerZone from '../../components/admin/page-parts/DangerZone.vue';
 import BaseEmpty from '../../components/base/BaseEmpty.vue';
 import BaseSwitch from '../../components/base/BaseSwitch.vue';
 import { ShieldAlert, Save, RotateCcw, Loader2, Info, Layers,
-  Target, Flame, TrendingUp, RefreshCw, AlertTriangle, ChevronDown, ChevronRight } from 'lucide-vue-next';
+  Target, RefreshCw, AlertTriangle, Zap, Shield } from 'lucide-vue-next';
 import BaseLoadingAnnounce from '../../components/base/BaseLoadingAnnounce.vue';
 
 const { api } = useApi();
@@ -107,14 +85,6 @@ async function applySuite(s: any) {
   } finally {
     busy.value = ''
   }
-}
-
-const groupIcons: Record<string, any> = {
-  exposure: Layers,
-  exit_strategy: Target,
-  per_trade: Target,
-  stop_loss: Flame,
-  pyramiding: TrendingUp,
 }
 
 // 杠杆区间合并行的参数引用（schema 缺失时自动退回通用行渲染，不炸页面）
@@ -191,11 +161,75 @@ function outOfRange(p: any): boolean {
   return v !== undefined && (v < p.min || v > p.max)
 }
 
-/** 分组内除杠杆两键外的参数（杠杆区间在上方合并为一行） */
-function paramsOf(groupId: string): any[] {
+/** 分组内除杠杆两键外的参数（支持按核心/高级分级过滤） */
+const showAdvanced = ref(false);
+
+const advancedParamsCount = computed(() => {
+  return (schema.value?.params || []).filter((p: any) => p.tier === 'advanced').length;
+});
+
+const coreParamsCount = computed(() => {
   return (schema.value?.params || []).filter(
-    (x: any) => x.group === groupId && x.key !== 'ASTRA_MIN_LEVERAGE' && x.key !== 'ASTRA_MAX_LEVERAGE',
-  )
+    (p: any) => p.tier === 'core' && p.key !== 'ASTRA_MIN_LEVERAGE' && p.key !== 'ASTRA_MAX_LEVERAGE',
+  ).length + 1; // +1 计入杠杆合并行
+});
+
+const coreKeys = [
+  'ASTRA_MAX_CONCURRENT_POSITIONS',
+  'ASTRA_MAX_SAME_DIRECTION_POSITIONS',
+  'ASTRA_MAX_MARGIN_EQUITY_RATIO',
+  'ASTRA_DAILY_LOSS_EQUITY_RATIO',
+  'ASTRA_TIME_STOP_HOURS',
+  'ASTRA_MIN_ENTRY_CONFIDENCE',
+  'ASTRA_MAX_SCALE_IN_COUNT',
+  'ASTRA_SCALE_OUT_ENABLED',
+];
+
+const visibleParams = computed(() => {
+  const all = schema.value?.params || [];
+  const core = coreKeys.map((k) => all.find((p: any) => p.key === k)).filter(Boolean);
+  if (!showAdvanced.value) {
+    return core;
+  }
+  const advanced = all.filter(
+    (p: any) => p.tier === 'advanced' && p.key !== 'ASTRA_MIN_LEVERAGE' && p.key !== 'ASTRA_MAX_LEVERAGE',
+  );
+  return [...core, ...advanced];
+});
+
+const hasDirtyAdvanced = computed(() => {
+  return dirtyKeys.value.some((key: string) => {
+    const p = schema.value?.params.find((x: any) => x.key === key);
+    return p && p.tier === 'advanced';
+  });
+});
+
+const availEquity = computed(() => {
+  const eq = Number((store as any)?.data?.account?.avail_eq);
+  return Number.isFinite(eq) && eq > 0 ? eq : 0;
+});
+
+function calcMarginPreview(p: any): string | null {
+  if (!availEquity.value) return null;
+  const v = draft[p.key] ?? p.default;
+  if (p.key === 'ASTRA_MAX_MARGIN_EQUITY_RATIO') {
+    const amt = availEquity.value * Number(v);
+    return `≈ ${amt.toFixed(2)} USDT`;
+  }
+  if (p.key === 'ASTRA_DAILY_LOSS_EQUITY_RATIO') {
+    const amt = availEquity.value * Number(v);
+    return `≈ -${amt.toFixed(2)} USDT`;
+  }
+  return null;
+}
+
+function setLeverageCorridor(minLev: number, maxLev: number) {
+  if (levMinP.value && levMaxP.value) {
+    draft[levMinP.value.key] = minLev;
+    disp[levMinP.value.key] = String(minLev);
+    draft[levMaxP.value.key] = maxLev;
+    disp[levMaxP.value.key] = String(maxLev);
+  }
 }
 
 /** 引擎口径 6 项（数据驱动的单一模板，取代 6 段复制粘贴） */
@@ -226,71 +260,6 @@ const engineFacts = computed(() => {
 const driftLabels = computed(() =>
   driftCount.value.map((k) => schema.value?.params.find((x: any) => x.key === k)?.label || k),
 )
-
-/** 置顶核心锁利出场策略：将 exit_strategy 提升至第 2 组（紧随仓位敞口），首屏直达 */
-const orderedGroups = computed(() => {
-  if (!schema.value?.groups) return [];
-  const list = [...schema.value.groups];
-  const exitIdx = list.findIndex((g: any) => g.id === 'exit_strategy');
-  if (exitIdx > -1) {
-    const [exitG] = list.splice(exitIdx, 1);
-    const expIdx = list.findIndex((g: any) => g.id === 'exposure');
-    list.splice(expIdx + 1, 0, exitG);
-  }
-  return list;
-});
-
-/** 分组手风琴折叠状态：默认仅展开核心组（仓位与出场），其余紧凑收拢为单行摘要，极大缩短页面长度 */
-const expandedGroups = ref<Record<string, boolean>>({
-  exposure: true,
-  exit_strategy: true,
-  per_trade: false,
-  stop_loss: false,
-  pyramiding: false,
-});
-
-const isAllExpanded = computed(() =>
-  orderedGroups.value.every((g: any) => expandedGroups.value[g.id] !== false),
-);
-
-function toggleAllGroups() {
-  const target = !isAllExpanded.value;
-  for (const g of orderedGroups.value) {
-    expandedGroups.value[g.id] = target;
-  }
-}
-
-function groupSummary(groupId: string): string {
-  if (groupId === 'exit_strategy') {
-    const scaleOut = draft.ASTRA_SCALE_OUT_ENABLED ? `分批 ${Math.round((draft.ASTRA_SCALE_OUT_RATIO || 0.5) * 100)}%` : '分批禁用';
-    const maxTp = `止盈宽 ≤ ${draft.ASTRA_MAX_TAKE_PROFIT_ATR || 3.5}x ATR`;
-    return `${scaleOut} · ${maxTp}`;
-  }
-  if (groupId === 'exposure') {
-    const levMin = draft.ASTRA_MIN_LEVERAGE || 2;
-    const levMax = draft.ASTRA_MAX_LEVERAGE || 5;
-    return `杠杆 ${levMin}~${levMax}x · 单笔 ${Math.round((draft.ASTRA_MAX_MARGIN_EQUITY_RATIO || 0.2) * 100)}%`;
-  }
-  if (groupId === 'per_trade') {
-    const rrMin = (draft.ASTRA_MIN_RISK_REWARD || 2.0).toFixed(1);
-    const rrMax = (draft.ASTRA_MAX_RISK_REWARD || 3.5).toFixed(1);
-    return `R:R ${rrMin}~${rrMax} · 置信度 ≥ ${draft.ASTRA_MIN_ENTRY_CONFIDENCE || 80}%`;
-  }
-  if (groupId === 'stop_loss') {
-    return `止损宽 ${draft.ASTRA_STOP_LOSS_ATR_MULT || 2.0}x ATR · 日亏 ${Math.round((draft.ASTRA_DAILY_LOSS_EQUITY_RATIO || 0.05) * 100)}% · 冷静 ${draft.ASTRA_STOP_COOLDOWN_MINUTES || 30}m`;
-  }
-  if (groupId === 'pyramiding') {
-    return (draft.ASTRA_MAX_SCALE_IN_COUNT || 0) > 0 ? `允许加仓 ${draft.ASTRA_MAX_SCALE_IN_COUNT} 次` : '已禁用加仓';
-  }
-  return '';
-}
-
-function groupHasDirty(groupId: string): boolean {
-  return dirtyKeys.value.some((key: string) => {
-    const p = schema.value?.params.find((x: any) => x.key === key);
-    return p && p.group === groupId;
-  });
-}
 
 async function saveChanges() {
   if (!dirtyKeys.value.length) return
@@ -400,10 +369,6 @@ onMounted(loadData)
       </template>
     </PageHeader>
 
-    <BaseTabs v-model="activeTab" :items="tabs" :label="t('admin.risk.tabsLabel')" baseId="rk" />
-
-    <div v-if="activeTab === 'params'" id="rk-panel-params" role="tabpanel" aria-labelledby="rk-tab-params" tabindex="0">
-
     <!-- 生效说明条 -->
     <div class="rk-note" :class="{ 'is-warn': driftCount.length || processFresh?.stale }">
       <AlertTriangle v-if="driftCount.length || processFresh?.stale" :size="13" />
@@ -461,17 +426,34 @@ onMounted(loadData)
           <div
             v-for="s in suites"
             :key="s.id"
-            class="rk-suite"
-            :class="{ 'is-on': activeSuiteId === s.id }"
+            class="rk-suite transition-all duration-200"
+            :class="{ 'is-on !border-l-4 !border-[var(--brand)]': activeSuiteId === s.id }"
           >
             <div class="rk-suite-top">
-              <span class="rk-suite-name">{{ s.name }}</span>
+              <div class="flex items-center gap-2">
+                <component
+                  :is="s.id === 'conservative' ? Shield : (s.id === 'aggressive' ? Zap : Target)"
+                  :size="15"
+                  :class="activeSuiteId === s.id ? 'text-[var(--brand)]' : 'text-[var(--ink-3)]'"
+                />
+                <span class="rk-suite-name">{{ s.name }}</span>
+              </div>
               <span v-if="activeSuiteId === s.id" class="badge badge-up">{{ t('admin.risk.activeNow') }}</span>
               <span v-else class="rk-suite-tag">{{ s.tagline }}</span>
             </div>
             <p class="rk-suite-desc">{{ s.desc }}</p>
+            <div class="flex flex-wrap gap-x-2.5 gap-y-1 pt-1.5 pb-0.5 border-t border-[var(--line-subtle)] font-mono text-4xs">
+              <span class="text-[var(--ink-3)]">{{ t('admin.risk.suiteMetricLev') }}: <b class="text-[var(--ink-1)] font-medium">{{ s.values?.ASTRA_MIN_LEVERAGE }}~{{ s.values?.ASTRA_MAX_LEVERAGE }}x</b></span>
+              <span class="text-[var(--ink-3)]">{{ t('admin.risk.suiteMetricMargin') }}: <b class="text-[var(--ink-1)] font-medium">{{ Math.round((s.values?.ASTRA_MAX_MARGIN_EQUITY_RATIO || 0) * 100) }}%</b></span>
+              <span class="text-[var(--ink-3)]">{{ t('admin.risk.suiteMetricRisk1R') }}: <b class="text-[var(--accent)] font-medium">{{ Number(((s.values?.ASTRA_RISK_PER_TRADE_RATIO || 0) * 100).toFixed(1)) }}%</b></span>
+              <span class="text-[var(--ink-3)]">{{ t('admin.risk.suiteMetricAssetCap') }}: <b class="text-[var(--ink-1)] font-medium">{{ Math.round((s.values?.ASTRA_SINGLE_ASSET_EQUITY_RATIO || 0) * 100) }}%</b></span>
+              <span class="text-[var(--ink-3)]">{{ t('admin.risk.suiteMetricRR') }}: <b class="text-[var(--brand)] font-medium">{{ s.values?.ASTRA_MIN_RISK_REWARD }}~{{ s.values?.ASTRA_MAX_RISK_REWARD }}</b></span>
+              <span class="text-[var(--ink-3)]">{{ t('admin.risk.suiteMetricCooldown') }}: <b class="text-[var(--ink-1)] font-medium">{{ s.values?.ASTRA_STOP_COOLDOWN_MINUTES }}m</b></span>
+              <span class="text-[var(--ink-3)]">{{ t('admin.risk.suiteMetricDailyLoss') }}: <b class="text-[var(--down)] font-medium">{{ Math.round((s.values?.ASTRA_DAILY_LOSS_EQUITY_RATIO || 0) * 100) }}%</b></span>
+            </div>
             <button type="button"
-              class="btn btn-ghost btn-sm"
+              class="btn btn-sm"
+              :class="activeSuiteId === s.id ? 'btn-primary' : 'btn-ghost'"
               :disabled="busy !== '' || activeSuiteId === s.id"
               @click="applySuite(s)"
             >
@@ -486,104 +468,127 @@ onMounted(loadData)
         <header class="card-head flex items-center justify-between">
           <div class="flex items-center gap-2">
             <h2 class="card-title"><ShieldAlert :size="14" />{{ t('admin.risk.paramsTitle') }}</h2>
-            <span class="badge mono">{{ schema.params.length }}</span>
+            <span class="badge mono">{{ showAdvanced ? (coreParamsCount + advancedParamsCount) : coreParamsCount }}</span>
           </div>
           <button
             type="button"
-            class="btn btn-quiet btn-sm font-mono text-3xs"
-            @click="toggleAllGroups"
+            class="btn btn-ghost btn-sm font-mono text-3xs flex items-center gap-1.5"
+            :class="{ 'bg-[var(--surface-3)] text-[var(--ink-1)] font-medium': showAdvanced }"
+            :aria-expanded="showAdvanced"
+            :aria-controls="showAdvanced ? 'rk-advanced-list' : undefined"
+            @click="showAdvanced = !showAdvanced"
           >
-            {{ isAllExpanded ? t('common.collapseAll') : t('common.expandAll') }}
+            <Layers :size="12" />
+            <span>{{ showAdvanced ? t('admin.risk.hideAdvanced') : t('admin.risk.showAdvanced', undefined, { n: advancedParamsCount }) }}</span>
+            <span v-if="hasDirtyAdvanced" class="badge badge-warn text-3xs">{{ t('admin.risk.customized') }}</span>
           </button>
         </header>
 
-        <div v-for="group in orderedGroups" :key="group.id" class="rk-group">
-          <header
-            class="rk-group-head cursor-pointer select-none transition-colors hover:bg-[var(--surface-3)]"
-            role="button"
-            tabindex="0"
-            :aria-expanded="expandedGroups[group.id] !== false"
-            :aria-controls="activeTab === 'params' ? 'risk-group-' + group.id : undefined"
-            @click="expandedGroups[group.id] = !expandedGroups[group.id]"
-            @keydown.enter.prevent="expandedGroups[group.id] = !expandedGroups[group.id]"
-            @keydown.space.prevent="expandedGroups[group.id] = !expandedGroups[group.id]"
-          >
-            <component :is="groupIcons[group.id] || ShieldAlert" :size="14" />
-            <div class="rk-group-text flex-1">
-              <div class="flex items-center gap-2">
-                <span class="rk-group-name">{{ group.label }}</span>
-                <span v-if="groupHasDirty(group.id)" class="badge badge-warn text-3xs">{{ t('admin.risk.customized') }}</span>
-                <span v-if="!expandedGroups[group.id]" class="text-3xs font-mono text-[var(--ink-3)] bg-[var(--surface-2)] px-1.5 py-0.5 rounded border border-[var(--line-1)]">
-                  {{ groupSummary(group.id) }}
-                </span>
-              </div>
-              <span class="rk-group-desc">{{ group.desc }}</span>
+        <!-- 杠杆区间合并行 -->
+        <div v-if="levMinP && levMaxP" class="rk-row">
+          <div class="rk-row-info">
+            <div class="rk-row-title">
+              <span>{{ t('admin.risk.levRangeTitle') }}</span>
+              <span class="badge badge-up text-3xs">{{ t('admin.risk.coreBadge') }}</span>
+              <span v-if="isCustomized(levMinP) || isCustomized(levMaxP)" class="badge badge-warn">
+                {{ t('admin.risk.customized') }}
+              </span>
+              <span v-if="levInverted" class="badge badge-down">{{ t('admin.risk.levInverted') }}</span>
             </div>
-            <component
-              :is="expandedGroups[group.id] ? ChevronDown : ChevronRight"
-              :size="14"
-              class="text-[var(--ink-3)] transition-transform shrink-0"
-            />
-          </header>
-
-          <div :id="'risk-group-' + group.id" v-show="expandedGroups[group.id] !== false">
-
-          <!-- 杠杆区间合并行 -->
-          <div v-if="group.id === 'exposure' && levMinP && levMaxP" class="rk-row">
-            <div class="rk-row-info">
-              <div class="rk-row-title">
-                <span>{{ t('admin.risk.levRangeTitle') }}</span>
-                <span v-if="isCustomized(levMinP) || isCustomized(levMaxP)" class="badge badge-warn">
-                  {{ t('admin.risk.customized') }}
-                </span>
-                <span v-if="levInverted" class="badge badge-down">{{ t('admin.risk.levInverted') }}</span>
-              </div>
-              <p class="panel-desc">{{ t('admin.risk.levRangeDesc') }}</p>
-              <p class="rk-row-meta mono">
-                {{ t('admin.risk.defaultWord') }} {{ toDisplay(levMinP, levMinP.default) }} ~ {{ toDisplay(levMaxP, levMaxP.default) }} x
-                · {{ t('admin.risk.configurableWord') }} {{ toDisplay(levMinP, levMinP.min) }} ~ {{ toDisplay(levMaxP, levMaxP.max) }} x
-                · {{ levMinP.key }} / {{ levMaxP.key }}
-              </p>
-            </div>
-
-            <div class="rk-input-group focus-ring">
-              <input
-                v-model="disp[levMinP.key]"
-                type="number"
-                inputmode="decimal"
-                class="rk-input"
-                :aria-label="t('admin.risk.levLowerAria')"
-                :aria-invalid="outOfRange(levMinP) || levInverted ? 'true' : undefined"
-                :class="{ 'is-bad': outOfRange(levMinP) || levInverted }"
-                :min="toDisplay(levMinP, levMinP.min)"
-                :max="toDisplay(levMinP, levMaxP.max)"
-                :step="levMinP.step"
-                @input="onFieldInput(levMinP)"
-              />
-              <span class="rk-unit">x</span>
-              <span class="rk-sep">~</span>
-              <input
-                v-model="disp[levMaxP.key]"
-                type="number"
-                inputmode="decimal"
-                class="rk-input"
-                :aria-label="t('admin.risk.levUpperAria')"
-                :aria-invalid="outOfRange(levMaxP) || levInverted ? 'true' : undefined"
-                :class="{ 'is-bad': outOfRange(levMaxP) || levInverted }"
-                :min="toDisplay(levMaxP, levMaxP.min)"
-                :max="toDisplay(levMaxP, levMaxP.max)"
-                :step="levMaxP.step"
-                @input="onFieldInput(levMaxP)"
-              />
-              <span class="rk-unit">x</span>
+            <p class="panel-desc">{{ t('admin.risk.levRangeDesc') }}</p>
+            <p class="rk-row-meta mono">
+              {{ t('admin.risk.defaultWord') }} {{ toDisplay(levMinP, levMinP.default) }} ~ {{ toDisplay(levMaxP, levMaxP.default) }} x
+              · {{ t('admin.risk.configurableWord') }} {{ toDisplay(levMinP, levMinP.min) }} ~ {{ toDisplay(levMaxP, levMaxP.max) }} x
+              · {{ levMinP.key }} / {{ levMaxP.key }}
+            </p>
+            <div class="flex items-center gap-1.5 mt-2 flex-wrap">
+              <span class="text-3xs text-[var(--ink-3)] font-mono">{{ t('admin.risk.quickPresets') }}:</span>
+              <button
+                type="button"
+                class="btn btn-ghost btn-sm !h-5 !px-2 !py-0 text-3xs font-mono rounded"
+                :class="{ '!bg-[var(--brand)] !text-white font-medium': draft[levMinP.key] === 2 && draft[levMaxP.key] === 3 }"
+                @click="setLeverageCorridor(2, 3)"
+              >
+                2x ~ 3x
+              </button>
+              <button
+                type="button"
+                class="btn btn-ghost btn-sm !h-5 !px-2 !py-0 text-3xs font-mono rounded"
+                :class="{ '!bg-[var(--brand)] !text-white font-medium': draft[levMinP.key] === 2 && draft[levMaxP.key] === 5 }"
+                @click="setLeverageCorridor(2, 5)"
+              >
+                2x ~ 5x
+              </button>
+              <button
+                type="button"
+                class="btn btn-ghost btn-sm !h-5 !px-2 !py-0 text-3xs font-mono rounded"
+                :class="{ '!bg-[var(--brand)] !text-white font-medium': draft[levMinP.key] === 6 && draft[levMaxP.key] === 10 }"
+                @click="setLeverageCorridor(6, 10)"
+              >
+                6x ~ 10x
+              </button>
             </div>
           </div>
 
-          <!-- 常规参数行 -->
-          <div v-for="p in paramsOf(group.id)" :key="p.key" class="rk-row">
+          <div class="rk-input-group focus-ring">
+            <input
+              v-model="disp[levMinP.key]"
+              type="number"
+              inputmode="decimal"
+              class="rk-input"
+              :aria-label="t('admin.risk.levLowerAria')"
+              :aria-invalid="outOfRange(levMinP) || levInverted ? 'true' : undefined"
+              :class="{ 'is-bad': outOfRange(levMinP) || levInverted }"
+              :min="toDisplay(levMinP, levMinP.min)"
+              :max="toDisplay(levMinP, levMaxP.max)"
+              :step="levMinP.step"
+              @input="onFieldInput(levMinP)"
+            />
+            <span class="rk-unit">x</span>
+            <span class="rk-sep">~</span>
+            <input
+              v-model="disp[levMaxP.key]"
+              type="number"
+              inputmode="decimal"
+              class="rk-input"
+              :aria-label="t('admin.risk.levUpperAria')"
+              :aria-invalid="outOfRange(levMaxP) || levInverted ? 'true' : undefined"
+              :class="{ 'is-bad': outOfRange(levMaxP) || levInverted }"
+              :min="toDisplay(levMaxP, levMaxP.min)"
+              :max="toDisplay(levMaxP, levMaxP.max)"
+              :step="levMaxP.step"
+              @input="onFieldInput(levMaxP)"
+            />
+            <span class="rk-unit">x</span>
+          </div>
+        </div>
+
+        <!-- 参数条目平铺（无嵌套折叠卡片，核心参数首屏直见） -->
+        <template v-for="(p, idx) in visibleParams" :key="p.key">
+          <!-- 高级参数分隔条（仅当展开高级参数且到达第一项高级参数时显示） -->
+          <div
+            v-if="showAdvanced && p.tier === 'advanced' && (idx === 0 || visibleParams[idx - 1]?.tier === 'core')"
+            id="rk-advanced-list"
+            class="rk-advanced-divider"
+          >
+            <div class="flex items-center gap-2">
+              <Layers :size="13" class="text-[var(--ink-3)]" />
+              <span class="text-3xs font-mono font-medium text-[var(--ink-2)]">
+                {{ t('admin.risk.advancedHeading', undefined, { n: advancedParamsCount }) }}
+              </span>
+            </div>
+            <span class="text-4xs text-[var(--ink-3)]">{{ t('admin.risk.advancedParamsDesc') }}</span>
+          </div>
+
+          <div class="rk-row">
             <div class="rk-row-info">
               <div class="rk-row-title">
                 <span>{{ p.label }}</span>
+                <span v-if="p.tier === 'advanced'" class="badge text-3xs">{{ t('admin.risk.advancedBadge') }}</span>
+                <span v-else class="badge badge-up text-3xs">{{ t('admin.risk.coreBadge') }}</span>
+                <span v-if="calcMarginPreview(p)" class="badge badge-accent text-3xs font-mono" :title="t('admin.risk.liveEquityHint')">
+                  {{ calcMarginPreview(p) }}
+                </span>
                 <span v-if="isCustomized(p)" class="badge badge-warn">{{ t('admin.risk.customized') }}</span>
               </div>
               <p class="panel-desc">{{ p.desc }}</p>
@@ -634,8 +639,7 @@ onMounted(loadData)
               </button>
             </div>
           </div>
-          </div>
-        </div>
+        </template>
       </section>
 
       <!-- 危险区 -->
@@ -666,11 +670,6 @@ onMounted(loadData)
         <Save v-else :size="14" />
         <span>{{ busy === 'save' ? t('admin.risk.saving') : t('admin.risk.saveApply') }}</span>
       </button>
-    </div>
-    </div>
-
-    <div v-else id="rk-panel-pipeline" role="tabpanel" aria-labelledby="rk-tab-pipeline" tabindex="0">
-      <InterceptorsPage embedded />
     </div>
   </div>
 </template>
@@ -821,36 +820,16 @@ onMounted(loadData)
   align-self: flex-start;
 }
 
-/* ══ 参数分组 ══ */
-.rk-group + .rk-group {
-  border-top: 1px solid var(--ds-color-border-default);
-}
-.rk-group-head {
+/* ══ 高级参数分隔条 ══ */
+.rk-advanced-divider {
   display: flex;
-  align-items: flex-start;
-  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ds-space-2);
   padding: var(--ds-space-3) var(--ds-space-4);
   background-color: var(--ds-color-bg-surface-inset);
-  color: var(--ds-color-text-description);
-}
-.rk-group-head > svg {
-  margin-top: 2px;
-  flex-shrink: 0;
-}
-.rk-group-text {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  min-width: 0;
-}
-.rk-group-name {
-  font-size: var(--text-xs);
-  font-weight: 600;
-  color: var(--ds-color-text-primary);
-}
-.rk-group-desc {
-  font-size: var(--text-4xs);
-  color: var(--ds-color-text-placeholder);
+  border-top: 1px solid var(--ds-color-border-default);
+  flex-wrap: wrap;
 }
 
 .rk-row {

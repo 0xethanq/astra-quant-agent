@@ -455,6 +455,36 @@ class ScaleOutFillFinalizeTests(unittest.TestCase):
         self.assertEqual(recorded, [], "已收尾过的持仓不得重复记账")
         self.assertEqual(notified, [])
 
+    def test_remaining_cloud_stop_is_amended_to_breakeven_on_leg_fill(self):
+        """★ 首批止盈腿成交后：必须将交易所剩余保护单同步推进至保本止损位。"""
+        from unittest.mock import MagicMock
+        tracker = self._tracker()
+        mock_okx = MagicMock()
+        mock_okx.pending_algo_orders.return_value = [
+            {"algoId": "leg2_runner", "sz": "2366", "side": "buy", "posSide": "short",
+             "state": "live", "tpTriggerPx": "1.07", "slTriggerPx": "1.18", "reduceOnly": "true"}
+        ]
+        import scripts.trader.scale_out as _so
+        with tempfile.TemporaryDirectory(prefix="astra-scaleout-amend-") as _td, \
+             patch.object(_so, "SCALE_OUT_EVENTS_FILE", Path(_td) / "scale_out_events.jsonl"), \
+             patch("scripts.trader.scale_out.SCALE_OUT_ENABLED", True), \
+             patch("scripts.trader.scale_out.SCALE_OUT_RATIO", 0.5):
+            ok, reason = _so.execute_scale_out_if_eligible(
+                self._factor(), self._position(2366),
+                {"SUI-USDT-SWAP_short": tracker}, "2026-09-29 17:00:00", [],
+                okx_rest=mock_okx, venue_registry=None,
+                record_trade=lambda *a: None, notify_trade_close=lambda *a: None,
+                close_fee=lambda *a: 0.0, close_trade_payload=lambda **kw: kw,
+                TAKER_FEE_RATE=0.0005,
+                ensure_cloud_position_protection=lambda *a, **k: (True, "ok"),
+            )
+        self.assertTrue(ok, reason)
+        self.assertEqual(mock_okx.amend_algo_sl.call_count, 1)
+        args, kwargs = mock_okx.amend_algo_sl.call_args
+        self.assertEqual(args[0], "leg2_runner")
+        self.assertAlmostEqual(args[1], 1.1391, places=4)
+        self.assertEqual(kwargs.get("inst_id"), "SUI-USDT-SWAP")
+
 
 class ScaleOutEventLedgerTests(unittest.TestCase):
     """事件流水是可观测性的第一手证据（用户"看不出分批止盈发生过"的根治）。"""

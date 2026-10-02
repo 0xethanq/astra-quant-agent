@@ -151,17 +151,17 @@ test('字阶：不许有亚像素档位（去重后相邻档差 ≥ 1px，批 89
     [],
     `字阶里出现亚像素相邻档（0.5px 级差肉眼不可辨，等于同一档位多个名字）：\n  ${tooClose.join('\n  ')}`,
   );
-  // 生效字阶钉死：改动这里必须是有意的
-  assert.deepEqual(uniq, [11, 12, 13, 14, 15, 18, 22, 26], `生效字阶变化：${uniq.join('/')}`);
+  // 生效字阶钉死：改动这里必须是有意的（2026-10 升级高分屏舒适字阶）
+  assert.deepEqual(uniq, [12, 13, 14, 15, 16, 20, 24, 30, 36, 48, 60, 76], `生效字阶变化：${uniq.join('/')}`);
 });
 
-test('字阶：12px 同值别名组必须保持（批 89 有意保留的语义名）', () => {
+test('字阶：13px 同值别名组必须保持（批 89 有意保留的语义名，2026-10 升级）', () => {
   const scale = readScale();
-  const aliases = Object.entries(scale).filter(([, v]) => v === 12).map(([k]) => k).sort();
+  const aliases = Object.entries(scale).filter(([, v]) => v === 13).map(([k]) => k).sort();
   assert.deepEqual(
     aliases,
     ['2xs', '3xs', 'sm', 'xs'],
-    `12px 别名组变化（增删都要有意为之，并同步 tokens.css 的说明）：${aliases.join('/')}`,
+    `13px 别名组变化（增删都要有意为之，并同步 tokens.css 的说明）：${aliases.join('/')}`,
   );
   // 曾经的亚像素档不得回潮
   for (const [name, v] of Object.entries(scale)) {

@@ -42,9 +42,12 @@ export const zhAdminAbout = {
   checkUpToDate: "当前代码已是最新，与远端主分支保持同步。",
   updateSuccess: "系统更新成功！",
   updateNoop: "当前分支已是最新。",
+  commitsTitle: "待同步更新内容 (最新提交)：",
 
   // ── 推倒重来新增（批 8）──
   productTitle: '产品信息',
+  pitchTitle: '系统核心定位',
+  pitchBody: '多模型对抗交叉质询、7层量化因子微积分验证、纯 Python 物理风控一票否决的 OKX 永续合约自主交易系统。',
   bandVersion: '系统版本',
   bandControlPlane: '网关控制面',
   bandRuntime: '运行环境',

@@ -54,12 +54,18 @@
      同一张对差集表里查出来的，一并补上。 */
   --text-md: var(--text-md);
   --text-md--line-height: 1.5;
+  --text-5xl: var(--text-5xl);
+  --text-5xl--line-height: 1.1;
+  --text-6xl: var(--text-6xl);
+  --text-6xl--line-height: 1.05;
+  --text-7xl: var(--text-7xl);
+  --text-7xl--line-height: 1.02;
 }
 
 /* =========================================================================
    批 37 · 补齐行高工具类（`leading-body` / `leading-dense`）
    -------------------------------------------------------------------------
-   **与批 28 同源的静默失效**：tokens.css 定义了 `--leading-body: 1.6`（DSH 160%）
+   **与批 28 同源的静默失效**：tokens.css 定义了 `--leading-body: 1.6`（160% 行高）
    与 `--leading-dense: 1.45`（表格行专用），但 @theme 从未声明这一档 →
    `.leading-body` / `.leading-dense` **一条规则都没生成**。
 

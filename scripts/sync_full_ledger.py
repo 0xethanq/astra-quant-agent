@@ -147,6 +147,8 @@ def _write_sync_status(env):
 
 INITIAL_STATE_FILE = os.path.join(DATA_DIR, "account_initial_state.json")
 POSITION_TRACKER_FILE = os.path.join(DATA_DIR, "position_trackers.json")
+#: 平仓证据旁车（由 `scripts/trader/close_evidence.py` 在平仓前写入）。
+CLOSE_EVIDENCE_FILE = os.path.join(DATA_DIR, "closed_trade_evidence.json")
 
 from instrument_pool import load_instruments
 
@@ -346,6 +348,8 @@ def _holding_row(p, venue, *, env, trackers, tz_bj, allowed, council_by_inst,
 
 
 from scripts.ledger.okx_history import build_okx_trade
+from scripts.ledger.evidence_join import enrich_closed_rows_with_evidence
+from scripts.trader.close_evidence import load_close_evidence
 from scripts.ledger.merge import merge_lifecycle_trades
 from scripts.ledger.notify import notify_newly_closed_trades
 from scripts.ledger.holdings import (
@@ -518,6 +522,26 @@ def build_lifecycle_ledger():
         key=lambda x: str(x.get("close_time") or x.get("time") or x.get("open_time") or ""),
         reverse=True
     )
+
+    # 平仓证据 join（2026-10）：把"开仓快照＋MFE/MAE＋机制级离场原因＋决策来源"
+    # 从旁车 `closed_trade_evidence.json` 搬进平仓行，并给每一行打上
+    # `exit_reason_source`（`mechanism` = 机制确认 / `inferred` = 交易所侧推断）。
+    #
+    # ⚠️ 刻意放在**合并/排序后、写盘前**，且**不改 `build_okx_trade`** —— 那个函数被
+    # `tests/extraction/test_ledger_okx_history_extraction.py` 以 AST ＋逐行双重钉死，
+    # 在里面加字段等于把六个历史判定一起置于风险中。本步是纯派生，去掉即回滚。
+    try:
+        _evidence_rows = load_close_evidence(CLOSE_EVIDENCE_FILE)
+        combined_trades, _evidence_stats = enrich_closed_rows_with_evidence(
+            trades=combined_trades, evidence=_evidence_rows)
+        if _evidence_stats["closed_rows"]:
+            print(f"[sync_full_ledger] 平仓证据 join: {_evidence_stats['matched']}/"
+                  f"{_evidence_stats['closed_rows']} 行命中（机制确认 "
+                  f"{_evidence_stats['mechanism']}、推断 {_evidence_stats['inferred']}）")
+    except Exception as _evidence_exc:
+        # fail-soft：证据旁车是**增强**，坏了绝不许阻断台账写盘（与 council 溯源同纪律）
+        print(f"[sync_full_ledger] 平仓证据 join 跳过（不影响台账落盘）: {_evidence_exc}")
+
 
     fd, tmp_path = tempfile.mkstemp(prefix=".ledger-", suffix=".tmp", dir=DATA_DIR)
     try:

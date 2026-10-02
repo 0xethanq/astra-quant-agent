@@ -10,7 +10,7 @@
 | 量能 | ±1.5 | MACD 加速度 ±0.6；OBV 流向 ±0.5；放量 K 线 ±0.4 |
 | 均值回归 | ±1.2 | VWAP 极值 ±1.2；顺势健康区间 ±0.5 |
 | 情绪 | ±0.8 | `sentiment_score * 1.5` 夹取 |
-| 微积分 | ±1.5 | 四个动力学 regime ±0.5/0.6；定积分 ±0.4；概率 ±0.4 |
+| 7 梯队因子共振 | ±1.5 | T4 MACD 柱×加速度同向 ±0.6、背离 ±0.5；T0.5 CVD×Taker 比 ±0.4；T1 OBI ±0.3；T3 VWAP 乖离 ±0.2；T0 OI 四象限 ±0.3；`EXHAUSTED` 减半 |
 """
 
 import unittest
@@ -94,44 +94,80 @@ class MeanReversionFactorTest(_Base):
         self.assertEqual(self._score(vwap_bias=0.75, rsi=65.0)[0], -1.2)
 
 
-class CalculusFactorTest(_Base):
-    def _calc(self, **calc):
-        return self._score(calculus=calc)[0]
+class FactorResonanceTest(_Base):
+    """Sub-Factor 5（2026-10 重钉）：7 梯队因子共振，取代原微积分/定积分/概率。
 
-    def test_dynamics_regimes(self):
-        self.assertEqual(self._calc(regime="BULL_ACCELERATING"), 0.6)
-        self.assertEqual(self._calc(regime="BULL_DECELERATING"), -0.5,
-                         "多头减速扣分（Anti-FOMO）")
-        self.assertEqual(self._calc(regime="BEAR_ACCELERATING"), -0.6)
-        self.assertEqual(self._calc(regime="BEAR_DECELERATING"), 0.5,
-                         "空头减速加分（Anti-bottom-chasing）")
+    ⚠️ 原 `CalculusFactorTest` 守的是"v/a/i 三通道 + 定积分 + 概率"。
+    这三块整链退场后，同一条"方向证据"账目由**可观测因子**承载，
+    故本类改名并把每一条触发逐项钉住 —— 判据强度不放水。
+    """
 
-    def test_dynamics_from_velocity_acceleration_impulse(self):
-        """无 regime 字样时也要能从 v/a/i 推出来（双通道，不是只认字符串）。"""
-        self.assertEqual(self._calc(velocity=0.3, acceleration=0.2, impulse=0.5), 0.6)
-        self.assertEqual(self._calc(velocity=-0.3, acceleration=-0.2, impulse=-0.5), -0.6)
+    def _res(self, *, hist=0.0, accel=0.0, state="", div="", rsi_div="",
+             cvd5=0.0, taker=1.0, obi=0.0, obi_reliable=False, vwap=0.0,
+             quadrant="", **over):
+        return self._score(
+            trend_momentum={"macd_hist": hist, "macd_accel": accel,
+                            "macd_momentum_state": state, "macd_divergence": div,
+                            "rsi_divergence": rsi_div},
+            volume_money_flow={"cvd_5m_usd": cvd5, "taker_buy_sell_ratio": taker},
+            microstructure={"obi_pct": obi, "obi_robust_pct": obi,
+                            "depth_reliable": obi_reliable},
+            volume_profile={"vwap_bias_pct": vwap},
+            smart_money_derivatives={"oi_price_quadrant": quadrant},
+            **over)[0]
 
-    def test_definite_integrals_both_directions(self):
-        self.assertEqual(
-            self._calc(definite_integrals={"energy_integral": 2.0,
-                                           "deviation_area_integral": 1.0}), 0.4)
-        self.assertEqual(
-            self._calc(definite_integrals={"energy_integral": -2.0,
-                                           "deviation_area_integral": -1.0}), -0.4)
+    def test_macd_bar_and_acceleration_must_agree(self):
+        self.assertEqual(self._res(hist=1.0, accel=0.5), 0.6)
+        self.assertEqual(self._res(hist=-1.0, accel=-0.5), -0.6)
 
-    def test_probability_theory_both_directions(self):
-        self.assertEqual(
-            self._calc(probability_theory={"continuation_prob_pct": 80.0}), 0.4)
-        self.assertEqual(
-            self._calc(probability_theory={"breakdown_prob_pct": 80.0}), -0.4)
+    def test_macd_fading_bar_is_penalised_not_rewarded(self):
+        """柱体仍正但在收缩 ⇒ **扣分**（反 FOMO）；反之空头动能衰减加分。"""
+        self.assertEqual(self._res(hist=1.0, accel=-0.5), -0.3)
+        self.assertEqual(self._res(hist=-1.0, accel=0.5), 0.3)
 
-    def test_calculus_is_clamped_to_band(self):
-        """子因子夹取在 ±1.5 —— 累加超额不得把分数顶出区间。"""
-        score = self._calc(regime="BULL_ACCELERATING",
-                           definite_integrals={"energy_integral": 2.0,
-                                               "deviation_area_integral": 1.0},
-                           probability_theory={"continuation_prob_pct": 80.0})
-        self.assertEqual(score, 1.4, "0.6+0.4+0.4=1.4（未越界，验证累加口径）")
+    def test_exhausted_state_halves_the_score(self):
+        self.assertEqual(self._res(hist=1.0, accel=0.5, state="EXHAUSTED"), 0.3)
+        self.assertEqual(self._res(hist=1.0, accel=0.5, state="BULL_EXHAUSTING"), 0.3)
+
+    def test_divergence_flips_the_direction(self):
+        self.assertEqual(self._res(div="BEARISH_DIVERGENCE"), -0.5)
+        self.assertEqual(self._res(rsi_div="BULLISH_DIVERGENCE"), 0.5)
+        self.assertEqual(self._res(div="BEARISH"), -0.5)
+        self.assertEqual(self._res(rsi_div="BULLISH"), 0.5)
+
+    def test_orderflow_needs_cvd_and_taker_ratio_to_agree(self):
+        """单看一个大数容易被单笔大单骗 ⇒ CVD 与 Taker 比必须同向。"""
+        self.assertEqual(self._res(cvd5=1e6, taker=1.10), 0.4)
+        self.assertEqual(self._res(cvd5=-1e6, taker=0.90), -0.4)
+        self.assertEqual(self._res(cvd5=1e6, taker=1.01), 0.0,
+                         "Taker 比未过半门槛 ⇒ 不加分")
+        self.assertEqual(self._res(cvd5=1e6, taker=0.85), 0.0, "互相矛盾 ⇒ 0")
+
+    def test_obi_and_vwap_and_quadrant(self):
+        # OBI 只在 `depth_reliable=True` 时采信（实测原始 OBI 会被单笔挂单支配）
+        self.assertEqual(self._res(obi=25.0, obi_reliable=True), 0.3)
+        self.assertEqual(self._res(obi=-25.0, obi_reliable=True), -0.3)
+        self.assertEqual(self._res(obi=25.0, obi_reliable=False), 0.0,
+                         "不可信盘口不得贡献方向分")
+        self.assertEqual(self._res(obi=-25.0), 0.0, "缺省（未标注可信）同样不采信")
+        self.assertEqual(self._res(vwap=-0.9), 0.2)
+        self.assertEqual(self._res(vwap=0.9), -0.2)
+        # ⚠️ 象限名取自 `classify_derivatives_quadrant()` 的词表
+        self.assertEqual(self._res(quadrant="SHORT_COVERING"), 0.3)
+        self.assertEqual(self._res(quadrant="LONG_LIQUIDATION"), -0.3)
+
+    def test_the_sub_factor_is_clamped_to_its_band(self):
+        """全部触发同向堆叠也**不得**越过 ±1.5（区间是账目契约）。"""
+        hot = self._res(hist=1.0, accel=0.5, cvd5=1e6, taker=1.2, obi=30.0,
+                        vwap=-1.0, quadrant="SHORT_COVERING")   # 0.6+0.4+0.3+0.2+0.3
+        self.assertEqual(hot, 1.5, "1.8 被夹到区间上限 1.5")
+        cold = self._res(hist=-1.0, accel=-0.5, cvd5=-1e6, taker=0.8, obi=-30.0,
+                         vwap=1.0, quadrant="LONG_LIQUIDATION")
+        self.assertEqual(cold, -1.5)
+
+    def test_missing_tiers_are_neutral_not_directional(self):
+        """梯队整体缺失 ⇒ 子因子必须是 0（**不许**把缺失读成中性偏多/偏空）。"""
+        self.assertEqual(self._score()[0], 0.0)
 
 
 class InstitutionalSetupTest(_Base):
@@ -167,21 +203,32 @@ class InstitutionalSetupTest(_Base):
         self.assertEqual(score, -2.5)
         self.assertEqual(action, "SELL_SHORT")
 
-    def test_high_jerk_shock_dampens_breakout_setups(self):
-        """高抖动冲击市场 ⇒ **压制突破类形态**（Setup 1-4 都带 `not is_high_jerk_shock`）。"""
+    def test_volatility_shock_dampens_breakout_setups(self):
+        """ATR% ≥ 4 的冲击行情 ⇒ **压制突破类形态**（Setup 1-4 都带 `not is_high_jerk_shock`）。
+
+        2026-10 重钉：原判据是高 jerk（`max_abs_jerk ≥ 1.8` / `SHOCK_HIGH_JERK` regime），
+        该字段随数理链退场；同一意图（极端波动里突破假信号率飙升）现由
+        **ATR% 与有效点差**承载 —— 更直接，且不依赖已删除的动力学快照。
+        """
         _, _, tag = self._score(
             price=100.0, ema9=99.0, ema21=98.0, ema55=97.0, rsi=60.0,
             vol_ratio=1.3, macd_accel=0.5, macd_hist=0.5, is_bull_candle_15m=True,
-            calculus={"max_abs_jerk": 2.5})
+            volatility_channel={"atr_pct": 4.5})
         self.assertEqual(tag, "⚪ 观望", "冲击市场不许追突破")
 
-    def test_high_jerk_shock_by_regime_string(self):
+    def test_wide_spread_also_dampens_breakout_setups(self):
+        """点差走阔（≥15bps）＝流动性抽离，同样压制突破类形态。"""
         _, _, tag = self._score(
             price=100.0, ema9=99.0, ema21=98.0, ema55=97.0, rsi=60.0,
             vol_ratio=1.3, macd_accel=0.5, macd_hist=0.5, is_bull_candle_15m=True,
-            calculus={"regime": "SHOCK_HIGH_JERK"})
-        self.assertEqual(tag, "⚪ 观望", "regime 字样同样要能识别冲击")
+            microstructure={"spread_bps": 18.0})
+        self.assertEqual(tag, "⚪ 观望")
 
-
-if __name__ == "__main__":
-    unittest.main()
+    def test_normal_volatility_does_not_block_the_setup(self):
+        """反向断言：正常波动（ATR% 1.0、点差 0.3bps）时必须**放行** ——
+        否则上一条会因为"永远拦住"而空转。"""
+        _, _, tag = self._score(
+            price=100.0, ema9=99.0, ema21=98.0, ema55=97.0, rsi=60.0,
+            vol_ratio=1.3, macd_accel=0.5, macd_hist=0.5, is_bull_candle_15m=True,
+            volatility_channel={"atr_pct": 1.0}, microstructure={"spread_bps": 0.3})
+        self.assertEqual(tag, "🚀 动量突破")

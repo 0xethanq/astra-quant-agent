@@ -106,18 +106,18 @@ class AssemblySemanticsTest(unittest.TestCase):
         rows = self._run(lib={"instruments": [{"instId": "BTC-USDT-SWAP", "chg24h": 9.9}]})
         self.assertEqual(rows[0]["chg24h"], 9.9, "没有实时 ticker ⇒ 用因子库")
 
-    def test_library_indicators_and_the_neutral_default(self):
-        """库里的 `trend_momentum` 指标；两处都没有时 `rsi` 落到 **50.0**。
+    def test_library_indicators_and_missing_rsi(self):
+        """库里的 `trend_momentum` 指标；两处都没有时 `rsi` **必须缺失**。
 
-        ⚠️ 值得记一笔：`rsi` 读不到给 **50.0**（一个**看起来中性**的数值），而同行的 `adx`
-        读不到给占位符 —— 同一行里两种「读不到」表示法并存。本用例只钉现状；
-        「读不到是否该给中性数值」列为待议（与「读不到 ≠ 没有」相关）。
+        ★ 2026-10「不许假数据」：原先读不到给 **50.0** —— 一个看起来中性的数值，
+        看板会显示"RSI=50 中性"，而行内 `adx` 给的是占位符（同一行两种表示法并存，
+        正是本仓红线"缺失 ≠ 0/中性"的反例）。现在与 `adx` 对齐：都缺失。
         """
         rows = self._run(lib={"instruments": [
             {"instId": "BTC-USDT-SWAP", "trend_momentum": {"rsi_14": 61.5}}]})
         self.assertEqual(rows[0]["rsi"], 61.5, "库里有指标就用库里的")
         rows = self._run()
-        self.assertEqual(rows[0]["rsi"], 50.0, "两处都没有 ⇒ 中性默认值 50.0（现状，列待议）")
+        self.assertIsNone(rows[0]["rsi"], "两处都没有 ⇒ 缺失（前端渲染 --），不许 50.0")
 
     def test_name_type_and_position_slot(self):
         rows = self._run()

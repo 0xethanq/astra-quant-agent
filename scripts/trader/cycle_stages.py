@@ -32,6 +32,8 @@ def fetch_universe_and_manage_positions(*,
         usdt_available,
         TARGET_INSTRUMENTS,
         ThreadPoolExecutor,
+        build_close_evidence,
+        append_close_evidence,
         fetch_single_instrument_data,
         load_trackers,
         manage_position_tp_and_trailing,
@@ -43,13 +45,55 @@ def fetch_universe_and_manage_positions(*,
     # 3. Process Positions & Dynamic Trailing Exits
     executed_actions = []
     trackers = load_trackers()
+    _trackers_snapshot = {k: dict(v) for k, v in trackers.items() if isinstance(v, dict)} if isinstance(trackers, dict) else {}
     stale_tracker_count = prune_trackers(trackers, real_pos_dict)
     if stale_tracker_count:
+        # 为在两轮巡检之间由交易所云端 OCO（移动止损/止盈）平仓的持仓补记平仓证据
+        for k, tr in _trackers_snapshot.items():
+            if k not in trackers:
+                try:
+                    append_close_evidence(
+                        build_close_evidence(
+                            tracker=tr,
+                            position_key=k,
+                            exit_cause="exchange_closed",
+                            closed_at=timestamp_full,
+                        ),
+                    )
+                except Exception:
+                    pass
         executed_actions.append(f"清理 {stale_tracker_count} 条已失效持仓追踪记录")
     for f in all_factors:
         curr_pos = f["position"]
         if curr_pos:
-            manage_position_tp_and_trailing(f, curr_pos, trackers, timestamp_full, executed_actions)
+            # 平仓前追踪器快照 + 机制级离场原因归档（2026-10）：
+            # 追踪器在平仓分支里被 `pop`，`highWaterMark`/`lowWaterMark`/开仓快照
+            # 随之消失；而返回值第二项**就是**机制级离场原因，旧实现直接丢弃，
+            # 于是台账只能按盈亏金额猜出场原因（实测 41% 是"止盈推定"）。
+            #
+            # ⚠️ 这里**不自己拼追踪器 key**（`f['instId'] + '_' + curr_pos['side']`）：
+            # 那会与 `position_exit.py` 的拼法重复一份，任一侧漂移就静默错配、证据
+            # 挂到别的仓上。改用**调用前后差集**定位被摘掉的那一条 —— 调用点只关心
+            # "谁没了"，不关心 key 怎么拼。
+            _keys_before = set(trackers)
+            _snapshot_before = {k: dict(trackers[k]) for k in _keys_before
+                                if isinstance(trackers.get(k), dict)}
+            # 返回值契约是 `(是否已平, 离场原因)`；但**旧调用方一直丢弃它**，
+            # 故桩/替身很可能返回 None。宽容解包：认不出就按"未平仓"处理
+            # （宁可不留证据，也不把"没平"错记成"已平"）。
+            _outcome = manage_position_tp_and_trailing(f, curr_pos, trackers, timestamp_full, executed_actions)
+            _closed, _exit_cause = (_outcome if isinstance(_outcome, tuple) and len(_outcome) == 2
+                                    else (False, ""))
+            _removed = [k for k in _keys_before if k not in trackers]
+            if _closed and len(_removed) == 1:
+                append_close_evidence(
+                    build_close_evidence(
+                        tracker=_snapshot_before.get(_removed[0]) or {},
+                        position_key=_removed[0],
+                        exit_cause=_exit_cause,
+                        closed_at=timestamp_full,
+                    ),
+                )
     save_trackers(trackers)
     # ⚠️ 不返回 `f`：原文段后对 `f` 的那次读（`f.write(log_entry)`）是
     # `with open(LOG_FILE) as f` **自己绑定的文件句柄**，与标的字典无关

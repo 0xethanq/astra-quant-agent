@@ -1,70 +1,126 @@
-# ASTRA AI 自进化量化交易系统 — 完整部署与灾备恢复手册 (QwenPaw)
+# AstraQuant — 生产部署与灾备恢复手册 (v8.5.0)
 
-> 本文档用于在任何全新环境（新云服务器 / 重新安装的 QwenPaw）中，100% 快速恢复本套基于 Gemini 3.7 Flash High（Reasoning High）深度思考的大模型全权决策自进化量化交易系统。
-
----
-
-## 1. 灾备架构概览
-
-- **交易核心**：`scripts/ai_brain_trader.py` + `scripts/ai_factor_trader.py`（聚焦 BTC/ETH/SOL/DOGE/SUI/LINK 6 标的，LLM 全权决策，Maker 限价挂单，OKX 云端 OCO 止盈止损 100% 保护）
-- **因子计算与同步守护**：`scripts/daemon_web_sync.py`（60 秒并发计算动量趋势、波动通道、资金流向、微观盘口与 Top100 聪明钱五大量化因子库）
-- **自进化心法引擎**：`scripts/self_improvement_engine.py`（每日 20:00 深度复盘真实流水，提炼 3 大启发式心法沉淀至 `data/AI_TRADING_MEMORY.md`）
-- **全网快讯情报流**：`scripts/news_sentiment_harvester.py`（OKX 最新与重大快讯双路聚合）
-- **Web 监控大屏**：`astra_backend/dashboard_cache.py` + `astra_backend/templates/index.html`（Bloomberg/Linear 级 Dark Glassmorphism 极客交易终端，支持全局 Prompt 悬浮透视抽屉）
-- **插件化灾备**：`scripts/backup_runtime.py` + 后台“灾备中心”（按任务配置本地、百度官方 OAuth/ByPy、S3 兼容、阿里云 OSS、WebDAV/OpenList、阿里云盘桥接与实验性夸克桥接；凭证独立加密，任务导出不含密钥）
-- **核心数据资产清单**：
-  - `data/trading_ledger.json` & `trading_ledger.xlsx`（全量交易流水账本与资金费记录，只读保留、不重写、不删除）
-  - `data/AI_TRADING_MEMORY.md`（QwenPaw 原生带时间戳启发式实战心法长期记忆）
-  - `data/ai_brain_history.json`（AI 大脑每 15 分钟全市场宏观推演与在途持仓审计日志）
-  - `data/ai_brain_last_prompt.txt`（15,500+ 字符真实 System + User Prompt 快照）
-  - `data/factor_library_snapshot.json`（五大核心量化因子库快照）
-  - `data/snapshots.json`（历史权益与回撤走势快照）
-  - `data/news_sentiment.json`（全网实时快讯舆情库）
-  - `data/quant_trader.db`（SQLite 核心审计数据库）
+> 本文档用于在全新服务器或灾难恢复场景下，快速恢复与拉起基于多模型对抗、7 层量化因子微积分验证与纯 Python 物理风控一票否决的 AstraQuant 自主量化交易系统。
 
 ---
 
-## 2. 新环境一键恢复步骤
+## 1. 核心架构与关键资产
 
-### 步骤 1：解压最新灾备包
-从后台配置的任一成功灾备目标下载最新归档。百度 ByPy 兼容目录通常为 `/我的应用数据/bypy/ASTRA_Backups/`；官方 OAuth 默认应用目录为 `/apps/AstraQuantumTrader/ASTRA_Backups/`；S3/OSS/WebDAV 使用任务中配置的远程前缀。上传至工作区并解压：
-```bash
-cd /app/working/workspaces/default
-tar -zxvf astra_system_backup_*.tar.gz
-```
+### 1.1 系统运行组件
+- **交易决策主脑**：`scripts/ai_brain_trader.py` + `scripts/ai_factor_trader.py`（每 15 分钟主脑周期，多模型投委会质询，Maker/BBO 挂单，OKX 云端 OCO 止盈止损保护）；
+- **微观因子与行情服务**：`scripts/factors/okx_quant_factors.py`（高频计算衍生品基差、订单流 CVD、深度盘口 OBI、波动率及量能筹码分布）；
+- **自进化复盘引擎**：`scripts/self_improvement_engine.py`（基于真实平仓流水与因子证据，归因复盘并沉淀长期交易心法）；
+- **统一网关与调度守护**：`astra_gateway/scheduler.py`（单进程驱动交易 15m、资讯 10m、因子 60s、进化 6h 与日终巡检 12h）；
+- **Web 控制面与终端**：FastAPI 后端（`astra_backend/`）+ Vue 3 交易工作站与管理控制台（`frontend/`，静态构建后由 8080 端口统一反代）；
+- **多端备份引擎**：`scripts/backup_runtime.py` + 后台「灾备中心」（`/admin/backup`，支持本地归档、S3/R2、阿里云 OSS、百度网盘、WebDAV、阿里云盘与夸克网盘）。
 
-### 步骤 2：恢复 OKX V5 API Key 配置
-先保持交易调度器停止。运行 `sh deploy/install.sh` 安装后端 Python 依赖（已有 `.env` 不会被覆盖），检查 `ASTRA_OKX_ENV=demo`。
-
-- 推荐在步骤 3 启动控制面后，通过 `/admin` →「账户接入」重新填入 DEMO / LIVE 各自的 API Key、Secret Key、Passphrase 三件套。后台采用 **Fernet 本地加密存储，留空不改**；只授予必要读取/交易权限，禁用提款权限。
-- 若从受信任的私密备份恢复凭证，必须保留**成对匹配**的 `data/astra_secrets.enc` 与 `data/.astra_secret_key`，并让服务账户有读取权限。不要假定普通数据归档已包含密钥；缺失或无法解密时，优先在后台重新配置，禁止把密钥提交到代码仓库。
-- 选中档位未配齐时为 **NOT READY**，OKX 私有调用及交易 fail-closed；公共行情仍可免凭证读取。服务器重启不再丢失短期登录授权：持久化密文和匹配加密密钥即可重新加载，但 API Key 被撤销、IP 白名单变化仍须处理。
-- 登录后查看 `GET /api/v1/admin/okx/runtime`：`environment` 确认档位，`mode_configured` 确认三件套，`status` 为 `READY` 或 `NOT_READY`，未配置时看 `not_ready_reason`。**READY 仅表示本地配置，不代表交易所鉴权已通过**；恢复调度前再用只读账户快照核对账户与持仓。
-
-### 步骤 3：一键启动 Web 监控大屏 (端口 8080)
-```bash
-cd /app/working/workspaces/default
-. .venv/bin/activate
-python -m uvicorn astra_backend.app:app --host 0.0.0.0 --port 8080
-```
-验证访问：`http://<你的服务器IP>:8080`
-
-### 步骤 4：恢复单一调度器
-确认 DEMO 账户与只读快照正常、复核风控与遗留仓位后，再在另一终端启动：
-```bash
-cd /app/working/workspaces/default
-. .venv/bin/activate
-python -m astra_gateway.worker
-```
-生产环境使用 `STANDALONE.md` 的 systemd 配置托管。恢复前停用旧 QwenPaw 交易定时任务及重复守护进程，**不得同时运行两套交易调度器**，避免重复下单。
+### 1.2 核心数据资产清单
+| 资产路径 | 类型 | 说明与安全级别 |
+|---|---|---|
+| `data/astra_secrets.enc` & `.astra_secret_key` | 核心凭据 | Fernet 本地强加密存储的 OKX 交易 API 凭证，成对匹配 |
+| `data/astra_admin.db` | 数据库 | 管理员账号鉴权与权限数据库（默认超级管理员 `admin`） |
+| `data/astra_quant.db` | 数据库 | 本地量化交易流水、委托快照与审计台账 |
+| `data/trading_ledger.json` | 交易台账 | 全量平仓历史账本与盈亏证据 |
+| `data/structured_trading_memory.json` | 策略心法 | 自进化认知中枢的结构化长期记忆事实源 |
+| `data/AI_TRADING_MEMORY.md` | 记忆镜像 | 供可视化与模型注入的 Markdown 格式心法镜像 |
+| `data/instrument_pool.json` | 标的配置 | 活跃交易标的池、合约面值、精度与杠杆限制 |
+| `data/prompt_library.json` | 提示词库 | 策略提示词方案与决策契约 |
+| `data/council_config.json` | 投委会 | 多模型投委会席位名单与提示词设置 |
+| `data/llm_models.json` | 模型网关 | 上游大模型接入凭证、端点与健康探测配置 |
+| `data/backup_methods.json` | 备份配置 | 各灾备云存储渠道的加密接入凭据 |
 
 ---
 
-## 3. 常用维护与测试命令
+## 2. 灾后冷恢复全流程
 
-- **查看 Web 监控状态**：`curl -s http://127.0.0.1:8080/api/all | head -c 100`
-- **手工执行一次全系统云端备份**：`python3 scripts/nightly_backup_and_clean.py`
-- **手工触发一次 AI 交易大脑推演**：`python3 scripts/ai_brain_trader.py`
-- **强制触发每日 AI 策略自进化复盘**：`python3 scripts/self_improvement_engine.py`
-- **手工全量对账同步 OKX 账本**：`python3 scripts/sync_full_ledger.py`
+### 步骤 1：解压最新灾备归档包
+从后台灾备中心备份的目标渠道（S3/OSS/网盘/本地）下载最新备份包 `data_backup_*.tar.gz`，解压至目标目录：
+```bash
+git clone https://github.com/0xethanq/astra-quant-agent.git astra-quant
+cd astra-quant
+tar -zxvf /path/to/data_backup_*.tar.gz
+```
 
+### 步骤 2：环境初始化与配置核对
+运行交互式向导或初始化虚拟环境：
+```bash
+./setup.sh                  # 交互式向导，快速核对配置与初始凭证
+# 或手动安装依赖：
+sh deploy/install.sh        # 创建 .venv 并安装核心依赖
+```
+
+**凭证核对关键项**：
+- 检查 `.env` 文件中的环境档位：`ASTRA_OKX_ENV=demo`（模拟盘）或 `live`（实盘）；
+- 确认 `data/astra_secrets.enc` 与 `data/.astra_secret_key` 存在且成对匹配；
+- 检查管理员访问口令：系统默认账号 `admin`，初始安全口令详见 `.env` 中的 `ASTRA_ADMIN_TOKEN`；
+- 生产部署前，系统处于 `NOT READY` 状态，不会发生未经人工确认的真实交易所交互。
+
+### 步骤 3：启动服务
+
+**方案 A：Docker 容器启动（推荐）**
+```bash
+./deploy/docker-start.sh    # 构建并拉起控制面与守护容器
+docker compose ps           # 检查服务健康状态
+```
+
+**方案 B：Linux 裸机 / systemd 服务启动**
+```bash
+# 1. 构建前端生产资源（如从源码全新构建）
+cd frontend && npm install && npm run build && cd ..
+
+# 2. 启动服务与调度守护
+./start.sh
+```
+> 如需以 systemd 常驻运行，参考 `deploy/astra-quant.service` 与 `deploy/astra-gateway.service` 模板。
+
+### 步骤 4：恢复验证与检查
+1. 访问交易工作站：`http://<服务器IP>:8080/trading` 确认实时行情与微观结构正常渲染；
+2. 登录管理控制台：`http://<服务器IP>:8080/admin/login`；
+3. 进入「账户中心」：检查 OKX 运行状态，确认 API 响应正常且延迟健康；
+4. 进入「风控中心」：确认各项风控参数符合当前资金规模预算。
+
+---
+
+## 3. 应急控制与制动操作 (Kill Switch)
+
+### 3.1 紧急停机与停止调度（急停自动报单）
+若发现外部行情极端异常或需紧急维护，立即中止自动化调度：
+```bash
+# 停止调度进程
+pkill -f astra_gateway
+# 检查是否已完全终止
+pgrep -fl astra_gateway
+```
+
+### 3.2 紧急全平持仓与撤销挂单
+- **方式 A（Web 控制台）**：
+  登录管理后台，进入「持仓面板」或「账户安全」，点击对应标的的【紧急平仓】或全局【一键全平】按钮；
+- **方式 B（交易所原生条件单托底）**：
+  AstraQuant 采用交易所原生云端 OCO 委托机制。即使服务器断网或完全关机，挂在 OKX 撮合引擎上的止损单依然物理生效，本金处于云端强制保护状态。
+
+### 3.3 数据清理与全新初始化重跑
+若需彻底清空历史实战数据，从零启动新一轮测试：
+```bash
+# 1. 归档现有数据
+mkdir -p .archive && tar -czf .archive/data_backup_$(date +%Y%m%d_%H%M%S).tar.gz data/ logs/
+
+# 2. 清空交易台账与追踪状态（保留密钥与配置）
+.venv/bin/python -c '
+import json
+for p in ["data/trading_ledger.json", "data/closed_trades.json", "data/closed_trade_evidence.json", "data/snapshots.json", "data/open_order_intents.json"]:
+    with open(p, "w") as f: json.dump([], f)
+for p in ["data/position_trackers.json", "data/trading_state.json", "data/stop_cooldown.json"]:
+    with open(p, "w") as f: json.dump({}, f)
+'
+```
+
+---
+
+## 4. 常用运维与验证命令
+
+- **查看后端服务运行状态**：`curl -s http://127.0.0.1:8080/api/all | head -c 120`
+- **手工触发一次全量多通道云备份**：`.venv/bin/python scripts/nightly_backup_and_clean.py --all-enabled`
+- **手工单次执行 AI 大脑推演周期**：`.venv/bin/python scripts/ai_brain_trader.py`
+- **手工触发一次策略自进化复盘**：`.venv/bin/python scripts/self_improvement_engine.py`
+- **手工执行 OKX 账本对账同步**：`.venv/bin/python scripts/sync_full_ledger.py`
+- **磁盘存储与日志安全轮转检查**：`.venv/bin/python scripts/cleanup_disk.py`

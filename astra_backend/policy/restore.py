@@ -83,7 +83,7 @@ def restore_archived_policy(resolve_archive_file: Callable[..., Path], root: Pat
     r_dir = root_dir or root
     archived_package_hash = str(
         package.get("package_hash") or (package.get("metadata") or {}).get("package_hash") or "")
-    # 请求键可能是整包标识（新命名）或四单元 policy_hash（历史命名）：四单元校验必须
+    # 请求键可能是整包标识（新命名）或策略单元 policy_hash（历史命名）：单元校验必须
     # 比对**归档自带的** policy_hash，否则新命名归档永远校验不过（审计 P0-3 修复配套）。
     archived_policy_hash = str(package.get("policy_hash") or policy_hash)
 
@@ -150,16 +150,7 @@ def restore_archived_policy(resolve_archive_file: Callable[..., Path], root: Pat
                     else:
                         raise ValueError(f"Unsupported evolution memory format: {type(evo_data)}")
 
-            # 3. Restore Interceptors
-            if (
-                "interceptor_config" in payload
-                and isinstance(payload["interceptor_config"], dict)
-                and payload["interceptor_config"]
-            ):
-                from astra_backend.interceptor_manager import save_config as save_interceptor_config
-                save_interceptor_config(payload["interceptor_config"])
-
-            # 4. Restore Council
+            # 3. Restore Council
             if (
                 "council_config" in payload
                 and isinstance(payload["council_config"], dict)
@@ -168,10 +159,10 @@ def restore_archived_policy(resolve_archive_file: Callable[..., Path], root: Pat
                 from astra_backend.council_manager import save_council_config
                 save_council_config(payload["council_config"])
 
-            # 5. Restore Risk Config
+            # 4. Restore Risk Config
             # 审计 P0-3(2026-09-13)：此处曾宽 except → logger.warning，于是「旧归档含已
             # 下架风控键 / 值越界」导致风控**整段没恢复**，接口仍返回 status=restored，
-            # 而审计与四单元哈希都看不见。现改为不吞：异常上抛 → 外层回滚 + 明确报错。
+            # 而审计与策略单元哈希都看不见。现改为不吞：异常上抛 → 外层回滚 + 明确报错。
             if (
                 "risk_config" in payload
                 and isinstance(payload["risk_config"], dict)
@@ -214,7 +205,7 @@ def restore_archived_policy(resolve_archive_file: Callable[..., Path], root: Pat
             f"策略回滚失败且已恢复原状态: 恢复后哈希 {new_snapshot['policy_hash']} 与目标 {archived_policy_hash} 不一致"
         )
 
-    # 审计 P0-3：四单元哈希看不到风控/路由——它们恢复失败时上面的校验永远是绿的。
+    # 审计 P0-3：策略单元哈希看不到风控/路由——它们恢复失败时上面的校验永远是绿的。
     # 现按整包规范化投影逐单元核对，任何「归档里承诺、恢复后没对上」的单元一律判定
     # 恢复失败并回滚（绝不留半套状态），并在报错里点名是哪个单元。
     new_package = capture_full_strategy_package(root, root_dir=r_dir)

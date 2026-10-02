@@ -57,7 +57,10 @@ class _Base(unittest.TestCase):
               positions=(), ctVal=1.0, adaptive=None, news_file=None):
         """返回装配好的因子字典 `f`。K 线按**由旧到新**传入，内部自动翻转成交易所的
         「最新在前」顺序（生产代码会 `reversed()`）。"""
-        books = {"15m": list(reversed(candles_15m if candles_15m is not None else _rising(45))),
+        # ★ 2026-10：15M 默认 45 → 60 根。生产取数已改 60（`ema55` 需 ≥55 根，45 根时
+        #   它会退化成现价），且 `market_data_valid` 现在要求 `ema55` 真的算出来 ——
+        #   夹具必须与生产同源，否则测的就不是生产形态。
+        books = {"15m": list(reversed(candles_15m if candles_15m is not None else _rising(60))),
                  "1H": list(reversed(candles_1h if candles_1h is not None else _rising(35))),
                  "4H": list(reversed(candles_4h if candles_4h is not None else _rising(25)))}
         item = {"instId": INST, "name": "BTC", "type": "crypto", "base_sz": 2.0,
@@ -69,6 +72,105 @@ class _Base(unittest.TestCase):
             instrument_profile=lambda f, asset_type: {"sl_atr_mult": 1.3},
             load_adaptive_config=lambda: (adaptive or {}))
 
+
+
+
+class VolumeRatioUsesTheClosedBarTest(_Base):
+    """★ 2026-10 实盘修复：量比必须用**已收盘**的那根 15M。
+
+    交易周期固定在 :00/:15/:30/:45 触发，此刻 OKX 返回的 `vols[-1]` 是**刚开盘**的
+    当前根（累积量 ≈ 整根的 1%）⇒ 旧实现下实盘 `vol_ratio` 长期在 0.01~0.06x，
+    而 `signals.py` 的量能子分要 `>= 1.25`、「动量爆发/空头加速」两个形态要 `>= 1.3`
+    ⇒ **量能证据被静默关掉**。实测同标的 80 秒内旧口径从 0.53 漂到 0.72（跟着当前根涨），
+    新口径恒定 —— 即旧值跟踪的是"采集时刻"而不是市场。
+
+    （与 `tests/ops/test_brain_packages.py::MicrostructureTests::
+      test_volume_ratio_ignores_the_still_forming_bar` 同族；那边修的是大脑侧。）
+    """
+
+    def test_forming_bar_is_excluded_from_the_ratio(self):
+        rows = [_candle(100.0, vol=10.0) for _ in range(30)]      # 30 根已收盘，量恒 10
+        rows[-1] = _candle(100.0, vol=40.0)                      # 最近一根**已收盘**：放量 4 倍
+        rows.append(_candle(100.0, vol=0.4))                     # 正在形成的当前根：累积量极小
+        f = self._call(candles_15m=rows)
+        # 40 / mean(前 20 根已收盘=10) = 4.0；若误用当前根则是 0.4/… ≈ 0.04
+        self.assertAlmostEqual(f["vol_ratio"], 4.0, places=2)
+
+    def test_ratio_is_stable_while_the_forming_bar_grows(self):
+        """当前根量变化**不得**影响量比（旧实现下它会跟着变）。"""
+        base = [_candle(100.0, vol=10.0) for _ in range(30)]
+        base[-1] = _candle(100.0, vol=20.0)
+        first = self._call(candles_15m=base + [_candle(100.0, vol=1.0)])
+        later = self._call(candles_15m=base + [_candle(100.0, vol=9.0)])
+        self.assertEqual(first["vol_ratio"], later["vol_ratio"])
+        self.assertAlmostEqual(first["vol_ratio"], 2.0, places=2)
+
+
+class CandleShapeUsesTheClosedBarTest(_Base):
+    """★ 2026-10 实盘修复：`is_bull/bear_candle_15m`、上下影线比取自**已闭合**的 15M。
+
+    原取 `candles_15m[-1]`（OKX 正在形成的当前根）。交易周期固定在 :00/:15/:30/:45
+    触发，此刻该根刚开盘 ⇒ 开≈收、影线≈0，形态标志与影线比是**采样时刻的函数**：
+    实测同一根内 91 秒从"非阳非阴/下影 0.577"翻成"阳线/下影 0.462"，而已收盘根恒定。
+    `signals.py` 的形态闸正是"收阳/收阴**或**长影线"，条文也明确要求"已闭合 K 线给出的
+    确认信号" ⇒ 必须用已收盘根。
+    """
+
+    def test_flags_come_from_the_closed_bar_not_the_forming_bar(self):
+        rows = [_candle(100.0) for _ in range(20)]
+        rows[-2] = _candle(101.0, open_=100.0, high=102.0, low=99.0)   # 已收盘：阳线
+        rows[-1] = _candle(99.0, open_=100.0, high=100.2, low=98.8)    # 形成中：阴线
+        f = self._call(candles_15m=rows)
+        self.assertTrue(f["is_bull_candle_15m"], "应取已收盘根（阳）")
+        self.assertFalse(f["is_bear_candle_15m"])
+
+    def test_closed_bar_bear_is_reported_even_if_the_forming_bar_is_bull(self):
+        rows = [_candle(100.0) for _ in range(20)]
+        rows[-2] = _candle(99.0, open_=100.0, high=100.5, low=98.5)    # 已收盘：阴线
+        rows[-1] = _candle(101.0, open_=100.0, high=101.5, low=99.9)   # 形成中：阳线
+        f = self._call(candles_15m=rows)
+        self.assertTrue(f["is_bear_candle_15m"])
+        self.assertFalse(f["is_bull_candle_15m"])
+
+    def test_wick_ratios_come_from_the_closed_bar(self):
+        rows = [_candle(100.0) for _ in range(20)]
+        # 已收盘：实体 100→101，下影到 98 ⇒ 下影 2 / 全幅 4 = 0.5
+        rows[-2] = _candle(101.0, open_=100.0, high=102.0, low=98.0)
+        # 形成中：下影极小
+        rows[-1] = _candle(100.0, open_=100.0, high=100.05, low=99.95)
+        f = self._call(candles_15m=rows)
+        self.assertAlmostEqual(f["lower_wick_ratio"], 0.5, places=2)
+
+class FifteenMinuteDepthSupportsEma55Test(_Base):
+    """★ 2026-10：15M 取数必须够算 `ema55`（≥55 根）。
+
+    实盘原取 45 根 ⇒ `calc_ema(closes, 55)` 退化返回最后一根收盘价 ⇒ EMA55 恒等于现价
+    ⇒ `signals.py` 的 `px >= ema55*0.994` 位置下限几何上恒真（实测 22.4% 的 K 线上
+    错误放行）。本门正向钉住取数深度，防止有人"省一次取数"把它改回去。
+    """
+
+    def test_requested_15m_depth_is_at_least_55(self):
+        asked = {}
+
+        def spy(inst, bar, n):
+            asked[bar] = n
+            return _rising(n) if bar == "15m" else _rising(n)
+
+        item = {"instId": INST, "name": "BTC", "type": "crypto", "base_sz": 1.0,
+                "precision": 2, "ctVal": 1.0, "minSz": 0.01}
+        fetch_single_instrument_data(
+            item, [], 1000.0, news_sentiment_file=self.tmp.name,
+            fetch_candles_direct=spy,
+            instrument_profile=lambda f, t: {"sl_atr_mult": 1.3},
+            load_adaptive_config=lambda: {})
+        self.assertGreaterEqual(asked["15m"], 55,
+                                "15M 取数少于 55 根 ⇒ EMA55 退化等于现价，位置闸失去下限")
+
+    def test_ema55_is_a_real_indicator_not_the_last_close(self):
+        f = self._call()
+        self.assertIsNotNone(f["ema55"])
+        closes = [float(c[4]) for c in reversed(_rising(60))]
+        self.assertNotAlmostEqual(f["ema55"], closes[-1], places=9)
 
 class BboTickerTest(_Base):
     """盘口取价（BBO）：成功 ⇒ 用**真实 bid/ask**（限价精度靠它）。"""
@@ -144,41 +246,30 @@ class SentimentTest(_Base):
 
 
 class CalculusTest(_Base):
-    """多周期动力学：**引擎成功时用它给的整包**（不是只挑几个字段抄）。"""
+    """⚠️ 反向断言（2026-10 重钉）：多周期动力学已**整链退场**。
 
-    def test_engine_result_is_adopted_wholesale(self):
-        import types
-        fake = types.ModuleType("calculus_engine")
-        fake.calculate_multi_timeframe = lambda books: {
-            "valid": True, "regime": "BULL_ACCELERATING", "velocity": 0.4,
-            "acceleration": 0.3, "impulse": 0.2, "max_abs_jerk": 0.1, "quality": 0.9}
-        with patch.dict("sys.modules", {"calculus_engine": fake}):
-            f = self._call()
-        self.assertEqual(f["calculus"]["regime"], "BULL_ACCELERATING")
-        self.assertEqual(f["calculus"]["velocity"], 0.4)
-        self.assertTrue(f["calculus"]["valid"])
+    原来这两条守的是「引擎成功 ⇒ 整包采纳 / 引擎失败 ⇒ 保留 `valid=False` 的
+    诚实形状 + `error` + 告警」。数理链退场后，真正要守的性质变成了三条：
+    ① 门面**不再调用引擎**（AST 判据，不被文档串误伤）；
+    ② `f["calculus"]` 仍是一个**键位完整的占位**（老读者不炸），但 `valid=False`；
+    ③ 占位里**不许再有 `error`** —— 出现 `error` 说明还有人真的去调了引擎。
+    """
 
-    def test_engine_failure_keeps_honest_zero_shape_with_reason(self):
-        """引擎炸了 ⇒ 保留「零动力学」的**诚实形状**（`valid=False`）+ 原因 + 告警。
+    def test_the_engine_is_no_longer_called(self):
+        import ast
+        from pathlib import Path
+        tree = ast.parse(Path(
+            __import__("scripts.trader.factors", fromlist=["x"]).__file__
+        ).read_text(encoding="utf-8"))
+        self.assertNotIn("calculus_engine", {n.module for n in ast.walk(tree)
+                                             if isinstance(n, ast.ImportFrom)})
+        names = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name)}
+        self.assertNotIn("calculate_multi_timeframe", names)
 
-        ⚠️ 关键：不许静默退化 —— 主脑会照着 v=a=0 推理，等于拿"没有动力学"当"动力学为零"。
-        """
-        import types
-        import warnings as _w
-
-        def _boom(books):
-            raise RuntimeError("引擎炸了")
-
-        fake = types.ModuleType("calculus_engine")
-        fake.calculate_multi_timeframe = _boom
-        with patch.dict("sys.modules", {"calculus_engine": fake}):
-            with _w.catch_warnings(record=True) as caught:
-                _w.simplefilter("always")
-                f = self._call()
-        self.assertFalse(f["calculus"]["valid"])
-        self.assertEqual(f["calculus"]["regime"], "RANGE_LOW_VELOCITY")
-        self.assertIn("引擎炸了", f["calculus"]["error"])
-        self.assertTrue(any(issubclass(w.category, RuntimeWarning) for w in caught))
+    def test_the_placeholder_is_completely_stripped(self):
+        """★ 反向守卫（2026-10）：数理退役后，f 中不再留 calculus 占位键。"""
+        f = self._call()
+        self.assertNotIn("calculus", f, "calculus 占位已彻底移除")
 
 
 class PositionSnapshotTest(_Base):
@@ -279,7 +370,7 @@ class PartialMarketDataTest(_Base):
     def test_missing_15m_candles_with_1h_available_must_not_raise(self):
         f = self._call(candles_15m=[], candles_1h=_rising(35), candles_4h=_rising(25))
         self.assertEqual(f["price"], 0.0, "价格不可用时保持默认，不臆造")
-        self.assertEqual(f["atr_pct"], 0.0, "价格不可用 ⇒ 不臆造 ATR 百分比")
+        self.assertIsNone(f["atr_pct"], "价格不可用 ⇒ ATR 百分比缺失（None，不臆造）")
         self.assertFalse(f["market_data_valid"])
         self.assertEqual(f["sz"], 0.0, "行情无效 ⇒ 张数归零（上层跳过该标的）")
 
@@ -288,7 +379,7 @@ class PartialMarketDataTest(_Base):
         zeros = [_candle(0.0) for _ in range(45)]
         f = self._call(candles_15m=zeros, candles_1h=_rising(35), candles_4h=_rising(25))
         self.assertEqual(f["price"], 0.0)
-        self.assertEqual(f["atr_pct"], 0.0)
+        self.assertIsNone(f["atr_pct"])
         self.assertFalse(f["market_data_valid"])
 
 

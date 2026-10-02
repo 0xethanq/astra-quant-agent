@@ -32,7 +32,7 @@ export const zhNav = {
     council: '模型委员会',
     prompts: '提示词工坊',
     evolution: '自进化配置',
-    risk: '风控与拦截',
+    risk: '风险管理',
     security: '账户与标的',
     llm: '模型连接',
     notify: '通知渠道',

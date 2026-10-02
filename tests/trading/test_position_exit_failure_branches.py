@@ -104,6 +104,9 @@ class _Rig:
             notify_trade_close=lambda **k: self.notifies.append(k),
             protection_signals=lambda **k: self.hard_stop,
             ratcheted_trailing_stop=self._ratchet,
+            # 2026-10：建档时钉死"谁做的决定"（单模型 / 投委会＋采纳席位），供平仓
+            # 证据归档读取。桩按"读不到"诚实返回 unknown（不冒充单模型）。
+            resolve_decision_attribution=lambda inst_id: ("unknown", None),
         )
 
     def _close(self, *a, **k):

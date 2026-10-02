@@ -25,7 +25,7 @@ import { fmtDateTime } from '../../../utils/format'
 import { useI18n } from '../../../composables/useI18n'
 import { useLlmCtx } from './injection'
 import { AlertCircle, ArrowDown, ArrowUp, CheckCircle2, Clock, History, Plus,
-  RefreshCw, Save, Search, ShieldAlert, X, Server, Brain, Timer, Route } from 'lucide-vue-next'
+  RefreshCw, Save, Search, ShieldAlert, X, Server, Brain, Timer, Route, Zap, Trash2 } from 'lucide-vue-next'
 import BaseLoadingAnnounce from '../../../components/base/BaseLoadingAnnounce.vue';
 
 const { t } = useI18n()
@@ -63,6 +63,9 @@ const {
   deadModelIds,
   healthWarnings,
   providerHealth,
+  cacheStatus,
+  cacheLoading,
+  clearL1Cache,
 } = useLlmCtx()
 
 /** 首次加载中（尚无配置可渲染）→ 骨架 */
@@ -456,6 +459,81 @@ const bandFacts = () => [
                由既有的 truncate 负责视觉截断（读屏器仍能读全）。 -->
           <span class="pv-audit-err truncate" :title="failoverErrText(ev)">
             {{ failoverErrText(ev) }}
+          </span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ 2026 大模型前缀缓存与成本加速 ══ -->
+    <section v-if="cacheStatus" class="card">
+      <header class="card-head">
+        <h2 class="card-title">
+          <Zap :size="14" />
+          {{ t('admin.llm.cacheTitle') }}
+        </h2>
+        <span class="badge mono" :class="cacheStatus.model_stats?.cache_hit_rate ? 'badge-up' : ''">
+          {{ cacheStatus.model_stats?.cache_hit_rate != null ? `${cacheStatus.model_stats.cache_hit_rate}%` : '--' }}
+        </span>
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm"
+          :disabled="cacheLoading"
+          :title="t('admin.llm.clearL1CacheTitle')"
+          @click="clearL1Cache"
+        >
+          <Trash2 :size="14" />
+          <span>{{ t('admin.llm.clearL1Cache') }}</span>
+        </button>
+      </header>
+
+      <div class="pv-body">
+        <div class="pv-kv">
+          <span class="label-caps">{{ t('admin.llm.cacheHitRate') }}</span>
+          <span class="pv-kv-v mono" :class="cacheStatus.model_stats?.cache_hit_rate ? 'is-up' : ''">
+            {{ cacheStatus.model_stats?.cache_hit_rate != null ? `${cacheStatus.model_stats.cache_hit_rate}%` : '--' }}
+            ({{ cacheStatus.model_stats?.cache_hit_calls ?? 0 }}/{{ cacheStatus.model_stats?.cache_reporting_calls ?? 0 }})
+          </span>
+        </div>
+
+        <div class="pv-kv">
+          <span class="label-caps">{{ t('admin.llm.cachedTokensTotal') }}</span>
+          <span class="pv-kv-v mono is-accent">
+            {{ Number(cacheStatus.total_saved_tokens ?? 0).toLocaleString() }} Tokens
+          </span>
+        </div>
+
+        <div class="pv-kv">
+          <span class="label-caps">{{ t('admin.llm.estimatedSavings') }}</span>
+          <span class="pv-kv-v mono is-up">
+            ≈ ${{ cacheStatus.estimated_saved_usd ?? '0.00' }} USD
+          </span>
+        </div>
+
+        <div class="pv-kv">
+          <span class="label-caps">{{ t('admin.llm.l1CacheEntries') }}</span>
+          <span class="pv-kv-v mono">
+            {{ cacheStatus.l1_query_cache?.in_memory_entries ?? 0 }} (Hit: {{ cacheStatus.l1_query_cache?.hits ?? 0 }})
+          </span>
+        </div>
+      </div>
+
+      <div class="p-3">
+        <div class="label-caps mb-2">{{ t('admin.llm.protocolMatrix') }}</div>
+        <div class="flex flex-wrap gap-2">
+          <span class="badge mono" :class="cacheStatus.capabilities?.claude_ephemeral ? 'badge-up' : ''">
+            {{ t('admin.llm.claudeEphemeral') }}
+          </span>
+          <span class="badge mono" :class="cacheStatus.capabilities?.deepseek_prefix ? 'badge-up' : ''">
+            {{ t('admin.llm.deepseekPrefix') }}
+          </span>
+          <span class="badge mono" :class="cacheStatus.capabilities?.openai_prefix ? 'badge-up' : ''">
+            {{ t('admin.llm.openaiPrefix') }}
+          </span>
+          <span class="badge mono" :class="cacheStatus.capabilities?.gemini_context ? 'badge-up' : ''">
+            {{ t('admin.llm.geminiContext') }}
+          </span>
+          <span class="badge mono" :class="cacheStatus.capabilities?.session_affinity_active ? 'badge-accent' : ''">
+            {{ t('admin.llm.sessionAffinity') }}
           </span>
         </div>
       </div>

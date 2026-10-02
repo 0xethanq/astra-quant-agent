@@ -2,7 +2,7 @@
 /**
  * AdminLayout.vue · ASTRA 开发者工作台外壳
  * ---------------------------------------------------------------------------
- * 视觉语言：DeepSeek Harness 侧边导航工作台
+ * 视觉语言：AstraQuant 极简工作台布局架构
  *   · 画布与侧栏同底（#0a0a0a），靠 6% 发丝描边分区，不用独立侧栏底色
  *   · 导航项 30px 基线；选中态 = 白色 alpha 分层 + 品牌蓝图标，不做加粗染色
  *   · 顶栏 48px 与画布同底 + 底描边；面包屑弱化，动作区右对齐
@@ -23,11 +23,13 @@ import {
   MonitorPlay,
   Sun,
   Moon,
+  ArrowUpCircle,
 } from 'lucide-vue-next';
 import { useAuthStore } from '../stores/auth';
 import { useI18n } from '../composables/useI18n';
 import { useTheme } from '../composables/useTheme';
 import { useLocalStorage } from '../composables/useLocalStorage';
+import { useUpdateNotice } from '../composables/useUpdateNotice';
 import { adminGroups } from '../config/nav';
 import { APP_VERSION } from '../config/version';
 import BeijingClock from '../components/base/BeijingClock.vue';
@@ -41,6 +43,7 @@ const router = useRouter();
 const auth = useAuthStore();
 const { t } = useI18n();
 const { theme, toggleTheme } = useTheme();
+const { updateAvailable, behindCount } = useUpdateNotice();
 
 const collapsed = useLocalStorage('astra_admin_sidebar', false);
 const drawerOpen = ref(false);
@@ -174,6 +177,19 @@ watch(() => route.path, () => (drawerOpen.value = false));
         </nav>
 
         <div class="wb-topbar-right">
+          <!-- 远端新版本更新提醒 -->
+          <button
+            v-if="updateAvailable"
+            type="button"
+            class="btn btn-quiet h-7 px-2 text-3xs font-semibold gap-1.5 cursor-pointer text-amber-400 bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 rounded-lg inline-flex items-center"
+            :title="t('dash.shell.updateTooltip', undefined, { n: behindCount })"
+            @click="router.push('/admin/backup?tab=version')"
+          >
+            <ArrowUpCircle :size="14" class="text-amber-400 animate-pulse" />
+            <span class="hidden sm:inline">{{ t('dash.shell.updateAvailable') }}</span>
+            <span class="num text-4xs bg-amber-500/20 px-1 py-0.5 rounded font-mono">{{ behindCount }}</span>
+          </button>
+
           <BeijingClock class="wb-clock" />
 
           <button type="button" class="wb-icon-btn" :title="t('nav.actions.theme')" :aria-label="t('nav.actions.theme')" @click="toggleTheme">

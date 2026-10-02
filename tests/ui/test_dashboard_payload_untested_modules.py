@@ -201,16 +201,22 @@ class BuildFactorsListTest(_Base):
         self.assertIsInstance(state, dict)
         self.assertEqual(len(out), 2, "标的池有 2 条 → 输出 2 条")
 
-    def test_missing_files_yield_defaults(self):
+    def test_missing_files_yield_honest_missing_values(self):
+        """★ 2026-10「不许假数据」：文件全缺时，**市场类读数与杠杆必须缺失**。
+
+        原先给的是 `rsi=50.0`（"中性 RSI"）与 `leverage=3`（连用例都注明"编造的"）。
+        `action="WAIT"` / `strategy_tag` / `reason` 保留：那三样描述的是**系统状态**
+        （"还没有 AI 决策，雷达刚接入"），不是对市场的观测，且 WAIT 是安全默认。
+        """
         out, _ = self._build()
         for row in out:
             with self.subTest(inst=row["instId"]):
                 self.assertEqual(row["action"], "WAIT")
                 self.assertEqual(row["score"], 0.0)
                 self.assertEqual(row["strategy_tag"], "⚪ AI观望")
-                self.assertEqual(row["rsi"], 50.0)
+                self.assertIsNone(row["rsi"], "缺指标 ⇒ 缺失（前端 --），不许 50.0")
                 self.assertEqual(row["fundingRate"], "--")
-                self.assertEqual(row["leverage"], 3)
+                self.assertIsNone(row["leverage"], "无 AI 决策 ⇒ 缺失，不许编 3")
                 self.assertEqual(row["reason"], "新组合标的，雷达与量化特征已接入")
 
     # ---- 优先级链 ----
@@ -338,20 +344,64 @@ class BuildFactorsListTest(_Base):
                              lib={"instruments": [{"no_instId": 1}]})
         self.assertEqual(len(out), 2)
 
-    def test_calculus_block_is_assembled(self):
+    def test_factor_tier_blocks_are_assembled(self):
+        """★ 2026-10 重钉：原 `calculus` 块换成 5 个 7 梯队因子块。
+
+        每块都必须**逐字段透传**（前端 FactorDrawer 直接读这些键），
+        缺失时给 `None`/`--` 而**不是**编造中性值。
+        """
         out, _ = self._build(lib={"instruments": [{
             "instId": "BTC-USDT-SWAP",
-            "calculus_dynamics": {"velocity": 1, "acceleration": 2,
-                                  "jerk": 3, "impulse": 4}}]})
+            "trend_momentum": {"macd_hist": 1, "macd_accel": 2,
+                               "macd_momentum_state": "ACCELERATING",
+                               "macd_divergence": "NONE", "rsi_1h": 61.5,
+                               "rsi_15m": 55.0, "rsi_zone": "BULL_MOMENTUM",
+                               "vwap_bias_pct": 0.44},
+            "volume_money_flow": {"cvd_5m_usd": 5, "cvd_1h_usd": 6,
+                                  "taker_buy_sell_ratio": 1.19,
+                                  "cvd_divergence": "NONE"},
+            "microstructure": {"obi_pct": 28.5, "depth_bias": "STRONG_BID",
+                               "bid_ask_depth_ratio": 1.42, "spread_bps": 0.33},
+            "volume_profile": {"vwap_24h": 61850.0, "vah": 62400.0, "val": 61200.0,
+                               "vpvr_poc": 61680.0,
+                               "value_area_position": "INSIDE_VALUE_AREA",
+                               "vwap_extreme_band": "NORMAL"},
+            "smart_money_derivatives": {"funding_rate_pct": 0.0036,
+                                        "next_funding_rate_pct": 0.0041,
+                                        "funding_crowding": "NEUTRAL",
+                                        "oi_chg_1h_pct": 3.2,
+                                        "oi_price_quadrant": "LONG_BUILDUP",
+                                        "elite_divergence": "NEUTRAL",
+                                        "liquidation_bias": "SHORT_SQUEEZE",
+                                        "basis_annualized_pct": 7.4}}]})
         btc = next(r for r in out if r["instId"] == "BTC-USDT-SWAP")
-        self.assertEqual(btc["calculus"],
-                         {"velocity_1h": 1, "accel_1h": 2, "jerk_1h": 3, "impulse_1h": 4})
+        self.assertEqual(btc["momentum"]["macd_hist_1h"], 1)
+        self.assertEqual(btc["momentum"]["macd_accel_1h"], 2)
+        self.assertEqual(btc["momentum"]["rsi_zone"], "BULL_MOMENTUM")
+        self.assertEqual(btc["orderflow"]["cvd_5m_usd"], 5)
+        self.assertEqual(btc["orderflow"]["taker_buy_sell_ratio"], 1.19)
+        self.assertEqual(btc["microstructure"]["obi_pct"], 28.5)
+        self.assertEqual(btc["microstructure"]["depth_bias"], "STRONG_BID")
+        self.assertEqual(btc["value_area"]["vpvr_poc"], 61680.0)
+        self.assertEqual(btc["value_area"]["value_area_position"], "INSIDE_VALUE_AREA")
+        self.assertEqual(btc["derivatives"]["oi_price_quadrant"], "LONG_BUILDUP")
+        self.assertEqual(btc["derivatives"]["basis_annualized_pct"], 7.4)
+        self.assertNotIn("calculus", btc, "旧 calculus 块必须彻底消失")
 
-    def test_leverage_defaults_to_3(self):
+    def test_missing_tiers_give_placeholders_not_fabricated_neutrals(self):
+        """梯队缺失 ⇒ 数值字段 `None`、枚举字段 `--`（不许用 0/NEUTRAL 冒充）。"""
+        out, _ = self._build()
+        btc = next(r for r in out if r["instId"] == "BTC-USDT-SWAP")
+        self.assertIsNone(btc["momentum"]["macd_hist_1h"])
+        self.assertEqual(btc["momentum"]["macd_momentum_state"], "--")
+        self.assertEqual(btc["derivatives"]["funding_crowding"], "--")
+
+    def test_leverage_is_missing_not_fabricated(self):
+        """★「不许假数据」：没有 AI 决策的标的，杠杆显示 **None**（前端 `--`），不许编 3。"""
         out, _ = self._build(decisions={"BTC-USDT-SWAP": {"decision": {"leverage": 10}}})
         b = {r["instId"]: r for r in out}
         self.assertEqual(b["BTC-USDT-SWAP"]["leverage"], 10)
-        self.assertEqual(b["ETH-USDT-SWAP"]["leverage"], 3)
+        self.assertIsNone(b["ETH-USDT-SWAP"]["leverage"])
 
 
 class LedgerViewSmokeTest(_Base):
@@ -375,11 +425,15 @@ class LedgerViewSmokeTest(_Base):
 
     def test_causal_join_attaches_snapshot_and_preserves_discipline(self):
         """因果铁律贯通：有效快照挂接 DYNAMICS_OBSERVED，历史无快照严格保持 NONE。"""
+        # ★ 2026-10 重钉：可观测性字段集由 17 项微积分换成 18 项 7 梯队因子。
         full_snap = {k: 0.5 for k in (
-            "velocity", "acceleration", "jerk", "impulse", "curvature", "power",
-            "power_regime", "regime", "dynamics_quality",
-            "continuation_prob_pct", "breakdown_prob_pct", "var_95_pct", "cvar_95_pct",
-            "prob_regime", "is_fat_tail", "energy_integral", "deviation_area_integral"
+            "macd_hist", "macd_accel", "macd_momentum_state",
+            "rsi_1h", "rsi_zone",
+            "cvd_5m_usd", "cvd_1h_usd", "taker_buy_sell_ratio",
+            "obi_pct", "bid_ask_depth_ratio", "spread_bps",
+            "vwap_bias_pct", "value_area_position", "vpvr_poc",
+            "funding_rate_pct", "oi_chg_1h_pct", "oi_price_quadrant",
+            "elite_divergence",
         )}
         full_snap.update({"price": 100.0, "atr": 2.0, "null_field": None})
 
@@ -456,7 +510,7 @@ class LedgerViewSmokeTest(_Base):
         sol = by_id["trade_sol"]
         self.assertEqual(sol["snapshot_observability"], "DYNAMICS_OBSERVED")
         self.assertIsNotNone(sol.get("entry_snapshot"))
-        self.assertEqual(sol["entry_snapshot"]["velocity"], 0.5)
+        self.assertEqual(sol["entry_snapshot"]["macd_hist"], 0.5)
         self.assertNotIn("null_field", sol["entry_snapshot"])  # null 字段被 prune
 
         self.assertEqual(by_id["trade_btc"]["snapshot_observability"], "NONE")

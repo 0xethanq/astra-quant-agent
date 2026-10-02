@@ -1,10 +1,10 @@
 /* =========================================================================
    Base · 重置 / 全局排版 / 动效
    -------------------------------------------------------------------------
-   排版规则对齐 DeepSeek Harness：
-     · 正文 line-height 160%（DSH body）· 标题负字距（DSH -0.01 ~ -0.02em）
+   排版规则：
+     · 正文 line-height 160% · 标题微负字距（-0.01 ~ -0.025em）
      · 表格数字 tabular-nums（金融数据基线，跳动不抖）
-     · text-wrap: pretty（DSH body 同款，避免中文孤字换行）
+     · text-wrap: pretty（避免孤字换行）
    ========================================================================= */
 
 *,
@@ -22,6 +22,10 @@ html {
 body {
   margin: 0;
   background-color: var(--ds-color-bg-page, #07080c);
+  background-image:
+    radial-gradient(circle at 50% -120px, rgba(16, 185, 129, 0.045) 0%, rgba(99, 102, 241, 0.02) 50%, transparent 80%),
+    radial-gradient(circle at 0% 40%, rgba(16, 185, 129, 0.018) 0%, transparent 40%);
+  background-attachment: fixed;
   color: var(--ds-color-text-secondary);
   font-family: var(--ds-font-body);
   font-size: var(--text-base);
@@ -33,7 +37,7 @@ body {
   min-height: 100vh;
 }
 
-/* —— 标题：负字距梯度，与 DSH heading/title 一致 —— */
+/* —— 标题：负字距梯度 —— */
 /* 批 96：分组选择器里原含 `h5, h6` —— 实测全仓模板 **0 次**使用这两个标签
    （`h1` 9 / `h2` 63 / `h3` 20 / `h4` 10），且无 `v-html` 在运行时生成标题，
    故是死选择器。h5/h6 也没有各自的字号规则（只有 h1~h4 有）。 */
@@ -92,7 +96,7 @@ pre,
   letter-spacing: -0.01em;
 }
 
-/* —— 小标签：DSH 的 +0.09em 大字距 + 弱化色 —— */
+/* —— 小标签：+0.09em 大字距 + 弱化色 —— */
 .label-caps {
   font-size: var(--text-3xs);
   font-weight: 500;
@@ -113,7 +117,7 @@ pre,
   color: #07080c;
 }
 
-/* —— 滚动条：DSH --ds-color-scrollbar —— */
+/* —— 滚动条：--ds-color-scrollbar —— */
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
@@ -143,8 +147,7 @@ table {
 
 /* =========================================================================
    动效
-   —— DSH 全站只有一条 .8s ease-out 入场；此处按控件尺度细分，
-      并统一收敛到 --ease-out，避免出现 DSH 没有的弹跳/发光
+   —— 按控件尺度细分过渡曲线与时长，统一收敛到 --ease-out
    ========================================================================= */
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -205,7 +208,7 @@ table {
   }
 }
 
-/* 页面入场：路由切换时给内容一个 DSH 式轻入场 */
+/* 页面入场：路由切换时给内容一个轻盈入场 */
 
 .pop-enter-active,
 .pop-leave-active {

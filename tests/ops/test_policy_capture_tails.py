@@ -41,22 +41,22 @@ class PolicyCaptureTailsTests(unittest.TestCase):
     # 2. 各组件捕获异常隔离自愈
     # -------------------------------------------------------------------------
     def test_capture_components_exceptions_isolated_fallbacks(self):
-        # 当提示词、心法、拦截器、委员会、风控捕获均抛异常时，安全返回对齐默认空值 (lines 124, 136, 143, 150, 157)。
-        # OKX-only 迁移后 venue_routing 捕获（及其 routing_policy pool/raw 读取）已删除，故不再覆盖。
+        # 当提示词、心法、委员会、风控捕获均抛异常时，安全返回对齐默认空值。
+        # OKX-only 迁移后 venue_routing 捕获（及其 routing_policy pool/raw 读取）已删除；
+        # 2026-10 策略插件系统裁撤后 interceptor_config 捕获同样删除，故两者都不再覆盖。
         with patch("prompt_library.load_library", side_effect=RuntimeError("prompt error")):
             with patch("evolution_shield.STRUCTURED_MEMORY_FILE", self.tmp_path / "missing_mem.json"):
                 with patch("evolution_shield.read_memory_snapshot", side_effect=RuntimeError("memory error")):
-                    with patch("astra_backend.interceptor_manager.load_config", side_effect=RuntimeError("int error")):
-                        with patch("astra_backend.council_manager.load_council_config", side_effect=RuntimeError("ccl error")):
-                            with patch("astra_backend.risk_config.current_values", side_effect=RuntimeError("risk error")):
-                                pkg = capture_full_strategy_package(self.tmp_path, root_dir=self.tmp_path)
-                                p = pkg["package"]
-                                self.assertEqual(p["prompt_config"], {})
-                                self.assertEqual(p["evolution_memory"], {"version": "missing", "lessons": []})
-                                self.assertEqual(p["interceptor_config"], {})
-                                self.assertEqual(p["council_config"], {})
-                                self.assertEqual(p["risk_config"], {})
-                                self.assertNotIn("venue_routing", p)
+                    with patch("astra_backend.council_manager.load_council_config", side_effect=RuntimeError("ccl error")):
+                        with patch("astra_backend.risk_config.current_values", side_effect=RuntimeError("risk error")):
+                            pkg = capture_full_strategy_package(self.tmp_path, root_dir=self.tmp_path)
+                            p = pkg["package"]
+                            self.assertEqual(p["prompt_config"], {})
+                            self.assertEqual(p["evolution_memory"], {"version": "missing", "lessons": []})
+                            self.assertEqual(p["council_config"], {})
+                            self.assertEqual(p["risk_config"], {})
+                            self.assertNotIn("venue_routing", p)
+                            self.assertNotIn("interceptor_config", p)
 
     # -------------------------------------------------------------------------
     # 3. 环境路径复原异常处理

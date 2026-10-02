@@ -16,10 +16,18 @@
 
 | 模块 | 内容 | 注入面 |
 |---|---|---|
-| `defaults.py` | `build_default_factors(inst_id, name)` —— 六 Pillar 的完整默认结构（95 行字面量） | 无（除 `time.time()`） |
-| `scoring.py` | `score_composite_alpha(factors)` —— 八项加权打分（-100~+100）与信号建议 | **无**（只读入参 `factors`；不 import 任何取数模块） |
-| `candles_15m.py` | `derive_candle_series` / `compute_15m_indicators` —— 15M 的 ATR/RSI/VWAP 乖离/量比/OBV + Pillar 6 | `safe_float`、`calculate_calculus`（微积分引擎）由调用方传入 |
+| `defaults.py` | `build_default_factors(inst_id, name)` —— 7 梯队的完整默认结构（原 3 个退役数理 Pillar 已整体剥离） | 无（除 `time.time()`） |
+| `scoring.py` | `score_composite_alpha(factors)` —— **六项 7 梯队加权打分**（-100~+100）与信号建议 | **无**（只读入参 `factors`；不 import 任何取数模块） |
+| `candles_15m.py` | `derive_candle_series` / `compute_15m_indicators` / `mark_15m_missing` —— 15M 的 ATR/RSI/VWAP 乖离/量比/OBV（**Pillar 6 微积分段已退场**） | 仅 `safe_float`（2026-10 起注入面收缩为零） |
+| `okx_quant_factors.py` | **7 梯队量化因子引擎**：T0 衍生品／T0.5 订单流／T1 盘口／T1.5 期权／T2 期限／T3 筹码／T4 动量 —— 纯计算 + 带 TTL 缓存的公开 REST 取数 + `apply_*_tier` 装配 | 无（自持 `_public_get` 与 `safe_float`；取数与装配都可单测） |
 | `smart_money.py` | `fetch_smart_money_for_symbol` / `fetch_smart_money_pool` —— 大户多空比与聪明钱资金流（OKX Rubik 单源） | 无 |
+
+### ⚠️ 数理系统退场与剥离（2026-10）
+
+`calculus_dynamics` / `definite_integrals` / `probability_theory` 三个 Pillar
+已于 2026-10 **彻底从代码层剥离**（连占位键位也不再产出）：
+不再计算、不进提示词、不参与打分与信号。`candles_15m.py` 的 Pillar 6
+整段摘除，`scoring.py` 的第五项由「微积分 ±1.5」换成「7 梯队因子共振 ±1.5」。
 
 ### ⚠️ `candles_15m.py` 的取数**故意留在门面**
 

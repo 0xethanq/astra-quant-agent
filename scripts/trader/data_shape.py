@@ -76,7 +76,10 @@ def validate_trackers(raw):
                 bad.append(f"{key}: scale_count={sc!r} 非非负整数 ⇒ 入场循环 "
                            "`int(tracker.get(\"scale_count\", 0))` 会 TypeError（周期中途中断）")
         for num_key in ("trailingStopPx", "highWaterMark", "lowWaterMark",
-                        "takeProfitPx", "entryTs"):
+                        "takeProfitPx", "entryTs",
+                        # 2026-10：初始止损距离**冻结**，是自进化 MFE/MAE 的 1R 分母。
+                        # 非数值会让 `abs(entry - stop)` 抛 TypeError（平仓证据组装中断）。
+                        "initialStopPx"):
             if num_key in t and t[num_key] is not None:
                 v = t[num_key]
                 if not isinstance(v, (int, float)) or isinstance(v, bool):

@@ -49,106 +49,140 @@ def _sf(v):
         return 0.0
 
 
-class FailClosedFallbackTests(unittest.TestCase):
-    """★ 管线抛异常 ⇒ 一律 `WAIT`，但 `rr` 仍要尽力算出来给前台看。"""
+class PhysicalGateTests(unittest.TestCase):
+    """★ 物理校验契约（2026-10：策略插件管线整套裁撤后重写）。
 
-    def _fallback(self, d_item, exc=None):
-        import astra_backend.interceptor_manager as im
-        boom = exc or RuntimeError("插件系统崩了")
-        with patch.object(im, "run_interceptor_pipeline", side_effect=boom):
-            return validate_and_filter_decision({}, d_item, set(), {}, safe_float=_sf)
+    旧类 `FailClosedFallbackTests` 钉的是「插件管线抛异常 ⇒ 降级 WAIT 并回显异常」，
+    插件系统删除后该行为不复存在。现在这里钉的是**仍然生效**的物理闸门：
 
-    def test_falls_back_to_wait_with_the_original_exception_in_the_reason(self):
-        action, reason, rr = self._fallback({"action": "BUY_LONG"})
-        self.assertEqual(action, "WAIT", "管线挂了绝不许放行原动作")
-        self.assertIn("插件系统崩了", reason)
-        self.assertIn("安全降级为 WAIT", reason)
-        self.assertEqual(rr, 0.0)
+    - 方向词法与畸形输入：一律 `WAIT`，且**不再抛异常**（旧实现真值非 dict 会炸）；
+    - 行情不完整 / 反向持仓冲突 / 报价几何非法：`WAIT`（fail-closed）；
+    - 遥测 R:R：合法报价按同一口径算出，非法一律 0；
+    - 策略性闸门（置信度 / ADX / 4H 逆势）**不存在**：这些不再拦截。
+    """
 
-    def test_buy_long_risk_reward_is_computed_on_the_fallback(self):
-        _, _, rr = self._fallback({"action": "BUY_LONG", "entry_price": "100",
-                                   "stop_loss_price": "95", "take_profit_price": "115"})
+    def _gate(self, pkg, d_item, active_ids=None, sides=None):
+        return validate_and_filter_decision(pkg, d_item, active_ids or set(),
+                                            sides or {}, safe_float=_sf)
+
+    def _pkg(self, **over):
+        pkg = {"instId": "BTC-USDT-SWAP", "name": "BTC", "data_quality": "valid"}
+        pkg.update(over)
+        return pkg
+
+    def test_missing_market_data_fails_closed(self):
+        action, reason, _ = self._gate({}, {"action": "BUY_LONG"})
+        self.assertEqual(action, "WAIT", "行情不完整绝不许放行")
+        self.assertIn("行情不完整", reason)
+        self.assertIn("安全降级", reason)
+
+    def test_buy_long_risk_reward_is_computed(self):
+        _, _, rr = self._gate(self._pkg(), {"action": "BUY_LONG", "entry_price": "100",
+                                            "stop_loss_price": "95", "take_profit_price": "115"})
         self.assertAlmostEqual(rr, 3.0)
 
-    def test_sell_short_risk_reward_is_computed_on_the_fallback(self):
-        _, _, rr = self._fallback({"action": "SELL_SHORT", "entry_price": "100",
-                                   "stop_loss_price": "110", "take_profit_price": "80"})
+    def test_sell_short_risk_reward_is_computed(self):
+        _, _, rr = self._gate(self._pkg(), {"action": "SELL_SHORT", "entry_price": "100",
+                                            "stop_loss_price": "110", "take_profit_price": "80"})
         self.assertAlmostEqual(rr, 2.0)
 
     def test_buy_long_rr_is_zero_when_the_stop_is_not_below_the_entry(self):
-        _, _, rr = self._fallback({"action": "BUY_LONG", "entry_price": "100",
-                                   "stop_loss_price": "105", "take_profit_price": "115"})
+        _, _, rr = self._gate(self._pkg(), {"action": "BUY_LONG", "entry_price": "100",
+                                            "stop_loss_price": "105", "take_profit_price": "115"})
         self.assertEqual(rr, 0.0)
 
     def test_buy_long_rr_is_zero_when_take_profit_is_not_above_entry(self):
-        _, _, rr = self._fallback({"action": "BUY_LONG", "entry_price": "100",
-                                   "stop_loss_price": "95", "take_profit_price": "99"})
+        _, _, rr = self._gate(self._pkg(), {"action": "BUY_LONG", "entry_price": "100",
+                                            "stop_loss_price": "95", "take_profit_price": "99"})
         self.assertEqual(rr, 0.0)
 
     def test_sell_short_rr_requires_the_full_ordering(self):
         for tp, sl in (("105", "110"), ("80", "95")):
             with self.subTest(take_profit=tp, stop_loss=sl):
-                _, _, rr = self._fallback({"action": "SELL_SHORT", "entry_price": "100",
-                                           "stop_loss_price": sl, "take_profit_price": tp})
+                _, _, rr = self._gate(self._pkg(), {"action": "SELL_SHORT", "entry_price": "100",
+                                                    "stop_loss_price": sl, "take_profit_price": tp})
                 self.assertEqual(rr, 0.0)
+
+    def test_zero_stop_only_is_not_enough_for_rr(self):
+        # `entry > stop_loss > 0` —— 三个条件都要；stop 为 0 时不算
+        _, _, rr = self._gate(self._pkg(), {"action": "BUY_LONG", "entry_price": "100",
+                                            "stop_loss_price": "0", "take_profit_price": "115"})
+        self.assertEqual(rr, 0.0)
 
     def test_unknown_action_is_coerced_to_wait(self):
         for action in ("HOLD", "buy_long", "", None, "LONG"):
             with self.subTest(action=action):
-                out_action, _, rr = self._fallback({"action": action})
+                out_action, _, rr = self._gate(self._pkg(), {"action": action})
                 self.assertEqual(out_action, "WAIT")
                 self.assertEqual(rr, 0.0)
 
     def test_falsy_decision_items_still_degrade_safely(self):
+        # 缺 action ⇒ 词法层直接按 WAIT 处理（`WAIT` 是合法裁决，reason 为空）。
         for d_item in ({}, None, [], (), 0, "", 0.0):
             with self.subTest(d_item=d_item):
-                action, reason, rr = self._fallback(d_item)
+                action, reason, rr = self._gate({}, d_item)
                 self.assertEqual(action, "WAIT")
+                self.assertEqual(reason, "")
                 self.assertEqual(rr, 0.0)
+
+    def test_falsy_package_with_real_action_still_hits_the_physical_gate(self):
+        # action 合法但行情缺失 ⇒ 走物理闸门，reason 必须带上"安全降级"字样。
+        for pkg in ({}, None, [], 0, ""):
+            with self.subTest(pkg=pkg):
+                action, reason, _ = self._gate(
+                    pkg, {"action": "BUY_LONG", "entry_price": "100",
+                          "stop_loss_price": "95", "take_profit_price": "115"})
+                self.assertEqual(action, "WAIT")
                 self.assertIn("安全降级", reason)
 
-    def test_truthy_non_dict_decision_item_crashes_the_fallback(self):
-        # ⚠️ 实测行为（本刀仅记录，**未改**）：兜底体写作 `(d_item or {}).get("action", ...)`
-        #    —— `or {}` 只兜住**假值**。一个**真值非 dict**（`"junk"` / `42` / `["a"]`）
-        #    会走进 `.get` 而抛 `AttributeError`，于是"最后一道防线"自己炸掉：
-        #    调用方拿到的不是安全的 `WAIT`，而是一个异常。
-        #    方向上它仍是 fail-closed（异常 ＞ 放行），但"降级成 WAIT"这个承诺在此不成立，
-        #    所以必须显式钉住现状，避免后人以为这里"什么都兜得住"。
+    def test_truthy_non_dict_decision_item_no_longer_crashes(self):
+        # ⚠️ 旧实现的兜底体写作 `(d_item or {}).get(...)`：`or {}` 只兜住**假值**，
+        #    真值非 dict 会在 `.get` 上抛 `AttributeError`，让"最后一道防线"自己炸掉。
+        #    重写为物理校验时按类型兜底，现在一律安全返回 WAIT。
         for d_item in ("junk", 42, ["a"], {"a": 1}.keys):
             with self.subTest(d_item=d_item):
-                with self.assertRaises(AttributeError):
-                    self._fallback(d_item)
+                action, reason, rr = self._gate({}, d_item)
+                self.assertEqual(action, "WAIT", "畸形决策项必须降级为 WAIT，不得抛异常")
+                self.assertEqual(rr, 0.0)
 
-    def test_zero_stop_only_is_not_enough_for_rr(self):
-        # `entry > stop_loss > 0` —— 三个条件都要；stop 为 0 时不算
-        _, _, rr = self._fallback({"action": "BUY_LONG", "entry_price": "100",
-                                   "stop_loss_price": "0", "take_profit_price": "115"})
-        self.assertEqual(rr, 0.0)
+    def test_non_dict_package_does_not_crash(self):
+        for pkg in ("junk", 42, ["a"], None):
+            with self.subTest(pkg=pkg):
+                action, _, _ = self._gate(pkg, {"action": "BUY_LONG"})
+                self.assertEqual(action, "WAIT")
 
-    def test_normal_path_returns_the_pipeline_result_verbatim(self):
-        import astra_backend.interceptor_manager as im
-        with patch.object(im, "run_interceptor_pipeline",
-                          return_value=("BUY_LONG", "通过", 2.5)) as pipeline:
-            out = validate_and_filter_decision({"instId": "X"}, {"action": "BUY_LONG"},
-                                               {"X"}, {"X": "long"}, safe_float=_sf)
-        self.assertEqual(out, ("BUY_LONG", "通过", 2.5))
-        pipeline.assert_called_once()
-
-    def test_context_carries_active_ids_and_sides(self):
-        import astra_backend.interceptor_manager as im
-        with patch.object(im, "run_interceptor_pipeline",
-                          return_value=("WAIT", "r", 0.0)) as pipeline:
-            validate_and_filter_decision({}, {}, {"A"}, {"A": "long"}, safe_float=_sf)
-        context = pipeline.call_args.args[2]
-        self.assertEqual(context["active_inst_ids"], {"A"})
-        self.assertEqual(context["active_position_sides"], {"A": "long"})
-
-    def test_import_failure_also_degrades_rather_than_raising(self):
-        with patch.dict(sys.modules, {"astra_backend.interceptor_manager": None}):
-            action, reason, _ = validate_and_filter_decision({}, {"action": "BUY_LONG"},
-                                                             set(), {}, safe_float=_sf)
+    def test_opposing_position_collision_fails_closed(self):
+        action, reason, _ = self._gate(
+            self._pkg(), {"action": "SELL_SHORT", "entry_price": 100.0,
+                          "stop_loss_price": 105.0, "take_profit_price": 90.0},
+            {"BTC-USDT-SWAP"}, {"BTC-USDT-SWAP": "long"})
         self.assertEqual(action, "WAIT")
-        self.assertIn("安全降级", reason)
+        self.assertIn("反向或不兼容持仓", reason)
+
+    def test_same_direction_position_is_not_a_collision(self):
+        action, reason, _ = self._gate(
+            self._pkg(), {"action": "BUY_LONG", "entry_price": 100.0,
+                          "stop_loss_price": 95.0, "take_profit_price": 115.0},
+            {"BTC-USDT-SWAP"}, {"BTC-USDT-SWAP": "long"})
+        self.assertEqual(action, "BUY_LONG", reason)
+        self.assertEqual(reason, "")
+
+    def test_illegal_quote_geometry_fails_closed(self):
+        action, reason, _ = self._gate(
+            self._pkg(), {"action": "BUY_LONG", "entry_price": 100.0,
+                          "stop_loss_price": 105.0, "take_profit_price": 115.0})
+        self.assertEqual(action, "WAIT")
+        self.assertIn("买多几何不合法", reason)
+
+    def test_strategy_gates_are_gone(self):
+        """置信度 / ADX / 4H 逆势都不再拦截 —— 开不开单由大模型自己判断。"""
+        d = {"action": "SELL_SHORT", "confidence": 20.0, "entry_price": 100.0,
+             "stop_loss_price": 105.0, "take_profit_price": 90.0}
+        action, reason, rr = self._gate(
+            self._pkg(adx_1h=8.0, macro_4h="4H_MACRO_BULL (大级别多头通道)"), d)
+        self.assertEqual(action, "SELL_SHORT", f"策略性闸门应已移除: {reason}")
+        self.assertEqual(reason, "")
+        self.assertGreaterEqual(rr, 2.0)
 
 
 class _CacheBase(unittest.TestCase):
@@ -387,11 +421,25 @@ class CacheContractTests(_CacheBase, unittest.TestCase):
                          {"ran": False, "adopted_role": None})
 
     def test_thought_process_defaults_are_explicit_placeholders(self):
+        """★ 2026-10：`calculus_dynamics`+`math_prob_rationale` 两键合并为 `factor_evidence`。"""
         thought = self._assemble(decisions={})["BTC-USDT-SWAP"]["thought_process"]
         self.assertIn("中性", thought["market_structure"])
-        self.assertIn("模型未提供", thought["calculus_dynamics"])
-        self.assertIn("模型未提供", thought["math_prob_rationale"])
+        self.assertIn("模型未提供", thought["factor_evidence"])
+        self.assertIn("MACD", thought["factor_evidence"], "占位文案必须点名要看哪些因子")
+        self.assertNotIn("calculus_dynamics", thought)
+        self.assertNotIn("math_prob_rationale", thought)
         self.assertIn("以【本周期风险预算】为准", thought["risk_reward_evaluation"])
+
+    def test_retired_contract_fields_are_ignored_and_not_merged(self):
+        """★ 反向守卫（2026-10）：已退役的旧模型契约键（calculus_dynamics / math_prob_rationale）
+        不再拼入 factor_evidence。系统不再支持不存在的退役因子契约。"""
+        thought = self._assemble(decisions={"BTC-USDT-SWAP": {"decision": {},
+                                                             "calculus_dynamics": "v=+0.05",
+                                                             "math_prob_rationale": "P续=65%"}}
+                                 )["BTC-USDT-SWAP"]["thought_process"]
+        self.assertNotIn("v=+0.05", thought["factor_evidence"])
+        self.assertNotIn("P续=65%", thought["factor_evidence"])
+        self.assertIn("模型未提供具体因子证据", thought["factor_evidence"])
 
     def test_volume_and_oi_default_falls_back_to_the_package_values(self):
         thought = self._assemble(decisions={})["BTC-USDT-SWAP"]["thought_process"]

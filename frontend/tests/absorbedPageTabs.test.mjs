@@ -8,9 +8,13 @@
  * | 宿主页 | 被吸收页 | 旧路径 |
  * |---|---|---|
  * | GatewayPage（运行单元） | AgentsPage / DecisionsPage | /admin/agents · /admin/decisions |
- * | RiskPage（风控与拦截） | InterceptorsPage | /admin/interceptors |
  * | AuditPage（账号与审计） | AdminSysPage | /admin/adminsys |
  * | BackupPage（系统与灾备） | PolicySnapshotPage / AboutPage | /admin/policy · /admin/about |
+ *
+ * ⚠️ 2026-10：`InterceptorsPage`（决策插件工位）**不是被吸收，而是整套删除** ——
+ *    随策略插件系统一起裁撤（页面/导航/命名路由/后端接口全删），
+ *    `/admin/decision-plugins`、`/admin/interceptors`、`/admin/plugins` 三条旧路径
+ *    统一重定向到 `/admin/risk`。本表与下面的"不得复活"判据同步更新。
  *
  * 这类改动有三种**静默**失败形态，本闸逐条按住：
  *
@@ -40,7 +44,6 @@ const read = (rel) => readFileSync(path.join(SRC, rel), 'utf8');
 /** 宿主页 → 期望的页签数（含宿主自身那一个）。 */
 const HOSTS = {
   'views/admin/GatewayPage.vue': 2,
-  'views/admin/RiskPage.vue': 2,
   'views/admin/DecisionsPage.vue': 4,
   'views/admin/BackupPage.vue': 3,
 };
@@ -48,7 +51,6 @@ const HOSTS = {
 /** 被吸收页 → 它必须被哪个宿主页渲染。 */
 const ABSORBED = {
   'views/admin/AgentsPage.vue': 'views/admin/GatewayPage.vue',
-  'views/admin/InterceptorsPage.vue': 'views/admin/RiskPage.vue',
   'views/admin/AuditPage.vue': 'views/admin/DecisionsPage.vue',
   'views/admin/PolicySnapshotPage.vue': 'views/admin/BackupPage.vue',
   'views/admin/AboutPage.vue': 'views/admin/BackupPage.vue',
@@ -132,9 +134,13 @@ test('已删除页面不得复活，旧路径必须有重定向', () => {
     'PluginsPage.vue 已删除，不应复活');
   assert.equal(existsSync(path.join(SRC, 'views/admin/LegacyRedirect.vue')), false,
     'LegacyRedirect.vue 是零引用死文件，已删除');
+  // 决策插件工位：随策略插件系统整套裁撤（2026-10），页面与后端接口一并删除
+  assert.equal(existsSync(path.join(SRC, 'views/admin/InterceptorsPage.vue')), false,
+    'InterceptorsPage.vue 已随策略插件系统删除，不应复活');
 
   const routerText = read('router/index.ts');
-  for (const oldPath of ['plugins', 'policy', 'about', 'agents', 'interceptors', 'audit']) {
+  for (const oldPath of ['plugins', 'policy', 'about', 'agents', 'interceptors',
+                         'decision-plugins', 'audit']) {
     assert.ok(routerText.includes(`path: '${oldPath}', redirect`),
       `/admin/${oldPath} 缺少重定向（旧书签会 404）`);
   }

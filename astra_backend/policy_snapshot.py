@@ -54,7 +54,6 @@ from astra_backend.policy.fingerprints import (
     compute_layout_hash,
     extract_council_fingerprint,
     extract_evolution_mind_fingerprint as _core_extract_evolution_mind_fingerprint,
-    extract_interceptors_fingerprint as _core_extract_interceptors_fingerprint,
     extract_prompt_profile_fingerprint as _core_extract_prompt_profile_fingerprint,
     package_identity,
     package_restore_diff,
@@ -83,21 +82,13 @@ def extract_evolution_mind_fingerprint(memory_snapshot: Optional[Dict[str, Any]]
     return _core_extract_evolution_mind_fingerprint(ROOT, memory_snapshot, root_dir)
 
 
-def extract_interceptors_fingerprint(interceptor_plugins: Optional[List[Dict[str, Any]]] = None,
-                                     plugins_dir: Optional[Path] = None,
-                                     root_dir: Optional[Path] = None) -> Dict[str, Any]:
-    return _core_extract_interceptors_fingerprint(ROOT, interceptor_plugins, plugins_dir, root_dir)
-
-
 def generate_policy_snapshot(root_dir: Optional[Path] = None,
                              prompt_profile: Optional[Dict[str, Any]] = None,
                              memory_snapshot: Optional[Dict[str, Any]] = None,
-                             interceptor_plugins: Optional[List[Dict[str, Any]]] = None,
                              council_config: Optional[Dict[str, Any]] = None,
-                             plugins_dir: Optional[Path] = None,
                              base_version: str = DEFAULT_BASE_VERSION) -> Dict[str, Any]:
     return _core_generate_policy_snapshot(ROOT, root_dir, prompt_profile, memory_snapshot,
-                                          interceptor_plugins, council_config, plugins_dir, base_version)
+                                          council_config, base_version)
 
 
 def get_current_policy_snapshot() -> Dict[str, Any]:
@@ -278,7 +269,6 @@ __all__ = [
     "compute_file_hash",
     "extract_prompt_profile_fingerprint",
     "extract_evolution_mind_fingerprint",
-    "extract_interceptors_fingerprint",
     "extract_council_fingerprint",
     "format_policy_snapshot_summary",
     "generate_policy_snapshot",

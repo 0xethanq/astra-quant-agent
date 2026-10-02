@@ -441,16 +441,13 @@ class UpdateCycleLiveTests(_Base):
     def test_happy_path_builds_and_persists_the_live_payload(self):
         self._patch_llm({"model": "gpt-x", "provider_name": "p", "reasoning_effort": "low",
                          "api_format": "openai_chat"})
-        from scripts import calculus_engine
-        regime = self._start(mock.patch.object(calculus_engine, "detect_macro_market_regime",
-                                               return_value={"regime": "bull"}))
+        # ★ 2026-10：退役引擎已彻底删除，载荷里不许有 market_regime
         DC.update_cache_cycle()
         self.assertEqual(DC.CACHE_DATA["built"], True)
         self.assertEqual(DC.CACHE_DATA["llm_runtime"],
                          {"model": "gpt-x", "provider_name": "p",
                           "reasoning_effort": "low", "api_format": "openai_chat"})
-        self.assertEqual(DC.CACHE_DATA["market_regime"], {"regime": "bull"})
-        regime.assert_called_once_with(["f"])
+        self.assertNotIn("market_regime", DC.CACHE_DATA)
         self.persist.assert_called_once_with(DC.CACHE_DATA)
         self.assertGreater(DC.LAST_CACHE_TIME, 0)
         self.assertEqual(self.algo.call_args[0][0], [{"instId": "BTC"}])
@@ -460,35 +457,32 @@ class UpdateCycleLiveTests(_Base):
         self._start(mock.patch.object(DC.os, "environ",
                                       {"LLM_MODEL": "env-model",
                                        "LLM_REASONING_EFFORT": "medium"}))
-        with mock.patch("scripts.calculus_engine.detect_macro_market_regime",
-                        side_effect=RuntimeError("no factors")):
-            DC.update_cache_cycle()
+        DC.update_cache_cycle()
         self.assertEqual(DC.CACHE_DATA["llm_runtime"],
                          {"model": "env-model", "provider_name": "默认",
                           "reasoning_effort": "medium", "api_format": "openai_chat"})
 
     def test_missing_market_regime_module_is_tolerated(self):
         self._patch_llm({})
-        from scripts import calculus_engine
-        self._start(mock.patch.object(calculus_engine, "detect_macro_market_regime",
-                                      side_effect=ImportError("没有这个函数")))
-        with mock.patch.dict(sys.modules, {"calculus_engine": None}):
+        with mock.patch.dict(sys.modules, {"calculus_engine": None, "scripts.calculus_engine": None}):
             DC.update_cache_cycle()
         self.assertNotIn("market_regime", DC.CACHE_DATA)
 
-    def test_legacy_single_spelling_import_is_the_fallback(self):
-        """双拼写铁律：`scripts.calculus_engine` 拿不到时退到顶层 `calculus_engine`。"""
+    def test_retired_regime_engine_is_never_consulted(self):
+        """★ 2026-10 用户拍板：退役数理引擎（含其双拼写兜底）**不再参与任何载荷**。
+
+        历史接线是"`scripts.calculus_engine` → 顶层 `calculus_engine`"双拼写兜底；
+        现在两个拼写**都不许**被用到 —— 本用例把第二个拼写做成会返回内容的合成模块，
+        断言它的输出**不会**出现在载荷里。
+        """
         self._patch_llm({})
-        from scripts import calculus_engine
-        self._start(mock.patch.object(calculus_engine, "detect_macro_market_regime",
-                                      side_effect=ImportError("scripts. 下拿不到")))
         legacy = types.ModuleType("calculus_engine")
         legacy.detect_macro_market_regime = lambda factors: {"regime": "legacy",
                                                              "factors": factors}
-        with mock.patch.dict(sys.modules, {"calculus_engine": legacy}):
+        with mock.patch.dict(sys.modules, {"calculus_engine": legacy,
+                                           "scripts.calculus_engine": None}):
             DC.update_cache_cycle()
-        self.assertEqual(DC.CACHE_DATA["market_regime"],
-                         {"regime": "legacy", "factors": ["f"]})
+        self.assertNotIn("market_regime", DC.CACHE_DATA)
 
     def test_bills_failure_is_recorded_and_the_cycle_continues(self):
         self._start(mock.patch.object(DC.okx_rest, "bills",

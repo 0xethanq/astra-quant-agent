@@ -1,10 +1,10 @@
 <script setup lang="ts">
 /**
- * LedgerDrawer.vue · DeepSeek Harness 风格单笔订单全生命周期穿透抽屉
+ * LedgerDrawer.vue · AstraQuant 单笔订单全生命周期穿透抽屉
  * 穿透展示：开平仓生命周期轨迹、费用精细构成、多维度盈亏归因、AI 委员会席位采纳溯源
  */
 import { computed } from 'vue';
-import { fmtDateTime, fmtNum, fmtSigned, fmtPct, fmtPrice, dirClass, cleanReason } from '../../utils/format';
+import { fmtDateTime, fmtNum, fmtSigned, fmtPct, fmtPrice, fmtUsdt, dirClass, cleanReason } from '../../utils/format';
 import { pairLabel } from '../../utils/instId';
 import { useI18n } from '../../composables/useI18n';
 import {
@@ -86,6 +86,24 @@ const obsLabel = computed(() => {
   if (obsTag.value === 'PRICE_ONLY') return t('dash.ledger.observability.priceOnly');
   return t('dash.ledger.observability.none');
 });
+
+function formatExitReason(row: any): string {
+  if (!row) return '--';
+  const cause = String(row.exit_cause || '');
+  if (cause === 'time_stop' || cause.includes('时间止损')) return t('dash.ledger.exitReasons.timeout');
+  if (cause === 'ratchet_lock' || cause.includes('阶梯锁利')) return t('dash.ledger.exitReasons.ratchetLock');
+  if (cause === 'momentum_tp' || cause.includes('移动止盈')) return t('dash.ledger.exitReasons.momentumTp');
+  if (cause === 'scale_out' || cause.includes('分批止盈')) return t('dash.ledger.exitReasons.scaleOut');
+  if (cause === 'hard_stop' || cause.includes('硬止损')) return t('dash.ledger.exitReasons.sl');
+  if (cause === 'breakeven' || cause.includes('保本平仓')) return t('dash.ledger.exitReasons.be');
+  if (cause === 'ai_close' || cause.includes('AI 主动')) return t('dash.ledger.exitReasons.aiClose');
+  if (cause === 'protection_fail' || cause.includes('保护失效')) return t('dash.ledger.exitReasons.protectionFail');
+  if (cause === 'exchange_closed') return Number(row.net_pnl || 0) > 0 ? t('dash.ledger.exitReasons.tp') : t('dash.ledger.exitReasons.sl');
+  const raw = cleanReason(row.exit_reason);
+  if (raw === '止盈推定' || raw.includes('止盈推定')) return t('dash.ledger.exitReasons.inferredTp');
+  if (raw === '止损推定' || raw.includes('止损推定')) return t('dash.ledger.exitReasons.inferredSl');
+  return raw;
+}
 
 const snap = computed<Record<string, any> | null>(() => {
   const s = x.value?.entry_snapshot || x.value?.signal_snapshot || x.value?.snapshot;
@@ -174,7 +192,7 @@ const cells = computed(() => [
           </div>
           <div>
             <span class="text-3xs text-[var(--ink-3)] block">{{ t('dash.ledger.col.exitReason') }}</span>
-            <span class="text-[var(--ink-1)] mt-0.5 block leading-snug font-medium">{{ cleanReason(x.exit_reason) }}</span>
+            <span class="text-[var(--ink-1)] mt-0.5 block leading-snug font-medium">{{ formatExitReason(x) }}</span>
           </div>
         </div>
       </div>
@@ -210,106 +228,122 @@ const cells = computed(() => [
             {{ t('dash.ledger.observability.observedDesc') }}
           </p>
 
-          <!-- 体制状态徽章带 -->
-          <div v-if="snap.regime || snap.power_regime || snap.dynamics_quality != null || snap.is_fat_tail != null" class="flex flex-wrap items-center gap-1.5 pt-0.5">
+          <!-- 因子状态徽章带（★ 2026-10：原 regime/power_regime/dynamics_quality/fat_tail
+               均属已退役的数理链，改为现行 7 梯队因子的状态枚举） -->
+          <div
+            v-if="snap.macd_momentum_state || snap.rsi_zone || snap.oi_price_quadrant || snap.funding_crowding"
+            class="flex flex-wrap items-center gap-1.5 pt-0.5"
+          >
             <span
-              v-if="snap.regime"
+              v-if="snap.macd_momentum_state"
               class="rounded px-1.5 py-0.5 border text-3xs font-mono font-medium text-[var(--up)] border-[var(--up-line)] bg-[var(--up-bg)]"
             >
-              {{ snap.regime }}
+              MACD: {{ snap.macd_momentum_state }}
             </span>
             <span
-              v-if="snap.power_regime"
+              v-if="snap.rsi_zone"
               class="rounded px-1.5 py-0.5 border text-3xs font-mono font-medium text-[var(--accent)] border-[var(--line-1)] bg-[var(--surface-2)]"
             >
-              {{ snap.power_regime }}
+              RSI: {{ snap.rsi_zone }}
             </span>
             <span
-              v-if="snap.dynamics_quality != null"
+              v-if="snap.macd_divergence && snap.macd_divergence !== 'NONE'"
               class="rounded px-1.5 py-0.5 border text-3xs font-mono text-[var(--ink-2)] border-[var(--line-1)] bg-[var(--surface-2)]"
             >
-              Q: {{ fmtNum(snap.dynamics_quality, 3) }}
+              {{ t('dash.ledger.observability.macdDivergence') }}: {{ snap.macd_divergence }}
             </span>
             <span
-              v-if="snap.is_fat_tail != null"
+              v-if="snap.oi_price_quadrant"
               class="rounded px-1.5 py-0.5 border text-3xs font-mono text-[var(--ink-2)] border-[var(--line-1)] bg-[var(--surface-2)]"
             >
-              {{ t('dash.ledger.observability.fatTail') }}: {{ snap.is_fat_tail ? t('dash.ledger.observability.fatTailYes') : t('dash.ledger.observability.fatTailNo') }}
+              {{ t('dash.ledger.observability.oiQuadrant') }}: {{ snap.oi_price_quadrant }}
+            </span>
+            <span
+              v-if="snap.funding_crowding"
+              class="rounded px-1.5 py-0.5 border text-3xs font-mono text-[var(--ink-2)] border-[var(--line-1)] bg-[var(--surface-2)]"
+            >
+              {{ t('dash.ledger.observability.fundingCrowding') }}: {{ snap.funding_crowding }}
+            </span>
+            <span
+              v-if="snap.value_area_position"
+              class="rounded px-1.5 py-0.5 border text-3xs font-mono text-[var(--ink-2)] border-[var(--line-1)] bg-[var(--surface-2)]"
+            >
+              {{ snap.value_area_position }}
             </span>
           </div>
 
-          <!-- 数理指标网格：微积分 + 定积分 + 概率极值 -->
+          <!-- 7 梯队因子网格（★ 2026-10 替换原「微积分 + 定积分 + 概率极值」网格） -->
           <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1">
             <div class="rounded border p-2 bg-[var(--surface-1)] border-[var(--line-1)]">
-              <span class="text-3xs text-[var(--ink-3)] block">{{ t('dash.ledger.observability.velocity') }}</span>
-              <span class="num font-mono font-bold text-xs mt-0.5 block" :class="dirClass(snap.velocity)">
-                {{ snap.velocity != null ? fmtNum(snap.velocity, 4) : '--' }}
+              <span class="text-3xs text-[var(--ink-3)] block">{{ t('dash.ledger.observability.macdHist') }}</span>
+              <span class="num font-mono font-bold text-xs mt-0.5 block" :class="dirClass(snap.macd_hist)">
+                {{ snap.macd_hist != null ? fmtNum(snap.macd_hist, 4) : '--' }}
               </span>
             </div>
             <div class="rounded border p-2 bg-[var(--surface-1)] border-[var(--line-1)]">
-              <span class="text-3xs text-[var(--ink-3)] block">{{ t('dash.ledger.observability.acceleration') }}</span>
-              <span class="num font-mono font-bold text-xs mt-0.5 block" :class="dirClass(snap.acceleration)">
-                {{ snap.acceleration != null ? fmtNum(snap.acceleration, 5) : '--' }}
+              <span class="text-3xs text-[var(--ink-3)] block">{{ t('dash.ledger.observability.macdAccel') }}</span>
+              <span class="num font-mono font-bold text-xs mt-0.5 block" :class="dirClass(snap.macd_accel)">
+                {{ snap.macd_accel != null ? fmtNum(snap.macd_accel, 4) : '--' }}
               </span>
             </div>
             <div class="rounded border p-2 bg-[var(--surface-1)] border-[var(--line-1)]">
-              <span class="text-3xs text-[var(--ink-3)] block">{{ t('dash.ledger.observability.jerk') }}</span>
+              <span class="text-3xs text-[var(--ink-3)] block">{{ t('dash.ledger.observability.rsi1h') }}</span>
               <span class="num font-mono font-bold text-xs mt-0.5 block text-[var(--ink-strong)]">
-                {{ snap.jerk != null ? fmtNum(snap.jerk, 4) : '--' }}
+                {{ snap.rsi_1h != null ? fmtNum(snap.rsi_1h, 1) : '--' }}
               </span>
             </div>
             <div class="rounded border p-2 bg-[var(--surface-1)] border-[var(--line-1)]">
-              <span class="text-3xs text-[var(--ink-3)] block">{{ t('dash.ledger.observability.impulse') }}</span>
+              <span class="text-3xs text-[var(--ink-3)] block">{{ t('dash.ledger.observability.cvd1h') }}</span>
+              <span class="num font-mono font-bold text-xs mt-0.5 block" :class="dirClass(snap.cvd_1h_usd)">
+                {{ snap.cvd_1h_usd != null ? fmtUsdt(snap.cvd_1h_usd, 0) : '--' }}
+              </span>
+            </div>
+            <div class="rounded border p-2 bg-[var(--surface-1)] border-[var(--line-1)]">
+              <span class="text-3xs text-[var(--ink-3)] block">{{ t('dash.ledger.observability.takerRatio') }}</span>
               <span class="num font-mono font-bold text-xs mt-0.5 block text-[var(--ink-strong)]">
-                {{ snap.impulse != null ? fmtNum(snap.impulse, 3) : '--' }}
+                {{ snap.taker_buy_sell_ratio != null ? fmtNum(snap.taker_buy_sell_ratio, 3) : '--' }}
               </span>
             </div>
             <div class="rounded border p-2 bg-[var(--surface-1)] border-[var(--line-1)]">
-              <span class="text-3xs text-[var(--ink-3)] block">{{ t('dash.ledger.observability.curvature') }}</span>
+              <span class="text-3xs text-[var(--ink-3)] block">{{ t('dash.ledger.observability.obi') }}</span>
+              <span class="num font-mono font-bold text-xs mt-0.5 block" :class="dirClass(snap.obi_pct)">
+                {{ snap.obi_pct != null ? fmtNum(snap.obi_pct, 1) + '%' : '--' }}
+              </span>
+            </div>
+            <div class="rounded border p-2 bg-[var(--surface-1)] border-[var(--line-1)]">
+              <span class="text-3xs text-[var(--ink-3)] block">{{ t('dash.ledger.observability.vwapBias') }}</span>
+              <span class="num font-mono font-bold text-xs mt-0.5 block" :class="dirClass(snap.vwap_bias_pct)">
+                {{ snap.vwap_bias_pct != null ? fmtNum(snap.vwap_bias_pct, 2) + '%' : '--' }}
+              </span>
+            </div>
+            <div class="rounded border p-2 bg-[var(--surface-1)] border-[var(--line-1)]">
+              <span class="text-3xs text-[var(--ink-3)] block">{{ t('dash.ledger.observability.vpvrPoc') }}</span>
               <span class="num font-mono font-bold text-xs mt-0.5 block text-[var(--ink-strong)]">
-                {{ snap.curvature != null ? fmtNum(snap.curvature, 3) : '--' }}
+                {{ snap.vpvr_poc != null ? fmtPrice(snap.vpvr_poc) : '--' }}
               </span>
             </div>
             <div class="rounded border p-2 bg-[var(--surface-1)] border-[var(--line-1)]">
-              <span class="text-3xs text-[var(--ink-3)] block">{{ t('dash.ledger.observability.power') }}</span>
-              <span class="num font-mono font-bold text-xs mt-0.5 block" :class="dirClass(snap.power)">
-                {{ snap.power != null ? fmtNum(snap.power, 4) : '--' }}
-              </span>
-            </div>
-            <div class="rounded border p-2 bg-[var(--surface-1)] border-[var(--line-1)]">
-              <span class="text-3xs text-[var(--ink-3)] block">{{ t('dash.ledger.observability.energyIntegral') }}</span>
+              <span class="text-3xs text-[var(--ink-3)] block">{{ t('dash.ledger.observability.fundingRate') }}</span>
               <span class="num font-mono font-bold text-xs mt-0.5 block text-[var(--ink-strong)]">
-                {{ snap.energy_integral != null ? fmtNum(snap.energy_integral, 4) : '--' }}
+                {{ snap.funding_rate_pct != null ? fmtNum(snap.funding_rate_pct, 4) + '%' : '--' }}
               </span>
             </div>
             <div class="rounded border p-2 bg-[var(--surface-1)] border-[var(--line-1)]">
-              <span class="text-3xs text-[var(--ink-3)] block">{{ t('dash.ledger.observability.deviationArea') }}</span>
+              <span class="text-3xs text-[var(--ink-3)] block">{{ t('dash.ledger.observability.oiChange') }}</span>
+              <span class="num font-mono font-bold text-xs mt-0.5 block" :class="dirClass(snap.oi_chg_1h_pct)">
+                {{ snap.oi_chg_1h_pct != null ? fmtNum(snap.oi_chg_1h_pct, 3) + '%' : '--' }}
+              </span>
+            </div>
+            <div class="rounded border p-2 bg-[var(--surface-1)] border-[var(--line-1)]">
+              <span class="text-3xs text-[var(--ink-3)] block">{{ t('dash.ledger.observability.eliteDivergence') }}</span>
+              <span class="num font-mono font-bold text-2xs mt-0.5 block text-[var(--ink-strong)]">
+                {{ snap.elite_divergence || '--' }}
+              </span>
+            </div>
+            <div class="rounded border p-2 bg-[var(--surface-1)] border-[var(--line-1)]">
+              <span class="text-3xs text-[var(--ink-3)] block">{{ t('dash.ledger.observability.basisAnnualized') }}</span>
               <span class="num font-mono font-bold text-xs mt-0.5 block text-[var(--ink-strong)]">
-                {{ snap.deviation_area_integral != null ? fmtNum(snap.deviation_area_integral, 4) : '--' }}
-              </span>
-            </div>
-            <div class="rounded border p-2 bg-[var(--surface-1)] border-[var(--line-1)]">
-              <span class="text-3xs text-[var(--ink-3)] block">{{ t('dash.ledger.observability.continuationProb') }}</span>
-              <span class="num font-mono font-bold text-xs mt-0.5 block text-[var(--up)]">
-                {{ snap.continuation_prob_pct != null ? fmtNum(snap.continuation_prob_pct, 1) + '%' : '--' }}
-              </span>
-            </div>
-            <div class="rounded border p-2 bg-[var(--surface-1)] border-[var(--line-1)]">
-              <span class="text-3xs text-[var(--ink-3)] block">{{ t('dash.ledger.observability.breakdownProb') }}</span>
-              <span class="num font-mono font-bold text-xs mt-0.5 block text-[var(--warn)]">
-                {{ snap.breakdown_prob_pct != null ? fmtNum(snap.breakdown_prob_pct, 1) + '%' : '--' }}
-              </span>
-            </div>
-            <div class="rounded border p-2 bg-[var(--surface-1)] border-[var(--line-1)]">
-              <span class="text-3xs text-[var(--ink-3)] block">{{ t('dash.ledger.observability.var95') }}</span>
-              <span class="num font-mono font-bold text-xs mt-0.5 block text-[var(--ink-strong)]">
-                {{ snap.var_95_pct != null ? fmtNum(snap.var_95_pct, 2) + '%' : '--' }}
-              </span>
-            </div>
-            <div class="rounded border p-2 bg-[var(--surface-1)] border-[var(--line-1)]">
-              <span class="text-3xs text-[var(--ink-3)] block">{{ t('dash.ledger.observability.cvar95') }}</span>
-              <span class="num font-mono font-bold text-xs mt-0.5 block text-[var(--down)]">
-                {{ snap.cvar_95_pct != null ? fmtNum(snap.cvar_95_pct, 2) + '%' : '--' }}
+                {{ snap.basis_annualized_pct != null ? fmtNum(snap.basis_annualized_pct, 3) + '%' : '--' }}
               </span>
             </div>
           </div>

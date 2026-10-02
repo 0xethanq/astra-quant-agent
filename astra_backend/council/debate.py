@@ -85,7 +85,8 @@ def _call_single_trader(resolve_seat: Callable[..., Any],
     trader_user_prompt = (
         f"【当前全景市场数据、账户资金与在途持仓挂单】\n"
         f"{market_prompt}\n\n"
-        f"请以你「{role_name}」（提案标识: {proposal_id}）的专业视角，向首席投资官 (CIO) 提交本轮实操审查与作战方案：\n"
+        f"====================================================\n"
+        f"【作战提案审查通用要求（所有席位统一标准）】\n"
         f"1. 账户持仓与挂单审查：\n"
         f"   - 对在途持仓逐一给出管理建议：HOLD（波段完好继续持有）、CLOSE_MARKET（结构破位斩仓）或 UPDATE_SL（浮盈锁定移动止损）；\n"
         f"   - 对在途未成交限价挂单逐一给出建议：CANCEL（偏离盘口或动能失效立即撤单）或 KEEP（继续保留）；\n"
@@ -94,7 +95,9 @@ def _call_single_trader(resolve_seat: Callable[..., Any],
         f"3. 质询与风控：简要指出其他交易员方案可能带来的资金过载或流动性风险（60字内/标的）。\n\n"
         f"【提案输出格式（强制）】正文分析之后，必须以标准报价单块收尾（每标的一行，无明确结论的标的也必须列 WAIT 行），供 CIO 与执行层逐项横向对比：\n"
         f"标的 | 倾向 | 限价 | 止损 | 止盈 | 拟用保证金(USDT) | 置信度(0-100) | 一句话依据\n"
-        f"示例：BTC-USDT-SWAP | WAIT | - | - | - | - | 55 | 箱体中段乱跳，无概率优势"
+        f"示例：BTC-USDT-SWAP | WAIT | - | - | - | - | 55 | 箱体中段乱跳，无概率优势\n\n"
+        f"====================================================\n"
+        f"【本席位提交指令】请以你「{role_name}」（提案标识: {proposal_id}）的专业视角，向首席投资官 (CIO) 提交本轮实操审查与作战方案！"
     )
 
     messages = [
@@ -339,6 +342,7 @@ def execute_council_debate(load_config: Callable[[], Dict[str, Any]], resolve_se
 
     trader_proposals: Dict[str, Dict[str, Any]] = {}
     trader_critiques: Dict[str, Dict[str, Any]] = {}
+    trader_debates: Dict[str, Dict[str, Any]] = {}
 
     if not trader_keys:
         # Fallback: Solo CIO decision if no active traders enabled
@@ -437,6 +441,114 @@ def execute_council_debate(load_config: Callable[[], Dict[str, Any]], resolve_se
                             "content": f"质询异常: {exc}",
                             "latency_ms": 0,
                         }
+    elif consensus_mode == "debate":
+        # === MODE: Adversarial Debate (Round 1 Proposals -> Dispute Detection -> Round 2 Debate) ===
+        rem = deadline - time.time()
+        if rem < MIN_SAFE_REASONING_TIME * 2.0:
+            raise TimeoutError(
+                f"Council timeout: remaining time {rem:.2f}s insufficient for debate mode (requires >= {MIN_SAFE_REASONING_TIME * 2.0}s)"
+            )
+
+        # Stage 1: Round 1 Independent Proposals
+        cio_reserve = min(CIO_MIN_ARBITRATION_TIME, max(MIN_SAFE_REASONING_TIME * 2.0, rem * 0.35))
+        round1_budget = max(2.0, min(max(rem * 0.55, 90.0), rem - cio_reserve))
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, len(trader_keys))) as pool:
+            futures = {}
+            for idx, key in enumerate(trader_keys):
+                if idx > 0:
+                    time.sleep(0.8)
+                fut = pool.submit(
+                    call_trader,
+                    key,
+                    roles[key],
+                    market_prompt,
+                    original_system_prompt,
+                    round1_budget,
+                    runtime_context,
+                )
+                futures[fut] = key
+            for fut in concurrent.futures.as_completed(futures):
+                key = futures[fut]
+                try:
+                    trader_proposals[key] = fut.result()
+                except Exception as exc:
+                    trader_proposals[key] = {
+                        "proposal_id": f"{key}_prop",
+                        "role_id": key,
+                        "role_name": roles[key].get("name", key),
+                        "status": "error",
+                        "content": f"Proposal exception: {exc}",
+                        "weight": 0.0,
+                    }
+
+        # Stage 1.5: Detect Disputed Symbols via Consensus Engine
+        from astra_backend.council.consensus import (
+            calculate_council_consensus,
+            extract_disputed_symbols,
+        )
+        early_consensus = calculate_council_consensus(trader_proposals, roles)
+        disputed_symbols = extract_disputed_symbols(early_consensus)
+
+        # Stage 2: Targeted Adversarial Debate on Disputed Symbols
+        rem = deadline - time.time()
+        if rem < MIN_SAFE_REASONING_TIME + 2.0:
+            for k in trader_keys:
+                trader_debates[k] = {
+                    "role_id": k,
+                    "role_name": roles[k].get("name", k),
+                    "status": "skipped",
+                    "content": f"时间预算紧缺 (剩余 {rem:.2f}s < 7.0s)，安全降级跳过对抗辩论以确保 CIO 终审",
+                    "latency_ms": 0,
+                }
+        elif not disputed_symbols:
+            for k in trader_keys:
+                trader_debates[k] = {
+                    "role_id": k,
+                    "role_name": roles[k].get("name", k),
+                    "status": "skipped",
+                    "content": "全员提案高度共识，无严重多空撕裂标的，自动跳过第二轮红蓝对抗辩论",
+                    "latency_ms": 0,
+                }
+        else:
+            round2_budget = max(2.0, min(rem * 0.40, rem - min(CIO_MIN_ARBITRATION_TIME, max(MIN_SAFE_REASONING_TIME, rem * 0.5))))
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, len(trader_keys))) as pool:
+                debate_futures = {}
+                dispute_header = f"【核心争议对抗标的清单】: {', '.join(disputed_symbols)}（多空存在严重方向撕裂）"
+                for k in trader_keys:
+                    my_prop = trader_proposals.get(k, {}).get("content", "（该交易员第一轮未提交有效提案）")
+                    debate_peers_list = [dispute_header]
+                    for pk in trader_keys:
+                        if pk != k:
+                            p_res = trader_proposals.get(pk, {})
+                            p_id = p_res.get("proposal_id", f"{pk}_prop")
+                            p_name = p_res.get("role_name", pk)
+                            debate_peers_list.append(
+                                f"=== 【{p_name}】(提案标识: {p_id}) ===\n"
+                                f"{p_res.get('content', '（未提交）')}"
+                            )
+                    peers_text = "\n\n".join(debate_peers_list)
+                    debate_futures[pool.submit(
+                        call_critique,
+                        k,
+                        roles[k],
+                        my_prop,
+                        peers_text,
+                        original_system_prompt,
+                        round2_budget,
+                        runtime_context,
+                    )] = k
+                for fut in concurrent.futures.as_completed(debate_futures):
+                    k = debate_futures[fut]
+                    try:
+                        trader_debates[k] = fut.result()
+                    except Exception as exc:
+                        trader_debates[k] = {
+                            "role_id": k,
+                            "role_name": roles[k].get("name", k),
+                            "status": "error",
+                            "content": f"对抗辩论异常: {exc}",
+                            "latency_ms": 0,
+                        }
     else:
         # === MODE: Standard (Single-Round Proposals -> CIO Verdict) ===
         rem = deadline - time.time()
@@ -491,6 +603,15 @@ def execute_council_debate(load_config: Callable[[], Dict[str, Any]], resolve_se
         )
     compiled_proposals = "\n".join(transcript_blocks) if transcript_blocks else "（无其他交易员提交方案，首席投资官独立决策）"
 
+    # 计算量化共识度矩阵
+    try:
+        from astra_backend.council.consensus import calculate_council_consensus, format_consensus_docket
+        consensus_data = calculate_council_consensus(trader_proposals, roles)
+        consensus_docket = format_consensus_docket(consensus_data)
+    except Exception as exc:
+        consensus_data = {"by_symbol": {}, "error": str(exc)}
+        consensus_docket = f"【量化共识度矩阵计算异常】: {exc}"
+
     if consensus_mode == "cross_examination" and trader_critiques:
         critique_blocks = []
         for k in trader_keys:
@@ -503,10 +624,29 @@ def execute_council_debate(load_config: Callable[[], Dict[str, Any]], resolve_se
         docket_content = (
             f"【第一轮：各交易员独立作战提案卷宗】\n{compiled_proposals}\n\n"
             f"====================================================\n"
-            f"【第二轮：同行方案交叉漏洞质询与攻防辩论】\n{compiled_critiques}"
+            f"【第二轮：同行方案交叉漏洞质询与攻防辩论】\n{compiled_critiques}\n\n"
+            f"{consensus_docket}"
+        )
+    elif consensus_mode == "debate" and trader_debates:
+        debate_blocks = []
+        for k in trader_keys:
+            d_res = trader_debates.get(k, {})
+            debate_blocks.append(
+                f"=== 【{d_res.get('role_name', k)}】针对争议标的的对抗攻防辩论 ===\n"
+                f"{d_res.get('content', '（该交易员未提交对抗辩论）')}\n"
+            )
+        compiled_debates = "\n".join(debate_blocks)
+        docket_content = (
+            f"【第一轮：各交易员独立作战提案卷宗】\n{compiled_proposals}\n\n"
+            f"====================================================\n"
+            f"【第二轮：核心争议标的靶向红蓝对抗辩论】\n{compiled_debates}\n\n"
+            f"{consensus_docket}"
         )
     else:
-        docket_content = f"【交易员实战作战提案卷宗】\n{compiled_proposals}"
+        docket_content = (
+            f"【交易员实战作战提案卷宗】\n{compiled_proposals}\n\n"
+            f"{consensus_docket}"
+        )
 
     # CIO Final Review & Funding Verdict
     rem = deadline - time.time()
@@ -536,7 +676,8 @@ def execute_council_debate(load_config: Callable[[], Dict[str, Any]], resolve_se
         "   - 在 position_management 中对所有活动持仓下达权威指令（HOLD / CLOSE_MARKET / UPDATE_SL）及理由；\n"
         "   - 在 pending_orders_management 中对所有在途未成交挂单下达处理指令（CANCEL / KEEP）及理由；\n"
         "2. 【标的池全标的开仓方案终审 (decisions) 与采纳归属 (adopted_role)】：\n"
-        f"   - 仔细比对各位交易员提交的方案{'与交叉质询辩论' if consensus_mode == 'cross_examination' else ''}，评估逻辑最扎实者采纳，存在漏洞者驳回；\n"
+        f"   - 仔细比对各位交易员提交的方案{'与交叉质询辩论' if consensus_mode == 'cross_examination' else ('与对抗攻防辩论' if consensus_mode == 'debate' else '')}及【量化共识度矩阵】，评估逻辑最扎实者采纳，存在漏洞者驳回；\n"
+        f"   - 参考【量化共识度矩阵】：对方向共识度 ≥80% 且高置信度的标的优先批准，除非有重大系统性破位风险；对多空严重撕裂的标的审慎决策或观望；\n"
         f"   - 各席提案末尾附有标准报价单（标的|倾向|限价|止损|止盈|保证金|置信度|依据），请逐项横向对比后再裁决；"
         f"你批复的点位若与被采纳参谋报价单明显偏离，必须在 reasoning 中说明调整原因；\n"
         "   - decisions 必须是标的字典（如 \"BTC-USDT-SWAP\"），每个标的必须包含 \"adopted_role\" 字段：\n"
@@ -626,6 +767,8 @@ def execute_council_debate(load_config: Callable[[], Dict[str, Any]], resolve_se
         },
         "advisors": trader_proposals,
         "cross_examinations": trader_critiques if consensus_mode == "cross_examination" else {},
+        "adversarial_debates": trader_debates if consensus_mode == "debate" else {},
+        "consensus_metrics": consensus_data,
     }
 
     brain_output["council_transcript"] = council_transcript

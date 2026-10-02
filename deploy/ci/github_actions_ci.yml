@@ -33,16 +33,18 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install httpx
+          pip install pytest pytest-xdist pytest-subtests pytest-asyncio
 
-      - name: Build Frontend (Vue3 + Vite)
+      - name: Build & Test Frontend (Vue3 + Vite)
         run: |
           cd frontend
-          npm install
+          npm ci --prefer-offline || npm install
           npm run build
+          node --test tests/*.test.mjs
+          cd ..
 
-      - name: Run Full Test Suite
+      - name: Run Backend Test Suite (Pytest)
         env:
           ASTRA_TESTING: "1"
         run: |
-          python -m unittest discover -s tests
+          pytest -n auto -q

@@ -31,7 +31,6 @@
  * ## 保留的页面 delta / 复合选择器（不是漏删）
  *
  *   - `.dz-field { flex: 1 }`（DangerZone）—— 原件不含 `flex`；
- *   - `.ip-field + .ip-field`（InterceptorsPage）—— 相邻字段的上间距，仅本页要；
  *   - `.nf-field.is-span`（NotifyPage）—— 跨列变体；
  *   - `.me-field .field.is-readonly`（ModelEditDialog）—— 只读态微调；
  *   - `.pd-field-hint` / `.pv-field*` —— 别的类，名字里带 `field` 而已。
@@ -55,7 +54,6 @@ export const BAND_EXEMPT = {
 /** 允许保留的 field 规则（页面 delta / 复合选择器），值=理由。 */
 export const FIELD_ALLOWED = {
   '.dz-field': 'danger 区字段需要 flex: 1（原件不含 flex）',
-  '.ip-field + .ip-field': '相邻字段上间距，仅本页需要',
   '.nf-field.is-span': '跨列变体',
   '.me-field .field.is-readonly': '只读态微调',
   '.pd-field-hint': '另一个类（提示文字）',
@@ -158,16 +156,16 @@ test('字段栈模板用法必须在白名单内（防漂移出新写法）', ()
   const allowed = new Set([
     'field-stack',
     'field-stack me-field',
-    'field-stack ip-field',
     'field-stack nf-field',
     'field-stack nf-field is-span',
     'field-stack dz-field',
   ]);
   const bad = [...counts.keys()].filter((k) => !allowed.has(k));
   assert.deepEqual(bad, [], `出现未登记的字段栈写法：\n  ${bad.join('\n  ')}`);
-  // 2026-10：SecurityPage 的凭证区随「全站收口 OKX」精简（去掉 Binance/Gate
-  // 两组字段），field-stack 实例由 44 降为 42。
-  assert.equal(total, 42, `field-stack 实例应为 42 个，实测 ${total}`);
+  // 2026-10：SecurityPage 凭证区随「全站收口 OKX」精简（44 → 42）；
+  // 随后 InterceptorsPage 随策略插件系统整套裁撤（其 `field-stack ip-field`
+  // 实例一并消失），再由 42 降为 40。
+  assert.equal(total, 40, `field-stack 实例应为 40 个，实测 ${total}`);
 });
 
 test('豁免/白名单必须都有理由，且文件真实存在', () => {
@@ -192,6 +190,6 @@ test('闸自检：识别 band/field 基座规则，不误伤 delta 与同名字�
   assert.ok(/flex-direction: column/.test(base) && /gap:/.test(base), '应识别为基座规则');
   const delta = '.dz-field {\n  flex: 1;\n}';
   assert.equal(/flex-direction: column/.test(delta) && /gap:/.test(delta), false, 'delta 不该被当作基座');
-  const compound = '.ip-field + .ip-field {\n  margin-top: var(--ds-space-4);\n}';
+  const compound = '.nf-field.is-span {\n  grid-column: span 2;\n}';
   assert.equal(/flex-direction: column/.test(compound) && /gap:/.test(compound), false, '复合选择器不该被当作基座');
 });

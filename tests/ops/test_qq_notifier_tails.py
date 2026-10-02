@@ -433,33 +433,6 @@ class SlUpdatedTests(_NotifierSandbox, unittest.TestCase):
         self.assertIn("[GATE] ", self.call["title"])
 
 
-# ───────────────────── 拦截 / 熔断 / 简报 / 复盘 ─────────────────────
-class InterceptorBlockedTests(_NotifierSandbox, unittest.TestCase):
-    def _blk(self, **over):
-        kw = {"inst": "BTC-USDT-SWAP", "action": "BUY_LONG",
-              "interceptor_name": "POSITION_CAP", "reason": "超出同向上限"}
-        kw.update(over)
-        return qn.notify_interceptor_blocked(**kw)
-
-    def test_a_long_proposal_is_labelled(self):
-        self._blk()
-        self.assertIn("🟢 追多", self.call["message"])
-        self.assertIn("POSITION_CAP", self.call["message"])
-
-    def test_a_short_proposal_is_labelled(self):
-        self._blk(action="SELL_SHORT")
-        self.assertIn("🔴 追空", self.call["message"])
-
-    def test_the_fail_closed_stance_is_stated(self):
-        self._blk()
-        self.assertIn("Fail-Closed 强制降级观望", self.call["message"])
-
-    def test_the_event_type_and_priority(self):
-        self._blk()
-        self.assertEqual(self.call["event_type"], "risk.interceptor_blocked")
-        self.assertEqual(self.call["priority"], 70)
-
-
 class CircuitBreakerNoticeTests(_NotifierSandbox, unittest.TestCase):
     def test_the_critical_level_is_stated(self):
         qn.notify_circuit_breaker("交易所挤兑", "命中高危词汇")
@@ -512,7 +485,6 @@ class CrossCuttingTests(_NotifierSandbox, unittest.TestCase):
             lambda: qn.notify_trade_open("BTC-USDT-SWAP", "多", 1, 100.0, "s", "r"),
             lambda: qn.notify_trade_close("BTC-USDT-SWAP", 1.0, "止盈", 101.0),
             lambda: qn.notify_sl_updated("BTC-USDT-SWAP", "多", 95.0, 100.0),
-            lambda: qn.notify_interceptor_blocked("BTC-USDT-SWAP", "BUY_LONG", "I", "r"),
             lambda: qn.notify_circuit_breaker("e", "r"),
             lambda: qn.notify_daily_summary("s"),
             lambda: qn.notify_evolution_report(1.0, 1, "s", "l"),

@@ -169,7 +169,9 @@ ROW_SAMPLE_PATHS = {
     "InstrumentFactor": "factors",
     "PortfolioRiskRow": "portfolio_risk",
     "LLMRuntime": "llm_runtime",
-    "MarketRegimeData": "market_regime",
+    # ★ 2026-10：`MarketRegimeData`（全市场宏观体制）随退役数理引擎**整块移除** ——
+    #   提示词侧与看板侧都不再签发/声明该字段（数据源 `calculus_engine`→`regime.py`
+    #   缺数据时会凭空编结论）。此处的行契约条目一并删除，而不是让它"声明了却没生产者"。
 }
 
 #: 允许"类型声明、后端确实不产"的行字段（附理由）。本刀修完后为空。

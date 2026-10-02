@@ -67,7 +67,6 @@ DETERMINISTIC_DEFAULTS_EMPTY: "dict[str, str]" = {
     "llm_providers.json": "供应商表。理由同上（其中还有你自己的网关域名）。",
     "council_config.json": "投委会席位配置。为空 ⇒ 内置席位；不随线上调参漂移。",
     "backup_methods.json": "备份作业清单。为空 ⇒ 内置默认作业；不随你的存储目标漂移。",
-    "interceptor_plugins.json": "拦截器插件清单。为空 ⇒ 无自定义拦截器。",
     "trading_session.json": "交易时段配置。为空 ⇒ 内置默认（enabled=false = 全天候运行），"
                             "正好让用例跑在「未启用时段」这个确定性初态上；"
                             "继承生产值会让用例随你私人的时段设置而红/绿。",
@@ -97,6 +96,9 @@ REGENERABLE_EMPTY = (
 #: 因此允许它们出现在声明里、但不在实测"被清空"集合中。除此之外，
 #: 声明必须与实测**严格对齐** —— 否则这份清单会变成一份与现实无关的说明文。
 CONDITIONALLY_ABSENT: "dict[str, str]" = {
+    ".astra_gateway.lock":
+        "网关单实例锁：网关未启动时本机生产不存在该文件。一旦启动生成，沙箱里必须为空——"
+        "否则测试会误判已有网关进程在运行。",
     "prompt_library.local.json":
         "用户改动落点：本机没有本地改动时它就不存在。一旦存在，沙箱里同样必须为空——"
         "否则用例会随你私人的提示词改动漂移。",

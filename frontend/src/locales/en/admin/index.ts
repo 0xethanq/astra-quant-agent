@@ -10,7 +10,6 @@ import { enAdminBackup } from './backup';
 import { enAdminAudit } from './audit';
 import { enAdminAgents } from './agents';
 import { enAdminCouncil } from './council';
-import { enAdminInterceptors } from './interceptors';
 import { enAdminLlm } from './llm';
 import { enAdminSecurity } from './security';
 import { enAdminDecisions } from './decisions';
@@ -32,7 +31,6 @@ export const enAdmin = {
   audit: enAdminAudit,
   agents: enAdminAgents,
   council: enAdminCouncil,
-  interceptors: enAdminInterceptors,
   llm: enAdminLlm,
   security: enAdminSecurity,
   decisions: enAdminDecisions,

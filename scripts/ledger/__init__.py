@@ -21,6 +21,7 @@
 |---|---|---|
 | `okx_history.py` | `build_okx_trade(...)` —— 把 OKX 成交/账单原始行折成台账行 | 无（纯转换） |
 | `merge.py` | `merge_lifecycle_trades(...)` —— 旧台账 + 本轮新成交的**合并去重**（含审计 D8 迁移：撞键旧键行让位、窗口外旧行不动） | **零注入面**（纯入参） |
+| `evidence_join.py` | `enrich_closed_rows_with_evidence(...)` —— 把**平仓证据**（开仓快照 / MFE-MAE / 机制级离场原因 / 决策来源与采纳席位）按「标的＋方向＋开仓时刻」容差 join 进平仓行，并给每行打 `exit_reason_source`（`mechanism` 事实 / `inferred` 猜测）；一条证据只用一次 | **零注入面**（纯入参，零 I/O） |
 | `holdings.py` | `judge_position_side(...)`（**审计 C8** 方向判定：net-mode 按符号回退，不可判即"未知"）/ `format_holding_duration(...)`（时长格式化；**本刀修掉 naive/aware 失配**） —— 本体 `_holding_row` 因既有 pin 仍留门面 | `datetime` 调用方注入 |
 | `notify.py` | `notify_newly_closed_trades(...)` —— 台账落盘后把**新平仓**逐条推给 QQ （`id` 不在本轮既有已平集合 且 `status=="closed"`）；`qq_notifier` 惰性导入，失败只告警绝不影响落盘 | 依赖由参数传入（唯一有外部副作用的 ledger 部件，故单列） |
 

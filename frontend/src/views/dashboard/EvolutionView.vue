@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * EvolutionView.vue · DeepSeek Harness 风格自进化与认知中枢
+ * EvolutionView.vue · AstraQuant 模型自进化与复盘认知中枢
  * 包含：自进化复盘 HUD 状态带、诊断归因与行动决策树、确定性数理快照可观测性审计、核心黄金心法库与长期认知记忆流
  */
 import { computed } from 'vue';
@@ -77,6 +77,24 @@ function insBody(it: any): string {
 
 const actions = computed<any[]>(() => review.value.actions_taken || []);
 const snapAudit = computed<any>(() => review.value.snapshot_audit || null);
+// ── 2026-10（方向 1：证据链可观测性）──
+// 报告载荷里的两个覆盖率与缺口清单。它们**由后端从 snapshot_audit 内部派生**
+// （14 入参契约未变），故前端只需读；缺失时整块不渲染（老报告仍能打开）。
+const evidenceEntryCoverage = computed<number | null>(() => {
+  const v = review.value.evidence_coverage_pct;
+  return typeof v === 'number' ? v : null;
+});
+const evidenceExitCoverage = computed<number | null>(() => {
+  const v = review.value.exit_cause_coverage_pct;
+  return typeof v === 'number' ? v : null;
+});
+const evidenceGaps = computed<string[]>(() => {
+  const list = review.value.evidence_gap_reasons;
+  return Array.isArray(list) ? list.filter((g: any) => typeof g === 'string' && g) : [];
+});
+const hasEvidenceChain = computed(
+  () => evidenceEntryCoverage.value !== null || evidenceExitCoverage.value !== null,
+);
 
 function actText(a: any): string {
   if (typeof a === 'string') return a;
@@ -217,6 +235,34 @@ const md = computed(() => (store.data as any)?.ai_trading_memory_md || '');
               >
                 <span class="num font-mono font-bold text-3xs text-[var(--accent)] shrink-0 mt-0.5">0{{ idx + 1 }}</span>
                 <p class="text-xs text-[var(--ink-1)] leading-body flex-1">{{ actText(a) }}</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- 证据链健康度（2026-10 方向 1）：开仓现场覆盖 + 离场机制确认率 + 缺口清单 -->
+          <div v-if="hasEvidenceChain" class="dsh-card p-4 space-y-2">
+            <h2 class="text-xs font-bold uppercase tracking-wider text-[var(--ink-strong)] flex items-center gap-1.5">
+              <ShieldCheck class="h-4 w-4 text-[var(--accent)]" />
+              {{ t('dash.evolution.evidenceChainTitle') }}
+            </h2>
+            <div class="grid grid-cols-2 gap-2">
+              <div v-if="evidenceEntryCoverage !== null" class="dsh-card-sub p-3">
+                <div class="text-3xs text-[var(--ink-3)]">{{ t('dash.evolution.evidenceEntryCoverage') }}</div>
+                <div class="text-lg font-bold font-mono text-[var(--ink-1)]">{{ evidenceEntryCoverage }}%</div>
+              </div>
+              <div v-if="evidenceExitCoverage !== null" class="dsh-card-sub p-3">
+                <div class="text-3xs text-[var(--ink-3)]">{{ t('dash.evolution.evidenceExitCoverage') }}</div>
+                <div class="text-lg font-bold font-mono text-[var(--ink-1)]">{{ evidenceExitCoverage }}%</div>
+              </div>
+            </div>
+            <div class="dsh-card-sub p-3 text-3xs text-[var(--ink-2)] space-y-1">
+              <div class="font-bold text-[var(--ink-3)]">{{ t('dash.evolution.evidenceGapsTitle') }}</div>
+              <div v-if="!evidenceGaps.length" class="text-[var(--ink-2)]">
+                {{ t('dash.evolution.evidenceNoGaps') }}
+              </div>
+              <div v-for="(gap, i) in evidenceGaps" :key="i" class="flex gap-1.5">
+                <span class="text-[var(--accent)]">•</span>
+                <span>{{ gap }}</span>
               </div>
             </div>
           </div>

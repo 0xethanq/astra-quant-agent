@@ -14,7 +14,7 @@ from astra_backend.version import __version__
 DEFAULT_BASE_VERSION = f"v{__version__}"
 
 
-_PACKAGE_UNITS = ("prompt_config", "evolution_memory", "interceptor_config",
+_PACKAGE_UNITS = ("prompt_config", "evolution_memory",
                   "council_config", "risk_config")
 
 

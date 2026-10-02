@@ -1,13 +1,14 @@
 export const enAbout = {
   title: 'About AstraQuant',
-  desc: 'Version, licence and source repository',
+  desc: 'Autonomous OKX perpetual trading system powered by multi-model adversarial debate, 7-tier quant factor verification, and deterministic physical risk control.',
+  pitch: '"Cognition belongs to the models; physical verification belongs to the calculus; deterministic discipline belongs to the Python risk base."',
   arch: {
-    title: 'Architecture',
-    stack: 'FastAPI + Vue 3 static SPA',
+    title: 'Core Architectural Pillars',
+    stack: 'FastAPI + Vue 3 Static SPA · OKX Native V5 Signing',
     points: [
-      'LLM holds full decision authority; a Python base hard-blocks violations',
-      '100% exchange-side cloud OCO stops, Fail-Closed by design',
-      'Multi-model council debate + heuristic self-evolving memory loop',
+      '[Cognition at Top] Multi-model committee cross-examination & adversarial debate to eliminate single-model hallucinations',
+      '[Grounded in Truth] 7-tier quant factor matrix (Basis, CVD, OBI, Options IV surface, VWAP) for physical verification',
+      '[Physical Discipline] Pure Python deterministic risk gate + 100% exchange cloud OCO protection with absolute veto power',
     ],
   },
   repo: { title: 'Open-source repo', visit: 'Visit repo', starHint: 'Stars & issues welcome' },
@@ -23,6 +24,6 @@ export const enAbout = {
     copyHint: 'Click to copy',
   },
   version: 'Version {v} · build {r}',
-  license: 'MIT License · For research only, not financial advice',
+  license: 'AGPL-3.0 + Commons Clause · Research only, commercial resale & paid signals prohibited',
   risk: 'Risk warning: crypto perpetuals carry extreme leverage risk. Past performance never guarantees future results.',
 };

@@ -53,6 +53,15 @@ def build_state_payload(*, timestamp_full, active_pos_count, max_positions, long
         "instruments": []
     }
 
+    # ★ 2026-10：缺失渲染助手（不臆造数值 / 不臆造方向）
+    def _round_or_none(value, ndigits):
+        return round(value, ndigits) if isinstance(value, (int, float)) else None
+
+    def _trend_label(bullish):
+        if bullish is None:
+            return "--"          # 未知：既不是多头也不是空头
+        return "多头" if bullish else "空头"
+
     for f in all_factors:
         score, action, reasons, strat_tag, strat_desc = evaluate_asset_signal(f)
         payload["instruments"].append({
@@ -60,18 +69,22 @@ def build_state_payload(*, timestamp_full, active_pos_count, max_positions, long
             "instId": f["instId"],
             "type": f["type"],
             "price": f["price"],
-            "rsi": round(f["rsi"], 1),
-            "rsi_7": round(f.get("rsi_7", 50.0), 1),
-            "vwap_bias": round(f.get("vwap_bias", 0.0), 2),
-            "macd_hist": f.get("macd_hist", 0.0),
-            "macd_accel": f.get("macd_accel", 0.0),
-            "obv_flow": f.get("obv_flow", "NEUTRAL"),
-            "bb_bandwidth": f.get("bb_bandwidth", 0.0),
-            "vol_ratio": f.get("vol_ratio", 1.0),
-            "market_regime": f.get("market_regime", "CHOP"),
-            "structure_1h": f.get("structure_1h", "CHOP"),
-            "trend_1h": "多头" if f.get("trend_1h_bullish") else "空头",
-            "trend_4h": "多头" if f.get("trend_4h_bullish") else "空头",
+            # ★ 2026-10「不许假数据」：这里的 `.get(key, 兜底值)` 会把"没取到"
+            #   写进 trading_state.json 供看板展示 —— 50.0/0.0/1.0/NEUTRAL/CHOP 每一条
+            #   都会被读成"已观测的市场状态"。缺失一律 None（前端渲染 `--`），
+            #   字符串型一律 "--"，方向未知一律 "--"（不再默认显示"空头"）。
+            "rsi": _round_or_none(f.get("rsi"), 1),
+            "rsi_7": _round_or_none(f.get("rsi_7"), 1),
+            "vwap_bias": _round_or_none(f.get("vwap_bias"), 2),
+            "macd_hist": f.get("macd_hist"),
+            "macd_accel": f.get("macd_accel"),
+            "obv_flow": f.get("obv_flow") or "--",
+            "bb_bandwidth": f.get("bb_bandwidth"),
+            "vol_ratio": f.get("vol_ratio"),
+            "market_regime": f.get("market_regime") or "--",
+            "structure_1h": f.get("structure_1h") or "--",
+            "trend_1h": _trend_label(f.get("trend_1h_bullish")),
+            "trend_4h": _trend_label(f.get("trend_4h_bullish")),
             "score": score,
             "action": action,
             "strategy": strat_tag,

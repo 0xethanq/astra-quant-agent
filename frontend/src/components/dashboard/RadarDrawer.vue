@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * RadarDrawer.vue · DeepSeek Harness 风格决策白盒透视抽屉
+ * RadarDrawer.vue · AstraQuant 决策白盒透视抽屉
  * 包含：宏观综合研判、机会与持仓调度、投委会多模型博弈流（各交易员提案/辩论/CIO终审）与原始 JSON
  */
 import { computed, ref, watch } from 'vue';

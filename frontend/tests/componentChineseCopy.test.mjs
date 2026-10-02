@@ -25,9 +25,10 @@
  *   - `router/index.ts` —— SEO 文档标题，注释明写"中文为主（与后端钉扎测试与 CF 缓存语义一致）"；
  *   - `views/admin/council/councilLogic.ts` —— `CONSENSUS_MODES` 的中文是**回落值**，
  *     `CouncilPage` 有 `MODE_TEXT_KEY` 覆盖层（批 40），且内置席位的 prompt 本身是中文，
- *     自定义席位沿用中文才与之一致；
- *   - `views/admin/InterceptorsPage.vue` —— Python 插件**脚手架代码模板**，
- *     是用户要编辑的代码起点，不是界面 chrome。
+ *     自定义席位沿用中文才与之一致。
+ *
+ * ⚠️ 2026-10：`views/admin/InterceptorsPage.vue`（Python 插件脚手架模板）随策略插件
+ *    系统整套裁撤而删除，其豁免项一并移除（豁免指向不存在的文件会被本闸判红）。
  *
  * 运行：`node --test tests/*.test.mjs`
  */
@@ -46,7 +47,6 @@ export const BOUNDARIES = {
   'config/version.ts': '品牌名与官方仓库公告',
   'router/index.ts': 'SEO 文档标题，注释明写中文为主（后端钉扎 + CF 缓存语义）',
   'views/admin/council/councilLogic.ts': 'CONSENSUS_MODES 是回落值，CouncilPage 有 MODE_TEXT_KEY 覆盖层；且内置席位 prompt 为中文',
-  'views/admin/InterceptorsPage.vue': 'Python 插件脚手架代码模板（用户要编辑的代码起点）',
 };
 
 export function codeOnly(src) {

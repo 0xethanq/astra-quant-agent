@@ -267,6 +267,11 @@ def generate_trading_data():
             "action": action,
             "confidence": ai_dec.get("confidence"),
             "reason": ai_dec.get("summary_reason", "等待高确定性行情出现"),
+            # 三态可观测性（2026-10）：同源字段，见 scripts/brain/decisions.py
+            "decision_source": ai_dec.get("decision_source", "model"),
+            "gate_blocked": bool(ai_dec.get("gate_blocked", False)),
+            "gate_reason": ai_dec.get("gate_reason", ""),
+            "model_reason": ai_dec.get("model_reason", ""),
             "thought_process": ai_thought,
             "ai_decision": ai_dec
         })

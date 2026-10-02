@@ -41,7 +41,7 @@ import PageHeader from '../../components/admin/PageHeader.vue';
 import BaseDialog from '../../components/base/BaseDialog.vue';
 import BaseEmpty from '../../components/base/BaseEmpty.vue';
 import { Info, GitBranch, Download, RefreshCw, CheckCircle2, AlertTriangle,
-  ShieldCheck, Terminal, Loader2, ArrowUpRight, Link2, ExternalLink } from 'lucide-vue-next';
+  ShieldCheck, Terminal, Loader2, ArrowUpRight, Link2, ExternalLink, Sparkles } from 'lucide-vue-next';
 import BaseLoadingAnnounce from '../../components/base/BaseLoadingAnnounce.vue';
 import CopyButton from '../../components/base/CopyButton.vue';
 
@@ -241,6 +241,15 @@ const bandFacts = computed(() => {
               </div>
             </div>
 
+            <!-- 核心一句话定调 -->
+            <div class="mx-4 mt-3 p-3 rounded-lg border border-emerald-500/30 bg-emerald-500/5 text-xs text-[var(--ink-1)] leading-relaxed">
+              <p class="font-medium text-emerald-400 mb-1 flex items-center gap-1.5">
+                <Sparkles :size="13" />
+                <span>{{ t('admin.about.pitchTitle') }}</span>
+              </p>
+              <p>{{ t('admin.about.pitchBody') }}</p>
+            </div>
+
             <footer class="ab-block-foot">
               <a
                 href="https://github.com/0xethanq/astra-quant-agent"
@@ -359,6 +368,23 @@ const bandFacts = computed(() => {
               <p class="font-medium text-amber-200">{{ t('admin.about.dirtyAlertTitle') }}</p>
               <p class="text-3xs text-amber-300/70 mt-0.5">{{ t('admin.about.dirtyAlertDesc') }}</p>
             </div>
+          </div>
+
+          <!-- 待更新提交清单（有差额且有 commit 摘要时展示） -->
+          <div
+            v-if="(about.update?.behind || 0) > 0 && about.update?.commits?.length"
+            class="mx-4 mb-3 p-3 rounded-lg border border-emerald-500/20 bg-emerald-500/5 text-xs"
+          >
+            <p class="font-medium text-emerald-300 mb-1.5 flex items-center gap-1.5">
+              <ArrowUpRight :size="14" class="text-emerald-400" />
+              <span>{{ t('admin.about.commitsTitle') }}</span>
+            </p>
+            <ul class="space-y-1 font-mono text-3xs text-[var(--ink-2)]">
+              <li v-for="(c, i) in about.update.commits" :key="i" class="truncate flex items-center gap-1.5">
+                <span class="text-emerald-400/80">•</span>
+                <span>{{ c }}</span>
+              </li>
+            </ul>
           </div>
 
           <!-- 动作 -->

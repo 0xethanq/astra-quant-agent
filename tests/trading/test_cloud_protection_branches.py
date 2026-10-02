@@ -214,6 +214,16 @@ class SyncCloudAlgoStopTest(unittest.TestCase):
                         "net 容错：找不到活止损单会让「云端止损收紧」静默失效")
         self.assertEqual(len(rest.amended), 1)
 
+    def test_multi_legs_all_amended(self):
+        """双腿方案下 [TP1 腿, 余仓腿] 两笔 OCO 单的止损必须全部同步更新。"""
+        leg1 = self._live(algoId="algo-tp1", slTriggerPx="68000")
+        leg2 = self._live(algoId="algo-tp2", slTriggerPx="68000")
+        rest = _SyncRest([leg1, leg2])
+        self.assertTrue(sync_cloud_algo_stop("BTC-USDT-SWAP", "long", 69500.0, okx_rest=rest))
+        self.assertEqual(len(rest.amended), 2)
+        self.assertEqual(rest.amended[0][0], "algo-tp1")
+        self.assertEqual(rest.amended[1][0], "algo-tp2")
+
     def test_read_failure_returns_false_without_raising(self):
         rest = _SyncRest(raises=RuntimeError("read boom"))
         self.assertFalse(sync_cloud_algo_stop("BTC-USDT-SWAP", "long", 69000.0, okx_rest=rest),

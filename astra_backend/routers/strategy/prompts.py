@@ -462,6 +462,8 @@ def test_evolution_model(
             temperature=0.1,
             response_format={"type": "json_object"},
             timeout=float(payload.thinking_timeout or 60.0),
+            use_cache=True,
+            cache_ttl=120.0,
         )
         latency_ms = int((time.time() - t0) * 1000)
         return {

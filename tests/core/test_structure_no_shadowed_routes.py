@@ -117,7 +117,8 @@ def _router_include_order() -> list[str]:
 def _router_files(mod: str) -> list[Path]:
     """路由域的文件清单 —— 单模块 `routers/<mod>.py` 或**包** `routers/<mod>/*.py`。
 
-    第九十六刀：`strategy` 从 775 行单模块拆成包（council/interceptors/policy/prompts）。
+    第九十六刀：`strategy` 从 775 行单模块拆成包（council/policy/prompts；
+    2026-10 决策插件子路由裁撤后由四文件变三文件）。
     本门必须跟着解析包，否则会静默退化成"没有影子"（最危险的假阴性）。
     """
     single = ROUTER_DIR / f"{mod}.py"

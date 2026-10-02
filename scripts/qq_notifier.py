@@ -320,35 +320,6 @@ def notify_sl_updated(
     )
 
 
-def notify_interceptor_blocked(
-    inst: str,
-    action: str,
-    interceptor_name: str,
-    reason: str,
-    venue: str = "okx",
-) -> bool:
-    """Triggered when fail-closed physical interceptor cuts off an impulsive AI order."""
-    venue_name = str(venue or "OKX").upper()
-    symbol_str = _format_symbol(inst, venue)
-    action_label = "🟢 追多" if "LONG" in action.upper() else "🔴 追空"
-
-    message = (
-        f"🏢 目标交易所：{venue_name}\n"
-        f"⚡ 交易标的：{symbol_str}\n"
-        f"🤖 模型提案：{action_label}（已被底座物理切断）\n"
-        f"🛑 拦截门禁：{interceptor_name}\n"
-        f"📋 拦截原因：{reason}\n"
-        f"🔒 执行纪律：Fail-Closed 强制降级观望，严守风控纪律，拒绝冲动交易。"
-    )
-    return _publish(
-        "risk.interceptor_blocked",
-        f"🛡️ 【物理硬风控拦截】{inst} {action_label}提案已切断",
-        message,
-        {"instrument": inst, "action": action, "interceptor": interceptor_name, "reason": reason},
-        priority=70,
-    )
-
-
 def notify_circuit_breaker(macro_event: str, reason: str) -> bool:
     """Triggered when market wide circuit breaker or risk defense triggers."""
     message = (

@@ -15,6 +15,8 @@ save_council_config / export_council_config / _backup_council_config。
 | `policy.py` | 常量与预设模板（共识模式、超时下限、`DEFAULT_PRESET_TEMPLATES`） |
 | `presets.py` / `roster.py` | 预设与花名册的纯数据/纯计算部件 |
 | `role_normalizer.py` | CIO 终审输出的 `adopted_role` 归一化（纯函数，无 I/O） |
+| `consensus.py` | 报价单结构化解析与共识度量化计算（纯函数，无 I/O） |
+| `attribution.py` | 席位历史采纳战绩与胜率归因统计（纯数据计算） |
 
 ## 抽取约定
 

@@ -119,10 +119,14 @@ TEMPLATE_VARIABLES_METADATA = [
     },
     {
         "key": "market_regime",
-        "label": "全市场宏观体制",
+        "label": "全市场宏观体制（已退役·恒为空）",
         "category": "行情数据",
-        "description": "注入全市场宏观体制自适应识别结果（单边趋势/宽幅震荡/窄幅低波/极端冲击、趋势强度、波动与震荡指数、操盘指导建议）",
-        "sample": "【市场体制自适应识别】: 当前全市场宏观体制为【宽幅上下震荡】(高波动箱体 · 逆势防扫)。\n- 核心量化指标: 趋势强度=38.5/100 | 波动指数=76.2/100 | 震荡指数=82.0/100 | 主导方向=NEUTRAL\n- 操盘指导建议: 处于宽幅上下震荡箱体，建议箱体边界高抛低吸，拉宽止损至 2.0x ATR 防插针扫损，浮盈达 1.5R 及时保本或锁利。",
+        "description": ("**2026-10 起已退役**：该插槽恒为空，不再注入实盘值。原因：其数据源是已退役的"
+                        "数理引擎（`calculus_engine`→`calculus/regime.py`），且缺数据时会凭空编出"
+                        "体制结论与量化分（函数内写死 `atr_pct=1.5`/`adx=20.0` 兜底，实盘 `calculus` "
+                        "块已不存在 ⇒ 震荡/冲击分源自假零）。方向证据改由每个标的的真实 4H 宏观结构"
+                        "（`4H_MACRO_*`）、ADX、ATR 与 T4 动量承载；跨标的总括可由模型自行汇总。"),
+        "sample": "",
     },
     {
         "key": "market_matrix",
@@ -179,6 +183,20 @@ TEMPLATE_VARIABLES_METADATA = [
         "category": "系统环境",
         "description": "当前 AstraQuant 交易引擎版本",
         "sample": "6.8.1",
+    },
+    {
+        "key": "policy_version",
+        "label": "策略快照版本",
+        "category": "系统环境",
+        "description": "当前决策周期的策略版本快照标签",
+        "sample": "v8.0.0@prod",
+    },
+    {
+        "key": "policy_hash",
+        "label": "策略快照哈希",
+        "category": "系统环境",
+        "description": "当前决策周期的策略配置不可变哈希指纹",
+        "sample": "a1b2c3d4e5f6",
     },
     {
         "key": "timezone",
@@ -256,6 +274,27 @@ TEMPLATE_VARIABLES_METADATA = [
         "category": "交易台账",
         "description": "复盘窗口内逐笔已平仓交易明细的 JSON 序列化文本",
         "sample": '[{"symbol":"BTC","net_pnl":12.3,"fee":0.4}]',
+    },
+    {
+        "key": "snapshot_observability_summary",
+        "label": "可观测性审计摘要",
+        "category": "交易台账",
+        "description": "历史成交快照可观测性审计简报",
+        "sample": "全量可观测 10 笔 / 部分可观测 2 笔",
+    },
+    {
+        "key": "dynamics_observable_trades",
+        "label": "因子可观测成交笔数",
+        "category": "交易台账",
+        "description": "具备完整因子快照的已平仓交易笔数",
+        "sample": "10",
+    },
+    {
+        "key": "unobservable_trades",
+        "label": "因子不可观测成交笔数",
+        "category": "交易台账",
+        "description": "缺失入场因子快照的已平仓交易笔数",
+        "sample": "2",
     },
 ]
 

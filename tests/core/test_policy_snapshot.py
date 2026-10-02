@@ -56,28 +56,20 @@ class RootIsResolvedAtCallTimeTests(_Base):
         PS.extract_evolution_mind_fingerprint({"m": 1})
         core.assert_called_once_with(_SANDBOX_ROOT, {"m": 1}, None)
 
-    def test_interceptors(self):
-        core = self._start(mock.patch.object(PS, "_core_extract_interceptors_fingerprint",
-                                             return_value={}))
-        self._start(mock.patch.object(PS, "ROOT", _SANDBOX_ROOT))
-        PS.extract_interceptors_fingerprint([{"a": 1}], Path("/p"), Path("/r"))
-        core.assert_called_once_with(_SANDBOX_ROOT, [{"a": 1}], Path("/p"), Path("/r"))
-
     def test_generate_policy_snapshot_positional_order(self):
         core = self._start(mock.patch.object(PS, "_core_generate_policy_snapshot",
                                              return_value={}))
         self._start(mock.patch.object(PS, "ROOT", _SANDBOX_ROOT))
-        PS.generate_policy_snapshot(Path("/r"), {"p": 1}, {"m": 1}, [{"i": 1}], {"c": 1},
-                                    Path("/pl"), "9.9.9")
+        PS.generate_policy_snapshot(Path("/r"), {"p": 1}, {"m": 1}, {"c": 1}, "9.9.9")
         core.assert_called_once_with(_SANDBOX_ROOT, Path("/r"), {"p": 1}, {"m": 1},
-                                     [{"i": 1}], {"c": 1}, Path("/pl"), "9.9.9")
+                                     {"c": 1}, "9.9.9")
 
     def test_generate_policy_snapshot_defaults(self):
         core = self._start(mock.patch.object(PS, "_core_generate_policy_snapshot",
                                              return_value={}))
         self._start(mock.patch.object(PS, "ROOT", _SANDBOX_ROOT))
         PS.generate_policy_snapshot()
-        core.assert_called_once_with(_SANDBOX_ROOT, None, None, None, None, None, None,
+        core.assert_called_once_with(_SANDBOX_ROOT, None, None, None, None,
                                      PS.DEFAULT_BASE_VERSION)
 
     def test_current_snapshot(self):

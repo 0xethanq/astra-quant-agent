@@ -4,8 +4,12 @@
  * ## 实测缺陷与背景：
  *
  * 在实盘矩阵（`/trading`）桌面端数据表格中，共有 8 列支持点击客户端排序：
- * `name`（标的）、`price`（现价）、`chg24h`（24H 涨跌）、`velocity`（v 1H）、
- * `accel`（a 1H）、`adx`（ADX）、`ls`（多空比）、`conf`（AI 结论）。
+ * `name`（标的）、`price`（现价）、`chg24h`（24H 涨跌）、`macd`（1H MACD 柱）、
+ * `macdAccel`（1H MACD 柱加速度）、`adx`（ADX）、`ls`（多空比）、`conf`（AI 结论）。
+ *
+ * ★ 2026-10：原来这两列是 `velocity`（速度 v）/`accel`（加速度 a）—— 随数理系统
+ * 退场改成 1H MACD 柱与其加速度；**排序键改名必须与组件、本闸、locales 同批改**，
+ * 否则闸会红（这正是它存在的意义）。
  *
  * 缺陷：
  * 此前仅 `name` 列声明了 `<ArrowUpDown v-else class="h-3 w-3 opacity-40" />`；
@@ -28,7 +32,7 @@ import path from 'node:path';
 
 const SRC = path.resolve(import.meta.dirname, '..', 'src');
 
-const SORT_KEYS = ['name', 'price', 'chg24h', 'velocity', 'accel', 'adx', 'ls', 'conf'];
+const SORT_KEYS = ['name', 'price', 'chg24h', 'macd', 'macdAccel', 'adx', 'ls', 'conf'];
 
 test('FactorMatrix 全部 8 个可排序列必须统一具备 ArrowUpDown 闲置态图标', () => {
   const vue = readFileSync(path.join(SRC, 'components/dashboard/FactorMatrix.vue'), 'utf8');

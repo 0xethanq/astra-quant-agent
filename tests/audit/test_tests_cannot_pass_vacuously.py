@@ -80,6 +80,8 @@ def _has_assertion(fn: ast.AST) -> bool:
 
 
 def _test_methods(tree: ast.AST) -> list:
+    if tree is None:
+        return []
     return [n for n in ast.walk(tree)
             if isinstance(n, ast.FunctionDef) and n.name.startswith("test")]
 

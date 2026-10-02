@@ -65,8 +65,15 @@ DYNAMIC_MARKERS: Tuple[str, ...] = (
 TRADER_INTERVAL_SECONDS = 15 * 60
 #: 快照超过两个周期未更新即视为陈旧：**宁可不预热，也不拿过期前缀去烧钱**（fail-closed）。
 SNAPSHOT_MAX_AGE_SECONDS = 2 * TRADER_INTERVAL_SECONDS
-#: 实测 5.4k token（≈8100 字符）的前缀完全不触发缓存；低于该长度的前缀直接不发。
-MIN_PAYLOAD_CHARS = 9000
+def _env_int(name: str, default: int, minimum: int = 1) -> int:
+    try:
+        return max(minimum, int(str(os.getenv(name, default)).strip()))
+    except (TypeError, ValueError):
+        return default
+
+
+#: 2026 前缀门槛：适配 DeepSeek (64 tok) / Claude (1024 tok) / OpenAI (1024 tok)；默认 3000 字符 (≈1200 tokens)。
+MIN_PAYLOAD_CHARS = _env_int("ASTRA_CACHE_WARMUP_MIN_CHARS", 3000)
 
 _last_warmup_time: float = 0.0
 _last_warmed_slot: int = -1
@@ -80,13 +87,6 @@ def warmup_mode() -> str:
     """当前保活模式：`off`（默认）/ `jit`；未知取值一律回落 `off`（fail-closed）。"""
     mode = str(os.getenv("ASTRA_CACHE_WARMUP_MODE", "off") or "off").strip().lower()
     return mode if mode in ("off", "jit") else "off"
-
-
-def _env_int(name: str, default: int, minimum: int = 1) -> int:
-    try:
-        return max(minimum, int(str(os.getenv(name, default)).strip()))
-    except (TypeError, ValueError):
-        return default
 
 
 def _strip_snapshot_divider(system_text: str) -> str:

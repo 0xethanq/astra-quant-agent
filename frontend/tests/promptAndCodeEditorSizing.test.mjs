@@ -10,11 +10,11 @@
  *    优化后：textarea 行数扩至 24 行，设置 min-height >= 500px，统一采用 var(--ds-font-mono)
  *    并挂载代码块背景色，右侧预览同步维持 500px 均衡高度。
  *
- * 2. 物理拦截器源码编辑器（InterceptorsPage）：
- *    此前弹窗最大宽度仅 960px（size="xl"），代码框高度仅约 440px，面对 100~200 行 Python
- *    风控逻辑时极其狭窄。
- *    优化后：BaseDialog 扩充支持 2xl（1160px 宽度），编辑器弹窗升级为 size="2xl"，代码框 min-height
- *    扩充至 >= 520px，支持 4 空格缩进（tab-size: 4）与专业代码编辑器配色。
+ * 2. 决策插件源码编辑器（`InterceptorsPage`，2026-10 已随策略插件系统整套裁撤删除）：
+ *    当初为它把 BaseDialog 从 xl(960px) 扩充出 2xl(1160px) 变体。页面删除后：
+ *    - 该用例一并移除；
+ *    - **2xl 变体保留**（通用能力，下面 CouncilPage 那条继续钉住它存在），
+ *      当前无调用方，属"预留档位"而非界面缺陷。
  *
  * 3. 投委会席位提示词（CouncilPage）：
  *    参谋席位系统提示词同样扩展至 rows="20"，min-height >= 400px，统一采用等宽字体。
@@ -48,29 +48,6 @@ test('PromptStudioPage 提示词主编辑区必须具备宽敞高度与等宽字
     vue,
     /\.ps-textarea\s*\{[^}]*font-family:\s*var\(--ds-font-mono\)/,
     'ps-textarea 必须使用 var(--ds-font-mono) 等宽字体',
-  );
-});
-
-test('InterceptorsPage 拦截器源码编辑器必须采用 2xl 超宽弹窗与宽敞 Python 代码编辑区', () => {
-  const vue = readFileSync(path.join(SRC, 'views/admin/InterceptorsPage.vue'), 'utf8');
-
-  // 弹窗尺寸检查
-  assert.match(
-    vue,
-    /<BaseDialog[^>]*:open="editorVisible"[^>]*size="2xl"/,
-    'InterceptorsPage 源码编辑弹窗必须使用 size="2xl" 展开 1160px 宽敞视口',
-  );
-
-  // 代码框样式检查
-  assert.match(
-    vue,
-    /\.ip-code\s*\{[^}]*min-height:\s*5\d\dpx/,
-    'ip-code CSS 缺少 min-height >= 500px 声明',
-  );
-  assert.match(
-    vue,
-    /\.ip-code\s*\{[^}]*tab-size:\s*4/,
-    'ip-code 必须设置 tab-size: 4 符合 Python 代码缩进规范',
   );
 });
 

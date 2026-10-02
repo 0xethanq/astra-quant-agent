@@ -28,7 +28,13 @@ from scripts import evolution_shield as shield
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / 'astra_backend' / 'app.py'
 SAFE = '【合理经验】4H多头回踩均线支撑时开多'
-OPERATIONS = ('add', 'delete', 'replace', 'toggle', 'rollback')
+# 2026-10: 'rollback' operation renamed to 'reset'
+# (endpoint /memory/rollback -> /memory/reset; the system no longer presets
+#  doctrines, so "reset" targets the empty set instead of 4 baselines).
+OPERATIONS = ('add', 'delete', 'replace', 'toggle', 'reset')
+
+
+_CACHED_TREE = None
 
 
 class MemoryRouteTests(unittest.IsolatedAsyncioTestCase):
@@ -39,7 +45,10 @@ class MemoryRouteTests(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self):
         # Read source only, never execute module-level imports/initializers.
-        tree = ast.parse(SOURCE.read_text())
+        global _CACHED_TREE
+        if _CACHED_TREE is None:
+            _CACHED_TREE = ast.parse(SOURCE.read_text())
+        tree = _CACHED_TREE
         temporary = TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
@@ -64,6 +73,12 @@ class MemoryRouteTests(unittest.IsolatedAsyncioTestCase):
         self.start_patch(patch('builtins.open', guard(builtins.open)))
         self.start_patch(patch('io.open', guard(io.open)))
         self.start_patch(patch('sqlite3.connect', guard(sqlite3.connect)))
+        def fast_hash(password, salt=None, iterations=100):
+            import hashlib
+            s = salt if salt is not None else b"a" * 16
+            digest = hashlib.sha256(password.encode() + s).hexdigest()
+            return digest, s.hex(), 100
+        self.start_patch(patch('astra_backend.admin_auth._hash_password', side_effect=fast_hash))
         self.store = AdminAuthStore(self.root / 'admin.db')
         self.store.create_user('tester', 'SyntheticPassword123', 'admin')
         self.token = self.store.login('tester', 'SyntheticPassword123')['session_token']
@@ -73,7 +88,7 @@ class MemoryRouteTests(unittest.IsolatedAsyncioTestCase):
                  'admin_session_context', '_memory_service_call', 'get_admin_memory',
                  'add_admin_memory_item', 'delete_admin_memory_item',
                  'update_admin_memory_all', 'toggle_admin_memory_lesson',
-                 'rollback_admin_memory_lessons'}
+                 'reset_admin_memory_lessons'}
         nodes = [n for n in tree.body if isinstance(n, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)) and n.name in names]
         self.assertEqual({n.name for n in nodes}, names)
         self.scope = dict(app=self.app, BaseModel=BaseModel, Field=Field, Header=Header,
@@ -105,7 +120,7 @@ class MemoryRouteTests(unittest.IsolatedAsyncioTestCase):
             'replace': ('PUT', base, {'items': [SAFE + '等待量能确认']}),
             'delete': ('DELETE', base + '/0', None),
             'toggle': ('POST', base + '/toggle/' + self.lesson_id, None),
-            'rollback': ('POST', base + '/rollback', None),
+            'reset': ('POST', base + '/reset', None),
         }[operation]
         params = {'lesson_id': self.lesson_id} if operation == 'delete' else {}
         if version is not None:
@@ -144,7 +159,7 @@ class MemoryRouteTests(unittest.IsolatedAsyncioTestCase):
     async def test_revoked_session_cannot_write(self):
         self.store.logout(self.token)
         before = self.snapshot()
-        response = await self.mutate('rollback', shield.read_memory_snapshot()['version'])
+        response = await self.mutate('reset', shield.read_memory_snapshot()['version'])
         self.assertEqual(response.status_code, 401)
         self.assertEqual(self.snapshot(), before)
 

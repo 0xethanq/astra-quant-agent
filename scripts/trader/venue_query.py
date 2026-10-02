@@ -177,7 +177,11 @@ def close_position_confirmed(inst_id: str, pos_side: str, before_size: float, ve
         print(f"[Close Pre-Clean] Warning cancelling pending orders for {inst_id}: {e}")
 
     try:
-        okx_rest.close_position(inst_id, pos_side, td_mode="cross", auto_cxl=True)
+        ord_cl_id = f"O{int(time.time() * 1000)}"
+        try:
+            okx_rest.close_position(inst_id, pos_side, td_mode="cross", auto_cxl=True, cl_ord_id=ord_cl_id)
+        except TypeError:
+            okx_rest.close_position(inst_id, pos_side, td_mode="cross", auto_cxl=True)
     except Exception as exc:
         return False, f"close command failed: {exc}"
 

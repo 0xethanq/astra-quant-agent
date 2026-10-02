@@ -40,6 +40,13 @@ onMounted(loadChannels);
       </div>
     </template>
 
+    <!-- 核心定位金句 -->
+    <div class="card-flat p-3 mb-3 border-l-2 border-emerald-400 bg-emerald-500/5">
+      <p class="text-xs italic leading-relaxed text-[var(--ink-1)]">
+        {{ t('dash.about.pitch') }}
+      </p>
+    </div>
+
     <!-- 架构 -->
     <div class="card-flat p-3.5">
       <p class="section-title mb-2 !text-sm">

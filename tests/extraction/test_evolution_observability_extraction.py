@@ -51,13 +51,18 @@ from scripts.evolution.observability import (  # noqa: E402
 
 class ThresholdTest(unittest.TestCase):
     def test_field_count(self):
-        self.assertEqual(len(DYNAMICS_FIELDS), 17)
+        """★ 2026-10：字段表由 17 项微积分字段换成 18 项 7 梯队因子字段。
+
+        这两条钉的是"字段表 ↔ 门槛"的**派生关系**，故字段数变化时
+        门槛必须跟着变（不是手写常数）—— 这正是它们存在的意义。
+        """
+        self.assertEqual(len(DYNAMICS_FIELDS), 18)
 
     def test_min_is_derived_not_hardcoded(self):
         """⚠️ 门槛必须是"字段表算出来的"，不是常数。"""
         self.assertEqual(DYNAMICS_OBSERVED_MIN,
                          max(1, int(len(DYNAMICS_FIELDS) * 0.85) + 1))
-        self.assertEqual(DYNAMICS_OBSERVED_MIN, 15)
+        self.assertEqual(DYNAMICS_OBSERVED_MIN, 16)
 
     def test_min_survives_a_field_table_change(self):
         """用真实公式再算一遍：字段表若变化，门槛必须跟着变。

@@ -79,6 +79,11 @@ class RiskConfigApiTests(unittest.TestCase):
                 os.environ.pop(key, None)
             else:
                 os.environ[key] = value
+        try:
+            from astra_backend.risk_config import reload_risk_constants
+            reload_risk_constants()
+        except Exception:
+            pass
         import astra_backend.config as backend_config
         backend_config.load_dotenv = self.original_loader
         settings_store.ENV_FILE = self.original_env_file

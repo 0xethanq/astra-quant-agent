@@ -39,7 +39,7 @@ def _lesson(text="这是一个足够长的可复用交易情境心法", **over):
     item = {"id": "lesson_" + (over.pop("id_suffix", None) or "a" * 8),
             "category": "TACTICAL", "rule_text": text, "enabled": True,
             "health_score": 90.0, "created_at": _fresh_stamp(),
-            "ttl_days": 7, "sample_size": 3, "is_baseline": False,
+            "ttl_days": 7, "sample_size": 3,
             "shield_status": "PASSED"}
     item.update(over)
     return item
@@ -88,6 +88,88 @@ class ConstitutionLinterTests(unittest.TestCase):
             "在 4H 趋势明确向上且 1H 回踩不破前低时，分批建立多头仓位", sample_size=3)
         self.assertTrue(ok)
         self.assertEqual(reason, "PASSED")
+
+    def test_chinese_prose_retired_factor_vocabulary_is_refused(self):
+        """★ 2026-10 补门禁漏洞：中文散文形态也必须拦。
+
+        实测漏洞（真实存量心法 `lesson_80fab4e2bc5b438`）：
+
+            若 1H RSI > 72 严重超买且 1H **动能加速度 a** 明显转负，
+            **条件延续概率**偏高时优先离场观望
+
+        整句引用的都是**已退役的动力学/概率链**，但上一版 `RETIRED_FACTOR_TOKENS`
+        **只有英文标识符** ⇒ `_retired_factor_hits` 返回 `[]`、`audit_proposed_lesson`
+        判 `PASSED`。而模型改用中文散文表述是**常态**（提示词全中文），
+        故"只认英文标识符"等于门禁在生产路径上基本不生效。
+        """
+        cases = [
+            "若 1H RSI > 72 严重超买且 1H 动能加速度 a 明显转负，条件延续概率偏高时优先离场观望",
+            "当动力学快照的 速度场 处于高位且 加加速度 转负时，禁止顺势追多。",
+            "偏差面积积分 超阈值说明动能力竭，必须等待回踩确认再布局。",
+            "曲率 与 能量积分 同步上行属单边共振，严禁左侧摸顶。",
+            "概率状态占比 达 75% 以上时不得顺势追多，先看结构回踩。",
+            "fast_var_95_pct 突破阈值且 is_fat_tail 为真时必须减仓观望，防范肥尾踩踏。",
+        ]
+        for text in cases:
+            ok, reason = es.audit_proposed_lesson(text, sample_size=5)
+            self.assertFalse(ok, f"中文散文形态的退役因子心法竟然通过：{text}")
+            self.assertIn("FACTOR_CONTRACT_DRIFT", reason)
+
+    def test_chinese_words_that_are_still_valid_are_not_blocked(self):
+        """★ 反向判据：只拦**指向具体退役因子**的复合词，不误伤语义仍成立的通用词。
+
+        "加速度"/"动能衰竭"/"超买"/"延续"这些词在 7 梯队范式下**依然成立**
+        （`macd_accel_pct` / `macd_momentum_state` 都是现行字段）。误伤它们比漏洞更糟：
+        会把本来可用的心法一并拒收，让自进化"学不到东西"。
+        """
+        for text in (
+            "1H MACD 柱与加速度同向放大才叫趋势延续，价格新高而柱体缩量属动能背离，禁止贴盘追单。",
+            "动量衰竭后价格二次冲高不过前高，视为动能背离，只做右侧确认单。",
+            "15M RSI 严重超买但 1H MACD 柱仍在放大时，不构成离场理由，按结构持有。",
+            "趋势延续需要 1H 与 4H 同向，单周期放大不构成加仓依据。",
+        ):
+            ok, reason = es.audit_proposed_lesson(text, sample_size=5)
+            self.assertTrue(ok, f"现行因子心法被误拦：{text} → {reason}")
+            self.assertEqual(es._retired_factor_hits(text), [],
+                             f"不应命中任何退役因子词元：{text}")
+
+    def test_retired_calculus_factor_vocabulary_is_refused(self):
+        """2026-10 因子契约门禁：引用已退役因子的心法一律拒收。
+
+        背景（真实事故）：因子范式从「数理微积分动力学」整块迁到 7 梯队后，
+        `velocity`／`power_regime`／`continuation_prob_pct`／`RANGE_LOW_VELOCITY` 等
+        已不在任何标的的数据包里；而提示词《数据缺失纪律》规定 `--` **不得**作为证据。
+        于是这类心法既无法评估、又恒以最保守方式生效 —— 实测把系统压成"只会 WAIT"。
+        """
+        cases = [
+            "当动力学环境处于 RANGE_LOW_VELOCITY 时，绝对禁止执行顺势追多，防范单边共振踩踏。",
+            "若动力学快照中 velocity > 0.8 且 power_regime 为 KINETIC_ACCELERATING，禁止左侧摸顶开空。",
+            "continuation_prob_pct 偏高（>75%）时不得顺势追多，必须等待回踩支撑确认。",
+            "能量积分 energy_integral 超阈值时必须观望，等待结构回踩确认后再布局。",
+            "反弹高空必须限定在 KINETIC_EXHAUSTION / STEADY_FLUX 之后右侧进场。",
+        ]
+        for text in cases:
+            ok, reason = es.audit_proposed_lesson(text, sample_size=3)
+            self.assertFalse(ok, f"退役因子心法竟然通过：{text}")
+            self.assertIn("FACTOR_CONTRACT_DRIFT", reason)
+
+    def test_current_seven_tier_factors_still_pass(self):
+        """门禁只拦**退役**词汇，现行 7 梯队因子写的心法必须照常通过。"""
+        for text in (
+            "1H MACD 柱与加速度同向放大才叫趋势延续，价格新高而柱体缩量属动能背离，禁止贴盘追单。",
+            "价格偏离 24H VWAP 超 1.5σ 且落在价值区外沿时，只做均值回归的右侧确认单。",
+            "15M RSI 超卖且 1H MACD 柱收缩拐点时，可在箱体极值附近小仓右侧试单。",
+        ):
+            ok, reason = es.audit_proposed_lesson(text, sample_size=3)
+            self.assertTrue(ok, f"现行因子心法被误拦：{text} → {reason}")
+
+    def test_the_loose_generic_token_needs_a_word_boundary(self):
+        """`velocity` 是通用词：只在独立出现时才算退役因子引用。"""
+        ok, reason = es.audit_proposed_lesson(
+            "在 4H 趋势明确向上且 1H 回踩不破前低时，分批建立多头仓位", sample_size=3)
+        self.assertTrue(ok, reason)
+        self.assertFalse(es._retired_factor_hits("macd_hist_velocity_pct") or
+                         "velocity" in es._retired_factor_hits("xvelocityy"))
 
     def test_a_single_sample_is_refused_as_an_outlier(self):
         ok, reason = es.audit_proposed_lesson(
@@ -211,9 +293,13 @@ class ValidateTests(unittest.TestCase):
 class LessonExpiryTests(unittest.TestCase):
     NOW = datetime.datetime(2026, 9, 22, tzinfo=datetime.timezone.utc)
 
-    def test_baseline_never_expires(self):
-        self.assertFalse(es.is_lesson_expired(
-            _lesson(is_baseline=True, created_at="2000-01-01T00:00:00+00:00"), self.NOW))
+    def test_no_lesson_is_exempt_from_the_half_life(self):
+        """★ 2026-10：原「基准心法永不过期」豁免已随基准机制拆除。
+
+        所有心法一律按 `ttl_days` 计半衰期 —— 不再有"宪法级例外"。
+        """
+        self.assertTrue(es.is_lesson_expired(
+            _lesson(created_at="2000-01-01T00:00:00+00:00"), self.NOW))
 
     def test_a_missing_created_at_never_expires(self):
         # ★ 第 231 行 —— 没有时间戳就**不判过期**（绝不猜）
@@ -283,12 +369,23 @@ class RenderLessonsTests(unittest.TestCase):
         self.assertEqual(len(es.render_lessons(rows).splitlines()),
                          es.MAX_INJECTED_LESSONS)
 
-    def test_baseline_lessons_rank_first(self):
-        rows = [_lesson(text="普通心法条目需要足够长才能通过校验", id_suffix="1" * 8,
-                        created_at="2026-09-21T00:00:00+00:00"),
-                _lesson(text="基准心法条目需要足够长才能通过校验", id_suffix="2" * 8,
-                        is_baseline=True, created_at="2000-01-01T00:00:00+00:00")]
-        self.assertTrue(es.render_lessons(rows).startswith("- 基准心法条目"))
+    def test_the_healthiest_lesson_ranks_first(self):
+        """★ 2026-10：排序键不再是"基准优先"（基准已不存在），而是**健康分优先**。
+
+        这条直接决定注入配额（8 条）给谁 —— 旧键下一条又老又差的条目会永久占位。
+        """
+        # 两条都必须**在 TTL 内**（否则会被半衰期挡掉，与排序无关）；
+        # 高分那条刻意更旧，用来证明"健康分压过新旧"。
+        import datetime as _dt
+        now = _dt.datetime.now(_dt.timezone.utc)
+        fresh = (now - _dt.timedelta(days=1)).isoformat()
+        older = (now - _dt.timedelta(days=5)).isoformat()
+        rows = [_lesson(text="低分心法条目需要足够长才能通过校验", id_suffix="1" * 8,
+                        health_score=30.0, created_at=fresh),
+                _lesson(text="高分心法条目需要足够长才能通过校验", id_suffix="2" * 8,
+                        health_score=95.0, created_at=older)]
+        self.assertTrue(es.render_lessons(rows).startswith("- 高分心法条目"),
+                        "健康分高的必须先注入，哪怕它更旧")
 
     def test_injection_report_exposes_the_gap(self):
         rows = [_lesson(text=f"心法条目编号{i}需要足够长才能通过校验",
@@ -425,9 +522,19 @@ class MarkdownMirrorTests(_Sandbox, unittest.TestCase):
         self.assertFalse(es.sync_markdown_mirror())
         self.assertFalse(self.mirror.exists())
 
-    def test_an_empty_body_means_no_mirror(self):
+    def test_an_empty_library_still_refreshes_the_mirror(self):
+        """★ 2026-10 缺陷修复：空库**必须**照写镜像，不能跳过。
+
+        旧实现空库直接 `return False` ⇒ 镜像保持上一次内容。用户清空心法库后，
+        看板仍显示**已删除的心法**与"共 N 条心法"的表头 —— "删掉"在界面上没发生。
+        """
         self._write_memory([_lesson(enabled=False)])
-        self.assertFalse(es.sync_markdown_mirror())
+        self.assertTrue(es.sync_markdown_mirror(), "空库也必须刷新镜像")
+        doc = self.mirror.read_text(encoding="utf-8")
+        self.assertIn("共 1 条心法（生效 0 条）", doc, "表头必须区分总条数与生效条数")
+        self.assertIn("当前无生效心法", doc)
+        self.assertNotIn("这是一个足够长的可复用交易情境心法", doc,
+                         "已删除的条目不得残留在镜像里")
 
     def test_the_mirror_carries_the_provenance_header(self):
         self._write_memory([_lesson(text="镜像里的心法条目")])
@@ -549,26 +656,29 @@ class ReviewCandidatesTests(_Sandbox, unittest.TestCase):
         self.assertEqual(len(result), 1)
         self.assertTrue(result[0]["enabled"])
 
-    def test_this_function_alone_does_drop_an_unmentioned_baseline(self):
-        # ⚠️ 实测语义：`_review_candidates` **自己**不保护基准心法 ——
-        #    未被复述的 enabled 基准既不进结果、也不会被退役（第 424 行 `continue`）。
-        #    它能安全是因为**调用方**先补回：`self_improvement_engine.merge_memory_with_constitution`
-        #    会把被省略的基准"原样补回并留痕"后再调 `publish_review`。
-        #    ⇒ 这是一处**两层防御**：内层函数依赖外层的补回，不是自足的。
-        old = [_lesson(text="基准心法条目内容需要足够长", is_baseline=True, id_suffix="6" * 8)]
+    def test_an_unmentioned_lesson_never_vanishes_it_becomes_a_tombstone(self):
+        """★ 2026-10 起本函数**自足**了：漏述的条目落成停用存档，而不是消失。
+
+        历史：旧实现在这里对 `is_baseline` 直接 `continue`（既不进结果也不退役），
+        安全性**依赖调用方补回**。基准机制拆除后补回没了，故基线保护改为
+        "一律落停用存档" —— 这比旧的两层防御更强：**任何**漏述的启用条目都不会蒸发。
+        """
+        old = [_lesson(text="既有心法条目内容需要足够长", id_suffix="6" * 8)]
         result = es._review_candidates(["应当保持耐心等待更好的入场时机"], old, 3, True,
                                        "INVALIDATE")
-        self.assertFalse(any(i["is_baseline"] for i in result),
-                         "本函数单独调用时基准确实会消失 —— 安全性来自调用方的补回")
+        by_text = {i["rule_text"]: i for i in result}
+        self.assertIn("既有心法条目内容需要足够长", by_text, "被漏述的条目必须仍在结果里")
+        self.assertFalse(by_text["既有心法条目内容需要足够长"]["enabled"], "但必须已停用")
+        self.assertIn("retired_reason", by_text["既有心法条目内容需要足够长"])
 
-    def test_the_outer_layer_readds_the_omitted_baseline(self):
-        # 对照：走调用方的那套补回逻辑，基准就不会丢
-        from scripts.self_improvement_engine import merge_memory_with_constitution
-        old = [_lesson(text="基准心法条目内容需要足够长", is_baseline=True, id_suffix="6" * 8)]
-        final, readded = merge_memory_with_constitution(
+    def test_the_outer_layer_adds_nothing_on_invalidate(self):
+        """★ 外层不再"补回"任何东西：INVALIDATE 的清单**只由模型给出**。"""
+        from scripts.self_improvement_engine import merge_lesson_texts
+        old = [_lesson(text="既有心法条目内容需要足够长", id_suffix="6" * 8)]
+        final = merge_lesson_texts(
             "INVALIDATE", ["应当保持耐心等待更好的入场时机"], old)
-        self.assertIn("基准心法条目内容需要足够长", final)
-        self.assertEqual(readded, ["基准心法条目内容需要足够长"])
+        self.assertEqual(final, ["应当保持耐心等待更好的入场时机"],
+                         "不得补回任何未复述条目")
 
     def test_the_old_list_is_not_merged_in_automatically(self):
         # ⚠️ 危险语义（本刀仅记录，**未改**）：`_review_candidates(texts, old, …)`
@@ -738,22 +848,36 @@ class ToggleLessonTests(_Sandbox, unittest.TestCase):
             es.toggle_lesson("lesson_x")
 
 
-class RollbackTests(_Sandbox, unittest.TestCase):
-    def test_rollback_restores_the_baseline_set(self):
-        self._write_memory([_lesson(text="自进化长出来的心法条目内容")])
-        out = es.rollback_to_baseline(expected_version=self._version())
-        self.assertEqual(len(out), len(es.BASELINE_LESSONS))
-        self.assertEqual(len(es.load_structured_memory()), len(es.BASELINE_LESSONS))
+class ResetAllLessonsTests(_Sandbox, unittest.TestCase):
+    """2026-10：`rollback_to_baseline` → `reset_all_lessons`（清空到空白）。
 
-    def test_rollback_requires_a_version(self):
+    系统不再预设心法，故"重置"的目标集合从 4 条基准变成**空集**。
+    安全性语义（CAS / 拒腐）原样保留。
+    """
+
+    def test_reset_empties_the_library(self):
+        self._write_memory([_lesson(text="自进化长出来的心法条目内容")])
+        out = es.reset_all_lessons(expected_version=self._version())
+        self.assertEqual(out, [], "清空到空白（系统不再预设任何心法）")
+        self.assertEqual(es.load_structured_memory(), [])
+        self.assertFalse(hasattr(es, "BASELINE_LESSONS"),
+                         "预设常量本身也必须已删除（不是留个空列表当摆设）")
+
+    def test_reset_requires_a_version(self):
         self._write_memory([_lesson()])
         with self.assertRaises(es.MemoryVersionRequiredError):
-            es.rollback_to_baseline()
+            es.reset_all_lessons()
 
-    def test_rollback_never_overwrites_corruption(self):
+    def test_reset_rejects_a_stale_version(self):
+        self._write_memory([_lesson()])
+        with self.assertRaises(es.MemoryConflictError):
+            es.reset_all_lessons(expected_version="stale")
+        self.assertEqual(len(es.load_structured_memory()), 1, "版本不符不得清空")
+
+    def test_reset_never_overwrites_corruption(self):
         self.memory.write_text("{ broken", encoding="utf-8")
         with self.assertRaises(es.MemoryCorruptError):
-            es.rollback_to_baseline(expected_version="x")
+            es.reset_all_lessons(expected_version="x")
 
 
 # ───────────────────── admin 视图与变更 ─────────────────────
@@ -899,3 +1023,59 @@ class AddSafeLessonTests(_Sandbox, unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+# ───────────────────── 「以后不再预设心法」的持久守卫 ─────────────────────
+class NoPresetDoctrineTests(unittest.TestCase):
+    """★ 用户 2026-10 的硬要求：**系统不再预设任何心法**。
+
+    这组守卫的意义在于**防止回归** —— 预设最容易以"就加一条兜底心法"的形式悄悄回来，
+    而它一旦回来，注入配额（8 条）就被长期占位，自进化学到的东西永远挤不进去。
+    故判据放在**模块源码**层面：任何形式的预设计量表都会立刻翻红。
+    """
+
+    SOURCE = (Path(__file__).resolve().parents[2] / "scripts" / "evolution_shield.py").read_text(encoding="utf-8")
+
+    def test_the_preset_constant_is_gone(self):
+        self.assertFalse(hasattr(es, "BASELINE_LESSONS"))
+        for name in ("BASELINE_LESSONS", "GOLDEN_LESSONS", "PRESET_LESSONS", "DEFAULT_LESSONS"):
+            with self.subTest(name=name):
+                self.assertNotIn(name, self.SOURCE,
+                                 f"模块里不得再出现预设清单 {name}")
+
+    def test_the_source_contains_no_hardcoded_lesson_literals(self):
+        """预设计量表必然是"含 rule_text 的字面量列表"；源码里不许有这种形状。"""
+        import ast as _ast
+        tree = _ast.parse(self.SOURCE)
+        offenders = []
+        for node in _ast.walk(tree):
+            if isinstance(node, (_ast.List, _ast.Tuple, _ast.Set)) and len(node.elts) > 0:
+                dicts = [e for e in node.elts if isinstance(e, _ast.Dict)]
+                if len(dicts) == len(node.elts) and len(dicts) > 1:
+                    keys = {k.value for d in dicts for k in d.keys
+                            if isinstance(k, _ast.Constant)}
+                    if "rule_text" in keys:
+                        offenders.append(getattr(node, "lineno", "?"))
+        self.assertEqual(offenders, [],
+                         f"发现疑似预设心法清单（行号 {offenders}）—— 系统不再预设心法")
+
+    def test_a_fresh_library_is_empty(self):
+        """全新环境（文件不存在）读出来必须是空库，不得凭空生出心法。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            missing = Path(tmp) / "nope.json"
+            with patch.object(es, "STRUCTURED_MEMORY_FILE", missing):
+                self.assertEqual(es.load_structured_memory(), [])
+                self.assertEqual(es.render_lessons([]), "")
+
+    def test_no_seed_path_creates_lessons_on_its_own(self):
+        """★ 没有任何路径会"自行播种"心法：空环境下调用方必须显式要求初始化。
+
+        判据：对**不存在的**库调用清空/读取，都不得凭空创建文件，更不得造出条目。
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "mem.json"
+            with patch.object(es, "STRUCTURED_MEMORY_FILE", target):
+                self.assertEqual(es.load_structured_memory(), [], "读取不得凭空造库")
+                self.assertFalse(target.exists(), "读取不得写出文件")
+                with self.assertRaises(es.MemoryVersionRequiredError):
+                    es.reset_all_lessons(expected_version="")
+                self.assertFalse(target.exists(), "缺少版本时不得写盘（更不得写预设）")

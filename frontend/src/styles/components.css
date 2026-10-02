@@ -1,12 +1,12 @@
 /* =========================================================================
-   Components · DeepSeek Harness 开发者工作台控件语汇
+   Components · AstraQuant 专业量化交易终端控件语汇
    -------------------------------------------------------------------------
-   设计纪律（对照 DSH 站点实证）：
-     · 分隔靠 6% 发丝描边 + 5% 白色 alpha 分层，不靠投影堆叠
-     · 暗色卡片质感来自 inset 1px 顶部高光，不是外发光
-     · 全站无装饰性渐变 / 无 glow / 无点阵背景
-     · 唯一彩色为品牌蓝 #6799fe 与语义盈亏色；其余一律无彩
-     · 圆角固定三档：控件 8 / 卡片 10 / 浮层 12
+   设计纪律：
+     · 分隔靠精细发丝描边 + 白色 alpha 半透磨砂分层，不靠投影堆叠
+     · 暗色卡片质感来自 inset 1px 顶刃微高光与双倒角，不是外发光
+     · 全站无装饰性杂乱渐变 / 无恶俗 glow / 无低质感点阵背景
+     · 色彩遵循极简低饱和：品牌翡翠绿与衍生品盈亏语义色
+     · 圆角遵循硬件仪器梯度：微件 6 / 控件 10 / 卡片 16 / 浮层 20
    ========================================================================= */
 
 /* =========================================================================
@@ -20,13 +20,13 @@
   border: 1px solid var(--ds-color-border-default);
   border-radius: var(--r-card);
   box-shadow: var(--shadow-card);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
   transition: border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
 }
 .card:hover {
-  border-color: var(--line-2);
-  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.12) inset, 0 16px 36px -4px rgba(0, 0, 0, 0.6);
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.15), inset 0 0 0 1px rgba(255, 255, 255, 0.03), 0 16px 36px -4px rgba(0, 0, 0, 0.65);
 }
 .card,
 .dsh-card {
@@ -39,8 +39,9 @@
   background-image: var(--grad-surface);
   border: 1px solid var(--ds-color-border-default);
   border-radius: var(--r-card);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
 }
 
 /* 卡片头：统一 44px 基线高度 */
@@ -104,7 +105,7 @@
 
 /* =========================================================================
    2 · 按钮
-   —— DSH 语义：primary = 反色单色；secondary = 玻璃；ghost = 纯文字
+   —— 控件语义：primary = 微锻造主动作；ghost/secondary = 磨砂玻璃；quiet = 纯文字
    ========================================================================= */
 .btn {
   display: inline-flex;
@@ -125,6 +126,9 @@
     border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out),
     box-shadow var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
 }
+.btn:active:not(:disabled) {
+  transform: scale(0.985);
+}
 .btn:disabled,
 .btn[aria-disabled='true'] {
   opacity: 0.4;
@@ -137,32 +141,34 @@
 }
 
 .btn-primary {
-  background-color: var(--ds-btn-primary-bg);
-  border-color: var(--ds-btn-primary-bg);
+  background: linear-gradient(180deg, var(--ds-btn-primary-bg) 0%, var(--ds-color-brand-deep) 100%);
+  border-color: rgba(255, 255, 255, 0.16);
   color: var(--ds-btn-primary-text);
   font-weight: 600;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2), 0 4px 14px rgba(16, 185, 129, 0.16);
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.28), 0 2px 8px -1px rgba(16, 185, 129, 0.35);
 }
 .btn-primary:hover:not(:disabled) {
-  background-color: var(--ds-btn-primary-hover-bg);
-  border-color: var(--ds-btn-primary-hover-bg);
+  background: linear-gradient(180deg, var(--ds-btn-primary-hover-bg) 0%, var(--ds-btn-primary-bg) 100%);
+  border-color: rgba(255, 255, 255, 0.25);
   color: var(--ds-btn-primary-text);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 6px 20px rgba(16, 185, 129, 0.28);
-  transform: translateY(-1px);
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.38), 0 4px 16px -2px rgba(16, 185, 129, 0.5);
+  transform: translateY(-0.5px);
 }
 
 .btn-ghost {
   background-color: var(--ds-btn-secondary-bg);
   border-color: var(--ds-btn-secondary-border);
   color: var(--ds-btn-secondary-text);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 .btn-ghost:hover:not(:disabled) {
   background-color: var(--ds-btn-secondary-hover-bg);
   border-color: var(--ds-btn-secondary-hover-border);
   color: var(--ds-color-text-primary);
-  transform: translateY(-1px);
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.12), 0 4px 12px -2px rgba(0, 0, 0, 0.3);
+  transform: translateY(-0.5px);
 }
 
 .btn-quiet {
@@ -267,7 +273,7 @@ textarea.input {
 .input:focus {
   background-color: var(--ds-color-bg-input);
   border-color: var(--ds-color-border-input-focus);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+  box-shadow: inset 0 1px 2px 0 rgba(0, 0, 0, 0.4), 0 0 0 3px rgba(16, 185, 129, 0.16);
 }
 /* —— 复合输入框（无边框 input 嵌在有边框包裹层里）——
    批 22：全站有 6 个这类输入框（审计/网关/风控/模型连接的搜索与数字输入、
@@ -276,7 +282,7 @@ textarea.input {
    鼠标点进去也没有反馈。给包裹层加 .focus-ring，复用 .input:focus 的同一套视觉。 */
 .focus-ring:focus-within {
   border-color: var(--ds-color-border-input-focus);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.16);
 }
 .field:disabled,
 .input:disabled {
@@ -305,8 +311,9 @@ textarea.input {
   font-weight: 500;
   letter-spacing: 0.02em;
   white-space: nowrap;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   transition: border-color var(--dur-fast), background-color var(--dur-fast);
 }
 .badge-up,
@@ -553,7 +560,7 @@ textarea.input {
    全仓搜 `meter` 只命中英文单词（如 `para**meter**s`），无任何模板/脚本用法。 */
 
 /* =========================================================================
-   9 · 轨迹与日志面板（DSH Trajectory 视图语汇）
+   9 · 轨迹与日志面板
    ========================================================================= */
 .log-panel {
   background-color: var(--ds-color-bg-surface-inset);
@@ -841,7 +848,7 @@ textarea.input {
   color: var(--down);
 }
 
-/* 骨架屏：DSH 低对比 shimmer，非高亮扫光 */
+/* 骨架屏：低对比柔和 shimmer，非高亮扫光 */
 .skeleton {
   border-radius: var(--r-xs);
   background-color: var(--ds-color-bg-surface-1);
@@ -1018,7 +1025,7 @@ kbd {
   cursor: not-allowed;
 }
 
-/* 小状态圆点（SecurityPage / CouncilPage / InterceptorsPage / AboutModal） */
+/* 小状态圆点（SecurityPage / CouncilPage / AboutModal） */
 .dot {
   display: inline-block;
   width: 6px;

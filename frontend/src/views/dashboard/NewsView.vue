@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * NewsView.vue · DeepSeek Harness 风格舆情快讯与重大黑天鹅情报看板
+ * NewsView.vue · AstraQuant 全球舆情快讯与黑天鹅情报看板
  * 包含：重大黑天鹅熔断预警带、币种情绪极性矩阵（支持移动端折叠与防挤压排版）、多源情报流（OKX/金十/全球宏观）与关键词检索
  */
 import { computed, ref } from 'vue';

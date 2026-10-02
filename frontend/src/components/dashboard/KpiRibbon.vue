@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * KpiRibbon.vue · DeepSeek Harness 风格核心指标仪表盘
+ * KpiRibbon.vue · AstraQuant 核心指标仪表盘
  * 纯净低饱和黑白/深灰主题，分层卡片结构，呈现 OKX 账户总权益、走势、浮亏与防线
  */
 import { computed } from 'vue';

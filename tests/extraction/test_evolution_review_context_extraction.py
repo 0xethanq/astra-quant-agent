@@ -133,7 +133,7 @@ class EvolutionReviewContextTest(unittest.TestCase):
 
     # ---------- 行为例：宿主宪章（安全语义） ----------
 
-    def test_constitution_contains_all_four_hard_rules(self):
+    def test_constitution_contains_all_hard_rules(self):
         from scripts.evolution.review_context import build_host_constitution
         text = build_host_constitution(observability_brief="BRIEF-XYZ")
         self.assertIn("宿主宪章·代码层硬约束", text)
@@ -143,15 +143,23 @@ class EvolutionReviewContextTest(unittest.TestCase):
         self.assertIn("PARTIAL", text)
         self.assertIn("PRICE_ONLY / NONE", text)
         self.assertIn("字段缺失本身不得解读为任何证据", text)
-        # ② 基准心法保护（不得静默删除）
-        self.assertIn("is_baseline", text)
-        self.assertIn("原样补回并留痕", text)
-        self.assertIn("禁止静默删除", text)
-        # ③ 证据不足必须 NO_CHANGE
+        # ★ 2026-10：宪章里的**退役因子词汇**必须已剥离（系统里不存在的因子
+        #   不该再以任何形式出现在提示词里，哪怕是"禁止引用"的形式）。
+        for dead in ("energy_integral", "deviation_area_integral", "VaR/CVaR",
+                     "v/a/j/I", "延续/击穿概率"):
+            self.assertNotIn(dead, text, f"退役因子词元 {dead} 不得出现在宪章里")
+        # ② 证据不足必须 NO_CHANGE
         self.assertIn("NO_CHANGE 永不覆盖或清空长期记忆", text)
-        # ④ 编号四条齐全（防误删一整条）
+        # ③ **无预设心法**纪律（2026-10 取代原「基准心法保护」一条：
+        #    基准机制整体拆除后，"不得删除基准"没有对象了，改为"按证据而非资历对待"）
+        self.assertIn("不含任何系统预设心法", text)
+        self.assertIn("不得因为'它一直在'而保留", text)
+        self.assertNotIn("is_baseline", text, "基准机制已拆除，宪章不得再提该字段")
+        self.assertNotIn("原样补回并留痕", text, "补回语义已不存在")
+        # ④ 编号四条齐全（防误删一整条；编号必须连续，不许跳号）
         for n in ("1.", "2.", "3.", "4."):
             self.assertIn(n, text)
+        self.assertNotIn("5.", text, "编号不得跳号")
 
     def test_constitution_is_pure_and_deterministic(self):
         from scripts.evolution.review_context import build_host_constitution

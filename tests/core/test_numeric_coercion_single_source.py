@@ -32,7 +32,7 @@ ROOT = Path(__file__).resolve().parents[2]
 ENTRYPOINTS = (
     (ROOT / "scripts" / "factor_library.py", "safe_float"),
     (ROOT / "scripts" / "ai_brain_trader.py", "safe_float"),
-    (ROOT / "scripts" / "calculus" / "regime.py", "_safe_float"),
+    # 2026-10 移除：`scripts/calculus/regime.py` 已随数理退役整体删除。
 )
 
 #: 边界输入：三份实现曾经"看起来不同"但必须同判的地方。

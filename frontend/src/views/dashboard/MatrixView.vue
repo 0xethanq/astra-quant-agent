@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * MatrixView.vue · DeepSeek Harness 风格实盘矩阵主工位
+ * MatrixView.vue · AstraQuant 实盘矩阵核心交易工位
  * 从零重新设计信息层级与工位排布：
  * 1. 顶部紧凑状态与工位模式换挡（标准工作台 / 沉浸工位模式）
  * 2. 核心指标 HUD 区域（低饱和黑白分层卡片）
@@ -48,12 +48,12 @@ function pick(instId: string) {
     <!-- 工位导航与控制顶栏 -->
     <div class="flex items-center justify-between gap-2 pt-0.5">
       <div class="flex items-center gap-2">
-        <h1 class="text-sm font-semibold tracking-tight text-[var(--ink-strong)] flex items-center gap-2">
+        <h1 class="text-base sm:text-lg font-semibold tracking-tight text-[var(--ink-strong)] flex items-center gap-2">
           <span class="dsh-status-dot active" aria-hidden="true" />
           {{ t('dash.matrix.title') }}
         </h1>
         <span
-          class="rounded-full px-2 py-0.5 border text-3xs font-mono font-medium"
+          class="rounded-full px-2.5 py-0.5 border text-3xs font-mono font-medium"
           style="background-color: var(--surface-2); border-color: var(--line-1); color: var(--ink-2)"
         >
           {{ t('dash.matrix.hudProdDynamics') }}
@@ -62,13 +62,13 @@ function pick(instId: string) {
 
       <!-- 模式切换控制器 -->
       <button type="button"
-        class="btn btn-ghost h-7 px-3 text-xs font-medium cursor-pointer inline-flex items-center gap-1.5 rounded-full transition-all"
+        class="btn btn-ghost h-8 px-3.5 text-xs font-medium cursor-pointer inline-flex items-center gap-1.5 rounded-full transition-all"
         :class="isFocusMode ? 'btn-primary' : ''"
         :title="isFocusMode ? t('dash.matrix.focusRestoreTip') : t('dash.matrix.focusTip')"
         @click="isFocusMode = !isFocusMode"
       >
-        <Minimize2 v-if="isFocusMode" class="h-3.5 w-3.5" />
-        <Maximize2 v-else class="h-3.5 w-3.5" />
+        <Minimize2 v-if="isFocusMode" class="h-4 w-4" />
+        <Maximize2 v-else class="h-4 w-4" />
         <span>{{ isFocusMode ? t('dash.matrix.focusExit') : t('dash.matrix.focusEnter') }}</span>
       </button>
     </div>

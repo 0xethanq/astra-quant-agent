@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * DataStatus.vue · DeepSeek Harness 风格引擎与数据健康状态指示器
+ * DataStatus.vue · AstraQuant 引擎与数据健康状态指示器
  * 熔断检测、引擎在线状态、调度周期与实时数据更新心跳
  */
 import { computed } from 'vue';

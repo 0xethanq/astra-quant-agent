@@ -86,21 +86,30 @@ class BuildStatePayloadTest(unittest.TestCase):
         self.assertEqual(p["instruments"][0]["trend_1h"], "多头")
         self.assertEqual(p["instruments"][0]["trend_4h"], "空头")
 
-    def test_missing_optional_fields_use_defaults(self):
+    def test_missing_optional_fields_are_explicitly_missing(self):
+        """★ 2026-10「不许假数据」：可选字段缺失 ⇒ **显式缺失**，不再回填
+        `50.0 / 0.0 / 1.0 / NEUTRAL / CHOP / 空头`。
+
+        这些值会写进 `trading_state.json` 供看板展示 —— 旧断言把"没取到"钉成了
+        "RSI 中性、量能正常、区间震荡、趋势空头"这类**结论**。
+        """
         bare = dict(name="X", instId="X-USDT-SWAP", type="swap", price=1.0,
                     rsi=50.0, position=0)
         p = self._build(factors=[bare])
         inst = p["instruments"][0]
-        self.assertEqual(inst["rsi_7"], 50.0)
-        self.assertEqual(inst["vwap_bias"], 0.0)
-        self.assertEqual(inst["macd_hist"], 0.0)
-        self.assertEqual(inst["macd_accel"], 0.0)
-        self.assertEqual(inst["obv_flow"], "NEUTRAL")
-        self.assertEqual(inst["bb_bandwidth"], 0.0)
-        self.assertEqual(inst["vol_ratio"], 1.0)
-        self.assertEqual(inst["market_regime"], "CHOP")
-        self.assertEqual(inst["structure_1h"], "CHOP")
-        self.assertEqual(inst["trend_1h"], "空头")
+        self.assertIsNone(inst["rsi_7"])
+        self.assertIsNone(inst["vwap_bias"])
+        self.assertIsNone(inst["macd_hist"])
+        self.assertIsNone(inst["macd_accel"])
+        self.assertEqual(inst["obv_flow"], "--")
+        self.assertIsNone(inst["bb_bandwidth"])
+        self.assertIsNone(inst["vol_ratio"])
+        self.assertEqual(inst["market_regime"], "--")
+        self.assertEqual(inst["structure_1h"], "--")
+        self.assertEqual(inst["trend_1h"], "--")     # 未知：不再默认显示"空头"
+        self.assertEqual(inst["trend_4h"], "--")
+        # 有值的字段照旧原样透传（缺失语义不能吃掉正常路径）
+        self.assertEqual(inst["rsi"], 50.0)
 
     def test_signal_evaluator_is_called_once_per_factor(self):
         calls = []

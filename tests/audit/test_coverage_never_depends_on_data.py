@@ -85,12 +85,13 @@ def all_tests_skippable(source: str, tree=None) -> bool:
     return bool(methods) and all(_has_skip(m) for m in methods)
 
 
-def data_guarded_silent_pass(source: str) -> list:
+def data_guarded_silent_pass(source: str, tree=None) -> list:
     """断言全在"数据存在性"守卫下、且 `if` 无 else 的用例名。"""
-    try:
-        tree = ast.parse(source)
-    except SyntaxError:
-        return []
+    if tree is None:
+        try:
+            tree = ast.parse(source)
+        except SyntaxError:
+            return []
     parents = _parents(tree)
     flagged = []
     for method in _test_methods(tree):
@@ -138,7 +139,8 @@ class CoverageNeverDependsOnDataTest(unittest.TestCase):
     def test_no_data_guarded_silent_pass(self):
         bad = {}
         for path in self._files():
-            hits = data_guarded_silent_pass(path.read_text(encoding="utf-8"))
+            t = scan.tree(path)
+            hits = data_guarded_silent_pass(scan.text(path), tree=t)
             if hits:
                 bad[str(path.relative_to(ROOT))] = hits
         self.assertEqual(bad, {}, "断言全在数据存在性守卫下且无 else ⇒ 文件不在就零断言通过："

@@ -251,7 +251,7 @@ class BacktestEngine:
                 conf = sig.get("confidence", 0.0)
                 rr = sig.get("rr", 0.0)
 
-                # Gatekeeper Hard Interceptors
+                # 回测模拟器自带的入场闸门（独立于生产链路；生产侧插件管线已于 2026-10 裁撤）
                 if conf < self.min_confidence_gate or rr < self.min_rr_gate:
                     filtered_by_gatekeeper += 1
                     continue

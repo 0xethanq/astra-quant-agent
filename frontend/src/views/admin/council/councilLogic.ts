@@ -123,7 +123,6 @@ export function roleIconKeyOf(roleId: string): string {
  * 该约束由 `tests/test_audit_config_p1b_guards.py::test_ui_slots_are_real_variables` 钉住。
  */
 export const DATA_SLOTS: Array<{ k: string; label: string }> = [
-  { k: 'market_regime', label: '宏观体制' },
   { k: 'market_matrix', label: '行情矩阵' },
   { k: 'account_balance', label: '账户余额' },
   { k: 'account_positions', label: '当前持仓' },

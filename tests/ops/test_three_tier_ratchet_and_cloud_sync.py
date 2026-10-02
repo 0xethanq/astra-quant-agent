@@ -105,7 +105,8 @@ class ThreeTierRatchetAndCloudSyncTests(unittest.TestCase):
         self.assertIn("已推保本无风险", t["stage_desc"])
         # 2500 * 1.002 = 2505.0
         self.assertGreaterEqual(t["trailingStopPx"], 2505.0)
-        self.assertEqual(len(self.http.calls("/api/v5/trade/amend-algos")), before + 1)
+        # 双腿方案下 [TP1 腿, 余仓腿] 两条委托的止损均同步上移（2 次 amend-algos）
+        self.assertEqual(len(self.http.calls("/api/v5/trade/amend-algos")), before + 2)
 
         # 3. Price rises to 2550 (profit = +50.0 >= 2.2 * ATR = 44.0) -> Triggers Tier 2 Wave Profit Lock (+1.0 ATR)
         f["price"] = 2550.0
@@ -116,7 +117,7 @@ class ThreeTierRatchetAndCloudSyncTests(unittest.TestCase):
         self.assertIn("锁定大波段利润", t["stage_desc"])
         # 2500 + 1.0 * 20 = 2520.0
         self.assertGreaterEqual(t["trailingStopPx"], 2520.0)
-        self.assertEqual(len(self.http.calls("/api/v5/trade/amend-algos")), before + 1)
+        self.assertEqual(len(self.http.calls("/api/v5/trade/amend-algos")), before + 2)
 
         # 4. Price surges to 2560 (profit 60.0 >= 2.0*ATR=40), then pulls back to 2540 (pullback 20.0 >= 0.75*ATR=15.0)
         # Should trigger Tier 3 Kinetic Momentum Pullback Exit
@@ -162,7 +163,8 @@ class ThreeTierRatchetAndCloudSyncTests(unittest.TestCase):
         self.assertIn("已推保本无风险", t["stage_desc"])
         # 2500 * (1 - 0.002) = 2495.0
         self.assertLessEqual(t["trailingStopPx"], 2495.0)
-        self.assertEqual(len(self.http.calls("/api/v5/trade/amend-algos")), before + 1)
+        # 双腿方案下 [TP1 腿, 余仓腿] 两条委托的止损均同步下移（2 次 amend-algos）
+        self.assertEqual(len(self.http.calls("/api/v5/trade/amend-algos")), before + 2)
 
         # 3. Price plunges to 2450 (profit = 50.0 >= 2.2 * ATR = 44.0) -> Triggers Tier 2 Wave Profit Lock (-1.0 ATR)
         f["price"] = 2450.0
@@ -173,7 +175,7 @@ class ThreeTierRatchetAndCloudSyncTests(unittest.TestCase):
         self.assertIn("锁定大波段利润", t["stage_desc"])
         # 2500 - 1.0 * 20 = 2480.0
         self.assertLessEqual(t["trailingStopPx"], 2480.0)
-        self.assertEqual(len(self.http.calls("/api/v5/trade/amend-algos")), before + 1)
+        self.assertEqual(len(self.http.calls("/api/v5/trade/amend-algos")), before + 2)
 
         # 4. Price plunges to 2440 (profit 60.0 >= 2.0*ATR=40), then rebounds to 2460 (rebound 20.0 >= 0.75*ATR=15.0)
         # Should trigger Tier 3 Kinetic Momentum Pullback Exit for Short

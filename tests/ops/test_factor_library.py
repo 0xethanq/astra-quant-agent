@@ -6,13 +6,13 @@
 | 语义 | 口径 |
 |---|---|
 | ★ **每一个外部数据源都必须"坏了不影响别人"** | 全文有 **7 处**独立的 `except: pass` / `except: print`：ticker、orderbook depth、15m K线、1H K线、官方指标批、资金费率、持仓量、Rubik 两个接口。任何一处返回垃圾/抛异常，都只能**丢掉自己那一块**，前面算好的字段必须原样保留 |
-| ★ **深度失衡用 0.67 / 1.5 两条门槛** | `bid/ask ≥ 1.5` ⇒ `STRONG_BID`；`≤ 0.67` ⇒ `STRONG_ASK`；中间**不写** `depth_bias`（保留默认值，而不是写个 `"NEUTRAL"`）。比值只在 `total_ask_sz > 0` 时可算 |
-| ★ **Rubik 长空比与主动成交都是"有 ccy 才问"** | 请求 URL 带 `ccy`；结果是 `data[0][1]`（长空比）与 `data[0][1] − data[0][2]`（主动买 − 主动卖）。两者都要求 `code == "0"`、`data` 非空 |
+| ★ **盘口偏置改用 OBI（T1 口径）** | `bid_ask_depth_ratio` 仍是 Top5 买卖量比；但 `depth_bias` 改由 **Top20 订单簿失衡度 OBI = (bid−ask)/(bid+ask)×100** 判定：`≥ +20%` ⇒ `STRONG_BID`、`≤ −20%` ⇒ `STRONG_ASK`，其余 `NEUTRAL` |
+| ★ **Rubik 长空比与主动成交都是"有 ccy 才问"** | 请求 URL 带 `ccy`；结果是 `data[0][1]`（长空比）与 **`data[0][2] − data[0][1]`（主动买 − 主动卖）** —— OKX 官方文档写明数组顺序是 `[ts, sellVol, buyVol]`，旧实现按 `[ts, buyVol, sellVol]` 读，**净差符号整体颠倒**（本次修正） |
 | ★ **`available` 只在真有数据源时才翻真** | `ccy in smart_money_pool` ⇒ `available=True` 且 `reason=""`；没有源就保持 `False`（**优雅缺失**，不是编造）。专测空池时字段不变 |
 | ★ **净流入的两档单位** | `|net| ≥ 1e4` ⇒ `X万 U`，否则 `Y U`（四舍五入到整数）|
 | ★ **大户信号的两条互斥条件** | `加权多头 ≥ 65% 且 净流入 > 0` ⇒ `BULL_ACCUMULATION`；`≤ 35% 且 净流入 < 0` ⇒ `BEAR_DISTRIBUTION`；其余**不写** `signal`（专测"有方向但金额不对"两个半个条件都不触发）|
 | ★ **胜率串只在有值时拼接** | 多/空胜率各自 `> 0` 才入串，用 `" / "` 连接；两者都为 0 不写字段 |
-| ★ **`_resolve_calculate_calculus` 是 memo 的** | 模块内只解析一次；**取不到就返回 `None`**（并缓存这个"没有"），此时 `compute_15m_indicators` 跳过 Pillar 6 而保留已算好的 ATR/RSI/VWAP/OBV |
+| ★ **微积分链路整体退场** | `_resolve_calculate_calculus` / `_CALCULUS_ENGINE_FN` 已删除；门面改为调用 `scripts/factors/okx_quant_factors` 的 7 梯队装配。反向断言：门面不得再出现 `calculus_engine` |
 | ★ **落盘是 tmp + `os.replace`** | 写失败只打印，**不许让整轮 `job` 失败**（否则每分钟一条失败历史）|
 | ★ **智能资金池导入有两级兜底** | 先 `scripts.factors.smart_money`，`ImportError` 再退 `factors.smart_money`；两者都炸才把池置空 |
 
@@ -113,6 +113,12 @@ class _Base(unittest.TestCase):
                                       return_value={}).start()
         self.score = mock.patch.object(FL, "score_composite_alpha").start()
         self.depth_impl = self.depth
+        # ⚠️ 因子引擎的取数带 TTL 缓存（taker 30s / 期权 300s / 基差 1h）：
+        # 不清缓存的话，同一进程里**上一条用例的路由响应会被下一条复用**，
+        # 断言就变成了看运气（实测 `test_a_positive_net_flow_is_formatted` 拿到
+        # 上一条的 5M 数据）。这是引擎提供的官方测试钩子。
+        from scripts.factors import okx_quant_factors as _qf
+        _qf._reset_cache_for_tests()
 
     def _route(self, mapping):
         self.routes.clear()
@@ -126,40 +132,73 @@ class _Base(unittest.TestCase):
         return FL.compute_instrument_factors(item or dict(_ITEM), pool or {})
 
 
+class NoCandlesMeansExplicitMissingTests(_Base):
+    """★ 2026-10：1H K 线取不到时，T4 必须**显式缺失**，不许留默认的伪中性值。
+
+    实盘症状：看板上某标的"MACD 柱 0.00 / RSI 50 / 态 NEUTRAL"，看着像"没有动能"，
+    其实那一轮根本没拿到 K 线 —— 调用点是 `if closes_1h:` 且**没有 else**，
+    于是 `build_default_factors` 的默认值被当成真因子读走。
+    """
+
+    def test_no_1h_candles_yields_missing_not_neutral(self):
+        self._route({})                       # 所有公开 REST 都取不到
+        self.candles.return_value = []        # 决定性：连 15m/1H K 线都没有
+        f = self._compute()
+        tm = f["trend_momentum"]
+        self.assertIsNone(tm["macd_hist"], "不许把默认 0.0 当真实柱值")
+        self.assertIsNone(tm["macd_accel"])
+        self.assertIsNone(tm["rsi_1h"], "不许把默认 50.0 当真实 RSI")
+        self.assertEqual(tm["macd_momentum_state"], "INSUFFICIENT_DATA")
+        self.assertEqual(tm["rsi_zone"], "INSUFFICIENT_DATA")
+        # 与"真值恰好为 0"必须可区分：这里的一切都是 None，而不是 0/50
+        self.assertNotEqual(tm["macd_hist"], 0.0)
+        self.assertNotEqual(tm["rsi_1h"], 50.0)
+
+    def test_no_volume_profile_candles_also_missing(self):
+        self._route({})
+        self.candles.return_value = []
+        f = self._compute()
+        vp = f["volume_profile"]
+        for key in ("vwap_24h", "vwap_bias_pct", "poc_price"):
+            if key in vp:
+                self.assertIsNone(vp[key], f"{key} 不许留默认 0.0 冒充'价格就在 VWAP 上'")
+
+
 # =====================================================================
 # 微积分引擎的 memo 解析
 # =====================================================================
 
-class CalculusResolverTests(_Base):
-    def test_a_memoized_value_is_returned_without_re_resolving(self):
-        original = FL._CALCULUS_ENGINE_FN
-        self.addCleanup(setattr, FL, "_CALCULUS_ENGINE_FN", original)
-        sentinel = object()
-        FL._CALCULUS_ENGINE_FN = sentinel
-        with mock.patch.dict(sys.modules, {"calculus_engine": None}):
-            self.assertIs(FL._resolve_calculate_calculus(), sentinel)
+class CalculusResolverIsGoneTests(_Base):
+    """⚠️ 反向断言：微积分解析器已随数理系统退场，不许"顺手接回来"。"""
 
-    def test_an_unavailable_engine_resolves_to_none(self):
-        original = FL._CALCULUS_ENGINE_FN
-        self.addCleanup(setattr, FL, "_CALCULUS_ENGINE_FN", original)
-        FL._CALCULUS_ENGINE_FN = FL._UNRESOLVED
-        with mock.patch.dict(sys.modules, {"calculus_engine": None}):
-            self.assertIsNone(FL._resolve_calculate_calculus())
+    def test_the_resolver_symbols_are_gone(self):
+        self.assertFalse(hasattr(FL, "_resolve_calculate_calculus"))
+        self.assertFalse(hasattr(FL, "_CALCULUS_ENGINE_FN"))
+        self.assertFalse(hasattr(FL, "_UNRESOLVED"))
 
-    def test_the_absence_is_memoized_too(self):
-        """取不到也要记住"取不到" —— 否则每个标的都白重试一次导入。"""
-        original = FL._CALCULUS_ENGINE_FN
-        self.addCleanup(setattr, FL, "_CALCULUS_ENGINE_FN", original)
-        FL._CALCULUS_ENGINE_FN = FL._UNRESOLVED
-        with mock.patch.dict(sys.modules, {"calculus_engine": None}):
-            FL._resolve_calculate_calculus()
-        self.assertIsNone(FL._CALCULUS_ENGINE_FN)
-        self.assertIsNot(FL._CALCULUS_ENGINE_FN, FL._UNRESOLVED)
+    def test_the_facade_no_longer_touches_the_calculus_engine(self):
+        source = Path(FL.__file__).read_text(encoding="utf-8")
+        self.assertNotIn("calculus_engine", source)
+        self.assertNotIn("calculate_calculus", source)
 
+    def test_the_facade_wires_the_seven_tier_engine(self):
+        """正方向：门面必须真的把 7 梯队装配接上（否则新因子永远不落盘）。"""
+        source = Path(FL.__file__).read_text(encoding="utf-8")
+        for call in ("qf.apply_momentum_tier(", "qf.apply_volume_profile_tier(",
+                     "qf.apply_orderflow_tier(", "qf.apply_microstructure_tier(",
+                     "qf.apply_derivatives_tier("):
+            self.assertIn(call, source, f"门面未接上 {call}")
 
-# =====================================================================
-# 逐数据源容灾
-# =====================================================================
+    def test_the_snapshot_carries_the_new_tiers(self):
+        self._route({"market/ticker": self._ticker()})
+        factors = self._compute()
+        for pillar in ("volume_profile", "options_structure", "smart_money_derivatives",
+                       "volume_money_flow", "microstructure", "trend_momentum"):
+            self.assertIn(pillar, factors)
+        self.assertIn("obi_pct", factors["microstructure"])
+        self.assertIn("vwap_extreme_band", factors["volume_profile"])
+        self.assertIn("elite_divergence", factors["smart_money_derivatives"])
+
 
 class SourceIsolationTests(_Base):
     def test_a_ticker_failure_is_swallowed(self):
@@ -177,24 +216,30 @@ class SourceIsolationTests(_Base):
         self._route({"market/ticker": self._ticker()})
         self.depth.side_effect = RuntimeError("深度接口挂了")
         factors = self._compute()
-        self.assertEqual(factors["microstructure"]["bid_ask_depth_ratio"], 1.0,
-                         "缺省比值是 1.0（中性），不是 0")
+        self.assertIsNone(factors["microstructure"]["bid_ask_depth_ratio"],
+                         "取数失败必须是显式缺失（None），不许用 1.0 冒充\"深度均衡\"")
 
     def test_an_indicator_batch_failure_is_swallowed(self):
         self._route({"market/ticker": self._ticker()})
         self.inds.side_effect = RuntimeError("指标批挂了")
-        self.assertEqual(self._compute()["trend_momentum"]["adx_1h"], 0.0)
+        # 指标批失败 ⇒ 显式缺失（0.0 会被读成"无趋势"这个结论）
+        self.assertIsNone(self._compute()["trend_momentum"]["adx_1h"])
 
     def test_a_funding_rate_failure_is_swallowed(self):
         self._route({"market/ticker": self._ticker(),
                      "funding-rate": OSError("资金费率挂了")})
-        self.assertEqual(
-            self._compute()["smart_money_derivatives"]["funding_rate_pct"], 0.0)
+        got = self._compute()["smart_money_derivatives"]
+        self.assertIsNone(got["funding_rate_pct"], "取数失败必须显式缺失")
+        self.assertEqual(got["funding_crowding"], "INSUFFICIENT_DATA",
+                         "不许用 NEUTRAL 冒充'费率不拥挤'这个结论")
 
     def test_an_open_interest_failure_is_swallowed(self):
         self._route({"market/ticker": self._ticker(),
                      "open-interest": OSError("持仓量挂了")})
-        self.assertEqual(self._compute()["smart_money_derivatives"]["oi_usd"], "--")
+        got = self._compute()["smart_money_derivatives"]
+        self.assertEqual(got["oi_usd"], "--")
+        self.assertIsNone(got["oi_chg_1h_pct"])
+        self.assertEqual(got["oi_price_quadrant"], "INSUFFICIENT_DATA")
 
     def test_a_long_short_ratio_failure_is_swallowed(self):
         self._route({"market/ticker": self._ticker(),
@@ -205,8 +250,11 @@ class SourceIsolationTests(_Base):
     def test_a_taker_volume_failure_is_swallowed(self):
         self._route({"market/ticker": self._ticker(),
                      "taker-volume": OSError("主动成交挂了")})
-        self.assertEqual(
-            self._compute()["volume_money_flow"]["taker_net_usd"], "0 U")
+        # ★ 取数失败 ⇒ 缺失标记；"0 U" 会被读成"主被动零净流"这个结论
+        got = self._compute()["volume_money_flow"]
+        self.assertEqual(got["taker_net_usd"], "--")
+        self.assertIsNone(got["cvd_5m_usd"])
+        self.assertEqual(got["cvd_divergence"], "INSUFFICIENT_DATA")
 
     def test_a_15m_failure_is_swallowed_without_losing_the_15m_basics(self):
         self._route({"market/ticker": self._ticker()})
@@ -227,6 +275,8 @@ class SourceIsolationTests(_Base):
 
 
 class OrderbookBiasTests(_Base):
+    """`depth_bias` 现在由 **Top20 OBI** 判定（T1 口径），ratio 仅作参考量。"""
+
     def _book(self, bid_sz, ask_sz):
         self.depth.return_value = {"bids": [["100", str(bid_sz)]],
                                    "asks": [["101", str(ask_sz)]]}
@@ -242,33 +292,54 @@ class OrderbookBiasTests(_Base):
         factors = self._compute()
         self.assertEqual(factors["microstructure"]["depth_bias"], "STRONG_ASK")
 
-    def test_the_upper_threshold_is_inclusive(self):
-        self._book(15, 10)     # 1.5 整
+    def test_the_strong_bid_threshold_is_inclusive(self):
+        self._book(15, 10)     # OBI = (15-10)/25 = +20.0% 整
         self.assertEqual(self._compute()["microstructure"]["depth_bias"],
                          "STRONG_BID")
 
-    def test_the_lower_threshold_is_inclusive(self):
-        self._book(67, 100)    # 0.67 整
+    def test_the_strong_ask_threshold_is_inclusive(self):
+        self._book(10, 15)     # OBI = -20.0% 整
         self.assertEqual(self._compute()["microstructure"]["depth_bias"],
                          "STRONG_ASK")
 
-    def test_a_balanced_book_gets_no_bias_at_all(self):
-        """中间地带**不写** `depth_bias`（保留缺省），不是写 `"NEUTRAL"`。"""
+    def test_a_balanced_book_is_neutral(self):
+        """★ 真实均衡盘口 ⇒ `NEUTRAL` 是**结论**；而缺失盘口 ⇒ `INSUFFICIENT_DATA`。
+
+        两者必须区分：原实现把"缺失"也写成 `NEUTRAL`，于是提示词里
+        `失衡度=0.0%/中性` 看起来像"盘口很均衡"，其实是没取到盘口。
+        """
         self._book(1, 1)
         self.assertEqual(self._compute()["microstructure"]["depth_bias"], "NEUTRAL")
 
+    def test_a_single_level_book_reports_the_obi_not_the_threshold(self):
+        """单档深度的 OBI 与 Top5 比值同向但**数值不同**：别把两者混为一谈。"""
+        self._book(3, 1)       # ratio = 3.0, OBI = +50.0%
+        got = self._compute()["microstructure"]
+        self.assertEqual(got["bid_ask_depth_ratio"], 3.0)
+        self.assertEqual(got["obi_pct"], 50.0)
+
     def test_an_empty_ask_side_yields_no_ratio(self):
         self.depth.return_value = {"bids": [["100", "5"]], "asks": []}
-        self.assertEqual(self._compute()["microstructure"]["bid_ask_depth_ratio"], 1.0)
+        got = self._compute()["microstructure"]
+        self.assertIsNone(got["bid_ask_depth_ratio"])
+        self.assertEqual(got["depth_bias"], "INSUFFICIENT_DATA")   # 不许冒充"均衡"
 
     def test_a_non_dict_depth_payload_is_ignored(self):
         self.depth.return_value = "垃圾"
-        self.assertEqual(self._compute()["microstructure"]["bid_ask_depth_ratio"], 1.0)
+        self.assertIsNone(self._compute()["microstructure"]["bid_ask_depth_ratio"])
 
 
 class RubikTests(_Base):
+    """⚠️ 官方数组顺序是 `[ts, sellVol, buyVol]` —— 索引 1 是**卖**、索引 2 是**买**。"""
+
     def _routes(self, **over):
+        # ⚠️ 分发是按子串匹配的：**更具体的键必须排在前面**，
+        #    否则 `long-short-account-ratio` 会先把 top-trader 那条吃掉。
         mapping = {"market/ticker": self._ticker(),
+                   "long-short-account-ratio-contract-top-trader":
+                       {"code": "0", "data": [["t", "1.40"]]},
+                   "long-short-position-ratio-contract-top-trader":
+                       {"code": "0", "data": [["t", "0.85"]]},
                    "long-short-account-ratio": {"code": "0", "data": [["t", "1.23"]]},
                    "taker-volume": {"code": "0", "data": [["t", "30000", "10000"]]}}
         mapping.update(over)
@@ -279,6 +350,12 @@ class RubikTests(_Base):
         self.assertEqual(self._compute()["smart_money_derivatives"]["long_short_ratio"],
                          "1.23")
 
+    def test_the_elite_ratios_are_read(self):
+        self._routes()
+        sm = self._compute()["smart_money_derivatives"]
+        self.assertAlmostEqual(sm["elite_account_ratio"], 1.40, places=4)
+        self.assertAlmostEqual(sm["elite_position_ratio"], 0.85, places=4)
+
     def test_a_zero_code_response_is_ignored(self):
         self._routes(**{"long-short-account-ratio": {"code": "50011", "data": [["t", "9"]]}})
         self.assertEqual(self._compute()["smart_money_derivatives"]["long_short_ratio"], "--")
@@ -287,15 +364,24 @@ class RubikTests(_Base):
         self._routes(**{"long-short-account-ratio": {"code": "0", "data": []}})
         self.assertEqual(self._compute()["smart_money_derivatives"]["long_short_ratio"], "--")
 
-    def test_the_taker_net_flow_is_formatted(self):
+    def test_net_flow_subtracts_sell_from_buy(self):
+        """`[t, sell=30000, buy=10000]` ⇒ 净额 **−2.0万 U**（主动卖压）。
+
+        ⚠️ 旧实现按 `[t, buy, sell]` 读，会把这一格显示成 `+2.0万 U` ——
+        方向整体颠倒，且不会报错。这条用例就是那个修正的哨兵。
+        """
         self._routes()
         self.assertEqual(self._compute()["volume_money_flow"]["taker_net_usd"],
-                         "2.0万 U")
+                         "-2.0万 U")
+        self.assertAlmostEqual(self._compute()["volume_money_flow"]["cvd_5m_usd"],
+                               -20000.0, places=1)
 
-    def test_a_negative_net_flow_is_formatted(self):
+    def test_a_positive_net_flow_is_formatted(self):
         self._routes(**{"taker-volume": {"code": "0", "data": [["t", "1000", "3000"]]}})
         self.assertEqual(self._compute()["volume_money_flow"]["taker_net_usd"],
-                         "-0.2万 U")
+                         "2000 U")
+        self.assertAlmostEqual(self._compute()["volume_money_flow"]["cvd_5m_usd"],
+                               2000.0, places=1)
 
     def test_the_rubik_calls_are_skipped_without_a_currency(self):
         self._route({"market/ticker": self._ticker()})
@@ -309,8 +395,10 @@ class RubikTests(_Base):
         self._routes()
         self._compute()
         source = Path(FL.__file__).read_text(encoding="utf-8")
-        self.assertIn('long-short-account-ratio?ccy={ccy}', source)
-        self.assertIn('taker-volume?ccy={ccy}', source)
+        self.assertIn("qf.fetch_taker_volume(ccy, \"5m\")", source)
+        qf_src = (ROOT / "scripts" / "factors" / "okx_quant_factors.py").read_text(encoding="utf-8")
+        self.assertIn('"/api/v5/rubik/stat/taker-volume"', qf_src)
+        self.assertIn('"ccy": base', qf_src)
 
 
 class SmartMoneyOverlayTests(_Base):
@@ -457,7 +545,7 @@ class IndicatorBatchTests(_Base):
     def test_a_missing_indicator_is_simply_absent(self):
         self.inds.return_value = {"ADX": {"adx": "31.5"}}
         factors = self._compute()
-        self.assertEqual(factors["volatility_channel"]["bb_width_1h"], 0.0)
+        self.assertIsNone(factors["volatility_channel"]["bb_width_1h"])
 
 
 class OneHourAtrTests(_Base):

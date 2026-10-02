@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * DashboardLayout.vue · DeepSeek Harness 开发者工作台骨架布局
+ * DashboardLayout.vue · AstraQuant 量化交易工作台骨架布局
  * 采用侧边导航工作台架构、分层工作区设计、顶部控制条与全局决策轨迹/日志面板
  */
 import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue';

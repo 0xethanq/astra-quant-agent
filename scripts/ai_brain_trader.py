@@ -88,7 +88,6 @@ from scripts.brain.runtime import (
 )
 from scripts.brain.snapshots import (
     update_factor_library_snapshot,
-    write_calculus_snapshot,
     write_prompt_snapshot,
 )
 from scripts.brain.dispatch import (
@@ -160,7 +159,6 @@ VENUE_HEALTH_FILE = os.path.join(DATA_DIR, "venue_health.json")
 FACTOR_LIBRARY_FILE = os.path.join(DATA_DIR, "factor_library_snapshot.json")
 NEWS_SENTIMENT_FILE = os.path.join(DATA_DIR, "news_sentiment.json")
 AI_MEMORY_MD_FILE = os.path.join(DATA_DIR, "AI_TRADING_MEMORY.md")
-CALCULUS_SNAPSHOT_FILE = os.path.join(DATA_DIR, "calculus_snapshot.json")
 AI_MEMORY_FILE = os.path.join(DATA_DIR, "ai_trading_memory.json")
 PROMPT_OVERRIDE_FILE = os.path.join(DATA_DIR, "system_prompt_override.txt")
 AI_BRAIN_LOCK_FILE = os.path.join(DATA_DIR, ".ai_brain_cycle.lock")
@@ -426,8 +424,7 @@ READONLY_OUTPUT_SCHEMA = """==== 【严格 JSON 规范契约与完整输出骨�
       "stop_loss_price": 77800.0,
       "summary_reason": "顺势回踩支撑企稳限价做多",
       "market_structure": "4H大势多头，1H均线回踩企稳",
-      "calculus_dynamics": "1H: v=+0.05, a=+0.20 动能转正",
-      "math_prob_rationale": "延续概率65%显著占优，R:R=2.5",
+      "factor_evidence": "1H MACD柱=45.2加速度+12.8，RSI=61.5，CVD=+680万U，OBI=+28.5%，VWAP上方0.44%，费率0.0036%，R:R=2.5",
       "volume_and_oi": "量能缩量企稳，主力净流入"
     }
   }
@@ -437,8 +434,9 @@ READONLY_OUTPUT_SCHEMA = """==== 【严格 JSON 规范契约与完整输出骨�
 - position_management.action 只允许: "HOLD" | "CLOSE_MARKET" | "UPDATE_SL" | "UPDATE_TP"；触发峰值回撤超 35% 或 1H 负功率衰竭时果断输出 CLOSE_MARKET 止盈；action 为 UPDATE_SL 时 suggested_sl_price 填目标价格、否则必须填 0.0；action 为 UPDATE_TP 时 suggested_tp1_price/suggested_tp2_price 填目标止盈价（分批已发生时只填 tp2）、否则两者必须填 0.0；
 - pending_orders_management.action 只允许: "KEEP" | "CANCEL"；挂单已大幅偏离盘口或入场逻辑失效时必须 CANCEL；
 - decisions[标的].action 只允许: "BUY_LONG" | "SELL_SHORT" | "WAIT"；action 为 WAIT 时 entry_price/take_profit_price/stop_loss_price 填 0.0；
-- decisions 只包含有明确结论的标的，未涉及的标的不得出现；
-- 每个决策的 calculus_dynamics 与 math_prob_rationale 必须明确引用具体 1H v, a 与概率数值，严禁只写空泛定性词句！"""
+- decisions **必须覆盖标的池全部标的**；无结论也要显式输出 WAIT 并写明缺什么
+  （漏答会被宿主按 fail-closed 兜底为 WAIT，并在看板上标为「未作答」，会污染你的复盘归因）；
+- 每个决策的 factor_evidence 必须明确引用具体因子数值（MACD 柱/加速度、RSI、CVD、Taker 买卖比、OBI、VWAP/POC、资金费率与 ΔOI），严禁只写空泛定性词句！"""
 
 # 兼容别名（既有引用/测试面按旧名解析；内容与上面**同一份**，不是第二份副本）。
 _SYSTEM_JSON_CONTRACT = READONLY_OUTPUT_SCHEMA
@@ -523,8 +521,8 @@ def build_risk_budget_text(usdt_available: float = None) -> str:
         f"- 目标盈亏比 R:R: {max(1.5, float(rc.MIN_RISK_REWARD_RATIO or 0.0)):.1f} ~ {rc.MAX_RISK_REWARD_RATIO:.1f} "
         f"(上限 {rc.MAX_RISK_REWARD_RATIO:.1f}；低于硬底线一律被拒，超出上限执行层自动平滑收窄钳制，防止止盈过远)\n"
         f"- 单笔止盈止损宽度: 基准止损 {rc.STOP_LOSS_ATR_MULT:g}x 1H ATR，最大止盈宽度 ≤ {rc.MAX_TAKE_PROFIT_ATR:g}x 1H ATR (超出上限执行层自动平滑收窄至合理波段)\n"
-        f"- 置信度标定带: {max(float(rc.MIN_ENTRY_CONFIDENCE or 0.0), 78.0):.0f}% ~ "
-        f"{max(float(rc.MIN_ENTRY_CONFIDENCE or 0.0), 78.0) + 8.0:.0f}% "
+        f"- 置信度标定带: {float(rc.MIN_ENTRY_CONFIDENCE or 0.0):.0f}% ~ "
+        f"{float(rc.MIN_ENTRY_CONFIDENCE or 0.0) + 8.0:.0f}% "
         f"(下沿=执行层新开仓门禁 {rc.MIN_ENTRY_CONFIDENCE:.0f}%，低于下沿必被物理拦截)\n"
         f"- 新开仓最低置信度门禁: {rc.MIN_ENTRY_CONFIDENCE:g}% (低于此值禁止新开仓)\n"
         + (
@@ -777,6 +775,14 @@ def execute_batch_ai_brain_cycle(
     positions_context = active_positions_detail
     active_positions_detail = active_positions_detail or []
 
+    # 2026 前缀防抖归一化：将持仓浮盈 upl 等浮点数规范化为 2 位定点数，消除微末浮点抖动
+    for _p in active_positions_detail:
+        if isinstance(_p, dict) and "upl" in _p:
+            try:
+                _p["upl"] = round(float(_p["upl"] or 0.0), 2)
+            except (TypeError, ValueError):
+                pass
+
     # 审计 P2-12：跨所 id 归一（模块级 canonical_position_inst_id，含单元测试）
     def _canonical_inst_id(raw: Any) -> str:
         return canonical_position_inst_id(raw)
@@ -798,15 +804,21 @@ def execute_batch_ai_brain_cycle(
         os=os,
         sys=sys    )
 
+    # 刷新本轮数据包中的 7 梯队因子快照，确保发给模型的 Prompt 拥有最新因子
+    try:
+        try:
+            from scripts.brain.packages import load_quant_factor_tiers
+        except ImportError:
+            from brain.packages import load_quant_factor_tiers
+        for _pkg in packages:
+            _fresh_tiers = load_quant_factor_tiers(_pkg.get("instId", ""))
+            if _fresh_tiers:
+                _pkg["quant_factors"] = _fresh_tiers
+    except Exception as _qf_err:
+        print(f"[AI Brain Batch] Quant factor refresh warning: {_qf_err}")
+
     # Fetch live pending limit orders from exchange（V5 直签 REST，行为契约见 fetch_pending_orders_list）
     pending_orders_list = fetch_pending_orders_list()
-
-    write_calculus_snapshot(
-        CALCULUS_SNAPSHOT_FILE=CALCULUS_SNAPSHOT_FILE,
-        json=json,
-        os=os,
-        packages=packages,
-        time_str=time_str    )
 
     runtime_context = {}
     prompt = construct_full_market_prompt(packages, pos_summary, positions_context, pending_orders_detail=pending_orders_list, current_time_str=time_str, usdt_available=usdt_available, runtime_context_out=runtime_context, policy_snapshot=policy_snapshot)

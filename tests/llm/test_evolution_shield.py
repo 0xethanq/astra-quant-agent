@@ -8,7 +8,7 @@ from scripts.evolution_shield import (
     load_structured_memory,
     audit_proposed_lesson,
     toggle_lesson,
-    rollback_to_baseline,
+    reset_all_lessons,
     add_safe_lesson,
 )
 
@@ -57,13 +57,28 @@ class EvolutionShieldTests(unittest.TestCase):
         passed, reason = audit_proposed_lesson("【合理经验】4H多头回踩均线支撑时开多", sample_size=3)
         self.assertTrue(passed)
 
-    def test_white_box_memory_crud_and_rollback(self):
-        # Rollback initializes clean golden baseline
-        baseline = rollback_to_baseline(expected_version=shield.read_memory_snapshot()["version"])
-        self.assertGreaterEqual(len(baseline), 4)
+    def test_white_box_memory_crud_and_reset(self):
+        """2026-10：`rollback_to_baseline` → `reset_all_lessons`（清空到空白）。
 
-        # Toggle first lesson
-        first_id = baseline[0]["id"]
+        系统不再预设任何心法，故"重置"的语义从"回到黄金基准"变成"清空"。
+        此测试同时守两件事：**清空真的清空**、**清空后仍能正常增删与启停**
+        （证明拆掉基准机制没有把心法库本身弄坏）。
+        """
+        # 1) 先放一条进去（否则"清空"无从验证）
+        ok, reason, seeded = add_safe_lesson("【风控】4H 多头回踩支撑且量能缩减时限价做多", sample_size=5)
+        self.assertTrue(ok, reason)
+        self.assertIsNotNone(seeded)
+        self.assertNotIn("is_baseline", seeded, "基准字段已随基准机制整体拆除")
+
+        # 2) 清空
+        remaining = reset_all_lessons(expected_version=shield.read_memory_snapshot()["version"])
+        self.assertEqual(remaining, [], "重置必须清空到空白（系统不再预设心法）")
+        self.assertEqual(load_structured_memory(), [])
+
+        # 3) 清空后仍可正常入库与启停
+        ok, reason, item = add_safe_lesson("【节奏】1H 动能背离且价格新高时不贴盘追多", sample_size=5)
+        self.assertTrue(ok, reason)
+        first_id = item["id"]
         toggled = toggle_lesson(first_id, expected_version=shield.read_memory_snapshot()["version"])
         self.assertIsNotNone(toggled)
         self.assertFalse(toggled["enabled"])
@@ -71,6 +86,13 @@ class EvolutionShieldTests(unittest.TestCase):
         # Toggle back
         toggled_back = toggle_lesson(first_id, expected_version=shield.read_memory_snapshot()["version"])
         self.assertTrue(toggled_back["enabled"])
+
+    def test_reset_requires_matching_version(self):
+        """CAS 纪律不因语义改变而放松：版本不符必须拒绝。"""
+        add_safe_lesson("【风控】4H 多头回踩支撑且量能缩减时限价做多", sample_size=5)
+        with self.assertRaises(Exception):
+            reset_all_lessons(expected_version="stale-version")
+        self.assertEqual(len(load_structured_memory()), 1, "版本不符不得清空")
 
 
 if __name__ == "__main__":

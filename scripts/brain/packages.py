@@ -9,10 +9,25 @@
   与 `grep -rn 'split("def ' tests/` 双向实测，均无引用；
 - **依赖面极窄**：整段只读 `json` / `urllib` 两个标准库模块、
   `Dict` / `Any` 两个 typing 名，外加 `fetch_candles` / `fetch_single_indicator`
-  两个**注入**进来的函数（见下），以及函数体内一处延迟导入的
-  `calculus_engine.calculate_multi_timeframe`（保持延迟，测试环境里不一定可导入）；
+  两个**注入**进来的函数（见下）；
 - 因此是「整段搬走」而非「消除抄写」，收益是行数，不需要逐值对拍 —— 但仍做了
   两条路径的差分（见 `tests/extraction/test_brain_package_extraction.py`）。
+
+## 2026-10 变更：数理引擎退场，改挂 **7 梯队量化因子**
+
+原实现在函数尾部调用 `calculus_engine.calculate_multi_timeframe` 把
+15M/1H/4H 的 K 线塞进微积分引擎，产出 `pkg["calculus"]`（v/a/j/I/E/A/概率）。
+该链路已整体退场；`pkg["calculus"]` 只保留**默认的显式不可用占位**
+（键位不动，供 `calculus_snapshot.json` 与台账兜底读取链使用）。
+
+取而代之：本模块新增 `pkg["quant_factors"]` —— **直接读因子引擎的产物**
+`data/factor_library_snapshot.json`（`scripts/factor_library.py` 每分钟刷新一次），
+按 `instId` 取出 T0/T0.5/T1/T1.5/T2/T3/T4 各梯队。
+
+> ⚠️ 为什么**不**在这里重算一遍：`factor_library.py` 已经为每个标的打过
+> 那一整轮公开接口（费率/OI 历史/精英多空比/清算/期权/基差…）。
+> 在这里重算会把外呼**翻倍**（OKX 公共行情按 IP 限频 40req/2s），
+> 而且两条路径会出现两份可能漂移的因子。**单一事实源 = 那一份快照。**
 
 ## 为什么两个行情函数是注入而不是 import
 
@@ -25,8 +40,10 @@
 正因如此，本模块**不 import 门面的任何东西**，只在调用期接收依赖。
 """
 import json
+import os
 import time
 import urllib.request
+from pathlib import Path
 
 from typing import Any, Dict
 
@@ -35,6 +52,49 @@ try:                      # 以脚本方式运行（SCRIPTS_DIR 在 sys.path 上
     from market_data_health import note_failure
 except ImportError:       # 以 scripts.brain.* 包被导入（PROJECT_ROOT 在 sys.path 上）
     from scripts.market_data_health import note_failure
+
+#: 因子引擎快照（由 `scripts/factor_library.py` 每分钟原子替换）。
+#: ⚠️ `ASTRA_DATA_DIR` 是测试沙箱变量（见 factor_library.py 的同名注释）：
+#: 生产不设置它，故取值与"仓库根 data/"逐位相同。
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+#: 透传进 `pkg["quant_factors"]` 的梯队键（顺序即提示词里的展示顺序）
+QUANT_FACTOR_TIERS = (
+    "trend_momentum", "volatility_channel", "volume_money_flow",
+    "microstructure", "smart_money_derivatives", "volume_profile",
+    "options_structure",
+)
+
+
+def _factor_snapshot_path() -> str:
+    data_dir = os.environ.get("ASTRA_DATA_DIR") or str(_PROJECT_ROOT / "data")
+    return os.path.join(data_dir, "factor_library_snapshot.json")
+
+
+def load_quant_factor_tiers(inst_id: str, *, path: str = None) -> Dict[str, Any]:
+    """按 `instId` 从因子引擎快照里取出各梯队因子块。
+
+    **失败语义**：文件缺失/损坏/该标的缺席 ⇒ 返回空 dict（提示词侧据此
+    显示"因子快照缺失"，**绝不编造中性因子**）。本函数**永不抛异常** ——
+    它在每分钟一轮的主脑循环里，抛一次就毁掉整轮决策。
+    """
+    target = path or _factor_snapshot_path()
+    try:
+        with open(target, "r", encoding="utf-8") as f:
+            snap = json.load(f)
+    except Exception:
+        return {}
+    instruments = snap.get("instruments") if isinstance(snap, dict) else None
+    if not isinstance(instruments, list):
+        return {}
+    for item in instruments:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("instId")) != str(inst_id):
+            continue
+        return {tier: item[tier] for tier in QUANT_FACTOR_TIERS
+                if isinstance(item.get(tier), dict)}
+    return {}
 
 
 def fetch_single_instrument_package(item: Dict[str, Any], *,
@@ -65,12 +125,13 @@ def fetch_single_instrument_package(item: Dict[str, Any], *,
         "vwap_bias": 0.0,
         "macd_hist": 0.0,
         "macd_accel": 0.0,
-        "vol_ratio": 1.0,
+        # ★「不许假数据」：1.0 会被读成"量能正常"这个**结论**；不写就是缺失
+        "vol_ratio": None,
         "obv_flow": "NEUTRAL",
         "adx_1h": 0.0,
         "smart_money": {
             "available": False,
-            "reason": "OKX CLI 已移除，smartmoney 无公开 V5 等价接口（待接新数据源）",
+            "reason": "Top100 加权多空比/净流无公开 V5 等价接口；持仓方向证据改用 OKX 官方 top-trader 的精英账户比/精英持仓比（见 T0 衍生品梯队）",
             "weighted_long_pct": "--",
             "net_flow_usdt": "--",
             "avg_long_entry": "--",
@@ -80,7 +141,6 @@ def fetch_single_instrument_package(item: Dict[str, Any], *,
         "recent_15m": [],
         "recent_1h": [],
         "recent_4h": [],
-        "calculus": {"valid": False, "regime": "DATA_UNRELIABLE", "quality": 0.0},
         "data_quality": "invalid"
     }
 
@@ -143,11 +203,17 @@ def fetch_single_instrument_package(item: Dict[str, Any], *,
                     vwap = pv_sum / v_sum
                     pkg["vwap_bias"] = round((pkg["price"] - vwap) / vwap * 100, 2)
 
-                # Volume Ratio (Last vs MA5)
-                if len(vols) >= 6:
-                    avg_v5 = sum(vols[-6:-1]) / 5
+                # Volume Ratio（**最后一根已收盘**的量 vs 它前面 5 根均量）
+                #
+                # ⚠️ 2026-10 实盘发现：原实现用 `vols[-1]` —— 那是 OKX 返回的
+                # **正在跳动的未收盘 15M K 线**，刚开盘时成交量接近 0，
+                # 于是提示词里长期出现 `15M量比=0.01x / 0.02x`，模型会读成
+                # "成交量枯竭"。改用 `vols[-2]`（最近一根**已收盘**）与
+                # `vols[-7:-2]` 对齐比较，比值才可解释。
+                if len(vols) >= 7:
+                    avg_v5 = sum(vols[-7:-2]) / 5
                     if avg_v5 > 0:
-                        pkg["vol_ratio"] = round(vols[-1] / avg_v5, 2)
+                        pkg["vol_ratio"] = round(vols[-2] / avg_v5, 2)
 
                 # OBV Flow
                 obv = 0
@@ -285,14 +351,9 @@ def fetch_single_instrument_package(item: Dict[str, Any], *,
         and len(pkg["recent_1h"]) >= 8
         and len(pkg["recent_4h"]) >= 6
     )
-    try:
-        from calculus_engine import calculate_multi_timeframe
-        pkg["calculus"] = calculate_multi_timeframe({
-            "15M": pkg["recent_15m"],
-            "1H": pkg["recent_1h"],
-            "4H": pkg["recent_4h"],
-        })
-    except Exception as exc:
-        pkg["calculus"] = {"valid": False, "regime": "DATA_UNRELIABLE", "quality": 0.0, "error": str(exc)}
+    # 6. 已退役：微积分多周期引擎（2026-10 数理系统退场）。
+    #    `pkg["calculus"]` 只保留**显式不可用**的默认占位 —— 键位不动，
+    #    供 calculus_snapshot.json / 台账兜底读取链使用；**不再计算任何东西**。
+    pkg["quant_factors"] = load_quant_factor_tiers(inst_id)
     pkg["data_quality"] = "valid" if required_market_data else "invalid"
     return pkg

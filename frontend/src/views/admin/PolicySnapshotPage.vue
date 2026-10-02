@@ -42,7 +42,7 @@ import { useAuthStore } from '../../stores/auth';
 import PageHeader from '../../components/admin/PageHeader.vue';
 import BaseDialog from '../../components/base/BaseDialog.vue';
 import BaseEmpty from '../../components/base/BaseEmpty.vue';
-import { Layers, FileText, Sparkles, ShieldCheck, Users, RefreshCw,
+import { Layers, FileText, Sparkles, Users, RefreshCw,
   Hash, Activity, Clock, ArrowUpRight, BookmarkPlus, RotateCcw,
   Archive, Trash2, Loader2, AlertTriangle, Package } from 'lucide-vue-next';
 import BaseLoadingAnnounce from '../../components/base/BaseLoadingAnnounce.vue';
@@ -185,7 +185,8 @@ function v(x: any): string {
 }
 
 /**
- * 四大策略单元：**一份数据驱动的模板**。
+ * 三大策略单元：**一份数据驱动的模板**。
+ * 2026-10：`interceptor`（决策插件管线）单元随策略插件系统整套裁撤而移除。
  * tone: 'up' 表示该值属于"守卫已生效"的肯定态，走语义绿。
  */
 const units = computed(() => {
@@ -217,25 +218,6 @@ const units = computed(() => {
         { label: t(`${P}evolution.concurrency`), value: t(`${P}evolution.concurrencyValue`), tone: 'up' },
       ],
       note: t(`${P}evolution.note`),
-    },
-    {
-      key: 'interceptor',
-      title: t(`${P}interceptor.title`),
-      icon: ShieldCheck,
-      to: '/admin/interceptors',
-      fields: [
-        { label: t(`${P}interceptor.core`), value: t(`${P}interceptor.coreValue`), tone: 'up' },
-        { label: t(`${P}interceptor.pluginsHash`), value: '#' + v(u.physical_interceptors?.plugins_hash), mono: true },
-        {
-          label: t(`${P}interceptor.enabled`),
-          value: t(`${P}interceptor.enabledValue`, undefined, {
-            n: v(u.physical_interceptors?.enabled_count),
-            t: v(u.physical_interceptors?.total_count),
-          }),
-        },
-        { label: t(`${P}interceptor.recheck`), value: t(`${P}interceptor.recheckValue`), tone: 'up' },
-      ],
-      note: t(`${P}interceptor.note`),
     },
     {
       key: 'council',

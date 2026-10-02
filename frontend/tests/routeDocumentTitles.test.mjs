@@ -72,14 +72,16 @@ test('所有后台子路由在 nav.ts 中均有唯一的导航元数据匹配', 
 
 test('被吸收页面的旧路径必须保留重定向（书签不 404）', () => {
   const routerText = readFileSync(path.join(SRC, 'router/index.ts'), 'utf8');
-  // 2026-09-30 后台精简：这些页面不再出现在侧栏，但旧 URL 必须仍然可用。
+  // 2026-09-30 后台精简与 2026-10 插件裁撤：这些历史别名必须仍然可用。
+  // 决策插件工位已整页删除 ⇒ 三条旧路径改指向风控页（不是 404）。
   const redirects = {
     agents: '/admin/gateway',
     interceptors: '/admin/risk',
     audit: '/admin/decisions',
     policy: '/admin/backup',
     about: '/admin/backup',
-    plugins: '/admin/gateway',
+    plugins: '/admin/risk',
+    'decision-plugins': '/admin/risk',
     logs: '/admin/decisions',
     accounts: '/admin/adminsys',
   };

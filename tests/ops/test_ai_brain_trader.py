@@ -330,9 +330,6 @@ class ExecuteBatchCycleTests(unittest.TestCase):
         def _fl(**kw):
             self.calls["fl"] = kw
 
-        def _calc(**kw):
-            self.calls["calc"] = kw
-
         def _prompt(*a, **kw):
             self.calls["prompt_args"] = (a, kw)
             return "PROMPT"
@@ -359,7 +356,6 @@ class ExecuteBatchCycleTests(unittest.TestCase):
         self._patch("fetch_single_instrument_package", lambda item: dict(packages[0]))
         self._patch("update_factor_library_snapshot", _fl)
         self._patch("fetch_pending_orders_list", lambda: [{"ordId": "7"}])
-        self._patch("write_calculus_snapshot", _calc)
         self._patch("construct_full_market_prompt", _prompt)
         self._patch("active_profile", lambda: {"name": "稳健"})
         self._patch("get_effective_system_prompt", _sysprompt)
@@ -413,8 +409,8 @@ class ExecuteBatchCycleTests(unittest.TestCase):
         # 在途持仓 id 已归一后下传
         self.assertEqual(dispatch["active_inst_ids"], {"BTC-USDT-SWAP"})
         self.assertEqual(dispatch["active_position_sides"], {"BTC-USDT-SWAP": "long"})
-        # 各快照步骤都被调用过（跨所矩阵快照已随多所执行面移除）
-        for key in ("fl", "calc", "snap"):
+        # 各快照步骤都被调用过（演算快照与跨所矩阵快照已随退役面移除）
+        for key in ("fl", "snap"):
             self.assertIn(key, self.calls)
 
     def test_smart_money_fills_only_na_placeholders(self):

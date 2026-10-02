@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * RadarView.vue · DeepSeek Harness 风格 AI 委员会决策推演与审计大盘
+ * RadarView.vue · AstraQuant AI 投委会决策推演与审计大盘
  * 呈现：决策周期时序流、AI 决策健康中枢、宏观研判流、多模型多空博弈与白盒穿透抽屉
  */
 import { computed, ref } from 'vue';

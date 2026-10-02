@@ -5,10 +5,12 @@
  *
  * 1. `BaseDialog` 标头属性覆盖率（WCAG 4.1.2 可访问名称）：
  *    在 `BaseDialog.vue` 中，对话框容器通过 `:aria-labelledby="title || $slots.title ? titleId : undefined"`
- *    将对话框的无障碍名称锚定到标题。此前全站 21 处 BaseDialog 中：
- *    `AboutModal.vue` 与 `InterceptorsPage.vue` 源码编辑器两处仅使用了 `<template #title>` 插槽，
- *    未显式传递 `:title` prop，导致组件在 props 检查或外部透传时无法直接读取对话框名称。
- *    补齐后：全仓全部 21 处 BaseDialog 100% 具备显式 `:title` 或 `title` 属性。
+ *    将对话框的无障碍名称锚定到标题。此前 `AboutModal.vue` 等处以 `<template #title>` 插槽
+ *    替代了显式 `:title` prop，导致组件在 props 检查或外部透传时无法直接读取对话框名称。
+ *    补齐后：全仓所有 BaseDialog 100% 具备显式 `:title` 或 `title` 属性。
+ *
+ *    ⚠️ 2026-10：`InterceptorsPage.vue`（当初同批修复的一处）随策略插件系统整套裁撤而删除；
+ *    本闸的判据是**全量扫描**（不是钉某个具体数量），故删页后自动跟随，无需改阈值。
  *
  * 2. `ModelEditDialog.vue` 模型保存按钮缺乏必填 ID 门禁：
  *    模型 ID 为大模型实例的唯一主键（PK），若 ID 为空则向后端派发必然失败的无效请求。
@@ -32,7 +34,7 @@ function getVueFiles(dir, out = []) {
   return out;
 }
 
-test('全仓全部 21 个 BaseDialog 必须 100% 具备显式 title 或 :title 属性', () => {
+test('全仓全部 BaseDialog 必须 100% 具备显式 title 或 :title 属性', () => {
   const files = getVueFiles(SRC);
   const badDialogs = [];
   let totalDialogs = 0;
@@ -51,7 +53,9 @@ test('全仓全部 21 个 BaseDialog 必须 100% 具备显式 title 或 :title �
     }
   }
 
-  assert.ok(totalDialogs >= 20, `检索到的 BaseDialog 总数过少: ${totalDialogs}`);
+  // 下限是"防止扫描路径写错导致什么都扫不到"的防空转护栏，不是产品承诺。
+  // 2026-10：InterceptorsPage 随策略插件系统删除 ⇒ 全仓 BaseDialog 由 20 降为 19。
+  assert.ok(totalDialogs >= 19, `检索到的 BaseDialog 总数过少: ${totalDialogs}`);
   assert.deepEqual(
     badDialogs,
     [],

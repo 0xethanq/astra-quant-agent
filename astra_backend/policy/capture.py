@@ -12,12 +12,11 @@ import logging
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from astra_backend.policy.fingerprints import (
     extract_council_fingerprint,
     extract_evolution_mind_fingerprint,
-    extract_interceptors_fingerprint,
     extract_prompt_profile_fingerprint,
 )
 from astra_backend.policy.schema import DEFAULT_BASE_VERSION
@@ -30,17 +29,16 @@ def generate_policy_snapshot(
     root_dir: Optional[Path] = None,
     prompt_profile: Optional[Dict[str, Any]] = None,
     memory_snapshot: Optional[Dict[str, Any]] = None,
-    interceptor_plugins: Optional[List[Dict[str, Any]]] = None,
     council_config: Optional[Dict[str, Any]] = None,
-    plugins_dir: Optional[Path] = None,
     base_version: str = DEFAULT_BASE_VERSION,
 ) -> Dict[str, Any]:
-    """Generates an immutable snapshot fingerprint across the 4 core strategy units."""
+    """Generates an immutable snapshot fingerprint across the 3 core strategy units.
+
+    2026-10：策略插件系统（决策插件管线）整套裁撤，`physical_interceptors`
+    单元随之移除 —— 快照现在覆盖「提示词 / 心法 / 模型委员会」三单元。
+    """
     prompt_info = extract_prompt_profile_fingerprint(root, prompt_profile, root_dir=root_dir)
     evolution_info = extract_evolution_mind_fingerprint(root, memory_snapshot, root_dir=root_dir)
-    interceptor_info = extract_interceptors_fingerprint(
-        root, interceptor_plugins, plugins_dir=plugins_dir, root_dir=root_dir
-    )
     council_info = extract_council_fingerprint(council_config, root_dir=root_dir)
 
     canonical_fingerprint = {
@@ -52,10 +50,6 @@ def generate_policy_snapshot(
         "evolution_mind": {
             "version": evolution_info["version"],
             "enabled_count": evolution_info["enabled_count"],
-        },
-        "physical_interceptors": {
-            "plugins_hash": interceptor_info["plugins_hash"],
-            "enabled_plugins": interceptor_info["enabled_plugins"],
         },
         "model_council": {
             "enabled": council_info["enabled"],
@@ -74,7 +68,6 @@ def generate_policy_snapshot(
         f"Policy[{policy_version}] "
         f"prompt:{prompt_info['active_profile_id']}#{prompt_info['layout_hash']} "
         f"mind:{mind_ver_short}({evolution_info['enabled_count']}) "
-        f"interceptors:{interceptor_info['plugins_hash']}({interceptor_info['enabled_count']}) "
         f"council:{'on' if council_info['enabled'] else 'off'}({council_info['consensus_mode']})"
     )
 
@@ -87,7 +80,6 @@ def generate_policy_snapshot(
         "units": {
             "prompt_profile": prompt_info,
             "evolution_mind": evolution_info,
-            "physical_interceptors": interceptor_info,
             "model_council": council_info,
         },
     }
@@ -104,7 +96,11 @@ def format_policy_snapshot_summary(snapshot: Dict[str, Any]) -> str:
 
 
 def capture_full_strategy_package(root: Path, root_dir: Optional[Path] = None) -> Dict[str, Any]:
-    """Captures complete runtime data payload across all 4 units for rollback/export."""
+    """Captures complete runtime data payload across all remaining units for rollback/export.
+
+    2026-10：策略插件系统裁撤 ⇒ 归档单元由 4 个（提示词/心法/插件/委员会）变为
+    3 个（提示词/心法/委员会）+ 风控配置。
+    """
     r_dir = root_dir or root
     sys_path_added = False
     scripts_dir = str(r_dir / "scripts")
@@ -134,13 +130,6 @@ def capture_full_strategy_package(root: Path, root_dir: Optional[Path] = None) -
     except Exception as e:
         logger.warning("Failed to capture evolution memory: %s", e)
         memory_full = {"version": "missing", "lessons": []}
-
-    try:
-        from astra_backend.interceptor_manager import load_config as load_interceptor_config
-        interceptor_full = load_interceptor_config(create_if_missing=False)
-    except Exception as e:
-        logger.warning("Failed to capture interceptor config: %s", e)
-        interceptor_full = {}
 
     try:
         from astra_backend.council_manager import load_council_config
@@ -175,7 +164,6 @@ def capture_full_strategy_package(root: Path, root_dir: Optional[Path] = None) -
         "package": {
             "prompt_config": prompt_full,
             "evolution_memory": memory_full,
-            "interceptor_config": interceptor_full,
             "council_config": council_full,
             "risk_config": risk_full,
         },

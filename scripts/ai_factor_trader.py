@@ -109,6 +109,11 @@ from scripts.trader.ledger_writer import (
 from scripts.trader.signal_snapshot import (
     build_signal_snapshot as _signal_snapshot_build,
 )
+from scripts.trader.close_evidence import (
+    append_close_evidence as _close_evidence_append,
+    build_close_evidence as _close_evidence_build,
+    resolve_decision_attribution as _resolve_decision_attribution,
+)
 from scripts.trader.circuit_guard import (
     check_black_swan_sentinel as _circuit_guard_sentinel,
     is_circuit_breaker_active as _circuit_guard_breaker,
@@ -863,6 +868,31 @@ def build_signal_snapshot(f: dict) -> dict:
     """
     return _signal_snapshot_build(f, data_dir=DATA_DIR)
 
+#: 平仓证据归档路径（旁车）。**调用期解析**，与 `_signal_journal_file` 同纪律：
+#: 模块级常量是导入期绑定，`patch.object(aft, "DATA_DIR", tmp)` 对它无效 ——
+#: 测试若不慎触发一次记录就会真写生产 `data/`（`signal_journal.json` 有过前科）。
+def _close_evidence_file() -> str:
+    return os.path.join(DATA_DIR, "closed_trade_evidence.json")
+
+def resolve_decision_attribution(inst_id: str) -> tuple:
+    """壳：从 per-symbol 决策缓存解析 `(decision_source, adopted_role)`。
+
+    调用期解析 `AI_DECISION_CACHE_FILE`，令 `patch.object(aft, ...)` 的既有隔离手法生效。
+    """
+    return _resolve_decision_attribution(inst_id, cache_path=AI_DECISION_CACHE_FILE)
+
+def build_close_evidence(*args, **kwargs):
+    """壳：平仓证据组装（纯计算，实现在 `scripts/trader/close_evidence.py`）。"""
+    return _close_evidence_build(*args, **kwargs)
+
+def append_close_evidence(record) -> bool:
+    """壳：平仓证据原子归档（实现在 `scripts/trader/close_evidence.py`）。
+
+    归档路径**调用期**解析（`patch.object(aft, "DATA_DIR", tmp)` 保真）——
+    测试若碰巧触发一次记录，也只会写进沙箱而不是生产 `data/`。
+    """
+    return _close_evidence_append(_close_evidence_file(), record)
+
 def _signal_journal_file() -> str:
     """**调用期**解析信号日记路径（与 `build_signal_snapshot(data_dir=DATA_DIR)` 同款）。
 
@@ -978,7 +1008,8 @@ def manage_position_tp_and_trailing(f, curr_pos, trackers, timestamp_full, execu
         _close_trade_payload=_close_trade_payload,
         notify_trade_close=notify_trade_close,
         protection_signals=protection_signals,
-        ratcheted_trailing_stop=ratcheted_trailing_stop)
+        ratcheted_trailing_stop=ratcheted_trailing_stop,
+        resolve_decision_attribution=resolve_decision_attribution)
 
 def execute_ai_position_management(real_pos_dict, trackers, timestamp_full, executed_actions):
     """执行主脑写下的持仓指令。实现与两条安全语义见 scripts/trader/position_mgmt.py。
@@ -1104,6 +1135,25 @@ def single_trader_cycle(func):
 
 
 # =============================================================================
+# 观望/拦单明细渲染（2026-10 三态可观测性）
+# =============================================================================
+def _format_entry_diagnostics(diag) -> str:
+    """把 `entry_execution.ENTRY_DIAGNOSTICS` 渲染成一行日志文本。
+
+    三态：`模型` = 大模型自己输出 WAIT；`风控` = 物理层拦下了它的开仓意图；
+    `未作答` = 该标的未出现在模型响应里（契约允许省略，按 fail-closed 兜底）。
+    纯展示函数：任何异常都由调用方吞掉，**绝不影响交易**。
+    """
+    label = {"model": "模型", "gate": "风控", "omitted": "未作答"}
+    parts = []
+    for d in diag:
+        source = str(d.get("source") or "model")
+        conf = f"{float(d.get('confidence') or 0.0):.0f}%" if source == "model" else "-"
+        parts.append(f"{d.get('name')}[{label.get(source, source)}{conf}]{d.get('reason') or ''}")
+    return " | ".join(parts)
+
+
+# =============================================================================
 # Master Portfolio Execution Loop
 # =============================================================================
 @single_trader_cycle
@@ -1180,6 +1230,8 @@ def execute_portfolio():
         usdt_available=usdt_available,
         TARGET_INSTRUMENTS=TARGET_INSTRUMENTS,
         ThreadPoolExecutor=ThreadPoolExecutor,
+        build_close_evidence=build_close_evidence,
+        append_close_evidence=append_close_evidence,
         fetch_single_instrument_data=fetch_single_instrument_data,
         load_trackers=load_trackers,
         manage_position_tp_and_trailing=manage_position_tp_and_trailing,
@@ -1259,6 +1311,34 @@ def execute_portfolio():
             trade_open_kwargs=trade_open_kwargs,
             venue_executed_facts=venue_executed_facts,
         )
+
+    # 4a-bis. 观望/拦单明细落盘（2026-10 三态可观测性）。
+    #
+    # 为什么必须单独落一行：`entry_execution._record_entry_diagnostic` 收集到的三态
+    # 此前**根本没有落到任何日志**——`logs/` 全目录搜不到每标的的观望原因，事后只能看
+    # 决策缓存里那一行被三种语义共用的 `summary_reason`。于是"为什么一直观望"无法审计。
+    #
+    # 放在门面（而不是 `persist_state_and_sync_ledger`）的原因：后者是**AST 逐字**抽取段，
+    # 往里加逻辑会破坏抽取门的不变量；此处只读模块级明细 + 追加一行，零交易语义。
+    # 失败一律吞掉：可观测性绝不允许影响交易。
+    try:
+        from scripts.trader.entry_execution import ENTRY_DIAGNOSTICS as _entry_diag
+        _omitted = 0
+        if isinstance(brain_cache, dict):
+            _omitted = sum(1 for f in all_factors if f.get("instId") not in brain_cache)
+        # 只有在**入场扫描真的跑了**时才写这一行（与上面调用点的守卫同一条件）：
+        # 行存在 ⇒ 逐标的裁决已审计；行缺失 ⇒ 本轮根本没扫（熔断/池不可信/非交易时段）。
+        # 否则"没有这行"会被误读成"没有观望"，而两者含义完全相反。
+        if not cb_active and pool_is_trustworthy() and not session_restricted:
+            _detail = _format_entry_diagnostics(_entry_diag) or "全标的均未产生观望"
+            _line = (f"[{timestamp_full}] 🔍 观望明细 "
+                     f"({_omitted}/{len(all_factors)} 未作答): {_detail}\n")
+            with open(LOG_FILE, "a", encoding="utf-8") as _fh:
+                _fh.write(_line)
+            print(_line.strip())
+        _entry_diag.clear()
+    except Exception as _diag_err:
+        print(f"[观望明细] 落盘失败（不影响交易）: {_diag_err}")
 
     # 4b. 行情取数健康快照（第 137 刀事故的可观测性闭环）：把本轮的取数
     # 失败计数/耗时/最近成功时刻落盘，供后端 `/metrics` 跨进程读取。

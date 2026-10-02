@@ -398,23 +398,28 @@ def sync_instruments_state() -> None:
             new_insts.append(existing_by_id[inst_id])
         else:
             # New coin baseline
+            # ★ 2026-10「不许假数据」：新币基线**只写系统状态**（"观望/等功能接入"），
+            #   **不写任何市场观测值**。原实现写入 rsi=50.0 / vol_ratio=1.0 /
+            #   obv_flow="NEUTRAL" / market_regime="CHOP" / trend="震荡" —— 看板会把
+            #   它们显示成"RSI 中性、量能正常、区间震荡"，而事实是这个币还没取过数。
+            #   市场类字段一律缺失（`None` / `"--"`），由行情与因子引擎随后填充。
             new_insts.append({
                 "name": target.get("name"),
                 "instId": inst_id,
                 "type": target.get("type", "crypto"),
                 "price": "--",
-                "rsi": 50.0,
-                "rsi_7": 50.0,
-                "vwap_bias": 0.0,
-                "macd_hist": 0.0,
-                "macd_accel": 0.0,
-                "obv_flow": "NEUTRAL",
-                "bb_bandwidth": 0.0,
-                "vol_ratio": 1.0,
-                "market_regime": "CHOP",
-                "structure_1h": "CHOP",
-                "trend_1h": "震荡",
-                "trend_4h": "震荡",
+                "rsi": None,
+                "rsi_7": None,
+                "vwap_bias": None,
+                "macd_hist": None,
+                "macd_accel": None,
+                "obv_flow": None,
+                "bb_bandwidth": None,
+                "vol_ratio": None,
+                "market_regime": None,
+                "structure_1h": None,
+                "trend_1h": None,
+                "trend_4h": None,
                 "score": 0.0,
                 "action": "WAIT",
                 "strategy": "⚪ 观望",

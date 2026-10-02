@@ -7,6 +7,7 @@
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import socket
 import time
@@ -126,6 +127,11 @@ def _parse_llm_response(target_format: str, res_json: Dict[str, Any]) -> Tuple[s
         except (TypeError, ValueError):
             pass
 
+    # 2026 缓存效能归一化：计算命中率 (0.0% ~ 100.0%)
+    input_t = usage.get("prompt_tokens") or usage.get("input_tokens") or 0
+    if isinstance(input_t, (int, float)) and input_t > 0 and usage.get("cached_tokens") is not None:
+        usage["cache_hit_ratio"] = round(float(usage["cached_tokens"]) / float(input_t) * 100.0, 1)
+
     # 截断显性化：Responses 用 status/incomplete_details，Chat 用 finish_reason=length。
     # 只做标注、不改控制流 —— 硬门禁仍是决策层的 JSON 校验。
     if target_format == "openai_responses":
@@ -163,6 +169,13 @@ def build_request_spec(
     rtype = reasoning_type if reasoning_type != "auto" else _detect_reasoning_type(model)
     effort = (reasoning_effort or "auto").strip().lower()
 
+    # 2026 会话亲和性标识（Session Affinity）：防止反代或中转集群轮询不同 Key 打散服务端显存 KV Cache
+    first_sys = next((str(m.get("content") or "") for m in messages if m.get("role") == "system"), "")
+    if not first_sys and messages:
+        first_sys = str(messages[0].get("content") or "")
+    affinity_seed = f"{model}:{first_sys[:300]}"
+    affinity_id = f"astra-{hashlib.sha256(affinity_seed.encode('utf-8')).hexdigest()[:16]}"
+
     # Protocol 1: Anthropic Claude Messages API
     if api_format == "claude_messages":
         endpoint = _join_api_path(cleaned_url, custom_path or "/messages")
@@ -171,6 +184,8 @@ def build_request_spec(
             "Content-Type": "application/json",
             "User-Agent": "AstraQuant/8.3 (Claude-Messages)",
             "anthropic-version": "2023-06-01",
+            "anthropic-beta": "prompt-caching-2024-07-31",
+            "X-Session-ID": affinity_id,
         }
         if api_key:
             headers["x-api-key"] = api_key
@@ -185,7 +200,18 @@ def build_request_spec(
             "messages": chat_messages,
         }
         if system_chunks:
-            payload["system"] = "\n\n".join(system_chunks)
+            sys_combined = "\n\n".join(system_chunks)
+            # 2026 Claude Prompt Caching: >=1000 字符长系统提示词注入 ephemeral 缓存断点
+            if len(sys_combined) >= 1000:
+                payload["system"] = [
+                    {
+                        "type": "text",
+                        "text": sys_combined,
+                        "cache_control": {"type": "ephemeral"},
+                    }
+                ]
+            else:
+                payload["system"] = sys_combined
 
         if effort in ("max", "xhigh", "high", "medium", "low"):
             budget_map = {
@@ -215,6 +241,7 @@ def build_request_spec(
         headers = {
             "Content-Type": "application/json",
             "User-Agent": "AstraQuant/8.3 (OpenAI-Responses)",
+            "X-Session-ID": affinity_id,
         }
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
@@ -222,6 +249,7 @@ def build_request_spec(
         payload: Dict[str, Any] = {
             "model": model,
             "input": messages,
+            "user": affinity_id,
         }
         if response_format and response_format.get("type") == "json_object":
             payload["text"] = {"format": {"type": "json_object"}}
@@ -237,6 +265,7 @@ def build_request_spec(
         headers = {
             "Content-Type": "application/json",
             "User-Agent": "AstraQuant/8.3 (OpenAI-Chat)",
+            "X-Session-ID": affinity_id,
         }
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
@@ -244,6 +273,7 @@ def build_request_spec(
         payload: Dict[str, Any] = {
             "model": model,
             "messages": messages,
+            "user": affinity_id,
         }
 
         # Temperature handling for reasoning models vs normal models

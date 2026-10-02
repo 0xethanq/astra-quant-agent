@@ -157,8 +157,7 @@ export const ORDER_JSON_TEMPLATE = `【标准下单 JSON 契约 (必须严格按
       "stop_loss_price": 62100.0,
       "summary_reason": "4H顺势回踩VWAP，1H加速度由负转正，R:R=2.05",
       "market_structure": "4H多头通道，1H回踩企稳",
-      "calculus_dynamics": "1H: v=+0.06, a=+0.35, 态=KINETIC_ACCELERATING",
-      "math_prob_rationale": "P续=76%, P破=24%, 肥尾风险受控",
+      "factor_evidence": "1H MACD柱=+45.2 加速=+12.8；5M CVD=+680万U，Taker比=1.19；OBI=+28.5%；VWAP乖离+0.44%",
       "volume_and_oi": "资金费率健康，OI平稳净吃单为正"
     }
   }

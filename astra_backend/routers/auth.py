@@ -25,6 +25,25 @@ def admin_auth_status() -> dict[str, Any]:
     return {"initialized": get_auth_store().has_users(), "mode": "account-password", "session_hours": 12}
 
 
+@router.post("/api/v1/admin/auth/init")
+def admin_auth_init(request: Request, payload: AdminLoginRequest) -> dict[str, Any]:
+    """首次部署初始化：当且仅当数据库内没有任何管理员时，允许创建第一个超级管理员。"""
+    auth_store = get_auth_store()
+    if auth_store.has_users():
+        raise HTTPException(status_code=403, detail="系统已被初始化，禁止重复初始化")
+    ip = resolve_client_ip(request)
+    ua = resolve_user_agent(request)
+    rec_audit = app_attr("audit_record", audit_record)
+    try:
+        user = auth_store.create_user(payload.username.strip(), payload.password, role="superadmin")
+        result = auth_store.login(payload.username.strip(), payload.password)
+    except Exception as exc:
+        rec_audit("admin.init", "failed", {"username": payload.username, "error": str(exc)}, ip=ip, user_agent=ua)
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    rec_audit("admin.init", "success", {"username": user["username"]}, ip=ip, user_agent=ua)
+    return result
+
+
 @router.post("/api/v1/admin/login", include_in_schema=False)
 @router.post("/api/v1/admin/auth/login")
 def admin_login(request: Request, payload: AdminLoginRequest) -> dict[str, Any]:

@@ -65,22 +65,27 @@ const decisionStream = computed(() => {
       confidence: conf,
       price: f.price,
       reason: d.summary_reason || f.reason || t('dash.shell.panel.computing'),
-      velocity: f.calculus?.velocity_1h ?? 0,
-      acceleration: f.calculus?.accel_1h ?? 0,
+      // 2026-10 三态：轨迹流里也要能区分「模型观望 / 风控拦单 / 模型漏答」
+      decisionSource: d.decision_source ?? f.decision_source ?? 'model',
+      gateBlocked: d.gate_blocked ?? f.gate_blocked ?? false,
+      // ★ 2026-10：原 calculus 的 v/a 换成 1H MACD 柱与其加速度
+      // 归一化（占现价 %）：低价币的绝对 MACD 小到看不见（见 matrix 列提示）
+      macdHist: f.momentum?.macd_hist_pct_1h ?? 0,
+      macdAccel: f.momentum?.macd_accel_pct_1h ?? 0,
+      velocity: f.momentum?.macd_hist_pct_1h ?? 0,
+      acceleration: f.momentum?.macd_accel_pct_1h ?? 0,
       adx: f.adx_1h ?? 0,
       leverage: d.leverage,
       tp: d.take_profit_price,
       sl: d.stop_loss_price,
       reasoning: d.reasoning || '',
       marketStructure: d.market_structure || '',
-      calculusDynamics: d.calculus_dynamics || '',
-      mathProbRationale: d.math_prob_rationale || '',
+      factorEvidence: d.factor_evidence || '',
       updatedAt: f.updated_at || new Date().toISOString(),
     };
   });
 });
 
-const marketRegime = computed(() => (store.data as any)?.market_regime || null);
 
 // 日志流提取与过滤
 const filteredLogs = computed(() => {
@@ -234,28 +239,9 @@ function actionBadgeClass(action: string) {
         <div class="flex-1 overflow-y-auto p-4">
           <!-- TAB 1: 决策流 -->
           <div v-if="activeTab === 'decisions'" class="space-y-3">
-            <!-- 宏观市场体制自适应徽章 -->
-            <div v-if="marketRegime" class="rounded border p-2.5 text-xs font-mono" style="background-color: var(--surface-2); border-color: var(--line-1)">
-              <div class="flex items-center justify-between">
-                <span class="font-bold flex items-center gap-1.5 text-[var(--accent)]">
-                  <ShieldCheck class="h-3.5 w-3.5" />
-                  {{ marketRegime.regime_name || t('dash.shell.panel.marketRegime') }}
-                </span>
-                <span class="text-3xs px-1.5 py-0.5 rounded border border-[var(--line-1)] text-[var(--ink-2)]">
-                  {{ marketRegime.regime_tag }}
-                </span>
-              </div>
-              <p class="mt-1 text-3xs text-[var(--ink-2)] font-sans leading-relaxed">
-                {{ marketRegime.recommended_action }}
-              </p>
-              <div class="mt-1.5 flex items-center justify-between text-4xs text-[var(--ink-3)] font-mono">
-                <span>{{ t('dash.shell.panel.velocity').split(' ')[0] }}: {{ marketRegime.trend_score }}</span>
-                <span>VOL: {{ marketRegime.volatility_score }}</span>
-                <span>OSC: {{ marketRegime.oscillation_score }}</span>
-                <span>DIR: {{ marketRegime.dominant_direction }}</span>
-              </div>
-            </div>
-
+            <!-- ★ 2026-10 已移除「宏观市场体制自适应徽章」：数据源是已退役数理引擎
+                 （calculus_engine→regime.py），且缺数据时会凭空编结论；后端已停止签发
+                 `market_regime`，故此处不再有该卡片（与提示词侧的移除同步）。 -->
             <div
               v-for="item in decisionStream"
               :key="item.instId"
@@ -303,23 +289,35 @@ function actionBadgeClass(action: string) {
 
               <!-- 行2：推演结论 -->
               <p class="mt-2 text-xs leading-body" style="color: var(--ink-1)">
+                <span
+                  v-if="item.decisionSource === 'omitted'"
+                  class="badge badge-warn mr-1.5 align-middle"
+                >{{ t('dash.matrix.matrix.sourceOmitted') }}</span>
+                <span
+                  v-else-if="item.gateBlocked"
+                  class="badge badge-down mr-1.5 align-middle"
+                >{{ t('dash.matrix.matrix.sourceGateBlocked') }}</span>
+                <span
+                  v-else-if="item.action === 'WAIT'"
+                  class="badge mr-1.5 align-middle"
+                >{{ t('dash.matrix.matrix.sourceModelWait') }}</span>
                 {{ item.reason }}
               </p>
 
-              <!-- 行3：微积分指标微缩表 -->
+              <!-- 行3：因子微缩表（1H MACD 柱/加速度 + ADX + 杠杆） -->
               <div
                 class="mt-2.5 flex items-center justify-between rounded px-2 py-1 text-3xs font-mono"
                 style="background-color: var(--surface-head); border: 1px solid var(--line-1); color: var(--ink-2)"
               >
-                <div>{{ t('dash.shell.panel.velocity') }} <span :class="item.velocity >= 0 ? 'text-[var(--up)]' : 'text-[var(--down)]'">{{ Number(item.velocity).toFixed(3) }}</span></div>
-                <div>{{ t('dash.shell.panel.acceleration') }} <span :class="item.acceleration >= 0 ? 'text-[var(--up)]' : 'text-[var(--down)]'">{{ Number(item.acceleration).toFixed(3) }}</span></div>
+                <div>{{ t('dash.shell.panel.macdHist') }} <span :class="item.macdHist >= 0 ? 'text-[var(--up)]' : 'text-[var(--down)]'">{{ Number(item.macdHist).toFixed(3) }}</span></div>
+                <div>{{ t('dash.shell.panel.macdAccel') }} <span :class="item.macdAccel >= 0 ? 'text-[var(--up)]' : 'text-[var(--down)]'">{{ Number(item.macdAccel).toFixed(3) }}</span></div>
                 <div>ADX: <span style="color: var(--ink-1)">{{ Number(item.adx).toFixed(1) }}</span></div>
                 <div v-if="item.leverage">{{ t('dash.shell.panel.leverage') }} <span style="color: var(--ink-1)">{{ item.leverage }}x</span></div>
               </div>
 
               <!-- 行4：思维心流与数理推演展开 (CoT) -->
               <details
-                v-if="item.reasoning || item.calculusDynamics || item.mathProbRationale || item.marketStructure"
+                v-if="item.reasoning || item.factorEvidence || item.marketStructure"
                 class="mt-2 text-3xs text-[var(--ink-3)] cursor-pointer"
               >
                 <summary class="hover:text-[var(--accent)] select-none font-mono">
@@ -330,13 +328,9 @@ function actionBadgeClass(action: string) {
                     <span class="font-bold font-mono" style="color: var(--ink-strong)">{{ t('dash.shell.panel.structure') }}: </span>
                     <span>{{ item.marketStructure }}</span>
                   </div>
-                  <div v-if="item.calculusDynamics">
-                    <span class="font-bold font-mono" style="color: var(--ink-strong)">{{ t('dash.shell.panel.dynamics') }}: </span>
-                    <span>{{ item.calculusDynamics }}</span>
-                  </div>
-                  <div v-if="item.mathProbRationale">
-                    <span class="font-bold font-mono" style="color: var(--ink-strong)">{{ t('dash.shell.panel.mathProb') }}: </span>
-                    <span>{{ item.mathProbRationale }}</span>
+                  <div v-if="item.factorEvidence">
+                    <span class="font-bold font-mono" style="color: var(--ink-strong)">{{ t('dash.shell.panel.factorEvidence') }}: </span>
+                    <span>{{ item.factorEvidence }}</span>
                   </div>
                   <div v-if="item.reasoning" class="pt-1 border-t" style="border-color: var(--line-1)">
                     <span class="font-bold text-[var(--accent)] font-mono">{{ t('dash.shell.panel.draft') }}: </span>

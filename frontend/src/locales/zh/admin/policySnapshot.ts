@@ -38,17 +38,6 @@ export const zhAdminPolicySnapshot = {
       concurrencyValue: 'CAS 乐观锁 · 428/409 拒绝过期覆盖',
       note: '结构化原子发布 + 乐观版本锁，NO_CHANGE 与异常禁止重写交易心法。',
     },
-    interceptor: {
-      title: '物理拦截插件',
-      core: '核心不可禁用底座:',
-      coreValue: '数据完整性/方向冲突/报价几何·有限性/盈亏比底线（阈值取实时风控配置）',
-      pluginsHash: '插件管线指纹 Plugins Hash:',
-      enabled: '启用可选插件:',
-      enabledValue: '{n} / {t} 个插件',
-      recheck: '最终发单二次复验:',
-      recheckValue: '生效报价缩放/舍入后复验',
-      note: '核心安全与可选插件彻底解耦，插件参数深拷贝隔离防篡改，缺失文件 Fail-Closed。',
-    },
     council: {
       title: '模型委员会',
       status: '机制启停状态:',
@@ -67,7 +56,7 @@ export const zhAdminPolicySnapshot = {
   archive: {
     title: '历史策略版本库',
     count: '{n} 个已归档策略包',
-    hint: '可将提示词、心法、拦截器、委员会与风控/路由还原至归档瞬间；回滚后逐单元核对，失败自动回退',
+    hint: '可将提示词、心法、委员会与风控/路由还原至归档瞬间；回滚后逐单元核对，失败自动回退',
     empty: '暂无已归档的策略版本。点击右上角「归档为策略版本」即可永久固化当前策略包。',
     running: '● 当前正在运行',
     archivedAt: '归档时间',
@@ -94,7 +83,7 @@ export const zhAdminPolicySnapshot = {
     deletedOk: '策略版本【{name}】已成功删除',
   },
   confirm: {
-    restore: '确定要将当前策略原子回滚至【{name}】(#{hash}) 吗？\n将同时恢复对应的提示词、心法、拦截器及投委会配置！',
+    restore: '确定要将当前策略原子回滚至【{name}】(#{hash}) 吗？\n将同时恢复对应的提示词、心法及投委会配置！',
     delete: '确定要彻底删除已归档的策略版本【{name}】(#{hash}) 吗？\n删除后不可恢复！',
   },
   err: {

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * BaseStat.vue · DeepSeek Harness 风格 KPI 指标单元
+ * BaseStat.vue · AstraQuant KPI 指标单元
  * 包含：微标头、大号等宽数理数值、动态变动副值、走势图插槽与可展开释义
  *
  * ⚠️ 左侧内边距必须 = 卡片头 `.dsh-card-header`（16px）与 `.fact` 单元（16px）：
@@ -54,7 +54,7 @@ const toneVar = {
     </div>
 
     <div class="flex min-w-0 flex-wrap items-baseline justify-between gap-1">
-      <span class="num font-mono truncate text-lg font-bold leading-tight text-[var(--ink-strong)]">{{ value }}</span>
+      <span class="num font-mono truncate text-xl sm:text-2xl font-bold leading-tight text-[var(--ink-strong)]">{{ value }}</span>
       <div class="flex items-center gap-1.5 shrink-0">
         <span v-if="delta" class="num font-mono text-3xs font-semibold" :style="{ color: toneVar[deltaTone] }">{{ delta }}</span>
         <slot name="extra" />

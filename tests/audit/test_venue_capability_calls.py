@@ -15,7 +15,7 @@
 
 ## 判据
 
-在 `scripts/`、`astra_backend/`、`astra_gateway/`、`plugins/` 里，对上述方法的调用，
+在 `scripts/`、`astra_backend/`、`astra_gateway/` 里，对上述方法的调用，
 必须能在其所在函数里找到下列**任一**守卫：
 
 1. `hasattr(同一接收者, "方法")` / `getattr(同一接收者, "方法", …)` —— 能力探针；
@@ -38,7 +38,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-SCAN_DIRS = ("scripts", "astra_backend", "astra_gateway", "plugins")
+# 2026-10：`plugins/` 随策略插件系统整套裁撤 ⇒ 不再是代码根（`test_scan_scope_is_explicit`
+# 会动态推导代码根并要求本门扫全，多数一个不存在的根同样是范围错误）。
+SCAN_DIRS = ("scripts", "astra_backend", "astra_gateway")
 
 #: 需要比对能力差异的**实现**集合（基类不参与：基类声明的是契约，不是差异来源）。
 #: ⚠️ 只收 `astra_backend/exchanges/` 里的**交易所适配器实现**；

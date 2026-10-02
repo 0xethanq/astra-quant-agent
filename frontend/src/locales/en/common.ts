@@ -53,6 +53,8 @@ export const enCommon = {
     pageNav: 'Pagination',
     prevPage: 'Previous',
     nextPage: 'Next',
+    prev: 'Previous',
+    next: 'Next',
     remove: 'Remove',
     restore: 'Restore',
     load: 'Load',
@@ -135,9 +137,9 @@ export const enCommon = {
   brand: {
     name: 'AstraQuant',
     nameEn: 'AstraQuant',
-    tagline: 'AI-Driven Perpetual Swing Terminal',
+    tagline: 'Autonomous OKX Perpetual Trading System (Adversarial Debate · 7-Tier Factors · Physical Risk)',
     official: 'Official',
-    license: 'MIT License',
+    license: 'AGPL-3.0 + Commons Clause',
   },
   // batch 39: fullwidth punctuation used to be hardcoded in templates
   // (`}}：{{`, `（{{ ... }}）`), which leaked into the English UI. Values now

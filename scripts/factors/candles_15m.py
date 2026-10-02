@@ -1,14 +1,17 @@
-"""15M K 线 → 技术指标 + 微积分/概率因子（结构优化阶段 4·B3 第三十二刀）。
+"""15M K 线 → 技术指标（结构优化阶段 4·B3 第三十二刀）。
 
 原样搬自 `scripts/factor_library.py::compute_instrument_factors` 的
-「15M Candles → ATR, RSI, VWAP Bias, Vol Ratio, OBV」与紧随其后的
-「Pillar 6: Calculus, Definite Integrals & Probability Theory」两段（88 行）。
+「15M Candles → ATR, RSI, VWAP Bias, Vol Ratio, OBV」一段。
 
-## 为什么这两段能合在一起抽
+## 2026-10 变更：Pillar 6（微积分/定积分/概率）整段摘除
 
-它们**共用同一组派生序列** `closes / highs / lows / vols`
-（由 `raw_candles` 反序 + `safe_float` 得到），且都写回同一个 `factors`。
-拆成两个函数就得把四个列表来回传 —— 合起来才是**一个内聚单元**。
+原实现紧随其后还有一段"Pillar 6: Calculus, Definite Integrals & Probability
+Theory"，把 15M 的 `closes/highs/lows/vols` 喂给 `calculate_calculus` 并写回
+`factors["calculus_dynamics"] / definite_integrals / probability_theory`。
+该段已随**数理系统整体退场**删除（不再计算、不进提示词、不参与打分；
+三个 Pillar 的键位在 `defaults.py` 里保留为 `retired: True` 的诊断占位）。
+
+于是本模块的注入面**收缩为零**：不再需要 `calculate_calculus` 由调用方传入。
 
 ## ⚠️ 本模块**没有**取数依赖（这是刻意的）
 
@@ -30,21 +33,11 @@
 4. **RSI 的 `avg_l == 0` 分支给 `rs = 100.0`**（不是除零）。
 5. **`atr_pct` / `vwap_bias_pct` 都会再除以 `price`**：
    `price > 0` 与 `v_sum > 0` 是**两道独立的除零守卫**，不能合并。
-
-## 边界与失败语义
-
-`calculate_calculus` 的调用被内层 `try/except: pass` 包住（原样保留）——
-**积分/概率引擎不可用时，前面算好的 ATR/RSI/VWAP/OBV 仍然保留**。
-注意这与"整个 15M 段失败"是两层不同的失败：外层 `try` 在门面（覆盖取数）。
-
-> 另外：原实现在**循环体内**做 `sys.path.append(...)` 再 `from calculus_engine import ...`。
-> 本刀把该依赖改为**调用期注入**（门面在模块层解析一次），
-> 于是不再每标的反复改 `sys.path`。这是**行为等价**的收口，不是逻辑变更。
 """
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 __all__ = ["derive_candle_series", "compute_15m_indicators"]
 
@@ -70,10 +63,9 @@ def derive_candle_series(raw_candles: List[Any], *, safe_float
 
 
 def compute_15m_indicators(raw_candles: List[Any], factors: Dict[str, Any], *,
-                           safe_float,
-                           calculate_calculus=None) -> Tuple[
+                           safe_float) -> Tuple[
                                List[float], List[float], List[float], List[float]]:
-    """按原顺序写入 15M 指标与 Pillar 6 因子，返回派生序列。
+    """按原顺序写入 15M 指标，返回派生序列。
 
     调用方保证 `raw_candles` 非空且 `len >= 15`（门面里的判断是 `>= 15`）。
     """
@@ -99,6 +91,10 @@ def compute_15m_indicators(raw_candles: List[Any], factors: Dict[str, Any], *,
         avg_l = sum(losses[-14:]) / 14
         rs = (avg_g / avg_l) if avg_l > 0 else 100.0
         factors["trend_momentum"]["rsi_14"] = round(100.0 - (100.0 / (1.0 + rs)), 1)
+    else:
+        # ★ 不足 14 根算不出 RSI ⇒ 显式缺失。默认块的 `rsi_14=50.0` 会被
+        #   打分侧读成"中性偏多"（`rsi >= 50 ⇒ +15` 趋势分）—— 那 15 分是假的。
+        factors["trend_momentum"]["rsi_14"] = None
 
     # VWAP Bias
     pv_sum = sum(closes[i] * vols[i] for i in range(len(closes)))
@@ -106,12 +102,15 @@ def compute_15m_indicators(raw_candles: List[Any], factors: Dict[str, Any], *,
     if v_sum > 0:
         vwap = pv_sum / v_sum
         factors["trend_momentum"]["vwap_bias_pct"] = round((factors["price"] - vwap) / vwap * 100, 2)
+    else:
+        # ★ 成交量合计为 0 ⇒ 算不出 VWAP：显式缺失，不用默认 0.0 冒充"正好贴在 VWAP 上"
+        factors["trend_momentum"]["vwap_bias_pct"] = None
 
-    # Vol Ratio
-    if len(vols) >= 6:
-        avg_v5 = sum(vols[-6:-1]) / 5
+    # Vol Ratio（最后一根已收盘的量 vs 它前面 5 根均量；杜绝 vols[-1] 跳动未收盘 K 线把量比拉至 0.03）
+    if len(vols) >= 7:
+        avg_v5 = sum(vols[-7:-2]) / 5
         if avg_v5 > 0:
-            factors["volume_money_flow"]["vol_ratio_15m"] = round(vols[-1] / avg_v5, 2)
+            factors["volume_money_flow"]["vol_ratio_15m"] = round(vols[-2] / avg_v5, 2)
 
     # OBV
     obv = 0
@@ -120,41 +119,27 @@ def compute_15m_indicators(raw_candles: List[Any], factors: Dict[str, Any], *,
         elif closes[i] < closes[i-1]: obv -= vols[i]
     factors["volume_money_flow"]["obv_flow"] = "BULL_FLOW" if obv > 0 else ("BEAR_FLOW" if obv < 0 else "NEUTRAL")
 
-    # Pillar 6: Calculus, Definite Integrals & Probability Theory (15M High-Resolution)
-    if calculate_calculus is not None:
-        try:
-            c_res = calculate_calculus(closes, highs, lows, vols)
-            if c_res.get("valid"):
-                # Calculus Dynamics
-                factors["calculus_dynamics"]["velocity"] = c_res.get("velocity", 0.0)
-                factors["calculus_dynamics"]["acceleration"] = c_res.get("acceleration", 0.0)
-                factors["calculus_dynamics"]["impulse"] = c_res.get("impulse", 0.0)
-                factors["calculus_dynamics"]["jerk"] = c_res.get("jerk", 0.0)
-                factors["calculus_dynamics"]["curvature"] = c_res.get("curvature", 0.0)
-                factors["calculus_dynamics"]["power"] = c_res.get("power", 0.0)
-                factors["calculus_dynamics"]["power_regime"] = c_res.get("power_regime", "STEADY_FLUX")
-                factors["calculus_dynamics"]["regime"] = c_res.get("regime", "RANGE_LOW_VELOCITY")
-                factors["calculus_dynamics"]["quality"] = c_res.get("quality", 0.0)
-                factors["calculus_dynamics"]["direction"] = c_res.get("direction", 0)
-
-                # Definite Integrals
-                d_int = c_res.get("definite_integrals", {})
-                factors["definite_integrals"]["energy_integral"] = d_int.get("energy_integral", 0.0)
-                factors["definite_integrals"]["deviation_area_integral"] = d_int.get("deviation_area_integral", 0.0)
-                factors["definite_integrals"]["volume_action_integral"] = d_int.get("volume_action_integral", 0.0)
-                factors["definite_integrals"]["integral_regime"] = d_int.get("integral_regime", "BALANCED_ENERGY")
-
-                # Probability Theory & Stochastic Modeling
-                p_th = c_res.get("probability_theory", {})
-                factors["probability_theory"]["skewness"] = p_th.get("skewness", 0.0)
-                factors["probability_theory"]["kurtosis"] = p_th.get("kurtosis", 0.0)
-                factors["probability_theory"]["continuation_prob_pct"] = p_th.get("continuation_prob_pct", 50.0)
-                factors["probability_theory"]["breakdown_prob_pct"] = p_th.get("breakdown_prob_pct", 50.0)
-                factors["probability_theory"]["var_95_pct"] = p_th.get("var_95_pct", 1.5)
-                factors["probability_theory"]["cvar_95_pct"] = p_th.get("cvar_95_pct", 2.2)
-                factors["probability_theory"]["prob_regime"] = p_th.get("prob_regime", "GAUSSIAN_BALANCED")
-                factors["probability_theory"]["is_fat_tail"] = p_th.get("is_fat_tail", False)
-        except Exception:
-            pass
-
     return closes, highs, lows, vols
+
+
+def mark_15m_missing(factors: Dict[str, Any]) -> None:
+    """15M K 线拿不到时，把 15M 派生的因子键**显式标缺失**。
+
+    ⚠️ 2026-10「不许假数据」审计：门面的 15M 分支是
+    `if d["data"] and len(...) >= 15: compute_15m_indicators(...)` **没有 else**
+    ⇒ 取数失败时 `build_default_factors` 的默认值留在原地：
+    `rsi_14=50.0`（打分侧 `rsi >= 50 ⇒ +15` **凭空加 15 分趋势分**）、
+    `vwap_bias_pct=0.0`（"正好贴在 VWAP 上"）、`atr/atr_pct/vol_ratio/obv_flow`。
+    这里与 `okx_quant_factors.mark_momentum_missing` 同纪律：数值 `None`、状态缺失。
+    """
+    tm = factors.setdefault("trend_momentum", {})
+    for key in ("rsi_14", "vwap_bias_pct", "vol_ratio", "ema21_slope_pct"):
+        tm[key] = None
+    vc = factors.setdefault("volatility_channel", {})
+    for key in ("atr_14", "atr_pct", "atr", "atr_15m"):
+        vc[key] = None
+    mf = factors.setdefault("volume_money_flow", {})
+    mf["obv_flow"] = "INSUFFICIENT_DATA"
+
+
+__all__ = ["derive_candle_series", "compute_15m_indicators", "mark_15m_missing"]

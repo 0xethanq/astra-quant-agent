@@ -277,8 +277,10 @@ class CycleStagesVerbatimTest(unittest.TestCase):
         got = cs.fetch_universe_and_manage_positions(
             all_positions=[], real_pos_dict={}, timestamp_full="2026-09-15 08:00:00",
             usdt_available=0.0, TARGET_INSTRUMENTS=[], ThreadPoolExecutor=_Ex,
+            build_close_evidence=lambda *a, **k: {"key": "k"},
+            append_close_evidence=lambda *a, **k: True,
             fetch_single_instrument_data=lambda *a, **k: None, load_trackers=lambda: {},
-            manage_position_tp_and_trailing=lambda *a, **k: None,
+            manage_position_tp_and_trailing=lambda *a, **k: (False, ""),
             prune_trackers=lambda t, r: 0, save_trackers=lambda t: None)
         self.assertEqual(len(got), 3, "返回 (all_factors, executed_actions, trackers)")
         self.assertEqual(got[0], [], "空宇宙应得空因子表")

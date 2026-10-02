@@ -348,3 +348,57 @@ def admin_delete_llm_provider(provider_id: str, x_astra_session: str | None = He
         raise HTTPException(status_code=404, detail="未找到该模型供应商")
     audit_record("llm.provider.delete", "success", {"actor": actor["username"], "provider_id": provider_id})
     return {"deleted": True, "provider_id": provider_id}
+
+
+@router.get("/api/v1/admin/llm/cache/status")
+def admin_get_llm_cache_status(x_astra_session: str | None = Header(default=None, alias="X-Astra-Session")) -> dict[str, Any]:
+    """获取大模型缓存运行状态、命中率、L1 查询缓存及节省统计。"""
+    require_admin_header(x_astra_session=x_astra_session)
+    from astra_gateway.publisher import DB_PATH
+    from astra_gateway.store import GatewayStore
+    from astra_backend.llm.query_cache import get_query_cache_stats
+    from astra_gateway.cache_warmer import warmup_mode
+
+    store = GatewayStore(DB_PATH)
+    stats = store.model_stats()
+    l1_stats = get_query_cache_stats()
+
+    # 预估节约金额（基于行业平均输入缓存折扣 ~1.50 USD / 1M cached tokens）
+    cached_tokens_total = int(stats.get("cached_tokens_total") or 0)
+    l1_saved_tokens = int(l1_stats.get("saved_tokens_total") or 0)
+    total_saved_tokens = cached_tokens_total + l1_saved_tokens
+    estimated_saved_usd = round(total_saved_tokens * 0.0000015, 4)
+
+    active_runtime = get_active_llm_runtime() or {}
+    active_model = str(active_runtime.get("model") or "")
+    active_format = str(active_runtime.get("api_format") or "")
+
+    capabilities = {
+        "claude_ephemeral": "claude" in active_model.lower() or active_format == "claude_messages",
+        "deepseek_prefix": "deepseek" in active_model.lower(),
+        "openai_prefix": active_format in ("openai_chat", "openai_responses") and not ("deepseek" in active_model.lower() or "claude" in active_model.lower()),
+        "gemini_context": "gemini" in active_model.lower(),
+        "session_affinity_active": True,
+    }
+
+    return {
+        "ok": True,
+        "model_stats": stats,
+        "l1_query_cache": l1_stats,
+        "warmer_mode": warmup_mode(),
+        "active_model": active_model,
+        "capabilities": capabilities,
+        "total_saved_tokens": total_saved_tokens,
+        "estimated_saved_usd": estimated_saved_usd,
+    }
+
+
+@router.post("/api/v1/admin/llm/cache/clear")
+def admin_clear_llm_cache(x_astra_session: str | None = Header(default=None, alias="X-Astra-Session")) -> dict[str, Any]:
+    """清除本地 L1 精确查询缓存。"""
+    actor = require_superadmin(x_astra_session)
+    from astra_backend.llm.query_cache import clear_query_cache
+    cleared = clear_query_cache()
+    audit_record("llm.cache.clear", "success", {"actor": actor["username"], "cleared_entries": cleared})
+    return {"ok": True, "cleared_entries": cleared, "message": f"已成功清除 {cleared} 条本地缓存记录"}
+

@@ -181,29 +181,5 @@ class AdaptiveRiskLimitTests(unittest.TestCase):
             importlib.reload(aft)
 
 
-class InterceptorTierTests(unittest.TestCase):
-    def setUp(self):
-        import importlib.util as u
-        spec = u.spec_from_file_location("gate", ROOT / "plugins" / "interceptors" / "02_confidence_gatekeeper.py")
-        self.mod = u.module_from_spec(spec)
-        spec.loader.exec_module(self.mod)
-
-    def test_tier_driven_not_symbol_name_driven(self):
-        # 任意 Tier-2 标的（非 DOGE）都应吃到 80% 严门禁
-        ok, msg = self.mod.check_risk({"name": "ANYCOIN", "tier": "tier_2_momentum"},
-                                      {"action": "BUY_LONG", "confidence": 78.0}, {})
-        self.assertFalse(ok, "Tier-2 标的 78% 应被拦截")
-        self.assertIn("80%", msg)
-
-    def test_tier1_bluechip_uses_standard_floor(self):
-        ok, _ = self.mod.check_risk({"name": "BTC", "tier": "tier_1_bluechip"},
-                                    {"action": "BUY_LONG", "confidence": 78.0}, {})
-        self.assertTrue(ok, "Tier-1 标的 78% 应放行")
-
-    def test_legacy_symbol_fallback_still_guarded(self):
-        ok, _ = self.mod.check_risk({"name": "DOGE"}, {"action": "BUY_LONG", "confidence": 78.0}, {})
-        self.assertFalse(ok, "无 tier 字段时应回退历史白名单，保持旧行为")
-
-
 if __name__ == "__main__":
     unittest.main()

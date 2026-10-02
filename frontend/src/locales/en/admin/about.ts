@@ -42,9 +42,12 @@ export const enAdminAbout = {
   checkUpToDate: "Local code is already up to date and in sync with the remote main branch.",
   updateSuccess: "System updated successfully!",
   updateNoop: "The current branch is already up to date.",
+  commitsTitle: "Pending Updates (Latest Commits):",
 
   // ── added by the rebuild (batch 8) ──
   productTitle: 'Product',
+  pitchTitle: 'Core System Essence',
+  pitchBody: 'Autonomous OKX perpetual trading system powered by multi-model adversarial debate, 7-tier quant factor verification, and deterministic physical risk control.',
   bandVersion: 'System version',
   bandControlPlane: 'Gateway control plane',
   bandRuntime: 'Runtime',

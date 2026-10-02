@@ -75,7 +75,7 @@ export const zhAdminCouncil = {
   slotNews: '舆情情报',
   insertSlotHint: '仅以下变量会被真实渲染（交易侧同源）；其它写法会渲染成 [UNKNOWN_VARIABLE:x]',
   slotMacro4h: '4H宏观',
-  slotCalculus1h: '微积分动能',
+  slotCalculus1h: 'MACD 动能',
   slotSmartMoney: '聪明钱',
   slotOrderbook: '盘口深度',
   slotSentiment: '情绪异动',
@@ -105,7 +105,7 @@ export const zhAdminCouncil = {
   entryLimit: '入场限价',
   stopLabel: '2.0x止损',
   takeProfitLabel: '2.0R止盈',
-  waitNote: '保持空仓防守，未达顺势回踩或微积分爆发要求。',
+  waitNote: '保持空仓防守，未达顺势回踩或 MACD 动能爆发要求。',
   defaultReason: '遵从投委会综合裁定。',
 
   // ── 推倒式重构新增（批 4）──
@@ -167,4 +167,10 @@ export const zhAdminCouncil = {
   // ── 批 67：席位提示词与导入 JSON 文本域缺少程序化名称 ──
   seatPromptAria: '席位提示词',
   importJsonAria: '委员会配置 JSON',
+  // ── 席位履约统计 ──
+  perfAdopted: '被采纳次数',
+  perfWinRate: '实盘胜率',
+  perfTotalTrades: '平仓单数',
+  perfPnl: '累计收益',
+  perfTitle: '席位实盘履约战绩',
 };

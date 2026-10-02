@@ -31,7 +31,8 @@ from typing import Dict, Any, List, Optional
 
 from scripts.factors.defaults import build_default_factors
 from scripts.factors.scoring import score_composite_alpha
-from scripts.factors.candles_15m import compute_15m_indicators
+from scripts.factors.candles_15m import compute_15m_indicators, mark_15m_missing
+from scripts.factors import okx_quant_factors as qf
 from concurrent.futures import ThreadPoolExecutor
 
 _BJ = timezone(timedelta(hours=8))
@@ -57,34 +58,6 @@ def safe_float(val: Any, default: float = 0.0) -> float:
     `nan`/`±inf`/不可转 ⇒ `default`；`bool` 按 `float()` 语义（`True→1.0`）。
     """
     return _shared_safe_float(val, default)
-
-def _resolve_calculate_calculus():
-    """按需（并缓存）解析微积分引擎。
-
-    原实现在 `compute_instrument_factors` 的**循环体内**每次
-    `sys.path.append(...)` + `from calculus_engine import calculate_calculus` ——
-    8 个标的就重复 8 次路径追加与导入查找。这里改为**模块内 memo 一次**：
-    行为等价（返回同一个函数对象），只是不再每个标的重复做。
-
-    取不到时返回 `None` —— `compute_15m_indicators` 会跳过 Pillar 6
-    而保留前面算好的 ATR/RSI/VWAP/OBV（与原来"内层 try: pass"的语义一致）。
-    """
-    global _CALCULUS_ENGINE_FN
-    if _CALCULUS_ENGINE_FN is not _UNRESOLVED:
-        return _CALCULUS_ENGINE_FN
-    fn = None
-    try:
-        sys.path.append(os.path.join(WORKSPACE_DIR, "scripts"))
-        from calculus_engine import calculate_calculus
-        fn = calculate_calculus
-    except Exception:
-        fn = None
-    _CALCULUS_ENGINE_FN = fn
-    return fn
-
-
-_UNRESOLVED = object()
-_CALCULUS_ENGINE_FN = _UNRESOLVED
 
 
 def compute_instrument_factors(item: Dict[str, Any], smart_money_pool: Dict[str, Any]) -> Dict[str, Any]:
@@ -115,43 +88,38 @@ def compute_instrument_factors(item: Dict[str, Any], smart_money_pool: Dict[str,
     except Exception:
         pass
 
-    # 2. Orderbook Depth (Top 5 Level Imbalance) via direct REST (zero Node CLI fork)
+    # 2. Orderbook Depth（T1：Top20 一次取回，同时导出 Top5/Top20 深度比与 OBI）
+    depth_data = None
     try:
-        ob_data = fetch_orderbook_depth(inst_id, sz=5)
-        if ob_data and isinstance(ob_data, dict):
-            bids = ob_data.get("bids", [])
-            asks = ob_data.get("asks", [])
-            total_bid_sz = sum(safe_float(b[1]) for b in bids)
-            total_ask_sz = sum(safe_float(a[1]) for a in asks)
-            if total_ask_sz > 0:
-                ratio = round(total_bid_sz / total_ask_sz, 2)
-                factors["microstructure"]["bid_ask_depth_ratio"] = ratio
-                if ratio >= 1.5:
-                    factors["microstructure"]["depth_bias"] = "STRONG_BID"
-                elif ratio <= 0.67:
-                    factors["microstructure"]["depth_bias"] = "STRONG_ASK"
+        depth_data = fetch_orderbook_depth(inst_id, sz=20)
     except Exception:
-        pass
+        depth_data = None
 
-    # 3. 15M Candles -> ATR, RSI, VWAP Bias, Vol Ratio, OBV
+    # 3. 15M Candles -> ATR, RSI, VWAP Bias, Vol Ratio, OBV（+ T3 筹码分布）
+    closes_15m: List[float] = []
     try:
         d = {"data": fetch_candles(inst_id, bar="15m", limit=24)}
         if d["data"] and len(d["data"]) >= 15:
             raw_candles = d["data"]
-            # 15M 派生序列 + 指标 + Pillar 6（阶段 4·B3 第三十二刀：
+            # 15M 派生序列 + 指标（阶段 4·B3 第三十二刀：
             # 迁至 scripts/factors/candles_15m.py）。取数仍在本门面内，
             # 故对 fetch_candles 的 patch.object 缝不受影响。
-            closes, highs, lows, vols = compute_15m_indicators(
-                raw_candles, factors, safe_float=safe_float,
-                calculate_calculus=_resolve_calculate_calculus())
+            closes_15m, _h15, _l15, _v15 = compute_15m_indicators(
+                raw_candles, factors, safe_float=safe_float)
         else:
             print(f"[Factor] ⚠️ {inst_id} 15m K线获取不足15根（www/aws/CLI 三级容灾均未取回），15M 因子降级缺省")
+            # ★「不许假数据」：降级缺省 ≠ 留着默认值（rsi_14=50.0 会被打分读成中性偏多加 15 分）
+            mark_15m_missing(factors)
     except Exception as exc:
         print(f"[Factor] ⚠️ {inst_id} 15m K线处理异常: {exc}")
+        mark_15m_missing(factors)
 
-    # 3.5. 1H Candles -> 1H ATR & 1H RSI
+    # 4. 1H Candles -> 1H ATR（+ T4 动量源序列）
+    #    ⚠️ `limit=100` 而不是 24：MACD(12,26,9) 需要 **35 根**收盘价，
+    #    只取 24 根会让 MACD 块静默退化成 0/中性（实盘已观测到）。
+    closes_1h: List[float] = []
     try:
-        d = {"data": fetch_candles(inst_id, bar="1H", limit=24)}
+        d = {"data": fetch_candles(inst_id, bar="1H", limit=100)}
         if d["data"] and len(d["data"]) >= 15:
             raw_1h = d["data"]
             closes_1h = [safe_float(c[4]) for c in reversed(raw_1h)]
@@ -172,7 +140,14 @@ def compute_instrument_factors(item: Dict[str, Any], smart_money_pool: Dict[str,
     except Exception as exc:
         print(f"[Factor] ⚠️ {inst_id} 1H K线处理异常: {exc}")
 
-    # 4. OKX Official Indicators (ADX, KDJ, BBWidth, CMF) via 1 single batch REST call (zero Node CLI fork)
+    # 5. OKX Official Indicators (ADX, KDJ, BBWidth, CMF) via 1 single batch REST call (zero Node CLI fork)
+    # ★ 2026-10「不许假数据」：先把这批键置为缺失，取到才写真值。
+    #   原实现只在 `if "ADX" in inds:` 里写 ⇒ 指标批失败时默认值（0.0）留在原地，
+    #   提示词会显示"ADX=0.0 / CMF=0.0"这类**假读数**（ADX=0 是个结论：无趋势）。
+    factors["trend_momentum"]["adx_1h"] = None
+    factors["trend_momentum"]["kdj_j"] = None
+    factors["volatility_channel"]["bb_width_1h"] = None
+    factors["volume_money_flow"]["cmf_1h"] = None
     try:
         inds = fetch_indicators_batch(inst_id, ["adx", "kdj", "bbwidth", "cmf"], bar="1H")
         if "ADX" in inds:
@@ -186,47 +161,74 @@ def compute_instrument_factors(item: Dict[str, Any], smart_money_pool: Dict[str,
     except Exception:
         pass
 
-    # 5. Derivatives & SmartMoney
+    # =========================================================================
+    # 6. OKX 7 梯队量化因子（2026-10 重构：替代原 Pillar 6 的微积分/定积分/概率）
+    #    取数全部走公开 REST（T3/T4 纯本地计算），失败即显式降级。
+    # =========================================================================
+    trend_hint = "BULL" if factors["chg24h"] > 0 else ("BEAR" if factors["chg24h"] < 0 else "CHOP")
+
+    # --- T4 动量确认（1H MACD(12,26,9) + 1H/15M RSI(14) 情境区间 + 顶底背离）---
+    if closes_1h:
+        qf.apply_momentum_tier(factors, closes_1h=closes_1h,
+                               closes_15m=closes_15m, trend=trend_hint,
+                              price=safe_float(factors.get('price')))
+    else:
+        # 没有 K 线 ⇒ 显式标缺失（默认值 0.0/RSI 50 会被读成"真实的中性动量"）
+        qf.mark_momentum_missing(factors)
+
+    # --- T3 筹码分布（24H 滚动 VWAP ± σ 带 + VPVR POC）---
     try:
-        req = urllib.request.Request(f"https://www.okx.com/api/v5/public/funding-rate?instId={inst_id}", headers=headers)
-        with urllib.request.urlopen(req, timeout=3) as resp:
-            d = json.loads(resp.read().decode("utf-8"))
-            if d.get("code") == "0" and d.get("data"):
-                factors["smart_money_derivatives"]["funding_rate_pct"] = round(safe_float(d["data"][0].get("fundingRate")) * 100, 4)
+        raw_vp = fetch_candles(inst_id, bar="15m", limit=qf.VWAP_WINDOW_15M)
+        if raw_vp:
+            qf.apply_volume_profile_tier(factors, raw_candles_15m=raw_vp,
+                                         price=factors["price"])
+        else:
+            qf.mark_volume_profile_missing(factors)
     except Exception:
         pass
 
-    try:
-        req = urllib.request.Request(f"https://www.okx.com/api/v5/public/open-interest?instType=SWAP&instId={inst_id}", headers=headers)
-        with urllib.request.urlopen(req, timeout=3) as resp:
-            d = json.loads(resp.read().decode("utf-8"))
-            if d.get("code") == "0" and d.get("data"):
-                usd = safe_float(d["data"][0].get("oiUsd", 0))
-                factors["smart_money_derivatives"]["oi_usd"] = f"{round(usd / 1e8, 2)}亿 U" if usd > 1e8 else f"{round(usd / 1e4, 1)}万 U"
-    except Exception:
-        pass
+    # --- T1 盘口微观结构（OBI / Top5/Top20 深度比 / 有效点差 bps）---
+    qf.apply_microstructure_tier(factors, depth=depth_data, price=factors["price"])
+    # ★ `spread_bps` 现在缺失即 `None`（不许 0.0 冒充"零点差"），比较前必须先取值
+    if depth_data and safe_float(factors["microstructure"].get("spread_bps")) > 0:
+        factors["microstructure"]["spread_pct"] = round(
+            factors["microstructure"]["spread_bps"] / 100.0, 4)
 
+    # --- T0.5 订单流（5M/1H CVD、Taker 买卖比、量价背离）---
     if ccy:
-        try:
-            req = urllib.request.Request(f"https://www.okx.com/api/v5/rubik/stat/contracts/long-short-account-ratio?ccy={ccy}&period=5m", headers=headers)
-            with urllib.request.urlopen(req, timeout=3) as resp:
-                d = json.loads(resp.read().decode("utf-8"))
-                if d.get("code") == "0" and d.get("data") and len(d["data"]) > 0:
-                    factors["smart_money_derivatives"]["long_short_ratio"] = str(d["data"][0][1])
-        except Exception:
-            pass
+        taker_5m = qf.fetch_taker_volume(ccy, "5m")
+        taker_1h = qf.fetch_taker_volume(ccy, "1H")
+        qf.apply_orderflow_tier(factors, taker_5m=taker_5m, taker_1h=taker_1h,
+                                closes_1h=closes_1h)
+        # 兼容既有消费端（前端/提示词旧的 taker_net_usd 字符串）
+        # ★ 先置缺失：`taker_5m` 取不到时原实现留着默认 "0 U"，
+        #   提示词会显示"5M主动吃单净差=0 U"——那是"零净流"这个**结论**。
+        factors["volume_money_flow"]["taker_net_usd"] = "--"
+        if taker_5m:
+            buy = safe_float(taker_5m[0][2]) if len(taker_5m[0]) > 2 else 0.0
+            sell = safe_float(taker_5m[0][1]) if len(taker_5m[0]) > 1 else 0.0
+            net_diff = buy - sell
+            factors["volume_money_flow"]["taker_net_usd"] = (
+                f"{round(net_diff / 1e4, 1)}万 U" if abs(net_diff) >= 1e4
+                else f"{net_diff:.0f} U")
 
-        try:
-            req = urllib.request.Request(f"https://www.okx.com/api/v5/rubik/stat/taker-volume?ccy={ccy}&instType=CONTRACTS&period=5m", headers=headers)
-            with urllib.request.urlopen(req, timeout=3) as resp:
-                d = json.loads(resp.read().decode("utf-8"))
-                if d.get("code") == "0" and d.get("data") and len(d["data"]) > 0:
-                    b_vol = safe_float(d["data"][0][1])
-                    s_vol = safe_float(d["data"][0][2])
-                    net_diff = b_vol - s_vol
-                    factors["volume_money_flow"]["taker_net_usd"] = f"{round(net_diff / 1e4, 1)}万 U"
-        except Exception:
-            pass
+    # --- T0 衍生品（费率/预测费率/ΔOI/账户多空比/清算脉冲）+ T1.5/T2（BTC/ETH 限定）---
+    if ccy:
+        ul_y = "-".join(inst_id.split("-")[:2]) if "-" in inst_id else inst_id
+        snapshot = qf.fetch_derivatives_snapshot(ccy, inst_id, ul_y)
+        options_block = basis_block = loan_block = None
+        if ccy in ("BTC", "ETH"):
+            options_block = qf.fetch_option_snapshot(f"{ccy}-USD", ccy) or None
+            basis_block = qf.fetch_quarterly_basis_inputs(ccy) or None
+            loan_block = qf.fetch_loan_rate_snapshot() or None
+        price_chg_1h_pct = 0.0
+        if len(closes_1h) >= 2 and closes_1h[-2] > 0:
+            price_chg_1h_pct = (closes_1h[-1] - closes_1h[-2]) / closes_1h[-2] * 100.0
+        qf.apply_derivatives_tier(
+            factors, snapshot=snapshot, ct_val=item.get("ctVal", 1.0),
+            price_chg_1h_pct=price_chg_1h_pct, price=safe_float(factors.get("price")),
+            options_block=options_block,
+            basis_block=basis_block, loan_block=loan_block)
 
     # SmartMoney Overlay（仅当真有数据源时覆盖缺失占位；无源时保留 available=False）
     if ccy in smart_money_pool:
@@ -264,6 +266,7 @@ def compute_instrument_factors(item: Dict[str, Any], smart_money_pool: Dict[str,
         elif w_long <= 35.0 and net_usdt < 0:
             factors["smart_money_derivatives"]["signal"] = "BEAR_DISTRIBUTION"
 
+    # ★ 2026-10 用户拍板：预估型强平热力图**已整块移除**（构建/透传/渲染/看板卡片）。
     # 复合 alpha 打分与信号建议（-100~+100）
     # 阶段 4·B3 第二十九刀：整段迁至 scripts/factors/scoring.py::score_composite_alpha，
     # 本处只保留调用。八项门槛/加减分与两处阻尼的说明见该模块文档串。

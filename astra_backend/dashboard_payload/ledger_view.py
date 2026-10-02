@@ -40,6 +40,38 @@ SNAPSHOT_MAX_POST_FILL_LAG_SECONDS = 1200
 SIDE_ALIASES = {"多": "long", "空": "short", "long": "long", "short": "short"}
 
 
+def _factor_snapshot_for(data_dir: str, inst_raw: str):
+    """用**现行 7 梯队因子快照**兜底装配开仓证据（替代退役的 calculus_snapshot.json）。
+
+    ⚠️ 2026-10 用户实盘反馈："决策轨迹与执行流里怎么还有导数"。
+    根因就在这里：持仓/跨所台账拿不到 journal 里的 `signal_snapshot` 时，
+    旧实现去读 `data/calculus_snapshot.json` 并 `build_signal_snapshot` ——
+    而那份文件是**数理链退役前**落盘的，于是轨迹详情里又冒出
+    速度 v / 加速度 a / 跃度 / 冲量 / 能量积分这些**已退役**的数理值。
+    现改为读 `factor_library_snapshot.json` 的对应标的 7 梯队块；
+    读不到就返回 None（前端显示 `--`，**绝不用旧数理值冒充**）。
+    """
+    path = os.path.join(data_dir, "factor_library_snapshot.json")
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+    except Exception:
+        return None
+    want = {str(inst_raw or "").strip(), f"{str(inst_raw or '').strip()}-USDT-SWAP"}
+    for item in (data.get("instruments") or []):
+        if not isinstance(item, dict):
+            continue
+        if item.get("name") in want or item.get("instId") in want:
+            blocks = {k: v for k, v in item.items()
+                      if isinstance(v, dict) and k in (
+                          "trend_momentum", "volume_money_flow", "microstructure",
+                          "volume_profile", "smart_money_derivatives",
+                          "options_structure", "volatility_channel")}
+            if blocks:
+                return blocks
+    return None
+
+
 def load_signal_journal_by_inst(data_dir: str) -> dict[str, list[dict]]:
     """读取开仓时刻数理快照日志（按标的分组），用于台账真实因果对齐。"""
     journal_file = os.path.join(data_dir, "signal_journal.json")
@@ -216,50 +248,34 @@ def load_ledger_lifecycle_trades(ledger_file, workspace_dir, autosync_enabled, r
                         snap = tr["signal_snapshot"]
                         break
                 if not snap:
-                    calc_file = os.path.join(data_dir, "calculus_snapshot.json")
-                    if os.path.exists(calc_file):
-                        try:
-                            with open(calc_file, "r", encoding="utf-8") as f_calc:
-                                calc_data = json.load(f_calc)
-                                for item in calc_data.get("instruments", []):
-                                    if item.get("name") == inst_raw or item.get("instId") in (inst_raw, f"{inst_raw}-USDT-SWAP"):
-                                        from scripts.trader.signal_snapshot import build_signal_snapshot
-                                        f_mock = {
-                                            "name": inst_raw,
-                                            "price": float(_t.get("open_px") or _t.get("close_px") or 0.0),
-                                            "atr": 0.0,
-                                            "calculus": item.get("calculus", {})
-                                        }
-                                        snap = build_signal_snapshot(f_mock, data_dir=data_dir)
-                                        break
-                        except Exception:
-                            pass
+                    _blocks = _factor_snapshot_for(data_dir, inst_raw)
+                    if _blocks:
+                        from scripts.trader.signal_snapshot import build_signal_snapshot
+                        f_mock = dict(_blocks)
+                        f_mock.update({
+                            "name": inst_raw,
+                            "price": float(_t.get("open_px") or _t.get("close_px") or 0.0),
+                            "atr": 0.0,
+                        })
+                        snap = build_signal_snapshot(f_mock, data_dir=data_dir)
             if not snap:
                 raw_side = str(_t.get("side") or _t.get("direction") or "")
                 inst_name = str(_t.get("inst") or _t.get("name") or "")
                 snap = match_trade_snapshot(journal_by_inst, inst_name, _t.get("open_time"), raw_side)
 
-            # 跨所台账无 journal 历史时的数理快照兜底对齐
+            # 跨所台账无 journal 历史时的**因子快照**兜底对齐
             if not snap:
                 inst_raw = str(_t.get("inst") or _t.get("name") or "")
-                calc_file = os.path.join(data_dir, "calculus_snapshot.json")
-                if os.path.exists(calc_file):
-                    try:
-                        with open(calc_file, "r", encoding="utf-8") as f_calc:
-                            calc_data = json.load(f_calc)
-                            for item in calc_data.get("instruments", []):
-                                if item.get("name") == inst_raw or item.get("instId") in (inst_raw, f"{inst_raw}-USDT-SWAP"):
-                                    from scripts.trader.signal_snapshot import build_signal_snapshot
-                                    f_mock = {
-                                        "name": inst_raw,
-                                        "price": float(_t.get("open_px") or _t.get("close_px") or 0.0),
-                                        "atr": 0.0,
-                                        "calculus": item.get("calculus", {})
-                                    }
-                                    snap = build_signal_snapshot(f_mock, data_dir=data_dir)
-                                    break
-                    except Exception:
-                        pass
+                _blocks = _factor_snapshot_for(data_dir, inst_raw)
+                if _blocks:
+                    from scripts.trader.signal_snapshot import build_signal_snapshot
+                    f_mock = dict(_blocks)
+                    f_mock.update({
+                        "name": inst_raw,
+                        "price": float(_t.get("open_px") or _t.get("close_px") or 0.0),
+                        "atr": 0.0,
+                    })
+                    snap = build_signal_snapshot(f_mock, data_dir=data_dir)
 
             pruned = prune_snapshot(snap) if isinstance(snap, dict) else None
             if pruned:

@@ -97,7 +97,14 @@ class FactorTelemetryTest(unittest.TestCase):
         self.assertIs(f.get("sentiment_available"), True,
                       "文件可读且该币在册 ⇒ 即使分数为 0 也是「真中性」")
 
-    def test_calculus_failure_records_reason_and_warns(self):
+    def test_the_retired_calculus_block_is_inert_and_never_warns(self):
+        """★ 2026-10 重钉（反向断言）：动力学退场后**不许**再有失败/告警路径。
+
+        原来这条守的是"引擎炸了必须把原因写进 `calculus.error` 并告警"。
+        现在整条链不再被调用 ⇒ 真正要守的性质是：注入一个**会炸的**引擎，
+        结果必须**完全不受影响**（没有 `error`、没有"动力学"告警）——
+        否则说明还有人在调用它。
+        """
         broken = types.ModuleType("calculus_engine")
 
         def _boom(*a, **k):
@@ -108,13 +115,9 @@ class FactorTelemetryTest(unittest.TestCase):
             with warnings.catch_warnings(record=True) as caught:
                 warnings.simplefilter("always")
                 f = _run_factors(self.news)
-        calc = f.get("calculus") or {}
-        self.assertIs(calc.get("valid"), False, "退化形状必须自陈 valid=False")
-        self.assertIn("error", calc, "必须把失败原因写进结构化字段，而不是只留在日志")
-        self.assertIn("engine exploded", str(calc["error"]))
+        self.assertNotIn("calculus", f, "calculus 占位已彻底剥离，不得再出现在因子字典中")
         msgs = [str(w.message) for w in caught if issubclass(w.category, RuntimeWarning)]
-        self.assertTrue(any("动力学" in m for m in msgs), msgs)
-
+        self.assertFalse(any("动力学" in m for m in msgs), msgs)
 
 class TrackerTelemetryTest(unittest.TestCase):
     def setUp(self):

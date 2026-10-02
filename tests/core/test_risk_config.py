@@ -194,15 +194,22 @@ class EffectiveEngineValuesTests(unittest.TestCase):
         reader.assert_not_called()
         self.assertEqual(out["pool_size_used"], 3)
 
-    def test_confidence_band_has_a_hard_floor_of_78(self):
+    def test_confidence_band_lower_bound_is_the_real_entry_gate(self):
+        """2026-10：标定带下沿 = **实际新开仓门禁本身**，不再有 78 硬地板。
+
+        旧行为（下沿恒为 `max(门禁, 78)`）会让预算文本自相矛盾：
+        门禁配 68 时却显示「标定带 78%~86%（下沿=门禁 68%）」——
+        模型据此以为 68~77 的信号必被物理拦截，主动放弃本可提交的信号。
+        """
         with mock.patch.object(RC, "MIN_ENTRY_CONFIDENCE", 60.0):
             out = RC.effective_engine_values(pool_size=1)
-        self.assertEqual(out["confidence_band"], [78.0, 86.0],
-                         "低于 78 的配置被硬地板抬回 78（宽度固定 8）")
+        self.assertEqual(out["confidence_band"], [60.0, 68.0],
+                         "下沿必须跟随门禁配置（宽度固定 8），不得再被抬回 78")
         default_band = RC.effective_engine_values(pool_size=1)["confidence_band"]
-        self.assertGreaterEqual(default_band[0], 78.0)
+        self.assertEqual(default_band[0], RC.MIN_ENTRY_CONFIDENCE)
         self.assertEqual(default_band[1] - default_band[0], 8.0)
-        self.assertGreaterEqual(out["target_rr"], 2.2)
+        # 目标 R:R 的下限跟随可配硬底线（2026-10 由 2.2 改为 1.6），不得高于它
+        self.assertGreaterEqual(out["target_rr"], RC.MIN_RISK_REWARD_RATIO)
 
 
 class NormalizeTests(unittest.TestCase):

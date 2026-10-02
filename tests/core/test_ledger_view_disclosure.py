@@ -23,6 +23,7 @@ import os
 import tempfile
 import time
 import unittest
+from pathlib import Path
 from unittest import mock
 
 from astra_backend.dashboard_payload import ledger_view as LV
@@ -130,8 +131,13 @@ class NonDictRowTest(unittest.TestCase):
         self.assertEqual(table, valid)
 
 
-class CalculusFallbackTest(unittest.TestCase):
-    """★ 两段**重复**的 calculus 兜底（代码里同一段写了两遍）都要能走到。
+class FactorSnapshotFallbackTest(unittest.TestCase):
+    """★ 两段**重复**的兜底（代码里同一段写了两遍）都要能走到，但原料已换。
+
+    2026-10 用户实盘反馈："决策轨迹与执行流里怎么还有导数" —— 根因是这两段兜底
+    去读 `data/calculus_snapshot.json`（**数理链退役前**落盘的旧文件），于是轨迹
+    详情里又冒出速度 v / 加速度 a / 跃度 / 冲量。现在改读
+    `data/factor_library_snapshot.json` 的 7 梯队块。
 
     第一段：`status == "holding"` 且 tracker 里没有快照时；
     第二段：以上都不成立、且 journal 因果匹配也没命中时（跨所台账无 journal 历史）。
@@ -141,34 +147,78 @@ class CalculusFallbackTest(unittest.TestCase):
         self.dir = tempfile.TemporaryDirectory()
         self.addCleanup(self.dir.cleanup)
         self.ledger = os.path.join(self.dir.name, "trading_ledger.json")
+        with open(os.path.join(self.dir.name, "factor_library_snapshot.json"), "w",
+                  encoding="utf-8") as f:
+            json.dump({"instruments": [{
+                "name": "BTC-USDT-SWAP", "instId": "BTC-USDT-SWAP",
+                "trend_momentum": {"macd_hist": -12.5, "macd_accel": 3.0},
+                "microstructure": {"obi_pct": -20.0}, "volume_money_flow": {},
+                "volume_profile": {}, "smart_money_derivatives": {},
+                "options_structure": {}, "volatility_channel": {},
+            }]}, f)
+        # ⚠️ 退役的 calculus_snapshot.json **也**放着：它绝不能再被读进来
         with open(os.path.join(self.dir.name, "calculus_snapshot.json"), "w",
                   encoding="utf-8") as f:
-            json.dump({"instruments": [{"name": "BTC-USDT-SWAP", "calculus": {"z": 1}}]}, f)
+            json.dump({"instruments": [{"name": "BTC-USDT-SWAP",
+                                        "calculus": {"velocity": 9.9, "acceleration": 9.9}}]}, f)
 
     def _run(self, row):
         with open(self.ledger, "w", encoding="utf-8") as f:
             json.dump([row], f)
         with mock.patch("scripts.trader.signal_snapshot.build_signal_snapshot",
-                        return_value={"velocity": 9.0}) as builder:
+                        return_value={"macd_hist": -12.5}) as builder:
             valid, table = LV.load_ledger_lifecycle_trades(self.ledger, self.dir.name, False,
                                                            OLD_RESET)
         return valid, table, builder
 
-    def test_holding_row_without_a_tracker_uses_calculus(self):
+    def test_holding_row_without_a_tracker_uses_the_factor_snapshot(self):
         valid, table, builder = self._run({"inst": "BTC-USDT-SWAP", "status": "holding",
                                            "side": "多", "open_time": time.time(),
                                            "open_px": 100.0})
         builder.assert_called_once()
         self.assertEqual(builder.call_args.kwargs.get("data_dir"), self.dir.name)
+        # 传进去的必须是**因子块**，而不是 calculus 块
+        passed = builder.call_args.args[0]
+        self.assertEqual(passed.get("trend_momentum", {}).get("macd_hist"), -12.5)
+        self.assertNotIn("calculus", passed)
         self.assertIn("entry_snapshot", table[0])
         self.assertNotEqual(table[0]["snapshot_observability"], "NONE")
 
-    def test_closed_row_without_journal_uses_calculus_too(self):
+    def test_closed_row_without_journal_uses_the_factor_snapshot_too(self):
         valid, table, builder = self._run({"inst": "BTC-USDT-SWAP", "status": "closed",
                                            "side": "多", "open_time": time.time(),
                                            "close_time": time.time(), "close_px": 101.0})
         builder.assert_called_once()
+        self.assertNotIn("calculus", builder.call_args.args[0])
         self.assertIn("entry_snapshot", table[0])
+
+    def test_the_retired_calculus_file_is_never_read_again(self):
+        """⚠️ 反向断言：哪怕 `calculus_snapshot.json` 就在旁边，也不许再读它。
+
+        它是退役引擎的落盘产物（存量文件不会自动消失），一旦被读进来，
+        轨迹详情就会重新显示"导数"——正是用户报的那个现象。
+
+        判据走 **AST**、且**排除 docstring**：解释"为什么不再读它"的说明文字
+        里当然会出现这个文件名（那是文档，不是行为）。
+        """
+        import ast
+        src = (Path(__file__).resolve().parents[2]
+               / "astra_backend" / "dashboard_payload" / "ledger_view.py").read_text(encoding="utf-8")
+        tree = ast.parse(src)
+        docstrings = set()
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+                body = getattr(node, "body", None) or []
+                if body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant) \
+                        and isinstance(body[0].value.value, str):
+                    docstrings.add(id(body[0].value))
+        literals = [n.value for n in ast.walk(tree)
+                    if isinstance(n, ast.Constant) and isinstance(n.value, str)
+                    and id(n) not in docstrings]
+        self.assertFalse(any("calculus_snapshot" in v for v in literals),
+                         "代码里仍在拼 calculus_snapshot.json 路径 ⇒ 轨迹会重新显示导数")
+        self.assertTrue(any("factor_library_snapshot" in v for v in literals),
+                        "必须真的去读现行因子快照")
 
     def test_unknown_instrument_leaves_the_row_unobservable(self):
         valid, table, builder = self._run({"inst": "DOGE-USDT-SWAP", "status": "closed",

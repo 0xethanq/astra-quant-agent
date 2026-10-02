@@ -207,47 +207,37 @@ class NewsDegradationTests(_PromptSandbox, unittest.TestCase):
         self.assertIn("中性平衡", out["news_intelligence"])
 
 
-class RegimeDualImportTests(_PromptSandbox, unittest.TestCase):
-    """★ 宏观 regime 的**双模导入**：`scripts.calculus_engine` → `calculus_engine` → 放弃。
+class RetiredRegimeBlockIsGoneTests(_PromptSandbox, unittest.TestCase):
+    """★ 2026-10 用户拍板：提示词里的【全市场宏观体制】块**已移除**。
 
-    两条路径的差别只在 `sys.path` 布局（以脚本方式跑 vs 以包方式导入），
-    所以钉法是"让第一条导入失败，看第二条是否接住"。
+    被移除的是**已退役数理系统**的输出（`scripts/calculus_engine` →
+    `scripts/calculus/regime.py`），且它缺数据时会**凭空编结论**：函数内写死
+    `atr_pct=1.5` / `adx=20.0` 兜底，而实盘 `calculus` 块早已完全不存在
+    ⇒ 其"震荡/冲击"分是用**假零**算出来的，却以"当前全市场宏观体制为【X】｜
+    主导方向=Y"的结论句进入提示词，还不在 P0–P3 证据分级里。
+
+    本门是**正向钉子**：即便把那个引擎函数打桩成会返回内容，提示词也**不许**再出现它
+    —— 防止有人"顺手"把退役接线接回去。
     """
 
-    def _engine(self, detect):
-        mod = types.ModuleType("calculus_engine")
-        mod.detect_macro_market_regime = detect
-        return mod
-
-    def test_primary_import_path_is_used_when_available(self):
-        import scripts.calculus_engine as real
-        with patch.object(real, "detect_macro_market_regime",
-                          lambda pkgs: {"summary_text": "PRIMARY"}):
+    def test_retired_regime_engine_output_never_reaches_the_prompt(self):
+        import types
+        fake = types.ModuleType("calculus_engine")
+        fake.detect_macro_market_regime = lambda pkgs: {"summary_text": "REGIME_TEXT"}
+        with patch.dict(sys.modules, {"scripts.calculus_engine": fake, "calculus_engine": fake}):
             out = {}
             self._call(runtime_context_out=out)
-        # ★ 回填的是**整个 regime_data 字典**（覆盖掉 update() 放进去的文本）
-        self.assertEqual(out["market_regime"], {"summary_text": "PRIMARY"})
+        self.assertNotEqual(out.get("market_regime"), {"summary_text": "REGIME_TEXT"})
+        self.assertNotIn("REGIME_TEXT", out["market_regime"])
+        self.assertNotIn("REGIME_TEXT", out["market_matrix"])
+        self.assertNotIn("市场体制自适应识别", out["market_matrix"])
 
-    def test_falls_back_to_bare_name_when_package_import_fails(self):
-        # 毒掉 `scripts.calculus_engine` ⇒ 走第二个 `from calculus_engine import ...`
-        with patch.dict(sys.modules, {"scripts.calculus_engine": None,
-                                      "calculus_engine": self._engine(
-                                          lambda pkgs: {"summary_text": "FALLBACK"})}):
-            out = {}
-            self._call(runtime_context_out=out)
-        self.assertEqual(out["market_regime"], {"summary_text": "FALLBACK"})
-
-    def test_both_imports_failing_degrades_to_empty_regime(self):
-        # 两条都断 ⇒ `except Exception: pass`，regime_text 留空、regime_data 留 None
-        with patch.dict(sys.modules, {"scripts.calculus_engine": None,
-                                      "calculus_engine": None}):
-            out = {}
-            self._call(runtime_context_out=out)
-        # 两条导入都断 ⇒ regime_data 留 None、regime_text 留空 ⇒ 回填的仍是**文本**
+    def test_market_regime_runtime_variable_is_an_empty_string(self):
+        """插槽保留但恒为空：`market_matrix` 退化成"只有行情矩阵"（不留悬空换行）。"""
+        out = {}
+        self._call(runtime_context_out=out)
         self.assertEqual(out["market_regime"], "")
         self.assertNotIsInstance(out["market_regime"], dict)
-        # matrix 退化成"只有行情矩阵"（不留下悬空换行）
-        self.assertNotIn("REGIME_TEXT", out["market_matrix"])
 
 
 class PolicySnapshotContextTests(_PromptSandbox, unittest.TestCase):
@@ -333,13 +323,16 @@ class RuntimeVarsTests(_PromptSandbox, unittest.TestCase):
         with self.assertRaises(KeyError):
             self._call(packages=[{}], runtime_context_out={})
 
-    def test_market_matrix_prepends_regime_when_present(self):
-        import scripts.calculus_engine as real
-        with patch.object(real, "detect_macro_market_regime",
-                          lambda pkgs: {"summary_text": "REG"}):
+    def test_market_matrix_does_not_prepend_any_regime_block(self):
+        """★ 退役块移除后：矩阵**只有**行情矩阵本身，不许再前置任何体制结论。"""
+        import types
+        fake = types.ModuleType("calculus_engine")
+        fake.detect_macro_market_regime = lambda pkgs: {"summary_text": "REG"}
+        with patch.dict(sys.modules, {"scripts.calculus_engine": fake, "calculus_engine": fake}):
             out = {}
             self._call(runtime_context_out=out)
-        self.assertTrue(out["market_matrix"].startswith("REG"))
+        self.assertFalse(out["market_matrix"].startswith("REG"))
+        self.assertNotIn("REG", out["market_matrix"][:3])
 
     def test_layout_is_applied_with_the_profile_name(self):
         self._call()

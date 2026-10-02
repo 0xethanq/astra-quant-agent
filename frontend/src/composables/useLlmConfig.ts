@@ -241,6 +241,31 @@ async function loadConfig() {
   }
 }
 
+// ----------------- 2026 大模型前缀缓存与 L1 查询缓存 -----------------
+const cacheStatus = ref<any>(null)
+const cacheLoading = ref(false)
+
+async function loadCacheStatus() {
+  try {
+    cacheStatus.value = await api('/api/v1/admin/llm/cache/status')
+  } catch (e: any) {
+    console.error('Failed to load LLM cache status:', e)
+  }
+}
+
+async function clearL1Cache() {
+  cacheLoading.value = true
+  try {
+    const res = await api('/api/v1/admin/llm/cache/clear', { method: 'POST' })
+    toast.ok(res?.message || t('admin.llm.toastL1Cleared'))
+    await loadCacheStatus()
+  } catch (e: any) {
+    toast.err(String(e?.message || e))
+  } finally {
+    cacheLoading.value = false
+  }
+}
+
 // Model Effort Options depending on model family
 const availableEffortOptions = computed(() => effortOptions(modelForm.value.id, t))
 
@@ -635,6 +660,7 @@ function toggleCapability(cap: string) {
 onMounted(() => {
   loadConfig()
   loadFailoverEvents()
+  loadCacheStatus().catch(() => {})
 })
 
   return {
@@ -707,5 +733,10 @@ onMounted(() => {
     toggleCapability,
     toggleFallback,
     toggleProviderQuick,
+    // 2026 缓存效能与状态
+    cacheStatus,
+    cacheLoading,
+    loadCacheStatus,
+    clearL1Cache,
   }
 }

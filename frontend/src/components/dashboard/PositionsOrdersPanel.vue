@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * PositionsOrdersPanel.vue · DeepSeek Harness 开发者工作台持仓与挂单面板
+ * PositionsOrdersPanel.vue · AstraQuant 实盘持仓与挂单面板
  * 侧栏/工位双向联动，低饱和黑白/深灰主题，高密度表格与清晰订单状态（OKX 专用）
  */
 import { computed, ref } from 'vue';

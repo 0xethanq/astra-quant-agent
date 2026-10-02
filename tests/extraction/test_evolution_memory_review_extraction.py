@@ -7,13 +7,14 @@ r"""进化复盘"心法合并 + 发布"抽取对拍门（第一百零四刀）�
 ## 为什么这块值得单独成门（它是**宪法级保护**）
 
 - 基准心法不允许被进化输出物理删除（2026-09-10 事故换来的规则）：
-  遗漏/试图删除的基准心法由宿主补回并计数（报告位 `baseline_memory_protected`）；
+  2026-10：原「遗漏/试图删除的基准心法由宿主补回并计数」已随基准机制整体拆除，
+  改为**一律落停用存档**（`enabled=False` + 退役留痕），不再有"宪法级补回"；
 - 审计 P1-8c：被模型省略的**已学（非基准）**心法不再"静默消失"，改为停用存档；
 - 发布失败 ⇒ 保留既有权威（`preserve_existing_memory = True`），不静默放宽。
 
 ## 三处 in-out（本门把规则钉死）
 
-`constitution_readded` / `retired_lessons` / `preserve_existing_memory` 都只在
+`retired_lessons` / `preserve_existing_memory` 都只在
 **该分支内**被赋值，分支跳过时保持调用方原值，块后又被报告消费 ——
 只按"段内是否赋值"判必然绑定会误判，故一律 in-out（门面在 L636 就已预初始化）。
 """
@@ -60,35 +61,35 @@ def _call() -> ast.Call:
 
 def _kwargs(**over):
     """构造一次最小调用的全部关键字（helper 无默认值 ⇒ 必须全给）。"""
-    base = dict(change_status="applied", constitution_readded=[], log_msg=lambda *a, **k: None,
+    base = dict(change_status="applied", log_msg=lambda *a, **k: None,
                 long_term_memory=[], memory_service=None, memory_snapshot={"version": 7, "lessons": []},
-                merge_memory_with_constitution=lambda *a, **k: ([], []),
+                merge_lesson_texts=lambda *a, **k: [],
                 preserve_existing_memory=True, retired_lessons=[], total_trades=0)
     base.update(over)
     return base
 
 
 class EvolutionMemoryReviewTest(unittest.TestCase):
-    def test_call_unpacks_three_in_out_values(self):
+    def test_call_unpacks_two_in_out_values(self):
         call = _call()
         params = [a.arg for a in _impl().args.kwonlyargs]
         self.assertEqual(call.args, [])
         self.assertEqual([k.arg for k in call.keywords], params)
         for k in call.keywords:
             self.assertEqual(ast.unparse(k.value), k.arg)
-        # 调用点必须是三目标解包（in-out 回传）
+        # 调用点必须是二目标解包（in-out 回传；原三目标含已拆除的 constitution_readded）
         tree = ast.parse(FACADE.read_text(encoding="utf-8"))
         fn = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == OWNER)
         tgt = [n.targets[0] for n in ast.walk(fn) if isinstance(n, ast.Assign)
                and isinstance(n.value, ast.Call) and getattr(n.value.func, "id", "") == HELPER]
         self.assertEqual(len(tgt), 1)
         names = [e.id for e in tgt[0].elts]
-        self.assertEqual(names, ["constitution_readded", "preserve_existing_memory", "retired_lessons"])
+        self.assertEqual(names, ["preserve_existing_memory", "retired_lessons"])
 
     def test_non_definite_outputs_are_passed_in(self):
-        """三处 in-out 必须在入参里（否则分支跳过时 UnboundLocalError）。"""
+        """两处 in-out 必须在入参里（否则分支跳过时 UnboundLocalError）。"""
         params = {a.arg for a in _impl().args.kwonlyargs}
-        for nm in ("constitution_readded", "preserve_existing_memory", "retired_lessons"):
+        for nm in ("preserve_existing_memory", "retired_lessons"):
             self.assertIn(nm, params, f"{nm} 必须 in-out")
 
     def test_no_undeclared_free_names(self):
@@ -121,9 +122,8 @@ class EvolutionMemoryReviewTest(unittest.TestCase):
         from scripts.evolution.memory_review import apply_memory_review
         calls = []
         svc = type("S", (), {"publish_review": lambda *a, **k: calls.append(k)})()
-        got = apply_memory_review(**_kwargs(preserve_existing_memory=True, memory_service=svc,
-                                            constitution_readded=["keep"]))
-        self.assertEqual(got, (["keep"], True, []), "跳过分支必须原样回传 in-out 值")
+        got = apply_memory_review(**_kwargs(preserve_existing_memory=True, memory_service=svc))
+        self.assertEqual(got, (True, []), "跳过分支必须原样回传 in-out 值")
         self.assertEqual(calls, [], "跳过分支**不得**触碰记忆服务")
 
     def test_publish_success_clears_preserve_flag(self):
@@ -131,7 +131,7 @@ class EvolutionMemoryReviewTest(unittest.TestCase):
         svc = type("S", (), {"publish_review": lambda *a, **k: "v8"})()
         got = apply_memory_review(**_kwargs(preserve_existing_memory=False, memory_service=svc,
                                             long_term_memory=["rule A"], total_trades=42))
-        self.assertEqual(got[1], False, "发布成功 ⇒ preserve_existing_memory=False")
+        self.assertEqual(got[0], False, "发布成功 ⇒ preserve_existing_memory=False")
 
     def test_publish_failure_retains_authority_and_logs(self):
         from scripts.evolution.memory_review import apply_memory_review
@@ -141,40 +141,40 @@ class EvolutionMemoryReviewTest(unittest.TestCase):
         svc = type("S", (), {"publish_review": _boom})()
         got = apply_memory_review(**_kwargs(preserve_existing_memory=False, memory_service=svc,
                                             log_msg=lambda m: logs.append(m)))
-        self.assertEqual(got[1], True, "发布失败 ⇒ 保留既有权威")
+        self.assertEqual(got[0], True, "发布失败 ⇒ 保留既有权威")
         self.assertTrue(any("retaining authority" in m for m in logs))
 
-    def test_constitution_re_added_is_logged(self):
+    def test_nothing_is_readded_back_into_the_memory(self):
+        """★ 反向判据：本轮**不再**有任何"宿主补回基准心法"的行为与留痕。"""
         from scripts.evolution.memory_review import apply_memory_review
         logs = []
         got = apply_memory_review(**_kwargs(
             preserve_existing_memory=False,
             memory_service=type("S", (), {"publish_review": lambda *a, **k: "v9"})(),
-            long_term_memory=["rule A"],
-            merge_memory_with_constitution=lambda *a, **k: (["rule A", "baseline"], ["baseline"]),
-            log_msg=lambda m: logs.append(m)))
-        self.assertEqual(got[0], ["baseline"], "补回的基准心法必须回传（供报告计数）")
-        self.assertTrue(any("基准心法" in m for m in logs), "补回必须留痕")
+            long_term_memory=["rule A"], log_msg=lambda m: logs.append(m)))
+        self.assertEqual(got[0], False)
+        self.assertFalse(any("基准心法" in m for m in logs), "不得再有补回留痕")
+        self.assertNotIn("constitution_readded", got if isinstance(got, dict) else ())
 
     def test_dropped_non_baseline_lessons_are_archived_not_lost(self):
         """审计 P1-8c：模型漏述的已学心法 ⇒ 停用存档（回传 retired_lessons），不得静默消失。"""
         from scripts.evolution.memory_review import apply_memory_review
         logs = []
         snap = {"version": 3, "lessons": [
-            {"rule_text": "kept", "enabled": True, "is_baseline": False},
-            {"rule_text": "dropped", "enabled": True, "is_baseline": False},
-            {"rule_text": "baseline-x", "enabled": True, "is_baseline": True},
-            {"rule_text": "disabled", "enabled": False, "is_baseline": False},
+            {"rule_text": "kept", "enabled": True},
+            {"rule_text": "dropped", "enabled": True},
+            {"rule_text": "also-dropped", "enabled": True},
+            {"rule_text": "disabled", "enabled": False},
         ]}
         got = apply_memory_review(**_kwargs(
             preserve_existing_memory=False,
             memory_service=type("S", (), {"publish_review": lambda *a, **k: "v10"})(),
             long_term_memory=["kept"], memory_snapshot=snap, log_msg=lambda m: logs.append(m),
-            # ⚠️ 桩必须与真实协作方契约一致：`merge_memory_with_constitution` 返回的是
-            # **合并后**的 safe 列表；"本轮已复述"的判定基于它，不是模型原始输出。
-            merge_memory_with_constitution=lambda status, safe, lessons: (safe, [])))
-        self.assertEqual(got[2], ["dropped"],
-                         "只归档「启用中的非基准且本轮未复述」的心法（基准走补回、停用不重复记）")
+            # ⚠️ 桩必须与真实协作方契约一致：`merge_lesson_texts` 返回**合并后**的清单；
+            # "本轮已复述"的判定基于它，不是模型原始输出。
+            merge_lesson_texts=lambda status, safe, lessons: safe))
+        self.assertEqual(got[1], ["dropped", "also-dropped"],
+                         "启用中且本轮未复述的一律归档（2026-10 起无基准例外）；停用的不重复记")
         self.assertTrue(any("停用存档" in m for m in logs))
 
     def test_merge_receives_change_status_and_snapshot_lessons(self):
@@ -182,13 +182,13 @@ class EvolutionMemoryReviewTest(unittest.TestCase):
         seen = {}
         def _merge(status, safe, lessons):
             seen.update(status=status, safe=list(safe), lessons=list(lessons))
-            return safe, []
-        snap = {"version": 1, "lessons": [{"rule_text": "b", "enabled": True, "is_baseline": True}]}
+            return safe
+        snap = {"version": 1, "lessons": [{"rule_text": "b", "enabled": True}]}
         apply_memory_review(**_kwargs(
             change_status="rolled_back", preserve_existing_memory=False, memory_snapshot=snap,
             long_term_memory=[{"rule_text": "from-dict"}, "plain"],
             memory_service=type("S", (), {"publish_review": lambda *a, **k: "v"})(),
-            merge_memory_with_constitution=_merge))
+            merge_lesson_texts=_merge))
         self.assertEqual(seen["status"], "rolled_back")
         self.assertEqual(seen["safe"], ["from-dict", "plain"], "对象/字符串两种心法都要压平成字符串")
         self.assertEqual(seen["lessons"], snap["lessons"])

@@ -29,7 +29,6 @@ MOD = ROOT / "scripts" / "brain" / "snapshots.py"
 OWNER = "execute_batch_ai_brain_cycle"
 SPECS = {                        # 函数名 -> 基线语句下标
     "update_factor_library_snapshot": 21,
-    "write_calculus_snapshot": 23,
     "write_prompt_snapshot": 28,
 }
 
@@ -99,20 +98,12 @@ class BrainSnapshotsVerbatimTest(unittest.TestCase):
 
     # ---------- 行为例：三个落盘（全部指向临时目录） ----------
 
-    def test_write_calculus_snapshot_writes_json_and_leaves_no_tmp(self):
+    def test_write_calculus_snapshot_is_removed(self):
+        """★ 反向守卫（2026-10）：数理退役后，演算快照落盘函数必须已从模块与门面中彻底移除。"""
         from scripts.brain import snapshots as S
-        with tempfile.TemporaryDirectory() as td:
-            target = os.path.join(td, "calculus.json")
-            S.write_calculus_snapshot(
-                packages=[{"name": "BTC", "instId": "BTC-USDT-SWAP", "calculus": {"x": 1}}],
-                time_str="2026-09-15 11:00:00", CALCULUS_SNAPSHOT_FILE=target,
-                json=json, os=os)
-            self.assertTrue(os.path.exists(target), "演算快照必须落盘")
-            self.assertFalse(os.path.exists(target + ".tmp"), "不得残留 .tmp")
-            got = json.loads(Path(target).read_text(encoding="utf-8"))
-            self.assertEqual(got["engine"], "causal-calculus-v1")
-            self.assertEqual(got["timestamp"], "2026-09-15 11:00:00")
-            self.assertEqual(got["instruments"][0]["instId"], "BTC-USDT-SWAP")
+        from scripts import ai_brain_trader as abt
+        self.assertFalse(hasattr(S, "write_calculus_snapshot"), "snapshots.py 不得保留该函数")
+        self.assertFalse(hasattr(abt, "CALCULUS_SNAPSHOT_FILE"), "ai_brain_trader.py 不得保留该路径常量")
 
     def test_write_prompt_snapshot_writes_rendered_text(self):
         from scripts.brain import snapshots as S

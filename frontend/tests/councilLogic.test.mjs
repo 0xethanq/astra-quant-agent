@@ -114,8 +114,10 @@ console.log('roleColorOf / roleIconKeyOf:');
 console.log('DATA_SLOTS:');
 {
   const ks = M.DATA_SLOTS.map(s => s.k);
-  eq('9 个槽位', M.DATA_SLOTS.length, 9);
-  eq('顺序与取值', ks, ['market_regime', 'market_matrix', 'account_balance', 'account_positions',
+  // ★ 2026-10：`market_regime`（全市场宏观体制）随退役数理引擎一并移除 —— 该插槽
+  //   恒为空（后端不再签发），列在可选变量里只会让用户插出一个永远为空的占位符。
+  eq('8 个槽位', M.DATA_SLOTS.length, 8);
+  eq('顺序与取值', ks, ['market_matrix', 'account_balance', 'account_positions',
                         'pending_orders', 'risk_budget', 'active_instruments',
                         'news_intelligence', 'trading_memory']);
   eq('无重复', new Set(ks).size, ks.length);

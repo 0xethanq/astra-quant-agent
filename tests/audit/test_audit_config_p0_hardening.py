@@ -269,7 +269,6 @@ class PolicyPackageIdentityTests(_SandboxBase):
             "evolution_memory": {"schema_version": 1, "revision": "r1",
                                  "lessons": [{"id": "l1", "rule_text": "顺势", "enabled": True,
                                               "health_score": 90.0, "shield_status": "PASSED"}]},
-            "interceptor_config": {"pipeline_order": [], "enabled": {}},
             "council_config": {"enabled": False, "consensus_mode": "standard",
                                "timeout_seconds": 240.0, "updated_at": "t1",
                                "roles": {"cio": {"id": "cio", "enabled": True, "is_arbitrator": True,
@@ -308,10 +307,13 @@ class PolicyPackageIdentityTests(_SandboxBase):
         self.assertEqual(ps.package_restore_diff(archived, current), [])
 
     def test_restore_diff_skips_units_absent_from_archive(self):
-        """归档没装的单元不能判成恢复失败（旧包无法清空它诞生之后才有的内容）。"""
-        archived = {"risk_config": {"A": 1}, "interceptor_config": {}}
-        current = {"risk_config": {"A": 1, "B": 2},
-                   "interceptor_config": {"pipeline_order": ["x"], "enabled": {"x": True}}}
+        """归档没装的单元不能判成恢复失败（旧包无法清空它诞生之后才有的内容）。
+
+        2026-10：原用例拿 `interceptor_config` 当"归档未装的单元"举例；该单元随
+        策略插件系统整套裁撤而消失，例子改用单元内的"归档没装的键"来表达同一语义。
+        """
+        archived = {"risk_config": {"A": 1}}
+        current = {"risk_config": {"A": 1, "B": 2}}
         self.assertEqual(ps.package_restore_diff(archived, current), [])
         self.assertEqual(ps.package_restore_diff({"risk_config": {"A": 1}}, {"risk_config": {"A": 9, "B": 2}}),
                          ["risk_config.A"])

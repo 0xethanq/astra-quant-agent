@@ -166,22 +166,24 @@ def sync_cloud_algo_stop(inst_id: str, pos_side: str, new_sl: float, reason: str
     # 与 execute_ai_position_management 内联云端止损上移行为保持一致(演示盘与实盘同构)。
     try:
         algo_orders = okx_rest.pending_algo_orders(inst_id)
-        # 第一百八十六刀：本文件第 105 行统计覆盖时用的是 `posSide in {pos_side, "net"}`，
-        # 这里却只认精确相等 —— **同一文件里同一语义两种写法**。净持仓账户（OKX one-way）
-        # 的云端单 `posSide` 是 `"net"` ⇒ 这里永远找不到活止损单 ⇒ 返回 False
-        # ⇒ "云端止损收紧"静默失效（是真单也照旧不动）。统一为 net 容错。
-        live_algo = next((o for o in algo_orders
-                          if str(o.get("state", "")).lower() == "live"
-                          and str(o.get("posSide", "net")).lower() in {pos_side, "net"}
-                          and o.get("slTriggerPx")), None)
-        if not live_algo:
+        # 统一为 net 容错，并支持双腿方案（[TP1 腿, 余仓腿]）逐条同步止损
+        live_algos = [o for o in (algo_orders or [])
+                      if str(o.get("state", "")).lower() == "live"
+                      and str(o.get("posSide", "net")).lower() in {pos_side, "net"}
+                      and o.get("slTriggerPx")]
+        if not live_algos:
             return False
-        current_cloud_sl = float(live_algo.get("slTriggerPx") or 0.0)
-        # Avoid redundant amend if price already matches
-        if abs(current_cloud_sl - new_sl) < 1e-6:
-            return True
-        okx_rest.amend_algo_sl(live_algo["algoId"], new_sl, inst_id=inst_id, new_sl_ord_px="-1")
-        return True
+        failed_count = 0
+        for leg in live_algos:
+            current_cloud_sl = float(leg.get("slTriggerPx") or 0.0)
+            if abs(current_cloud_sl - new_sl) < 1e-6:
+                continue
+            try:
+                okx_rest.amend_algo_sl(leg["algoId"], new_sl, inst_id=inst_id, new_sl_ord_px="-1")
+            except Exception as amend_err:
+                print(f"[Cloud OCO Amend Error] {inst_id} {pos_side} algo {leg.get('algoId')}: {amend_err}")
+                failed_count += 1
+        return failed_count == 0
     except Exception as e:
         print(f"[Cloud OCO Sync Error] {inst_id} {pos_side}: {e}")
         return False

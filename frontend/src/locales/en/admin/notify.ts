@@ -43,7 +43,7 @@ export const enAdminNotify = {
   catRisk: 'Black-swan circuit breaker',
   catRiskDesc: 'When market-wide panic or a liquidity drought trips the automatic circuit breaker, every channel is alerted at P0 priority.',
   catBriefing: 'Daily morning/evening report',
-  catBriefingDesc: 'At the times configured below, open positions, account equity, cumulative daily P&L and the macro causal-calculus summary are compiled automatically.',
+  catBriefingDesc: 'At the times configured below, open positions, account equity, cumulative daily P&L and the macro factor summary are compiled automatically.',
   scheduleLabel: 'Daily quantitative briefing times (Beijing time, comma-separated)',
   saveAll: 'Save all notification channels',
   saveSchedule: 'Save briefing times',

@@ -11,7 +11,7 @@
 | ★ **回退选模先同网关** | 模型池可能横跨多域名，先把配置**打桩打掉**再读真实配置没有任何意义；死域上的席位回退过去也是 400/504 ⇒ 优先同 `base_url` 的健康成员，其次异域名 |
 | ★ **快照 join 的四条铁律** | ①方向必须一致（拒空头快照当多头成因）；②允许 `[-6h, +20min]` 的首巡检窗口；③**开仓 20 分钟之后的快照绝不是因果现场**；④早于 6 小时算过期证据。窗口内**取最接近的** |
 | ★ **心法归一不许落回 `str(dict)`** | `_coerce_display_str` 要处理模型 schema 漂移：自序列化 JSON 字符串、`{dimension, analysis}`、`{action_type, action}`、纯列表 —— 否则前端渲染成 `[object Object]`（2026-09-09 用户截图那个事故）|
-| ★ **基准心法是宪法级** | `merge_memory_with_constitution`：ADD 为纯追加并去重；REVISE/INVALIDATE 可整理战术层，但**被省略的基准心法由宿主原样补回**（大模型无权物理删除宪法级记忆）|
+| ★ **心法合并只做追加与去重** | `merge_lesson_texts`（2026-10 起；原名 `merge_memory_with_constitution`）：ADD 为纯追加并去重；REVISE/INVALIDATE 采用模型清单。**原「基准心法由宿主强制补回」已随基准机制整体拆除**（用户要求系统不再预设任何心法）|
 | ★ **证据不足就保留旧心法** | `resolve_memory_update`：`NO_CHANGE` **或提案为空** ⇒ 一律保留既有清单（`preserve=True`）；非法状态码静默归到 `NO_CHANGE` |
 
 ## 封闭性
@@ -617,76 +617,83 @@ class ResolveMemoryUpdateTests(unittest.TestCase):
                 self.assertEqual(SIE.resolve_memory_update(status, ["x"], [])[0], status)
 
 
-class MergeMemoryWithConstitutionTests(unittest.TestCase):
-    def _lesson(self, text, baseline=False, enabled=True):
-        return {"rule_text": text, "is_baseline": baseline, "enabled": enabled}
+class MergeLessonTextsTests(unittest.TestCase):
+    """心法合并（2026-10 起**只做去重与追加**）。
+
+    历史：本类原名 `MergeMemoryWithConstitutionTests`，钉的是「基准心法宪法级保护」
+    —— 模型省略/试图删除的 `is_baseline` 条目由宿主强制补回（`readded`）。
+    用户已要求系统不再预设任何心法，基准机制整体拆除，故**补回行为不复存在**，
+    本类改为钉"仍然需要的那部分"：ADD 纯追加、去重、脏输入容忍。
+
+    ⚠️ 反向判据（新增）：合并函数**不得**再有任何"宿主强制补回"行为 ——
+    否则等于把预设保护偷偷加回来。
+    """
+
+    def _lesson(self, text, enabled=True):
+        return {"rule_text": text, "enabled": enabled}
+
+    def test_returns_a_plain_list_not_a_pair(self):
+        """★ 契约已变：不再返回 `(清单, 补回清单)` 二元组。"""
+        out = SIE.merge_lesson_texts("ADD", ["新"], [self._lesson("旧")])
+        self.assertIsInstance(out, list)
 
     def test_add_appends_new_items_after_the_existing_ones(self):
-        final, readded = SIE.merge_memory_with_constitution(
-            "ADD", ["新"], [self._lesson("旧")])
-        self.assertEqual(final, ["旧", "新"])
-        self.assertEqual(readded, [])
+        self.assertEqual(SIE.merge_lesson_texts("ADD", ["新"], [self._lesson("旧")]),
+                         ["旧", "新"])
 
     def test_add_deduplicates(self):
-        final, _ = SIE.merge_memory_with_constitution(
-            "ADD", ["旧", "新", "新"], [self._lesson("旧")])
-        self.assertEqual(final, ["旧", "新"])
+        self.assertEqual(SIE.merge_lesson_texts("ADD", ["旧", "新", "新"], [self._lesson("旧")]),
+                         ["旧", "新"])
 
-    def test_revise_keeps_only_the_proposed_items_plus_the_baselines(self):
-        final, readded = SIE.merge_memory_with_constitution(
-            "REVISE", ["战术新解"], [self._lesson("战术旧解"), self._lesson("基准", True)])
-        self.assertEqual(final, ["战术新解", "基准"])
-        self.assertEqual(readded, ["基准"])
+    def test_revise_takes_only_the_proposed_items(self):
+        """★ REVISE 下不再有"基准保留"：模型没复述的条目一律不在最终清单里。
 
-    def test_an_omitted_baseline_is_readded(self):
-        """★ 大模型无权物理删除宪法级记忆。"""
-        final, readded = SIE.merge_memory_with_constitution(
-            "INVALIDATE", [], [self._lesson("基准甲", True), self._lesson("基准乙", True)])
-        self.assertEqual(final, ["基准甲", "基准乙"])
-        self.assertEqual(readded, ["基准甲", "基准乙"])
+        （它们不会蒸发 —— `_review_candidates` 会把漏述的启用条目落成**停用存档**。）
+        """
+        out = SIE.merge_lesson_texts("REVISE", ["战术新解"],
+                                     [self._lesson("战术旧解"), self._lesson("另一条")])
+        self.assertEqual(out, ["战术新解"])
 
-    def test_a_baseline_the_model_kept_is_not_readded(self):
-        final, readded = SIE.merge_memory_with_constitution(
-            "REVISE", ["基准甲"], [self._lesson("基准甲", True)])
-        self.assertEqual(final, ["基准甲"])
-        self.assertEqual(readded, [])
+    def test_only_add_keeps_existing_and_it_is_a_general_contract(self):
+        """★ ADD 的"保留现有"是**通用契约**（对所有条目一视同仁），不是基准特权。
+
+        被拆掉的"宿主强制补回"只存在于 REVISE/INVALIDATE —— 那才是不管模型说什么
+        都硬塞回来的行为。ADD 保留现有条目是为了不让一次追加把库清空，
+        与"某条心法级别更高"无关（现在也没有级别这回事了）。
+        """
+        existing = [self._lesson("旧甲"), self._lesson("旧乙")]
+        self.assertEqual(SIE.merge_lesson_texts("ADD", ["新"], existing),
+                         ["旧甲", "旧乙", "新"])
+
+    def test_revise_and_invalidate_never_readd_anything(self):
+        """★ 反向判据：这两个状态下的最终清单**只由模型给出**，宿主一个字都不加。"""
+        for status in ("REVISE", "INVALIDATE", "NO_CHANGE"):
+            with self.subTest(status=status):
+                out = SIE.merge_lesson_texts(status, [], [self._lesson("旧甲"), self._lesson("旧乙")])
+                self.assertEqual(out, [], f"{status} 下不得补回任何未复述条目")
 
     def test_disabled_lessons_are_ignored(self):
-        final, readded = SIE.merge_memory_with_constitution(
-            "REVISE", [], [self._lesson("停用", False, enabled=False),
-                           self._lesson("启用", True, enabled=True)])
-        self.assertEqual(final, ["启用"])
-        self.assertEqual(readded, ["启用"])
+        out = SIE.merge_lesson_texts(
+            "ADD", [], [self._lesson("停用", enabled=False), self._lesson("启用")])
+        self.assertEqual(out, ["启用"])
 
     def test_non_dict_lessons_are_ignored(self):
-        final, _ = SIE.merge_memory_with_constitution(
-            "ADD", ["新"], ["junk", None, self._lesson("旧")])
-        self.assertEqual(final, ["旧", "新"])
+        self.assertEqual(SIE.merge_lesson_texts("ADD", ["新"], ["junk", None, self._lesson("旧")]),
+                         ["旧", "新"])
 
     def test_lessons_without_rule_text_are_ignored(self):
-        final, _ = SIE.merge_memory_with_constitution(
-            "ADD", ["新"], [{"rule_text": "  "}, {"is_baseline": True}, self._lesson("旧")])
-        self.assertEqual(final, ["旧", "新"])
+        self.assertEqual(SIE.merge_lesson_texts("ADD", ["新"], [{"rule_text": "  "}, {}, self._lesson("旧")]),
+                         ["旧", "新"])
 
     def test_object_memory_items_are_flattened(self):
-        final, _ = SIE.merge_memory_with_constitution(
-            "ADD", [{"dimension": "仓位", "analysis": "分批建仓"}], [])
-        self.assertEqual(final, ["【仓位】分批建仓"])
-
-    def test_empty_proposals_for_revise_leave_only_the_baselines(self):
-        final, readded = SIE.merge_memory_with_constitution(
-            "REVISE", [], [self._lesson("战术"), self._lesson("基准", True)])
-        self.assertEqual(final, ["基准"])
-        self.assertEqual(readded, ["基准"])
+        self.assertEqual(SIE.merge_lesson_texts("ADD", [{"dimension": "仓位", "analysis": "分批建仓"}], []),
+                         ["【仓位】分批建仓"])
 
     def test_none_existing_lessons_is_tolerated(self):
-        final, readded = SIE.merge_memory_with_constitution("ADD", ["新"], None)
-        self.assertEqual(final, ["新"])
-        self.assertEqual(readded, [])
+        self.assertEqual(SIE.merge_lesson_texts("ADD", ["新"], None), ["新"])
 
     def test_none_proposals_is_tolerated(self):
-        final, _ = SIE.merge_memory_with_constitution("REVISE", None, [self._lesson("旧")])
-        self.assertEqual(final, [])
+        self.assertEqual(SIE.merge_lesson_texts("REVISE", None, [self._lesson("旧")]), [])
 
 
 class CoerceDisplayStrTests(unittest.TestCase):
@@ -918,12 +925,22 @@ class LoadClosedTradesTests(_Base):
         self.assertIn("读取交易台账异常", self._log())
 
     def test_the_snapshot_observability_is_classified(self):
-        """`velocity` 是 17 个 DYNAMICS_FIELDS 之一；1/17 ⇒ PARTIAL（阈值 15）。
+        """`macd_hist` 是 18 个 DYNAMICS_FIELDS 之一；1/18 ⇒ PARTIAL（阈值 16）。
+
+        ★ 2026-10：字段表由 17 项微积分字段换成 18 项 7 梯队因子字段，
+        判据仍按"真实非空计数"，只是字段集换了。
 
         ⚠️ 别拿 `{"v": 1.0}` 这种想当然的短名 —— 它不在字段表里，会被判成 PRICE_ONLY。
+        ⚠️ 也别再拿 `velocity`：它已随数理链退场，**不算证据**（下一条专门钉住）。
         """
-        self._ledger(_trade(signal_snapshot={"velocity": 1.0}))
+        self._ledger(_trade(signal_snapshot={"macd_hist": 1.0}))
         self.assertEqual(SIE.load_closed_trades()[0]["snapshot_observability"], "PARTIAL")
+
+    def test_retired_dynamics_fields_are_not_evidence_any_more(self):
+        """⚠️ 反向断言：填满已退役的动力学字段 ⇒ 仍判 PRICE_ONLY（它们不再算证据）。"""
+        from scripts.evolution.observability import RETIRED_DYNAMICS_FIELDS
+        self._ledger(_trade(signal_snapshot={k: 1.0 for k in RETIRED_DYNAMICS_FIELDS}))
+        self.assertEqual(SIE.load_closed_trades()[0]["snapshot_observability"], "PRICE_ONLY")
 
     def test_a_full_dynamics_snapshot_is_fully_observed(self):
         from scripts.evolution.observability import DYNAMICS_FIELDS
@@ -953,33 +970,19 @@ class LoadClosedTradesTests(_Base):
         self._ledger(_trade())
         self.assertEqual(SIE.load_closed_trades()[0]["entry_snapshot"], {"velocity": 2.0})
 
-    def test_the_calculus_file_is_used_as_the_last_resort(self):
+    def test_the_calculus_file_is_never_read_even_if_present(self):
+        """★ 反向守卫（2026-10）：数理退役后，哪怕旁边放着 calculus_snapshot.json，
+        load_closed_trades 也绝不得去读它、更不得凭空构造 mock 传给 build_signal_snapshot。
+        无开仓快照的平仓单必须诚实标 NONE。
+        """
         self._write_json(self.data / "calculus_snapshot.json",
                          {"instruments": [{"name": "BTC", "calculus": {"v": 3.0}}]})
         self._ledger(_trade())
         with mock.patch("scripts.trader.signal_snapshot.build_signal_snapshot",
-                        return_value={"v": 9.0}) as build:
+                        side_effect=AssertionError("绝不得调用 build_signal_snapshot 兜底")):
             row = SIE.load_closed_trades()[0]
-        self.assertTrue(build.called)
-        self.assertEqual(row["entry_snapshot"], {"v": 9.0})
-
-    def test_a_calculus_snapshot_build_failure_is_swallowed(self):
-        self._write_json(self.data / "calculus_snapshot.json",
-                         {"instruments": [{"name": "BTC", "calculus": {}}]})
-        self._ledger(_trade())
-        with mock.patch("scripts.trader.signal_snapshot.build_signal_snapshot",
-                        side_effect=RuntimeError("算不出来")):
-            row = SIE.load_closed_trades()[0]
+        self.assertIsNone(row["entry_snapshot"])
         self.assertEqual(row["snapshot_observability"], "NONE")
-
-    def test_the_instid_form_is_matched_in_the_calculus_file(self):
-        self._write_json(self.data / "calculus_snapshot.json",
-                         {"instruments": [{"instId": "BTC-USDT-SWAP", "calculus": {}}]})
-        self._ledger(_trade())
-        with mock.patch("scripts.trader.signal_snapshot.build_signal_snapshot",
-                        return_value={"v": 1.0}) as build:
-            SIE.load_closed_trades()
-        self.assertTrue(build.called)
 
     def test_an_empty_ledger_list_yields_no_trades(self):
         self._ledger()
@@ -1052,12 +1055,17 @@ class ComposeEvolutionPromptsTests(_Base):
         self.assertIn("ETH", user)
 
     def test_both_prompts_end_with_the_host_constitution(self):
-        """★ profile 只能调风格，永远无法删改证据纪律与基准心法保护。"""
+        """★ profile 只能调风格，永远无法删改宿主宪章（证据纪律）。
+
+        2026-10：宪章里原「基准心法保护」一条已随基准机制拆除，改为
+        「长期记忆库不含任何系统预设心法」的行为纪律；结尾文案随之更新。
+        """
         system, user, _, _ = SIE.compose_evolution_prompts(self._trades(1.0))
         self.assertIn("宿主宪章", system)
         self.assertIn("宿主宪章", user)
-        self.assertTrue(system.rstrip().endswith("永不覆盖或清空长期记忆。"))
-        self.assertTrue(user.rstrip().endswith("永不覆盖或清空长期记忆。"))
+        self.assertIn("不含任何系统预设心法", system)
+        self.assertTrue(system.rstrip().endswith("不得因为'它一直在'而保留。"))
+        self.assertTrue(user.rstrip().endswith("不得因为'它一直在'而保留。"))
 
     def test_the_layout_is_applied_for_both_slots(self):
         SIE.compose_evolution_prompts(self._trades(1.0))
@@ -1321,9 +1329,11 @@ class RunSelfEvolutionTests(_Base):
                           "evolution_actions": ["乙"], "ai_long_term_memory": []}))
         self.fallback = self._start(mock.patch.object(SIE, "evolution_fallback_model",
                                                       return_value=None))
+        # 2026-10：`apply_memory_review` 不再有 `constitution_readded`（基准机制已拆）
+        # ⇒ 返回值从 3 元组变 2 元组。
         self.apply_review = self._start(mock.patch.object(
             SIE, "apply_memory_review",
-            return_value=(["补回"], False, ["退役"])))
+            return_value=(False, ["退役"])))
         # ⚠️ 桩要把 ledger_revision **回显**进载荷 —— 主编排的缓存判据就是比对它，
         #    返回一个不带该键的定值就等于"每次台账都变了"，缓存永远不命中。
         self.report = self._start(mock.patch.object(
@@ -1554,7 +1564,7 @@ class RunSelfEvolutionTests(_Base):
         self.assertIn("Markdown mirror sync skipped", self._log())
 
     def test_the_notification_is_sent_with_the_top_lesson(self):
-        self.apply_review.return_value = (["补回"], False, ["退役"])
+        self.apply_review.return_value = (False, ["退役"])
         SIE.run_self_evolution(force=True)
         self.assertTrue(self.notify.called)
         self.assertEqual(self.notify.call_args[0][0], 50.0)
@@ -1579,8 +1589,7 @@ class RunSelfEvolutionTests(_Base):
     def test_the_apply_review_helper_receives_the_facade_callables(self):
         SIE.run_self_evolution(force=True)
         kwargs = self.apply_review.call_args[1]
-        self.assertIs(kwargs["merge_memory_with_constitution"],
-                      SIE.merge_memory_with_constitution)
+        self.assertIs(kwargs["merge_lesson_texts"], SIE.merge_lesson_texts)
         self.assertIs(kwargs["log_msg"], SIE.log_msg)
 
     def test_the_cycle_is_guarded_by_the_single_flight_lock(self):

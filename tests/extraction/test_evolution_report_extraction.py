@@ -10,7 +10,7 @@ r"""自进化报告载荷抽取对拍门（第一百一十七刀）。
 并按字段分组断言几条**不是"看起来那样"**的语义：
 
 - `insights` 与 `diagnosis_insights` **是同一个列表**（历史字段名并存，前端两者都读）；
-- `retired_count` / `baseline_memory_protected` 是**计数快照**，不是明细；
+- `retired_count` 是**计数快照**，不是明细；
 - `memory_preserved` 直接透传 `preserve_existing_memory`（不做二次判断）；
 - `llm_error` 由 `__llm_error__` 转字符串、缺省 `""`（前端据此显示上游失败）；
 - `mode` 是固定文案。
@@ -39,7 +39,11 @@ EXPECTED_KEYS = {
     "timestamp", "ledger_revision", "total_trades", "win_rate", "profit_factor", "mode",
     "change_status", "retired_lessons", "retired_count", "memory_preserved", "insights",
     "diagnosis_insights", "memory_overwrites_reason", "actions_taken", "core_lessons",
-    "snapshot_audit", "baseline_memory_protected", "llm_error",
+    "snapshot_audit", "llm_error",
+    # ── 2026-10（方向 1：证据链可观测性）──────────────────────────────────
+    # 三个键由 `snapshot_audit` **内部派生** ⇒ 14 个 kw-only 入参一个都没变；
+    # 但它们进了前端契约，故必须在此**声明式**登记（门禁本意正是"改契约要有痕迹"）。
+    "evidence_coverage_pct", "exit_cause_coverage_pct", "evidence_gap_reasons",
 }
 
 
@@ -61,7 +65,9 @@ def _impl() -> ast.FunctionDef:
 class EvolutionReportExtractionTest(unittest.TestCase):
     def test_call_site_passes_every_parameter_once_same_name(self):
         params = [a.arg for a in _impl().args.kwonlyargs]
-        self.assertEqual(len(params), 14)
+        # 2026-10：`constitution_readded` 随基准机制整体拆除 ⇒ 14 → 13。
+        self.assertEqual(len(params), 13)
+        self.assertNotIn("constitution_readded", params, "该入参不得复活")
         tree = ast.parse(FACADE.read_text(encoding="utf-8"))
         fn = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == OWNER)
         calls = [n for n in ast.walk(fn) if isinstance(n, ast.Call)
@@ -91,7 +97,7 @@ class EvolutionReportExtractionTest(unittest.TestCase):
 
     def _build(self, **over):
         from scripts.evolution.report import build_evolution_report
-        kw = dict(actions_taken=[], change_status="NO_CHANGE", constitution_readded=[],
+        kw = dict(actions_taken=[], change_status="NO_CHANGE",
                   insights=[], ledger_revision="rev-1", llm_review={},
                   long_term_memory=["L1"], preserve_existing_memory=True,
                   profit_factor=1.5, retired_lessons=[], snapshot_audit={"n": 1},
@@ -124,9 +130,10 @@ class EvolutionReportExtractionTest(unittest.TestCase):
                       "两个键共享同一个列表对象（历史字段名并存，勿改成两份拷贝）")
 
     def test_count_fields_are_snapshots(self):
-        p = self._build(retired_lessons=["r1", "r2"], constitution_readded=["c1"])
+        p = self._build(retired_lessons=["r1", "r2"])
         self.assertEqual(p["retired_count"], 2)
-        self.assertEqual(p["baseline_memory_protected"], 1)
+        self.assertNotIn("baseline_memory_protected", p,
+                         "基准机制已拆除：该键不得复活")
         self.assertEqual(p["retired_lessons"], ["r1", "r2"], "明细与计数都要有")
 
     def test_memory_preserved_passes_through(self):

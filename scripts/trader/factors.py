@@ -22,8 +22,8 @@
 `calc_*`（6 个）与 `effective_risk_per_trade` / `quantize_size` 都来自
 `astra_backend.execution` —— 与门面**同一个对象**，因此
 `test_audit_config_p1_alignment` 的 `assertIs(getattr(trader, name), getattr(sizing, name))`
-照旧成立。`calculate_multi_timeframe` 保持原样在函数内延迟导入
-（它来自 `calculus_engine`，测试环境里不一定可导入）。
+照旧成立。`calculate_multi_timeframe` 与其所属的 `calculus_engine` 已整体删除
+（2026-10：数理链退场，不再有任何调用方）。
 """
 import json
 import os
@@ -72,34 +72,42 @@ def fetch_single_instrument_data(item, all_positions, usdt_available, *,
         "price": 0.0,
         "change24h": 0.0,
         "vol24h": 0.0,
-        "rsi": 50.0,
-        "rsi_7": 50.0,
-        "ema9": 0.0,
-        "ema21": 0.0,
-        "ema55": 0.0,
-        "ema21_slope_pct": 0.0,
-        "vwap": 0.0,
-        "vwap_bias": 0.0,
-        "macd_hist": 0.0,
-        "macd_accel": 0.0,
-        "obv_flow": "NEUTRAL",
-        "bb_bandwidth": 0.0,
-        "bb_squeeze": False,
+        # ★ 2026-10「不许假数据」：以下全部由"看起来合理的值"改为**显式缺失**。
+        #   旧初值把未取到数据的标的说成"RSI 中性 50 / 量能正常 1.0x / 区间震荡 CHOP /
+        #   1H·4H 趋势看多 True"—— 其中 `trend_*_bullish=True` 是**方向性**假值
+        #   （默认偏多），`rsi=50.0` 还恰好落在做多形态的命中带里。
+        #   这些字段现在只有真算出来才有值；没算出来就是 None，由 `market_data_valid`
+        #   闸（本函数结尾）与 `signals.py` 的显式缺失检查 fail-closed。
+        "rsi": None,
+        "rsi_7": None,
+        "ema9": None,
+        "ema21": None,
+        "ema55": None,
+        "ema21_slope_pct": None,
+        "vwap": None,
+        "vwap_bias": None,
+        "macd_hist": None,
+        "macd_accel": None,
+        "obv_flow": None,
+        "bb_bandwidth": None,
+        "bb_squeeze": None,
+        # `atr`/`price` 保留 0.0 **哨兵**：结尾 `market_data_valid` 硬闸 `price > 0 and atr > 0`，
+        # 三条下游（signals/position_exit/scale_out）都先查该闸 ⇒ fail-closed，不会当成"零波动"。
         "atr": 0.0,
-        "atr_pct": 0.0,
-        "vol_15m": 0.0,
-        "vol_ma20": 0.0,
-        "vol_ratio": 1.0,
-        "is_bull_candle_15m": False,
-        "is_bear_candle_15m": False,
-        "lower_wick_ratio": 0.0,
-        "upper_wick_ratio": 0.0,
-        "market_regime": "CHOP",
-        "structure_1h": "CHOP",
-        "trend_1h_bullish": True,
-        "trend_4h_bullish": True,
-        "trend_1h_bearish": False,
-        "trend_4h_bearish": False,
+        "atr_pct": None,
+        "vol_15m": None,
+        "vol_ma20": None,
+        "vol_ratio": None,
+        "is_bull_candle_15m": None,
+        "is_bear_candle_15m": None,
+        "lower_wick_ratio": None,
+        "upper_wick_ratio": None,
+        "market_regime": None,
+        "structure_1h": None,
+        "trend_1h_bullish": None,
+        "trend_4h_bullish": None,
+        "trend_1h_bearish": None,
+        "trend_4h_bearish": None,
         "sentiment_score": 0.0,
         "position": None,
         "market_data_valid": False,
@@ -137,7 +145,10 @@ def fetch_single_instrument_data(item, all_positions, usdt_available, *,
                 break
 
     # 1. Fetch 15M Candles
-    raw_15m = fetch_candles_direct(inst_id, "15m", 45)
+    # ★ 2026-10：45 → 60。`ema55` 需要 ≥55 根，取 45 根时它**退化等于现价**
+    #   （见 `calc_ema` 的缺失语义），而 `signals.py` 用 `px >= ema55*0.994`
+    #   判定"顺势回踩"的入场位置 ⇒ 那个条件会恒真。取 60 根后 EMA55 是真指标。
+    raw_15m = fetch_candles_direct(inst_id, "15m", 60)
     if raw_15m:
         candles_15m = list(reversed(raw_15m))
         closes = [float(c[4]) for c in candles_15m]
@@ -151,9 +162,10 @@ def fetch_single_instrument_data(item, all_positions, usdt_available, *,
         f["ema55"] = calc_ema(closes, 55)
         
         # Calculate EMA21 Slope over last 3 bars
-        if len(closes) >= 5:
+        if len(closes) >= 5 and f["ema21"] is not None:
             prev_e21 = calc_ema(closes[:-3], 21)
-            f["ema21_slope_pct"] = ((f["ema21"] - prev_e21) / prev_e21 * 100.0) if prev_e21 > 0 else 0.0
+            if prev_e21:            # None/0 ⇒ 保持缺失，不写 0.0（那是"斜率走平"这个结论）
+                f["ema21_slope_pct"] = (f["ema21"] - prev_e21) / prev_e21 * 100.0
 
         f["atr"] = calc_atr(candles_15m, 14)
         if f["price"] > 0:
@@ -176,12 +188,20 @@ def fetch_single_instrument_data(item, all_positions, usdt_available, *,
         # Multi-scale VWAP & Bias
         cum_pv = sum([closes[i] * vols[i] for i in range(-15, 0)])
         cum_v = sum(vols[-15:])
-        f["vwap"] = (cum_pv / cum_v) if cum_v > 0 else f["price"]
-        if f["vwap"] > 0:
+        f["vwap"] = (cum_pv / cum_v) if cum_v > 0 else None
+        if f["vwap"] is not None and f["vwap"] > 0:
             f["vwap_bias"] = ((f["price"] - f["vwap"]) / f["vwap"]) * 100.0
         
-        # Latest 15M Candle Geometry
-        last_c = candles_15m[-1]
+        # Latest **已闭合** 15M Candle Geometry
+        #
+        # ★ 2026-10 实盘修复：原取 `candles_15m[-1]` —— 那是 OKX 正在形成的**当前根**。
+        #   交易周期固定在 :00/:15/:30/:45 触发，此刻该根刚开盘：开≈收、上下影≈0
+        #   ⇒ `is_bull_candle_15m`/`is_bear_candle_15m` 双双为 False、影线比≈0，
+        #   而 `signals.py` 的形态闸正是"收阳/收阴**或**长影线"（`>= 0.20`/`>= 0.28`）
+        #   ⇒ 三个形态的确认条件在实盘几乎永远不成立。
+        #   条文（【因子证据与决策优先级】）本就要求"必须有**已闭合** K 线给出的确认信号"，
+        #   故改用最近一根**已收盘**的 15M（`[-2]`）；`price` 仍取当前价（那是真实最新价）。
+        last_c = candles_15m[-2] if len(candles_15m) >= 2 else candles_15m[-1]
         c_open, c_high, c_low, c_close = float(last_c[1]), float(last_c[2]), float(last_c[3]), float(last_c[4])
         f["bidPx"] = f["price"]
         f["askPx"] = f["price"]
@@ -214,9 +234,20 @@ def fetch_single_instrument_data(item, all_positions, usdt_available, *,
             f["lower_wick_ratio"] = lower_wick / total_len
             f["upper_wick_ratio"] = upper_wick / total_len
         
-        f["vol_15m"] = vols[-1]
-        f["vol_ma20"] = sum(vols[-20:]) / min(len(vols), 20) if vols else 1.0
-        f["vol_ratio"] = round(f["vol_15m"] / f["vol_ma20"], 2) if f["vol_ma20"] > 0 else 1.0
+        # ★ 2026-10 实盘修复（与 `scripts/brain/packages.py` 同一族）：量比必须用
+        #   **已收盘**的那根 15M。交易周期固定在 :00/:15/:30/:45 触发，此刻 OKX 返回的
+        #   `vols[-1]` 是**刚开盘**的当前根（累积量 ≈ 整根的 1%）⇒ 实盘 `vol_ratio`
+        #   长期是 0.01~0.06x，于是 `vol_ratio >= 1.25`（量能子分）与 `>= 1.3`
+        #   （「动量爆发」「空头加速」两个形态）**永远无法命中** —— 等于把量能证据静默关掉。
+        #   现在：最近一根已收盘的量 ÷ 它之前 20 根已收盘均量（排除正在形成的当前根）。
+        _closed_vols = vols[:-1]                  # ① 排除正在形成的当前根
+        f["vol_15m"] = _closed_vols[-1] if _closed_vols else None
+        _baseline = _closed_vols[:-1]             # ② 基线再排除"被比较的那根"本身
+        if _baseline:
+            _tail = _baseline[-20:]
+            f["vol_ma20"] = sum(_tail) / len(_tail)
+        if f["vol_ma20"] is not None and f["vol_ma20"] > 0 and f["vol_15m"] is not None:
+            f["vol_ratio"] = round(f["vol_15m"] / f["vol_ma20"], 2)
 
     # 2. Fetch 1H & 4H Trend Confluence
     raw_1h = fetch_candles_direct(inst_id, "1H", 35)
@@ -229,6 +260,12 @@ def fetch_single_instrument_data(item, all_positions, usdt_available, *,
         # 1H ATR 14 for Macro Swing Protection
         f["atr_1h"] = calc_atr(c_1h, 14)
         f["atr_15m"] = f["atr"]
+        # ⚠️ 2026-10 审计记录（**未改行为**）：这条 `max(..., price * 0.012)` 是"ATR 下限"，
+        #   平静行情里它会**主导** —— 实测 6/6 标的（BTC 83k / ETH 2.6k / SOL 118 …）
+        #   下限均大于 1H ATR 与 1.5×15M ATR。后果：仓位标定（`raw_dyn_sz` 用 `atr_val`）
+        #   与止损宽度实际上按 **价格的固定 1.2%** 而非市场真实波动走。
+        #   这是**风险参数**不是假数据（它明示是下限），但对"按波动自适应"的预期有偏差；
+        #   高波动时段（真实 ATR > 1.2% 价）才会回到按波动标定。
         f["atr"] = max(f["atr_1h"], f["atr_15m"] * 1.5, f["price"] * 0.012)
         # ⚠️ 2026-09-30 真机事故：15M 取数被 OKX **429 限流**时 `f["price"]` 保持默认 0
         # （15M 分支整段跳过），而 1H 取数成功 ⇒ 走到这里直接 ZeroDivisionError，
@@ -242,20 +279,23 @@ def fetch_single_instrument_data(item, all_positions, usdt_available, *,
         e21_1h = calc_ema(closes_1h, 21)
         # 审计D(2026-09-13)：e55_1h 死算清除（趋势判定只用 e9/e21；ema55 基线另在 f["ema55"] 生产）
         
-        f["trend_1h_bullish"] = (e9_1h >= e21_1h and closes_1h[-1] >= e21_1h * 0.996)
-        f["trend_1h_bearish"] = (e9_1h <= e21_1h and closes_1h[-1] <= e21_1h * 1.004)
+        if e9_1h is not None and e21_1h is not None:
+            f["trend_1h_bullish"] = (e9_1h >= e21_1h and closes_1h[-1] >= e21_1h * 0.996)
+            f["trend_1h_bearish"] = (e9_1h <= e21_1h and closes_1h[-1] <= e21_1h * 1.004)
 
         recent_low = min(lows_1h[-5:])
         prev_low = min(lows_1h[-15:-5])
         recent_high = max(highs_1h[-5:])
         prev_high = max(highs_1h[-15:-5])
 
-        if recent_low < prev_low and recent_high < prev_high:
-            f["structure_1h"] = "LH_LL"
-        elif recent_high > prev_high and recent_low > prev_low:
-            f["structure_1h"] = "HH_HL"
-        else:
-            f["structure_1h"] = "CHOP"
+        # 结构判定需要 15 根（[-15:-5] 与 [-5:]）⇒ 不够就保持缺失
+        if len(lows_1h) >= 15 and len(highs_1h) >= 15:
+            if recent_low < prev_low and recent_high < prev_high:
+                f["structure_1h"] = "LH_LL"
+            elif recent_high > prev_high and recent_low > prev_low:
+                f["structure_1h"] = "HH_HL"
+            else:
+                f["structure_1h"] = "CHOP"
     
     raw_4h = fetch_candles_direct(inst_id, "4H", 25)
     if raw_4h:
@@ -263,21 +303,26 @@ def fetch_single_instrument_data(item, all_positions, usdt_available, *,
         closes_4h = [float(c[4]) for c in c_4h]
         e9_4h = calc_ema(closes_4h, 9)
         e21_4h = calc_ema(closes_4h, 21)
-        f["trend_4h_bullish"] = (e9_4h >= e21_4h)
-        f["trend_4h_bearish"] = (e9_4h <= e21_4h)
+        if e9_4h is not None and e21_4h is not None:
+            f["trend_4h_bullish"] = (e9_4h >= e21_4h)
+            f["trend_4h_bearish"] = (e9_4h <= e21_4h)
 
     # 3. Dynamic Multi-Wave Regime Classification (Strict 15M + 1H + 4H Real-Time Alignment)
     # Anti-Inertia Fix: Never classify as BEAR_TREND if short-term 15M is actively reversing upwards (EMA9 > EMA21) or price > 15M EMA21/55
-    is_15m_bullish = (f["ema9"] >= f["ema21"] and f["price"] >= f["ema21"] * 0.998)
-    is_15m_bearish = (f["ema9"] <= f["ema21"] and f["price"] <= f["ema21"] * 1.002)
-
-    if f["trend_1h_bullish"] and is_15m_bullish and (f["structure_1h"] == "HH_HL" or f["price"] >= f["ema21"]):
-        f["market_regime"] = "BULL_TREND"
-    elif f["trend_1h_bearish"] and is_15m_bearish and (f["structure_1h"] == "LH_LL" or f["price"] <= f["ema21"]):
-        f["market_regime"] = "BEAR_TREND"
-    else:
-        # If 1H says bearish but 15M is rebounding upwards (e.g. V-reversal), strictly lock into CHOP / TRANSITION
-        f["market_regime"] = "CHOP"
+    # ★ 2026-10：任一输入缺失 ⇒ `market_regime` 保持 **None（未知）**，
+    #   不再"一律 CHOP" —— CHOP 是"已判定为区间震荡"这个**结论**，不能用来兜缺失。
+    _ema_ready = (f["ema9"] is not None and f["ema21"] is not None and f["price"] > 0)
+    _trend_ready = (f["trend_1h_bullish"] is not None or f["trend_1h_bearish"] is not None)
+    if _ema_ready and _trend_ready:
+        is_15m_bullish = (f["ema9"] >= f["ema21"] and f["price"] >= f["ema21"] * 0.998)
+        is_15m_bearish = (f["ema9"] <= f["ema21"] and f["price"] <= f["ema21"] * 1.002)
+        if f["trend_1h_bullish"] and is_15m_bullish and (f["structure_1h"] == "HH_HL" or f["price"] >= f["ema21"]):
+            f["market_regime"] = "BULL_TREND"
+        elif f["trend_1h_bearish"] and is_15m_bearish and (f["structure_1h"] == "LH_LL" or f["price"] <= f["ema21"]):
+            f["market_regime"] = "BEAR_TREND"
+        else:
+            # If 1H says bearish but 15M is rebounding upwards (e.g. V-reversal), strictly lock into CHOP / TRANSITION
+            f["market_regime"] = "CHOP"
 
     # 4. Load Real-time News Sentiment
     if os.path.exists(news_sentiment_file):
@@ -298,24 +343,12 @@ def fetch_single_instrument_data(item, all_positions, usdt_available, *,
                 f"（标记 sentiment_available=False，不得当成中性）: {_sent_err!r}",
                 RuntimeWarning)
 
-    # 5. Causal Multi-Timeframe Calculus Dynamics
-    f["calculus"] = {"valid": False, "regime": "RANGE_LOW_VELOCITY", "velocity": 0.0, "acceleration": 0.0, "impulse": 0.0, "max_abs_jerk": 0.0, "quality": 0.0}
-    try:
-        from calculus_engine import calculate_multi_timeframe
-        f["calculus"] = calculate_multi_timeframe({
-            "15M": raw_15m,
-            "1H": raw_1h,
-            "4H": raw_4h
-        })
-    except Exception as _calc_err:
-        # 2026-09-16：原先静默 pass —— 此处失败会退化成「全 0 动力学」
-        # （v=a=j=I=0、regime=RANGE_LOW_VELOCITY），主脑会照着 0 推理。
-        # 保留 valid=False 的诚实形状，但把原因一并写进去并告警。
-        f["calculus"]["error"] = f"{type(_calc_err).__name__}: {_calc_err}"[:200]
-        warnings.warn(
-            f"[factors] {name} 多周期动力学计算失败，已退化为零动力学"
-            f"（calculus.valid=False，原因见 calculus.error）: {_calc_err!r}",
-            RuntimeWarning)
+    # 5. 已退役：多周期微积分动力学（2026-10 数理链整体退场）
+    #
+    # 2026-10 第二轮：`f["calculus"]` 的**零动力学占位也已删除** —— 用户要求
+    # "系统里不存在的因子一个都不留"。占位键只会让下游误判"只是这次没取到"。
+    # 同一「开仓时刻可观测证据」意图现由 7 梯队因子承载
+    # （见 `scripts/factors/okx_quant_factors.py` 与 `pkg["quant_factors"]`）。
 
     # 6. Dynamic Equal-Risk Position Sizing with AI Self-Evolution Kelly Multipliers
     adaptive_cfg = load_adaptive_config()
@@ -340,6 +373,13 @@ def fetch_single_instrument_data(item, all_positions, usdt_available, *,
         and f["atr"] > 0
         and f.get("bidPx", 0) > 0
         and f.get("askPx", 0) >= f.get("bidPx", 0)
+        # ★ 2026-10：指标必须**真的算出来**才算有效 —— `calc_ema/calc_rsi` 现在
+        #   不足周期返回 None，若闸不查它们，None 会流进 signals/离场链路。
+        #   15M 取 60 根 ⇒ EMA55（需 55）满足；1H 取 35（需 21）、4H 取 25（需 21）满足。
+        and f["rsi"] is not None
+        and f["ema9"] is not None
+        and f["ema21"] is not None
+        and f["ema55"] is not None
     )
     f["market_data_valid"] = market_data_valid
     if not market_data_valid:

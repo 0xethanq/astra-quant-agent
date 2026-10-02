@@ -22,6 +22,7 @@ router = APIRouter(tags=["strategy"])
 def admin_get_council_config(x_astra_session: str | None = Header(default=None, alias="X-Astra-Session")) -> dict[str, Any]:
     require_admin_header(x_astra_session=x_astra_session)
     from astra_backend.council_manager import load_council_config, get_available_presets, get_preset_suites, seat_model_health
+    from astra_backend.council.attribution import compute_council_seat_performance
     cfg = load_council_config()
     cfg["available_presets"] = get_available_presets()
     cfg["available_suites"] = get_preset_suites()
@@ -30,6 +31,7 @@ def admin_get_council_config(x_astra_session: str | None = Header(default=None, 
     cfg["model_health_note"] = (
         "席位绑定未登记模型时，该席位由主脑模型代答（载荷带 model_fallback 标记）"
     )
+    cfg["seat_performance"] = compute_council_seat_performance()
     return cfg
 
 

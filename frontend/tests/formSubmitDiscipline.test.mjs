@@ -116,14 +116,6 @@ test('弹窗操作表单的处理函数必须包含重入闭锁守卫', () => {
     /async\s+function\s+createUser\(\)\s*\{\s*if\s*\(\s*creating\.value\s*\)\s*return/,
     'AdminSysPage.createUser 缺少 if (creating.value) return 闭锁',
   );
-
-  // 3. InterceptorsPage::submitCreate
-  const ip = stripComments(readFileSync(path.join(SRC, 'views/admin/InterceptorsPage.vue'), 'utf8'));
-  assert.match(
-    ip,
-    /async\s+function\s+submitCreate\(\)\s*\{\s*if\s*\(\s*creating\.value\s*\)\s*return/,
-    'InterceptorsPage.submitCreate 缺少 if (creating.value) return 闭锁',
-  );
 });
 
 test('判据自检：能准确捕获双重触发按钮，且正常按钮不误报', () => {

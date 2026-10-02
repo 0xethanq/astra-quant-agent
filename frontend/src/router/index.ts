@@ -38,9 +38,13 @@ const routes: RouteRecordRaw[] = [
       { path: 'logs', redirect: '/admin/decisions' },
       { path: 'promptlib', name: 'admin-promptlib', component: () => import('../views/admin/PromptStudioPage.vue') },
       { path: 'evolution', name: 'admin-evolution', component: () => import('../views/admin/EvolutionPage.vue') },
-      // ── 风控与拦截（宿主：风控参数配置 + 事前风控拦截）───────────────────────
+      // ── 风险管理（风控参数配置与熔断）───────────────────────────────────────
       { path: 'risk', name: 'admin-risk', component: () => import('../views/admin/RiskPage.vue') },
-      { path: 'interceptors', redirect: { path: '/admin/risk', query: { tab: 'pipeline' } } },
+      // ── 决策插件工位（2026-10 随策略插件系统整套裁撤）──────────────────────
+      // 页面、导航项与命名路由一并删除；三条历史路径全部重定向到风控页，旧书签不 404。
+      { path: 'decision-plugins', redirect: '/admin/risk' },
+      { path: 'interceptors', redirect: '/admin/risk' },
+      { path: 'plugins', redirect: '/admin/risk' },
       // ── 操作审计（并入系统日志，旧路径平滑重定向）───────────────────────────
       { path: 'audit', redirect: { path: '/admin/decisions', query: { tab: 'audit' } } },
       // ── 系统账号（独立一级页面）──────────────────────────────────────────
@@ -50,10 +54,6 @@ const routes: RouteRecordRaw[] = [
       { path: 'backup', name: 'admin-backup', component: () => import('../views/admin/BackupPage.vue') },
       { path: 'policy', redirect: { path: '/admin/backup', query: { tab: 'policy' } } },
       { path: 'about', redirect: { path: '/admin/backup', query: { tab: 'version' } } },
-      // ⚠️ 2026-09-30 后台精简：上表被重定向的页面均已作为宿主页的
-      // 页签保留（功能零删除、书签不 404）。原先的「内置插件清单」页**已删除**
-      // （只读静态清单、15 天 0 动作、信息与通知通道/运行单元重合）⇒ 重定向到运行单元。
-      { path: 'plugins', redirect: '/admin/gateway' },
     ],
   },
   {

@@ -218,24 +218,6 @@ class NotificationsTests(unittest.TestCase):
             self.assertIn("锁定胜率放飞", msg)
             self.assertEqual(payload["pnl"], 13.8)
 
-    def test_modern_notifier_interceptor_blocked(self):
-        import scripts.qq_notifier as notifier
-        with patch("scripts.qq_notifier._publish", return_value=True) as mock_pub:
-            res = notifier.notify_interceptor_blocked(
-                inst="DOGE",
-                action="BUY_LONG",
-                interceptor_name="4H 宏观顺势铁律",
-                reason="4H 均线空头承压",
-                venue="okx",
-            )
-            self.assertTrue(res)
-            event_type, title, msg, payload = mock_pub.call_args[0][:4]
-            self.assertEqual(event_type, "risk.interceptor_blocked")
-            self.assertIn("物理硬风控拦截", title)
-            self.assertIn("4H 宏观顺势铁律", msg)
-            self.assertIn("4H 均线空头承压", msg)
-            self.assertIn("Fail-Closed", msg)
-
 
 if __name__ == "__main__":
     unittest.main()

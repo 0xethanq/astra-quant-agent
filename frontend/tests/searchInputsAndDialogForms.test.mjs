@@ -49,7 +49,6 @@ test('关键弹窗录入表单必须支持原生回车提交关联', () => {
     { file: 'views/admin/AdminSysPage.vue', formId: 'as-create-form' },
     { file: 'views/admin/llm/ModelEditDialog.vue', formId: 'model-edit-form' },
     { file: 'views/admin/SecurityPage.vue', formId: 'sc-close-form' },
-    { file: 'views/admin/InterceptorsPage.vue', formId: 'ip-create-form' },
   ];
 
   for (const { file, formId } of forms) {

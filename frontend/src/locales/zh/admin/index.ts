@@ -10,7 +10,6 @@ import { zhAdminBackup } from './backup';
 import { zhAdminAudit } from './audit';
 import { zhAdminAgents } from './agents';
 import { zhAdminCouncil } from './council';
-import { zhAdminInterceptors } from './interceptors';
 import { zhAdminLlm } from './llm';
 import { zhAdminSecurity } from './security';
 import { zhAdminDecisions } from './decisions';
@@ -33,7 +32,6 @@ export const zhAdmin = {
   audit: zhAdminAudit,
   agents: zhAdminAgents,
   council: zhAdminCouncil,
-  interceptors: zhAdminInterceptors,
   llm: zhAdminLlm,
   security: zhAdminSecurity,
   decisions: zhAdminDecisions,

@@ -76,7 +76,8 @@ def manage_position_tp_and_trailing(f, curr_pos, trackers, timestamp_full, execu
     _close_trade_payload,
     notify_trade_close,
     protection_signals,
-    ratcheted_trailing_stop):
+    ratcheted_trailing_stop,
+    resolve_decision_attribution):
     # ⚠️ 2026-09-30（通知单一事实源）：本模块**不再发布**任何 `trade.closed`。
     #     此前硬止损/保护失效/时间止损/阶梯锁利四处各发一张卡片，而台账同步路径
     #     （`scripts/sync_full_ledger.py` → `scripts/ledger/notify.py`）会对同一笔再发
@@ -116,12 +117,19 @@ def manage_position_tp_and_trailing(f, curr_pos, trackers, timestamp_full, execu
     now_ts = int(time.time())
     if pos_key not in trackers:
         score, action, reasons, strat_tag, strat_desc = evaluate_asset_signal(f)
+        # 决策来源在建档时刻钉死（2026-10）：本块是**建仓后首次巡检**，per-symbol
+        # 决策缓存里仍留着建仓周期的"单模型 / 投委会 + 采纳席位"。到平仓时缓存已被
+        # 后续周期覆盖，那时再读就是错的数据 —— 故此处一次性写进追踪器，供
+        # `close_evidence` 在平仓归档时取用（单模型时 adopted_role 为 None）。
+        _decision_source, _adopted_role = resolve_decision_attribution(inst_id)
         trackers[pos_key] = {
             "instId": inst_id,
             "name": name,
             "side": curr_pos["side"],
             "policy_version": f.get("policy_version", ""),
             "policy_hash": f.get("policy_hash", ""),
+            "decision_source": _decision_source,
+            "adopted_role": _adopted_role,
             "strategy_tag": strat_tag if strat_tag != "⚪ 观望" else ("🌊 顺势回踩" if is_long else "⚡ 阻力抛压"),
             "entryPx": entry_px,
             "entryTs": now_ts,
@@ -138,6 +146,10 @@ def manage_position_tp_and_trailing(f, curr_pos, trackers, timestamp_full, execu
             "highWaterMark": cur_px,
             "lowWaterMark": cur_px,
             "trailingStopPx": round((entry_px - atr * profile["sl_atr_mult"]) if is_long else (entry_px + atr * profile["sl_atr_mult"]), prec),
+            # 初始止损距离**冻结**（2026-10）：`trailingStopPx` 会被三档棘轮逐级上移，
+            # 平仓时已经不是"1R"的基准了。自进化的 MFE/MAE 回吐分析需要**建仓那一刻**
+            # 的止损距离当 1R 分母，故在此独立冻结一份 —— 与 `scale_out_tp` 同一手法。
+            "initialStopPx": round((entry_px - atr * profile["sl_atr_mult"]) if is_long else (entry_px + atr * profile["sl_atr_mult"]), prec),
             "takeProfitPx": round((entry_px + max(atr * profile["tp_atr_mult"], entry_px * profile["min_profit_ratio"])) if is_long else (entry_px - max(atr * profile["tp_atr_mult"], entry_px * profile["min_profit_ratio"])), prec),
             "signal_snapshot": build_signal_snapshot(f),
             "stage_desc": "持有监控中"

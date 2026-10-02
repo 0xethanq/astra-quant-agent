@@ -64,6 +64,7 @@ from scripts.evolution.report import build_evolution_report
 from scripts.evolution.observability import (  # noqa: E402,F401
     DYNAMICS_FIELDS,
     DYNAMICS_OBSERVED_MIN,
+    RETIRED_DYNAMICS_FIELDS,
     _parse_bj,
     audit_snapshot_observability,
     classify_snapshot_observability,
@@ -483,29 +484,15 @@ def load_closed_trades(start_time_override: str | None = None):
                     reason = str(t.get("exit_reason") or t.get("remark") or "")
 
                     # join 铁律：方向一致、非未来、非过期；宿主逐单标注可观测性
+                    #
+                    # 证据优先级（2026-10）：**台账内嵌的 `entry_snapshot` 最权威**
+                    # （由 `close_evidence` 在平仓前钉死、`sync_full_ledger` join 进来），
+                    # 其次才是 journal 时间窗匹配（旧口径，容差宽、易错配）。
+                    # 原 `calculus_snapshot.json` 兜底已随数理退役链整体剥离（无证据即标 NONE，绝不伪造）。
                     raw_side = str(t.get("side") or t.get("direction") or "")
-                    snap = t.get("signal_snapshot") or _match_snapshot(
-                        journal_by_inst, inst, t.get("open_time"), raw_side)
-                    if not snap:
-                        calc_file = os.path.join(DATA_DIR, "calculus_snapshot.json")
-                        if os.path.exists(calc_file):
-                            try:
-                                with open(calc_file, "r", encoding="utf-8") as f_calc:
-                                    calc_data = json.load(f_calc)
-                                    for item in calc_data.get("instruments", []):
-                                        if item.get("name") == inst or item.get("instId") in (inst, f"{inst}-USDT-SWAP"):
-                                            from scripts.trader.signal_snapshot import build_signal_snapshot
-                                            f_mock = {
-                                                "name": inst,
-                                                "instId": f"{inst}-USDT-SWAP",
-                                                "price": float(t.get("open_px") or t.get("close_px") or 0.0),
-                                                "atr": 0.0,
-                                                "calculus": item.get("calculus", {})
-                                            }
-                                            snap = build_signal_snapshot(f_mock, data_dir=DATA_DIR)
-                                            break
-                            except Exception:
-                                pass
+                    snap = (t.get("entry_snapshot")
+                            or t.get("signal_snapshot")
+                            or _match_snapshot(journal_by_inst, inst, t.get("open_time"), raw_side))
                     observability = classify_snapshot_observability(snap)
                     closed_trades.append({
                         "inst": inst,
@@ -520,6 +507,18 @@ def load_closed_trades(start_time_override: str | None = None):
                         "exit_reason": reason,
                         "snapshot_observability": observability,
                         "entry_snapshot": prune_snapshot(snap),
+                        # ── 2026-10：离场证据与决策来源（台账 join 进来的新字段）──
+                        # `exit_cause` 是**机制确认**的机器标签；`exit_reason_source`
+                        # 说明这条标签是事实还是交易所侧推断（`inferred`）。
+                        # `mfe_r`/`mae_r` 需要初始止损距离当 1R 分母，取不到时为 None。
+                        "exit_cause": str(t.get("exit_cause") or ""),
+                        "exit_reason_source": str(t.get("exit_reason_source") or ""),
+                        "mfe_pct": t.get("mfe_pct"),
+                        "mae_pct": t.get("mae_pct"),
+                        "mfe_r": t.get("mfe_r"),
+                        "mae_r": t.get("mae_r"),
+                        "decision_source": str(t.get("decision_source") or ""),
+                        "adopted_role": t.get("adopted_role"),
                     })
         except Exception as e:
             log_msg(f"读取交易台账异常: {e}")
@@ -546,22 +545,26 @@ def resolve_memory_update(change_status: str, proposed_memory: Any, existing_mem
     return status, list(existing_memory if preserve else proposed), preserve
 
 
-def merge_memory_with_constitution(change_status: str, proposed_texts: List[str],
-                                   existing_lessons: List[Dict[str, Any]]) -> Tuple[List[str], List[str]]:
-    """基准心法宪法级保护（2026-09-10，落实「NO_CHANGE 全量保留」纪律的推广形态）。
+def merge_lesson_texts(change_status: str, proposed_texts: List[str],
+                       existing_lessons: List[Dict[str, Any]]) -> List[str]:
+    """心法合并（2026-10 起**只做去重与追加**，不再有宪法级保护）。
 
-    - ADD 为纯追加：现有全部条目保留 + 新增条目去重后置；
-    - REVISE / INVALIDATE：模型可整理非基准战术层，但任何被省略的基准心法
-      （is_baseline）由宿主原样补回——大模型复盘无权物理删除宪法级记忆，
-      证伪基准必须走 diagnosis_insights → 人工/管理端复核通道；
-    - 返回 (最终清单, 被强制补回的基准心法)。
+    历史：本函数原名 `merge_memory_with_constitution`，会把模型省略的"基准心法"
+    （`is_baseline`）原样补回，因为它们是宪法级、大模型无权删除。用户已要求系统
+    不再预设任何心法，且基准机制整体拆除，故"补回"这一半逻辑没有对象了 ——
+    函数只保留仍然需要的部分：
+
+    - **ADD 为纯追加**：现有全部条目保留 + 新增条目去重后置；
+    - 其余状态（REVISE/INVALIDATE/NO_CHANGE）：采用模型给出的清单（已去重）；
+      被省略的启用条目由 `_review_candidates` 落成**停用存档**，不会蒸发。
+
+    ⚠️ 这里**不再有任何**"宿主强制补回"的行为 —— 那是基准机制的遗迹。
     """
     def _text(lesson):
         return _coerce_display_str(lesson.get("rule_text") or "")
 
     enabled = [l for l in (existing_lessons or []) if isinstance(l, dict) and l.get("enabled")]
     existing_texts = [t for t in (_text(l) for l in enabled) if t]
-    baseline_texts = [t for t in (_text(l) for l in enabled if l.get("is_baseline")) if t]
 
     final: List[str] = []
     for p in proposed_texts or []:
@@ -570,8 +573,7 @@ def merge_memory_with_constitution(change_status: str, proposed_texts: List[str]
             final.append(t)
     if change_status == "ADD":
         final = existing_texts + [t for t in final if t not in existing_texts]
-    readded = [t for t in baseline_texts if t not in final]
-    return final + readded, readded
+    return final
 
 
 def _compute_multi_dimensional_breakdown(closed_trades: List[Dict[str, Any]]) -> str:
@@ -586,7 +588,14 @@ def _compute_multi_dimensional_breakdown(closed_trades: List[Dict[str, Any]]) ->
     total_fee = 0.0
 
     for t in closed_trades:
-        sym = str(t.get("symbol") or t.get("instId") or "UNKNOWN")
+        # ⚠️ 2026-10 修复：键名必须 `inst` 优先。
+        # `load_closed_trades` 产出的条目用的是 `inst`（台账字段），而旧实现先取
+        # `symbol`/`instId` —— 两者在台账行里**都不存在**，于是**全部交易塌成一个
+        # `UNKNOWN` 桶**。实测发给模型的提示词里就一行：
+        #     `• UNKNOWN: 37笔 (胜16/负21 | 胜率 43.2% | 净利 -349.97 USDT)`
+        # —— 逐标的归因（复盘最有行动价值的一维）被整块抹平，而 `asset_multipliers`
+        # 又完全由模型据此定夺、直接乘在真实保证金上。
+        sym = str(t.get("inst") or t.get("symbol") or t.get("instId") or "UNKNOWN")
         side = str(t.get("side") or "").lower()
         d_key = "short" if ("short" in side or "空" in side) else "long"
         pnl = float(t.get("net_pnl") or 0.0)
@@ -1031,6 +1040,18 @@ def derive_deterministic_insights(closed_trades: List[Dict[str, Any]],
             f"{_DETERMINISTIC_PREFIX} 数理快照可观测性：{observable}/{snapshot_audit.get('total')} "
             f"笔含完整动力学字段（不可观测的样本不得用于因果归因）。")
 
+    # 离场质量（2026-10 方向 3）：回答"这笔本来能赚多少、吐回去多少"。
+    # 这是确定性事实（全部由台账＋平仓证据算出），故放进兜底认知 —— 即便大模型
+    # 全链失败，用户仍能看到回吐/兑现率，而不是"本轮没有产出任何新认知"。
+    try:
+        from scripts.evolution.exit_quality import (analyze_exit_quality,
+                                                    render_exit_quality_brief)
+        _exit_quality = analyze_exit_quality(closed_trades=trades)
+        insights.append(f"{_DETERMINISTIC_PREFIX} " +
+                        render_exit_quality_brief(_exit_quality).replace("\n", " "))
+    except Exception as _eq_exc:
+        log_msg(f"离场质量分析跳过（不影响复盘）: {_eq_exc}")
+
     return insights
 
 
@@ -1072,7 +1093,6 @@ def run_self_evolution(force: bool = False):
 
     # 宿主确定性数理快照可观测性审计（写进报告，结论不依赖模型自数 null）
     snapshot_audit = audit_snapshot_observability(closed_trades)
-    constitution_readded: List[str] = []
     log_msg("🔬 数理快照可观测性审计: " + render_observability_brief(snapshot_audit))
 
     # 2. Call LLM for Cognitive Review & Memory Overwriting
@@ -1173,17 +1193,30 @@ def run_self_evolution(force: bool = False):
     )
 
     retired_lessons: List[str] = []
-    (constitution_readded, preserve_existing_memory, retired_lessons) = apply_memory_review(
+    (preserve_existing_memory, retired_lessons) = apply_memory_review(
         change_status=change_status,
-        constitution_readded=constitution_readded,
         log_msg=log_msg,
         long_term_memory=long_term_memory,
         memory_service=memory_service,
         memory_snapshot=memory_snapshot,
-        merge_memory_with_constitution=merge_memory_with_constitution,
+        merge_lesson_texts=merge_lesson_texts,
         preserve_existing_memory=preserve_existing_memory,
         retired_lessons=retired_lessons,
         total_trades=total_trades    )
+
+    # 心法健康度重算（2026-10 方向 4）：把 `health_score` 从"建档时写死 90.0、
+    # 此后再没人读"变成**承重件** —— 用本轮平仓证据给每条心法按"适用人群"打分，
+    # 并按需归档（停用留痕、绝不删除、绝不触碰基准心法）。走 CAS，失败只记日志。
+    #
+    # 为什么放在 `apply_memory_review` **之后**：本轮新学的心法要先落库，才能在
+    # 同一轮里被评估到；而重算只改分数/状态，不会让新心法绕过宪法门禁。
+    try:
+        _health_result = memory_service.refresh_health_from_evidence(
+            closed_trades=closed_trades, log_msg=log_msg)
+        if _health_result.get("status") == "error":
+            log_msg(f"⚠️ 心法健康度未更新：{_health_result.get('reason')}")
+    except Exception as _health_exc:
+        log_msg(f"心法健康度重算跳过（不影响复盘）: {_health_exc}")
 
     # Keep the legacy markdown mirror in lock-step with the authority so the
     # public dashboard can never freeze on a hand-edited snapshot.
@@ -1211,7 +1244,6 @@ def run_self_evolution(force: bool = False):
     report_payload = build_evolution_report(
         actions_taken=actions_taken,
         change_status=change_status,
-        constitution_readded=constitution_readded,
         insights=insights,
         ledger_revision=ledger_revision,
         llm_review=llm_review,

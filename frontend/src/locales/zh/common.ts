@@ -54,6 +54,8 @@ export const zhCommon = {
     pageNav: '分页导航',
     prevPage: '上一页',
     nextPage: '下一页',
+    prev: '上一步',
+    next: '下一步',
     remove: '移除',
     restore: '恢复',
     load: '载入',
@@ -134,9 +136,9 @@ export const zhCommon = {
   brand: {
     name: 'AstraQuant',
     nameEn: 'AstraQuant',
-    tagline: 'AI 主脑全自动永续波段终端',
+    tagline: '多模型交叉质询 · 7层量化因子验真 · 确定性物理风控的 OKX 永续自主交易系统',
     official: 'Official',
-    license: 'MIT License',
+    license: 'AGPL-3.0 + Commons Clause',
   },
   // 批 39：全角标点曾写死在模板里（`}}：{{`、`（{{ ... }}）`），
   // 英文界面因此出现全角冒号/括号。改为按语言取值：中文用全角，

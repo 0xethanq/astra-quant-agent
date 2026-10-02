@@ -14,7 +14,7 @@ Environment=HOME=/home/astra
 Environment=PATH=/opt/astra-quant-trader/.venv/bin:/usr/local/bin:/usr/bin:/bin
 WorkingDirectory=/opt/astra-quant-trader
 EnvironmentFile=/opt/astra-quant-trader/.env
-ExecStart=/usr/bin/python3 -m astra_gateway.worker
+ExecStart=/usr/bin/env python3 -m astra_gateway.worker
 Restart=always
 RestartSec=5
 NoNewPrivileges=true

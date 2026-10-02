@@ -29,7 +29,7 @@ class BacktestEngineTests(unittest.TestCase):
         self.assertEqual(res.total_trades, 0)
         self.assertEqual(res.initial_equity, 10000.0)
 
-    def test_interceptor_filtering_and_risk_metrics(self):
+    def test_gatekeeper_filtering_and_risk_metrics(self):
         # Construct synthetic trend series
         candles = []
         base = 60000.0
@@ -54,7 +54,7 @@ class BacktestEngineTests(unittest.TestCase):
                 "rr": 2.5,
                 "atr": 100.0,
             },
-            # Signal 2: Low confidence (< 0.70) -> Gatekeeper must block
+            # Signal 2: Low confidence (< 0.70) -> 回测自带闸门必须过滤
             {
                 "timestamp": "2026-09-01T12:00:00Z",
                 "action": "BUY",

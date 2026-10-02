@@ -95,7 +95,10 @@ test('所有确认短语/凭证类弹窗必须声明 initial-focus', () => {
     }
   }
 
-  assert.ok(seen.length >= 6, `识别到的确认类弹窗过少（${seen.length}），疑似判据失效`);
+  // 下限是"防止判据失效导致一个都没识别到"的防空转护栏。
+  // 2026-10：InterceptorsPage（新建插件 + 源码编辑器两个弹窗）随策略插件系统删除，
+  // 识别数由 6 降为 4。
+  assert.ok(seen.length >= 4, `识别到的确认类弹窗过少（${seen.length}），疑似判据失效`);
   assert.deepEqual(bad, [], `以下弹窗键盘用户打开后还要多按一次 Tab：\n  ${bad.join('\n  ')}`);
 });
 
@@ -107,7 +110,9 @@ test('initial-focus 是显式例外，不得大面积铺开', () => {
       if (/initial-focus=/.test(m[1])) declared += 1;
     }
   }
-  assert.equal(declared, 7, `initial-focus 使用处应为 7（实测 ${declared}）；若确需增减请同步复核本条与上一条`);
+  // 2026-10：InterceptorsPage 的两个弹窗（新建插件 / 源码编辑器）随策略插件系统
+  // 整套裁撤而删除 ⇒ 使用处由 7 降为 5，与上一条（识别数 ≥4）一致。
+  assert.equal(declared, 5, `initial-focus 使用处应为 5（实测 ${declared}）；若确需增减请同步复核本条与上一条`);
 });
 
 test('闸自检：能准确拦截漏声明 initial-focus 的确认弹窗', () => {

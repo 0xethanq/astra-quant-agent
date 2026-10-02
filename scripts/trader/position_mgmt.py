@@ -96,6 +96,22 @@ def execute_ai_position_management(real_pos_dict, trackers, timestamp_full, exec
             closed, close_detail = close_position_confirmed(inst_id, pos_side, float(position.get("pos", 0) or 0), venue=pos_venue)
             if closed:
                 executed_actions.append(f"[{name}] AI高置信度整仓退出 ({pos_venue.upper()}): {reason}")
+                tr = trackers.get(f"{inst_id}_{pos_side}")
+                if tr and isinstance(tr, dict):
+                    try:
+                        from scripts.trader.close_evidence import build_close_evidence, append_close_evidence
+                        from astra_backend.dashboard_payload.readers import DATA_DIR
+                        append_close_evidence(
+                            os.path.join(DATA_DIR, "closed_trade_evidence.json"),
+                            build_close_evidence(
+                                tracker=tr,
+                                position_key=f"{inst_id}_{pos_side}",
+                                exit_cause="ai_close",
+                                closed_at=timestamp_full,
+                            )
+                        )
+                    except Exception:
+                        pass
                 trackers.pop(f"{inst_id}_{pos_side}", None)
             else:
                 executed_actions.append(f"[{name}] AI平仓请求未获交易所确认，仓位保持不变: {close_detail}")

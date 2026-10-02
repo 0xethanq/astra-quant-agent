@@ -452,3 +452,16 @@ class PolicyRestoreRequest(BaseModel):
                 raise ValueError("policy_hash 必须为 6~64 位的字母、数字、下划线或短横线")
             data["policy_hash"] = val
         return data
+
+
+class SystemSetupRequest(BaseModel):
+    okx_env: str = Field(default="demo")
+    okx_api_key: str = Field(default="")
+    okx_secret_key: str = Field(default="")
+    okx_passphrase: str = Field(default="")
+    llm_base_url: str = Field(default="https://api.deepseek.com/v1")
+    llm_api_key: str = Field(default="")
+    llm_model: str = Field(default="deepseek-chat")
+    llm_reasoning_effort: str = Field(default="high")
+    risk_profile: str = Field(default="balanced")
+    admin_password: str = Field(default="")
