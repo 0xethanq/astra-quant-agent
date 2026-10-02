@@ -136,7 +136,7 @@ export const zhCommon = {
   brand: {
     name: 'AstraQuant',
     nameEn: 'AstraQuant',
-    tagline: '多模型交叉质询 · 7层量化因子验真 · 确定性物理风控的 OKX 永续自主交易系统',
+    tagline: '机构级自主量化交易操作系统（多模型对抗质询 · 7层微结构微积分 · 确定性物理风控）',
     official: 'Official',
     license: 'AGPL-3.0 + Commons Clause',
   },

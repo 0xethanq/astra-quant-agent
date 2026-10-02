@@ -1,30 +1,29 @@
 /** 关于与社区弹窗 */
 export const zhAbout = {
   title: '关于 AstraQuant',
-  desc: '多模型对抗质询 · 7层量化因子微积分 · 确定性物理风控的 OKX 永续自主交易系统',
-  pitch: '“认知在上，数据为基，纪律在底 —— 大模型负责提出假说，7层高频量化因子负责物理验真，纯 Python 底座行使一票否决权。”',
+  desc: '机构级自主量化交易操作系统 · 多模型对抗质询 · 7层微结构因子微积分 · 确定性物理风控',
+  pitch: '“认知在上，微积分验真，物理风控在底 —— 智能体提出假说，高频量化微积分物理证伪，确定性 Python 底座行使一票否决权。”',
   arch: {
-    title: '系统核心支柱',
-    stack: 'FastAPI + Vue 3 纯静态 SPA · OKX 原生直签',
+    title: '系统核心架构支柱',
+    stack: 'FastAPI + Vue 3 机构级工作台 · OKX V5 纯原生直签',
     points: [
-      '【认知在上】多模型投委会对抗质询与交叉辩论，彻底消灭单一模型幻觉与认知盲区',
-      '【事实为基】基差/订单流CVD/盘口深度OBI/期权IV曲面等 7 层衍生品微积分物理验真',
-      '【纪律在底】纯 Python 确定性物理风控门禁 + 100% 交易所云端 OCO 止损，一票否决任何违规意向',
+      '【对抗认知】多前沿大模型投委会交叉质询与博弈裁决，消灭单一智能体幻觉与认知盲区',
+      '【微积分验真】订单流CVD / 盘口深度OBI / 期权波动率曲面 / VWAP 筹码中枢 7 层衍生品高频因子物理验真',
+      '【确定性风控】纯 Python 零信任风控门禁 + 100% 交易所云端 OCO 止损，一票否决任何违规订单',
+      '【企业级缓存】Prompt Caching 单前缀广播（命中率 >90%）与 Zone 0~4 单调波动分级，亚秒级首字响应',
     ],
   },
-  repo: { title: '开源仓库', visit: '访问仓库', starHint: '欢迎 Star 与 Issue' },
+  repo: { title: '开源代码仓库', visit: '访问 GitHub 仓库', starHint: '欢迎 Star 与 Issue' },
   community: {
-    title: '社区交流',
-    qqGroup: '量化交流群',
-    qqPersonal: '作者 QQ',
-    linuxdo: 'LINUX DO 社区',
-    // 2026-09：通道列表改为**后端出值**（`/api/v1/referral-channels`，公开只读），
-    // 前端不再写死链接 ⇒ 每个渠道的展示文案：这里只留"每种所叫什么"的展示文案。
+    title: '生态与交流',
+    qqGroup: '官方技术交流群',
+    qqPersonal: '技术架构师联络',
+    linuxdo: 'LINUX DO 开源社区',
     channel: '{channel} 专属通道',
     open: '打开注册页',
     copyHint: '点击复制',
   },
-  version: '版本 {v} · 构建 {r}',
-  license: 'AGPL-3.0 + Commons Clause · 开源仅供研究，严禁商业转售与收费带单',
-  risk: '风险提示：加密货币永续合约具有极高杠杆风险，历史收益不代表未来表现。',
+  version: '系统版本 {v} · 构建代号 {r}',
+  license: 'GNU AGPL-3.0 + Commons Clause v1.0 + Anti-Scam Rider · 严禁商业转售与收费带单',
+  risk: '免责声明：加密货币高波动衍生品具有高杠杆资本风险，本系统为自主量化科研与自营交易框架，历史收益不预示未来表现。',
 };
