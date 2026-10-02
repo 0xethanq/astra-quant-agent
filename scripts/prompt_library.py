@@ -130,10 +130,10 @@ TEMPLATE_VARIABLES_METADATA = [
     },
     {
         "key": "market_matrix",
-        "label": "标的行情数理矩阵",
+        "label": "标的7梯队量化因子矩阵",
         "category": "行情数据",
-        "description": "注入标的池全部币种K线、现价、盘口买卖价、聪明钱流向、1H三大数理基石硬证据(v/a/j/I/E/A/VaR)",
-        "sample": "【BTC (BTC-USDT-SWAP)】| 现价: 77575 | 4H宏观大势=4H_MACRO_BULL\n- 1H三大数理基石硬证据: 1H:v=+0.08,a=+0.42...",
+        "description": "实时注入标的池全部币种的7梯队可观测量化因子（T0衍生品费率与OI象限、T0.5订单流CVD与Taker买卖比、T1盘口OBI与点差、T1.5期权偏度、T2期限基差、T3筹码VWAP与POC、T4动量MACD与RSI）。数据缺失时明示说明，绝不用0冒充。",
+        "sample": "【BTC (BTC-USDT-SWAP)】| 现价: 68500.0 | 4H宏观大势=4H_MACRO_BULL\n- T0 衍生品: 费率=0.0042% (正常), OI=12.5亿U (+2.8%), 四象限=增仓上行, 精英多空比=1.42\n- T0.5 订单流: 1H CVD=+850万U, Taker买卖比=1.28, 量价背离=无\n- T1 盘口: OBI=+32.5%, 深度比Top20=1.45, 点差=0.01%\n- T3 筹码: 24H VWAP=68120 (+0.56%), VAH=68900 / VAL=67800, POC=68250\n- T4 动量: 1H MACD柱=+48.2 (加速度+12.5), RSI(14)=62.4, ADX=28.5 (强趋势)",
     },
     {
         "key": "account_positions",
@@ -147,7 +147,7 @@ TEMPLATE_VARIABLES_METADATA = [
         "label": "在途未成交挂单",
         "category": "账户敞口",
         "description": "注入当前在途未成交的 Maker 限价挂单、买卖方向、价格、保证金及附带的云端OCO止盈止损",
-        "sample": "- [挂单ID: 38790...] LINK-USDT-SWAP | 限价买多 保证金 54.25U @ 10.85 | 附带云端止盈: 12.00 / 止损: 10.30",
+        "sample": "- [挂单ID: 38790...] ETH-USDT-SWAP | 限价买多 保证金 120.00U @ 3250.0 | 附带云端止盈: 3450.0 / 止损: 3180.0",
     },
     {
         "key": "account_balance",
@@ -175,7 +175,7 @@ TEMPLATE_VARIABLES_METADATA = [
         "label": "监控标的列表",
         "category": "系统环境",
         "description": "注入当前系统跟踪并推演的加密货币标的列表",
-        "sample": "BTC,ETH,SOL,DOGE,SUI,LINK",
+        "sample": "BTC,ETH,SOL,XRP,DOGE,ARB",
     },
     {
         "key": "strategy_version",

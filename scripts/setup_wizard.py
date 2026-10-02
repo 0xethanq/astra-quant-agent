@@ -254,6 +254,40 @@ def run_wizard(non_interactive: bool = False) -> None:
 
     # 写入文件
     update_env_keys(updates)
+    # 同步底层模型配置库 llm_models.json，杜绝环境变量与后台配置错位
+    if "LLM_MODEL" in updates:
+        try:
+            import json
+            cfg_file = ROOT / "data" / "llm_models.json"
+            if cfg_file.exists():
+                cfg = json.loads(cfg_file.read_text(encoding="utf-8"))
+                new_mid = updates["LLM_MODEL"]
+                new_base = updates.get("LLM_BASE_URL", "").rstrip("/")
+                new_key = updates.get("LLM_API_KEY", "")
+                cfg["active_model_id"] = new_mid
+                cfg["active_provider_id"] = "custom"
+                models = cfg.setdefault("models", [])
+                m = next((item for item in models if item.get("id") == new_mid), None)
+                if m:
+                    if new_base:
+                        m["base_url"] = new_base
+                    if new_key:
+                        m["api_key"] = new_key
+                else:
+                    models.append({
+                        "id": new_mid,
+                        "name": new_mid,
+                        "provider_id": "custom",
+                        "provider_name": "自定义",
+                        "base_url": new_base,
+                        "api_key": new_key,
+                        "api_format": "openai_chat",
+                        "reasoning_type": "auto",
+                        "reasoning_effort": updates.get("LLM_REASONING_EFFORT", "high"),
+                    })
+                cfg_file.write_text(json.dumps(cfg, indent=2, ensure_ascii=False), encoding="utf-8")
+        except Exception:
+            pass
 
     print(f"\n{GREEN}{BOLD}" + "=" * 72)
     print("   ✓ 配置完成！.env 已经成功生成并加固权限 (600)")

@@ -164,6 +164,12 @@ LEGACY_ALLOWED: "dict[str, str]" = {
         "默认管理员初始口令示例 `R20admin888888` 包含 R20 历史前缀。",
     "scripts/setup_wizard.py":
         "向导推荐的默认管理员口令 `R20admin888888` 包含 R20 历史前缀。",
+    "astra_backend/app.py":
+        "中间件平滑兼容旧客户端请求头 `X-R20-Session`，防止系统升级期间的会话瞬断。",
+    "frontend/src/stores/auth.ts":
+        "登录状态初始化平滑迁移 localStorage 中旧的 `r20.admin.session.*` 历史存储键，防止升级被踢出登录。",
+    "frontend/tests/authStore.test.mjs":
+        "测试用例断言包含 `r20.admin.session.*` 的平滑迁移逻辑与升级兼容性。",
 }
 
 #: 判据一的允许表：**路径 → 为什么这里必须写出被禁串**。

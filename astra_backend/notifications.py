@@ -310,6 +310,6 @@ def test_channel(channel: str) -> dict[str, str]:
     """Strictly test only the selected channel; another channel cannot mask failure."""
     env = _env()
     timestamp = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).strftime("%Y-%m-%d %H:%M:%S")
-    ok, detail = send_channel(channel, f"【AstraQuant】{timestamp}\n🔔 {channel.upper()} 通知测试：指定通道连接正常。", env)
+    ok, detail = send_channel(channel, f"【AstraQuant】{timestamp}\n[通道测试] {channel.upper()} 通知测试：指定通道连接正常。", env)
     prefix = "accepted:" if ok else "failed:"
     return {channel: f"{prefix} {detail}"}

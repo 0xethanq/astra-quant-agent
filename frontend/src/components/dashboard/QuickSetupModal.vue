@@ -35,11 +35,10 @@ const okxPassphrase = ref('');
 const testingOkx = ref(false);
 const okxTestResult = ref<{ ok: boolean; msg?: string; latency?: number } | null>(null);
 
-// Step 2: LLM
-const llmProvider = ref<'deepseek' | 'openrouter' | 'openai' | 'siliconflow' | 'custom'>('deepseek');
+// Step 2: LLM (纯自定义供应商模式)
+const customBaseUrl = ref('');
+const customModel = ref('');
 const llmApiKey = ref('');
-const customBaseUrl = ref('https://api.openai.com/v1');
-const customModel = ref('gpt-4o');
 const testingLlm = ref(false);
 const llmTestResult = ref<{ ok: boolean; msg?: string } | null>(null);
 
@@ -52,30 +51,6 @@ const saveError = ref('');
 const saveSuccess = ref(false);
 
 const derivedLlmConfig = computed(() => {
-  if (llmProvider.value === 'deepseek') {
-    return {
-      baseUrl: 'https://api.deepseek.com/v1',
-      model: 'deepseek-chat',
-    };
-  }
-  if (llmProvider.value === 'openrouter') {
-    return {
-      baseUrl: 'https://openrouter.ai/api/v1',
-      model: 'deepseek/deepseek-chat',
-    };
-  }
-  if (llmProvider.value === 'openai') {
-    return {
-      baseUrl: 'https://api.openai.com/v1',
-      model: 'gpt-4o',
-    };
-  }
-  if (llmProvider.value === 'siliconflow') {
-    return {
-      baseUrl: 'https://api.siliconflow.cn/v1',
-      model: 'deepseek-ai/DeepSeek-V3',
-    };
-  }
   return {
     baseUrl: customBaseUrl.value.trim() || 'https://api.openai.com/v1',
     model: customModel.value.trim() || 'gpt-4o',
@@ -317,31 +292,9 @@ async function handleApply() {
         </div>
       </div>
 
-      <!-- Step 2: LLM -->
+      <!-- Step 2: LLM (纯自定义配置) -->
       <div v-show="currentStep === 2" class="space-y-3">
-        <div>
-          <label class="t-label mb-1.5 block">{{ t('dash.firstRun.llmProvider') }}</label>
-          <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            <button
-              v-for="p in [
-                { id: 'deepseek', name: 'DeepSeek' },
-                { id: 'openrouter', name: 'OpenRouter' },
-                { id: 'openai', name: 'OpenAI' },
-                { id: 'siliconflow', name: 'SiliconFlow' },
-                { id: 'custom', name: 'Custom' },
-              ]"
-              :key="p.id"
-              type="button"
-              class="rounded-lg border p-2 text-center text-xs font-medium transition-colors cursor-pointer"
-              :class="llmProvider === p.id ? 'border-sky-500/40 bg-sky-500/10 text-sky-400 font-semibold' : 'border-[var(--line-2)] hover:bg-[var(--surface-2)] text-[var(--ink-2)]'"
-              @click="llmProvider = p.id as any"
-            >
-              {{ p.name }}
-            </button>
-          </div>
-        </div>
-
-        <div v-if="llmProvider === 'custom'" class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <div>
             <label class="t-label mb-1 block" for="wiz-custom-url">Base URL</label>
             <input

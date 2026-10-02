@@ -639,11 +639,11 @@ class FormatMessageTests(unittest.TestCase):
         self.assertNotIn("【AstraQuant】前缀", out)
 
     def test_the_iso_t_separator_is_replaced_and_truncated(self):
-        self.assertIn("⏱️ 时间：2026-09-20 10:11:12", WKR.format_message(self._row()))
+        self.assertIn("时间：2026-09-20 10:11:12", WKR.format_message(self._row()))
 
     def test_a_plain_timestamp_is_kept_as_is(self):
         out = WKR.format_message(self._row(created_at="2026-09-20 10:11:12"))
-        self.assertIn("⏱️ 时间：2026-09-20 10:11:12", out)
+        self.assertIn("时间：2026-09-20 10:11:12", out)
 
     def test_the_body_is_stripped(self):
         out = WKR.format_message(self._row(message="  BTC 多单  "))
@@ -652,7 +652,7 @@ class FormatMessageTests(unittest.TestCase):
     def test_missing_fields_do_not_raise(self):
         out = WKR.format_message({})
         self.assertIn("【AstraQuant】", out)
-        self.assertIn("⏱️ 时间：", out)
+        self.assertIn("时间：", out)
 
     def test_the_separator_is_present(self):
         self.assertIn("━━━━━━━━━━━━━━", WKR.format_message(self._row()))

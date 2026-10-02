@@ -373,17 +373,17 @@ def scan_risk_gates_and_ai_brain(*,
                     _cf = int(_hf.get("consecutive_failures", 0) or 0)
                     _warn = f"本轮AI推理失败（连续{_cf}轮｜{_hf.get('last_error') or '未知原因'}），禁止复用旧持仓指令"
                     if _cf >= 3:
-                        _warn = "🔴 AI决策链连续" + str(_cf) + "轮失败——非并发跳过，模型/密钥/额度需人工核查！" + _warn
+                        _warn = "[告警] AI决策链连续" + str(_cf) + "轮失败——非并发跳过，模型/密钥/额度需人工核查！" + _warn
                     executed_actions.append(_warn)
                     if _cf >= 3:
-                        print(f"[AI Health] 🔴 连续 {_cf} 轮批次决策失败，最近错误: {_hf.get('last_error')}")
+                        print(f"[AI Health] [告警] 连续 {_cf} 轮批次决策失败，最近错误: {_hf.get('last_error')}")
                 else:
                     executed_actions.append("本轮AI推理并发跳过（旧指令不违规复用），禁止复用旧持仓指令")
         except Exception as e:
             print(f"[AI Brain Batch Scan Warning] {e}")
     elif not cb_active and session_restricted:
         # 窗口外：必须留下**一条可检索**的动作行，否则"这一轮为什么什么都没做"在日志里无从解释
-        executed_actions.append("🕒 非交易时段：跳过 AI 大模型决策与新开仓（机械风控照常）")
+        executed_actions.append("[非交易时段] 跳过 AI 大模型决策与新开仓（机械风控照常）")
 
     # 审计 P2-11：标的池不可信（文件损坏/为空/条目非法）时，旧实现会拿 10 币出厂默认
     # 清单继续开新仓 —— 管理员删掉的标的会因"文件坏了"重新被交易。这里 fail-closed：

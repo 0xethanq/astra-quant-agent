@@ -7,7 +7,7 @@
 ### Institutional-Grade Autonomous Quant Trading OS & Multi-Agent Architecture
 #### Adversarial Multi-Model Committee · 7-Tier Derivative Microstructure Calculus · Zero-Trust Deterministic Risk Engine
 
-[![Release](https://img.shields.io/badge/Release-v8.5.0-00E599.svg?style=flat-square)](https://github.com/0xethanq/astra-quant-agent/releases)
+[![Release](https://img.shields.io/badge/Release-v8.5.1-00E599.svg?style=flat-square)](https://github.com/0xethanq/astra-quant-agent/releases)
 [![Website](https://img.shields.io/badge/Site-www.astraquant.tech-6E56CF.svg?style=flat-square)](https://www.astraquant.tech)
 [![License](https://img.shields.io/badge/License-AGPLv3%20%2B%20Commons%20Clause-blue.svg?style=flat-square)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.11-3776AB.svg?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
@@ -281,22 +281,32 @@ Systemd production service units: `deploy/astra-quant.service` and `deploy/astra
 ---
 
 <a id="code-map"></a>
-## 🗂 Code Map
+## 🗂 Code map
 
 > ⚠️ This repository has **never contained an `OPENCODE.md`**. Authoritative architectural entry points:
 
 | Domain | Specification Document | Key Scope |
 |---|---|---|
 | **Architecture Overview** | [`docs/STRUCTURE_OVERVIEW.md`](docs/STRUCTURE_OVERVIEW.md) | Layered architecture and subsystem directory layout |
-| **Backend Layering** | [`astra_backend/README.md`](astra_backend/README.md) | L0 Facade / L1 Wiring / L2 Routes / L3 Domain / L4 Subpackages |
-| **Runtime Scripts & Daemons**| [`scripts/README.md`](scripts/README.md) | 38 root-level scripts, daemons, and scheduling mechanics |
+| **Backend Layering** | [`astra_backend/README.md`](astra_backend/README.md) | Backend layering (L0 Facade / L1 Wiring / L2 Routes / L3 Domain / L4 Subpackages) |
+| **Runtime Scripts & Daemons**| [`scripts/README.md`](scripts/README.md) | Runtime scripts & daemons (38 root-level scripts, daemons, and scheduling mechanics) |
 | **Prompt Engineering** | [`docs/PROMPT_GUIDE.md`](docs/PROMPT_GUIDE.md) | JSON-only prompt library, 8 semantic slots, council doctrines |
 | **Failure Semantics** | [`docs/FAILURE_SEMANTICS.md`](docs/FAILURE_SEMANTICS.md) | Real-world failure post-mortems and defensive invariants |
 | **Beijing Time Contract** | [`docs/BEIJING_TIME_CONTRACT.md`](docs/BEIJING_TIME_CONTRACT.md) | Unified UTC+8 financial accounting and settlement foundation |
-| **Frontend Architecture** | [`frontend/src/components/admin/README.md`](frontend/src/components/admin/README.md) | Vue 3 components, composables, and state stores |
+| **Frontend Architecture** | [`frontend/src/components/admin/README.md`](frontend/src/components/admin/README.md) | Frontend components & state (Vue 3, composables, stores) |
 | **Standalone Deployment** | [`STANDALONE.md`](STANDALONE.md) | Environment configuration and host-native execution |
 | **Disaster Recovery** | [`RECOVERY_GUIDE.md`](RECOVERY_GUIDE.md) | Emergency liquidation and state recovery playbooks |
 | **Observability** | [`deploy/observability/README.md`](deploy/observability/README.md) | Prometheus metrics scraping and Grafana dashboards |
+
+**Gates watching this repository:**
+
+| Gate | What it prevents |
+|---|---|
+| `tests/audit/test_directory_docs_current.py` | A module existing without being registered in its `__init__.py` **and** its `README.md` |
+| `tests/core/test_readme_baseline_numbers.py` | Documented test counts rotting away from reality |
+| `tests/audit/test_doc_paths_are_committed.py` | Documentation pointing at paths that do not exist or are not committed |
+| `tests/audit/test_brand_strings_are_consistent.py` | Brand / namespace drift that would break live production data |
+| `tests/audit/test_deployment_scripts_are_sound.py` | Startup or Docker scripts that cannot actually start the project |
 
 ---
 

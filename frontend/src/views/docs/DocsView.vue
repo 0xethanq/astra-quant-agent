@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * DocsView.vue · AstraQuant 技术与量化策略文档中心 (v8.5.0)
+ * DocsView.vue · AstraQuant 技术与量化策略文档中心 (v8.5.1)
  * 包含：双轨工作台骨架、目录大纲索引树 (TOC) 与平滑滚动侦测、全功能架构透视、
  * 7 梯队因子与硬防线技术规范、Prompt Caching 提示词缓存体系、AGPL-3.0 + Commons Clause 许可说明
  */

@@ -7,7 +7,7 @@
 ### 机构级自主量化交易操作系统与多智能体博弈决策架构
 #### 对冲基金多模型博弈投委会 · 7层衍生品微结构微积分 · 确定性物理风控硬防线
 
-[![Release](https://img.shields.io/badge/Release-v8.5.0-00E599.svg?style=flat-square)](https://github.com/0xethanq/astra-quant-agent/releases)
+[![Release](https://img.shields.io/badge/Release-v8.5.1-00E599.svg?style=flat-square)](https://github.com/0xethanq/astra-quant-agent/releases)
 [![Website](https://img.shields.io/badge/Site-www.astraquant.tech-6E56CF.svg?style=flat-square)](https://www.astraquant.tech)
 [![License](https://img.shields.io/badge/License-AGPLv3%20%2B%20Commons%20Clause-blue.svg?style=flat-square)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.11-3776AB.svg?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
@@ -296,6 +296,16 @@ Windows 环境提供 `start.ps1`；生产系统级常驻服务模板参考 `depl
 | **独立运行与配置** | [`STANDALONE.md`](STANDALONE.md) | 环境变量参考与单机运行说明 |
 | **应急与故障恢复** | [`RECOVERY_GUIDE.md`](RECOVERY_GUIDE.md) | 紧急止损排障与灾备恢复方案 |
 | **可观测性运维** | [`deploy/observability/README.md`](deploy/observability/README.md) | Prometheus 与 Grafana 监控配置 |
+
+**盯着本仓的核心质量门禁：**
+
+| 门禁 | 它防的是什么 |
+|---|---|
+| `tests/audit/test_directory_docs_current.py` | 新增模块未登记进 `__init__.py` 或对应 `README.md` |
+| `tests/core/test_readme_baseline_numbers.py` | 文档里的测试基线数字失真腐烂 |
+| `tests/audit/test_doc_paths_are_committed.py` | 文档指向未提交或不存在的路径 |
+| `tests/audit/test_brand_strings_are_consistent.py` | 品牌与命名空间漂移 |
+| `tests/audit/test_deployment_scripts_are_sound.py` | 交付物与启动脚本异常 |
 
 ---
 

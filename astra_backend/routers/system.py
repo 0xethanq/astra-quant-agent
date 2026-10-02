@@ -593,6 +593,73 @@ def system_setup_apply(
                 pass
 
     update_env(env_updates)
+    if payload.llm_model:
+        try:
+            cfg = init_llm_providers()
+            new_mid = payload.llm_model.strip()
+            new_base = payload.llm_base_url.strip().rstrip("/") if payload.llm_base_url else ""
+            new_key = payload.llm_api_key.strip() if payload.llm_api_key else ""
+            new_effort = payload.llm_reasoning_effort.strip() if payload.llm_reasoning_effort else "high"
+
+            providers = cfg.setdefault("providers", [])
+            p_match = None
+            if new_base:
+                p_match = next((p for p in providers if (p.get("base_url") or "").rstrip("/") == new_base), None)
+            if not p_match:
+                p_match = next((p for p in providers if p.get("id") == "custom"), None)
+            if not p_match:
+                p_match = {
+                    "id": "custom",
+                    "name": "自定义",
+                    "type": "OpenAI 兼容",
+                    "group": "自定义",
+                    "enabled": True,
+                    "base_url": new_base,
+                    "api_key": new_key,
+                    "api_format": "openai_chat",
+                    "api_path": "/chat/completions",
+                    "models": [],
+                }
+                providers.append(p_match)
+            else:
+                p_match["enabled"] = True
+                if new_base:
+                    p_match["base_url"] = new_base
+                if new_key:
+                    p_match["api_key"] = new_key
+
+            prov_id = p_match.get("id", "custom")
+            models = cfg.setdefault("models", [])
+            m_found = next((m for m in models if m.get("id") == new_mid), None)
+            if m_found:
+                if new_base:
+                    m_found["base_url"] = new_base
+                if new_key:
+                    m_found["api_key"] = new_key
+                m_found["provider_id"] = prov_id
+                m_found["reasoning_effort"] = new_effort
+            else:
+                models.append({
+                    "id": new_mid,
+                    "name": new_mid,
+                    "provider_id": prov_id,
+                    "provider_name": p_match.get("name", "自定义"),
+                    "base_url": new_base or p_match.get("base_url", ""),
+                    "api_key": new_key or p_match.get("api_key", ""),
+                    "api_format": p_match.get("api_format", "openai_chat"),
+                    "reasoning_type": "auto",
+                    "reasoning_effort": new_effort,
+                    "capabilities": ["chat"],
+                    "description": "自定义模型",
+                })
+
+            cfg["active_model_id"] = new_mid
+            cfg["active_provider_id"] = prov_id
+            cfg["active_reasoning_effort"] = new_effort
+            save_llm_config(cfg)
+        except Exception:
+            pass
+
     refresh_settings()
     audit_record("system.setup_wizard", "success", {"env": env_updates.get("ASTRA_OKX_ENV"), "risk": payload.risk_profile})
     return {"ok": True, "message": "配置已成功保存并生效，引擎已同步更新"}

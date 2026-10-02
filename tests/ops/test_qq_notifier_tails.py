@@ -143,12 +143,12 @@ class TradeOpenTests(_NotifierSandbox, unittest.TestCase):
     def test_a_long_open_publishes_the_trade_opened_event(self):
         self.assertTrue(self._open())
         self.assertEqual(self.call["event_type"], "trade.opened")
-        self.assertIn("🟢 多单 BUY", self.call["message"])
+        self.assertIn("多单 BUY", self.call["message"])
         self.assertIn("BTC-USDT-SWAP", self.call["message"])
 
     def test_a_short_side_is_detected_from_the_english_spelling(self):
         self._open(side="SELL_SHORT")
-        self.assertIn("🔴 空单 SELL", self.call["message"])
+        self.assertIn("空单 SELL", self.call["message"])
 
     def test_the_venue_name_is_upper_cased_in_the_header(self):
         self._open(venue="binance")
@@ -157,12 +157,12 @@ class TradeOpenTests(_NotifierSandbox, unittest.TestCase):
 
     def test_a_policy_version_suppresses_the_strategy_line(self):
         self._open(policy_version="v7.9.2")
-        self.assertIn("🏷️ 策略版本：v7.9.2", self.call["message"])
-        self.assertNotIn("🎯 触发策略", self.call["message"])
+        self.assertIn("策略版本：v7.9.2", self.call["message"])
+        self.assertNotIn("触发策略", self.call["message"])
 
     def test_the_strategy_line_is_used_without_a_policy_version(self):
         self._open()
-        self.assertIn("🎯 触发策略：低吸", self.call["message"])
+        self.assertIn("触发策略：低吸", self.call["message"])
 
     def test_the_council_line_joins_role_and_confidence(self):
         self._open(council_role="技术席", confidence=88.5)
@@ -253,7 +253,7 @@ class TradeOpenTests(_NotifierSandbox, unittest.TestCase):
 
     def test_the_market_regime_is_shown(self):
         self._open(market_regime="趋势上行")
-        self.assertIn("🌐 宏观体制：趋势上行", self.call["message"])
+        self.assertIn("宏观体制：趋势上行", self.call["message"])
 
     def test_unknown_kwargs_are_tolerated(self):
         # `**kwargs: Any` —— 调用方加字段不许炸
@@ -279,38 +279,38 @@ class TradeCloseTests(_NotifierSandbox, unittest.TestCase):
 
     def test_a_profit_close_is_tagged_as_profit(self):
         self._close()
-        self.assertIn("🎉 【盈利落袋】", self.call["title"])
+        self.assertIn("【盈利落袋】", self.call["title"])
 
     def test_a_loss_close_is_tagged_as_stop_loss(self):
         # ★ 第 217–220 行
         self._close(pnl=-10.0, stage="止损")
-        self.assertIn("🛡️ 【风控止损】", self.call["title"])
+        self.assertIn("【风控止损】", self.call["title"])
         self.assertIn("-10.0000 USDT", self.call["message"])
 
     def test_a_near_zero_result_is_tagged_as_breakeven(self):
         # ★ 第 210–212 行 —— |net| < 0.05
         self._close(pnl=0.01, stage="平仓")
-        self.assertIn("⚖️ 【保本结清】", self.call["title"])
+        self.assertIn("【保本结清】", self.call["title"])
         self.assertIn("保本移损退出", self.call["message"])
 
     def test_an_exact_zero_is_breakeven(self):
         self._close(pnl=0.0)
-        self.assertIn("⚖️ 【保本结清】", self.call["title"])
+        self.assertIn("【保本结清】", self.call["title"])
 
     def test_a_breakeven_stage_forces_the_breakeven_tag(self):
         # 金额不为零但 stage 含"保本" ⇒ 仍按保本报
         self._close(pnl=5.0, stage="保本移损")
-        self.assertIn("⚖️ 【保本结清】", self.call["title"])
+        self.assertIn("【保本结清】", self.call["title"])
 
     def test_the_breakeven_boundary_is_exclusive(self):
         # |net| == 0.05 **不**算保本（`< 0.05`）
         self._close(pnl=0.05)
-        self.assertIn("🎉 【盈利落袋】", self.call["title"])
+        self.assertIn("【盈利落袋】", self.call["title"])
 
     def test_a_partial_exit_is_tagged_as_scale_out(self):
         # ★ 第 206–209 行 —— 判定先于 is_be/is_win
         self._close(pnl=0.01, stage="分批止盈")
-        self.assertIn("🎉 【阶梯止盈 TP1 达成】", self.call["title"])
+        self.assertIn("【阶梯止盈 TP1 达成】", self.call["title"])
         self.assertIn("首批 50% 利润落袋", self.call["message"])
 
     def test_the_partial_flag_alone_triggers_the_scale_out_tag(self):
@@ -351,7 +351,7 @@ class TradeCloseTests(_NotifierSandbox, unittest.TestCase):
 
     def test_the_side_line_is_only_shown_when_provided(self):
         self._close(side="空")
-        self.assertIn("🔴 空单", self.call["message"])
+        self.assertIn("空单", self.call["message"])
         self.capture.calls.clear()
         self._close()
         self.assertNotIn("持仓方向", self.call["message"])
@@ -362,12 +362,12 @@ class TradeCloseTests(_NotifierSandbox, unittest.TestCase):
 
     def test_a_zero_entry_price_omits_the_comparison(self):
         self._close(entry_px=0)
-        self.assertIn("🏁 退出价格：110.0", self.call["message"])
+        self.assertIn("退出价格：110.0", self.call["message"])
         self.assertNotIn("开仓均价", self.call["message"])
 
     def test_the_duration_line_is_optional(self):
         self._close(duration_str="2时30分")
-        self.assertIn("⏱️ 持仓时长：2时30分", self.call["message"])
+        self.assertIn("持仓时长：2时30分", self.call["message"])
 
     def test_a_partial_exit_explains_the_follow_up_protection(self):
         self._close(is_partial=True)
@@ -404,11 +404,11 @@ class SlUpdatedTests(_NotifierSandbox, unittest.TestCase):
     def test_the_current_price_line_shows_the_profit_percentage(self):
         # ★ 第 293/294 行
         self._sl(cur_px=105.0, profit_pct=5.0)
-        self.assertIn("📈 当前市价：105.0 (+5.00%)", self.call["message"])
+        self.assertIn("当前市价：105.0 (+5.00%)", self.call["message"])
 
     def test_the_current_price_line_without_a_percentage(self):
         self._sl(cur_px=105.0, profit_pct=None)
-        self.assertIn("📈 当前市价：105.0", self.call["message"])
+        self.assertIn("当前市价：105.0", self.call["message"])
         self.assertNotIn("(+", self.call["message"])
 
     def test_a_zero_current_price_omits_the_line(self):
@@ -417,7 +417,7 @@ class SlUpdatedTests(_NotifierSandbox, unittest.TestCase):
 
     def test_the_side_label_handles_the_english_spelling(self):
         self._sl(side="short")
-        self.assertIn("🔴 空单", self.call["message"])
+        self.assertIn("空单", self.call["message"])
 
     def test_the_default_reason_mentions_the_breakeven_move(self):
         self._sl()
@@ -467,7 +467,7 @@ class EvolutionReportTests(_NotifierSandbox, unittest.TestCase):
     def test_the_title_and_payload(self):
         qn.notify_evolution_report(55.0, 20, "s", "l")
         self.assertEqual(self.call["event_type"], "evolution.completed")
-        self.assertEqual(self.call["title"], "🧬 【AI 大脑自进化完成】胜率 55.0%")
+        self.assertEqual(self.call["title"], "【AI策略自进化完成】胜率 55.0%")
         self.assertEqual(self.call["payload"], {"winrate": 55.0, "total_trades": 20})
 
     def test_the_priority_is_sixty(self):
