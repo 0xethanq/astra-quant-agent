@@ -356,6 +356,18 @@ class SessionTests(_StoreBase):
         self.now += AA.SESSION_SECONDS + 1
         self.assertIsNone(self.store.validate_session(token))
 
+    def test_sliding_session_renews_active_session(self):
+        self._user()
+        token = self.store.login("admin", GOOD)["session_token"]
+        # Advance time by more than half of SESSION_SECONDS (e.g. 60%)
+        self.now += int(AA.SESSION_SECONDS * 0.6)
+        user = self.store.validate_session(token)
+        self.assertIsNotNone(user)
+        # Verify expires_at was renewed
+        with self.store.connect() as connection:
+            row = connection.execute("SELECT expires_at FROM admin_sessions").fetchone()
+        self.assertEqual(row["expires_at"], self.now + AA.SESSION_SECONDS)
+
     def test_disabling_the_user_invalidates_the_session(self):
         user = self._user()
         self._user(username="backup")

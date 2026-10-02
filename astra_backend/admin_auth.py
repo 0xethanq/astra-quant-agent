@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = Path(os.environ["ASTRA_ADMIN_DB"]) if os.environ.get("ASTRA_ADMIN_DB") else ROOT / "data" / "astra_admin.db"
 BJ_TZ = timezone(timedelta(hours=8))
 PBKDF2_ITERATIONS = 600_000
-SESSION_SECONDS = 12 * 60 * 60
+SESSION_SECONDS = int(os.getenv("ASTRA_SESSION_SECONDS", str(7 * 24 * 60 * 60)))
 USERNAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]{2,31}$")
 SCHEMA = """
 PRAGMA journal_mode=WAL;
@@ -203,7 +203,11 @@ class AdminAuthStore:
             ).fetchone()
             if not row:
                 return None
-            connection.execute("UPDATE admin_sessions SET last_seen_at=? WHERE id=?", (now_epoch, row["session_id"]))
+            new_expires = row["expires_at"]
+            # 活跃会话平滑滚动续期：若剩余有效期不足一半，自动顺延 SESSION_SECONDS，避免长周期挂机被突发踢出
+            if row["expires_at"] - now_epoch < SESSION_SECONDS // 2:
+                new_expires = now_epoch + SESSION_SECONDS
+            connection.execute("UPDATE admin_sessions SET last_seen_at=?, expires_at=? WHERE id=?", (now_epoch, new_expires, row["session_id"]))
         return dict(row)
 
     def logout(self, token: str) -> None:

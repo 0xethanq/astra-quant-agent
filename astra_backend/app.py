@@ -105,7 +105,8 @@ def require_admin_token(token: str) -> None:
         raise HTTPException(status_code=403, detail="管理员令牌无效")
 
 def current_admin(x_astra_session: str | None = None, x_astra_admin_token: str | None = None) -> dict[str, Any]:
-    user = admin_auth.validate_session(x_astra_session or "")
+    session_tok = x_astra_session or REQUEST_SESSION.get()
+    user = admin_auth.validate_session(session_tok or "")
     if user:
         return user
     if x_astra_admin_token and not admin_auth.has_users():
@@ -176,7 +177,8 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 @app.middleware("http")
 async def admin_session_context(request: Request, call_next):
-    token = REQUEST_SESSION.set(request.headers.get("X-Astra-Session", ""))
+    raw_token = request.headers.get("X-Astra-Session") or request.headers.get("X-R20-Session", "")
+    token = REQUEST_SESSION.set(raw_token)
     try:
         response = await call_next(request)
         path = request.url.path

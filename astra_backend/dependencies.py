@@ -54,7 +54,8 @@ def require_admin_token(token: str) -> None:
 
 def current_admin(x_astra_session: str | None = None, x_astra_admin_token: str | None = None) -> dict[str, Any]:
     auth_store = get_auth_store()
-    user = auth_store.validate_session(x_astra_session or "")
+    session_tok = x_astra_session or REQUEST_SESSION.get()
+    user = auth_store.validate_session(session_tok or "")
     if user:
         return user
     if x_astra_admin_token and not auth_store.has_users():

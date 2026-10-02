@@ -77,9 +77,16 @@ if [ ! -f "data/instrument_pool.json" ]; then
     "$PY" -c "from scripts.instrument_pool import save_instruments, DEFAULT_INSTRUMENTS; save_instruments(DEFAULT_INSTRUMENTS)" 2>/dev/null || true
 fi
 
-# 4. Check Node.js and build frontend if dist doesn't exist
-if [ ! -d "frontend/dist" ]; then
-    echo "📦 Frontend production bundle not detected. Building Vue 3 SPA..."
+# 4. Check Node.js and build frontend if dist doesn't exist or if src was updated
+NEED_BUILD=0
+if [ ! -d "frontend/dist" ] || [ ! -f "frontend/dist/index.html" ]; then
+    NEED_BUILD=1
+elif [ -d "frontend/src" ] && [ "frontend/src" -nt "frontend/dist/index.html" ]; then
+    NEED_BUILD=1
+fi
+
+if [ "$NEED_BUILD" = "1" ]; then
+    echo "📦 Frontend production bundle needs build/update. Building Vue 3 SPA..."
     if command -v npm &> /dev/null; then
         cd frontend
         npm install
