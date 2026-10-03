@@ -9,7 +9,7 @@
  * - 引入官方专属交易所开户与手续费返现通道（动态自后端加载，安全合规）
  * - 6 宫格核心能力、Docker 一键启动卡片与极简生态页脚
  */
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import {
   ArrowRight,
@@ -33,7 +33,63 @@ import { useReferralChannels } from '../../composables/useReferralChannels';
 
 const router = useRouter();
 const { t, currentLocale, toggleLocale } = useI18n();
-const { channels, load: loadChannels } = useReferralChannels();
+const { channels, partnerChannels, load: loadChannels } = useReferralChannels();
+
+interface PromoChannel {
+  key: string;
+  name: string;
+  badge: string;
+  isApiSupported: boolean;
+  invite_url: string;
+  code: string;
+  rateTier: string;
+  note: string;
+}
+
+const promoChannels = computed<PromoChannel[]>(() => {
+  const dynamicOkx = channels.value.find((c) => c.key === 'okx');
+  const binance = partnerChannels.value.find((c) => c.key === 'binance');
+  const gate = partnerChannels.value.find((c) => c.key === 'gate');
+
+  const list: PromoChannel[] = [];
+  if (dynamicOkx?.invite_url) {
+    list.push({
+      key: 'okx',
+      name: 'OKX',
+      badge: t('landing.referral.okxBadge'),
+      isApiSupported: true,
+      invite_url: dynamicOkx.invite_url,
+      code: dynamicOkx.code,
+      rateTier: t('landing.referral.rateTier'),
+      note: t('landing.referral.okxOldUserNote'),
+    });
+  }
+  if (binance?.invite_url) {
+    list.push({
+      key: 'binance',
+      name: 'Binance',
+      badge: t('landing.referral.partnerBadge'),
+      isApiSupported: false,
+      invite_url: binance.invite_url,
+      code: binance.code,
+      rateTier: t('landing.referral.rateTier'),
+      note: t('landing.referral.partnerNote'),
+    });
+  }
+  if (gate?.invite_url) {
+    list.push({
+      key: 'gate',
+      name: 'Gate.io',
+      badge: t('landing.referral.partnerBadge'),
+      isApiSupported: false,
+      invite_url: gate.invite_url,
+      code: gate.code,
+      rateTier: t('landing.referral.rateTier'),
+      note: t('landing.referral.partnerNote'),
+    });
+  }
+  return list;
+});
 
 // 移动端菜单控制
 const mobileMenuOpen = ref(false);
@@ -381,32 +437,53 @@ onMounted(() => {
           </p>
         </div>
 
-        <!-- OKX 专属返佣卡片网格（单通道时居中收窄） -->
-        <div
-          v-if="channels.length"
-          class="grid grid-cols-1 gap-6 text-left"
-          :class="channels.length === 1 ? 'max-w-lg mx-auto' : 'md:grid-cols-2 lg:grid-cols-3'"
-        >
+        <!-- 专属返佣卡片网格 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 text-left">
           <div
-            v-for="ch in channels"
+            v-for="ch in promoChannels"
             :key="ch.key"
-            class="rounded-2xl border border-emerald-500/20 bg-gradient-to-b from-[#111520] to-[#0c0e15] p-7 sm:p-8 flex flex-col justify-between hover:border-emerald-500/40 hover:shadow-2xl hover:shadow-emerald-500/10 transition-all shadow-xl"
+            class="rounded-2xl border p-7 sm:p-8 flex flex-col justify-between transition-all shadow-xl"
+            :class="ch.isApiSupported
+              ? 'border-emerald-500/30 bg-gradient-to-b from-[#111827] to-[#0c1017] hover:border-emerald-500/50 hover:shadow-2xl hover:shadow-emerald-500/10'
+              : 'border-white/[0.08] bg-gradient-to-b from-[#12131a] to-[#0c0d12] hover:border-white/[0.16] hover:shadow-2xl hover:shadow-black/40'"
           >
             <div>
-              <div class="flex items-center justify-between mb-5">
+              <div class="flex items-center justify-between mb-4">
                 <div class="flex items-center gap-2">
                   <span class="font-bold text-lg text-white font-mono">{{ ch.name }}</span>
-                  <span class="rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-3xs font-mono px-2 py-0.5">OKX VERIFIED</span>
+                  <span
+                    class="rounded text-3xs font-mono px-2 py-0.5 border"
+                    :class="ch.isApiSupported
+                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                      : 'bg-zinc-800/80 border-white/[0.1] text-zinc-400'"
+                  >
+                    {{ ch.badge }}
+                  </span>
                 </div>
-                <span class="rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-mono font-semibold px-2.5 py-1">
-                  {{ t('landing.referral.rateTier') }}
+                <span
+                  class="rounded-md text-xs font-mono font-semibold px-2.5 py-1 border"
+                  :class="ch.isApiSupported
+                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                    : 'bg-zinc-800/60 border-white/[0.08] text-zinc-300'"
+                >
+                  {{ ch.rateTier }}
                 </span>
               </div>
+
+              <!-- 特殊说明说明行 -->
+              <p class="text-xs text-zinc-400 mb-5 leading-relaxed min-h-8">
+                {{ ch.note }}
+              </p>
 
               <!-- 邀请码展示（若存在） -->
               <div v-if="ch.code" class="text-sm font-mono text-zinc-300 mb-6 bg-black/50 p-3.5 rounded-xl border border-white/[0.08] flex items-center justify-between">
                 <span class="text-zinc-500 text-xs">{{ t('landing.referral.codeLabel') }}</span>
-                <span class="text-emerald-400 font-bold tracking-wider select-all">{{ ch.code }}</span>
+                <span
+                  class="font-bold tracking-wider select-all"
+                  :class="ch.isApiSupported ? 'text-emerald-400' : 'text-zinc-200'"
+                >
+                  {{ ch.code }}
+                </span>
               </div>
             </div>
 
@@ -414,7 +491,10 @@ onMounted(() => {
             <div class="pt-5 border-t border-white/[0.06] flex items-center gap-3">
               <button
                 type="button"
-                class="flex-1 h-11 rounded-xl bg-gradient-to-r from-emerald-400 to-teal-400 hover:from-emerald-300 hover:to-teal-300 text-black text-sm font-semibold inline-flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95 shadow-md shadow-emerald-500/10"
+                class="flex-1 h-11 rounded-xl text-sm font-semibold inline-flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95 shadow-md"
+                :class="ch.isApiSupported
+                  ? 'bg-gradient-to-r from-emerald-400 to-teal-400 hover:from-emerald-300 hover:to-teal-300 text-black shadow-emerald-500/10'
+                  : 'bg-zinc-800 hover:bg-zinc-700 text-white border border-white/[0.1]'"
                 @click="openExternal(ch.invite_url)"
               >
                 <span>{{ t('landing.referral.openAccount') }}</span>
@@ -434,8 +514,13 @@ onMounted(() => {
           </div>
         </div>
 
+        <!-- 兼容性声明警示框 -->
+        <div class="mt-8 p-4 rounded-xl border border-amber-500/20 bg-amber-500/5 text-xs text-amber-300/90 text-center font-mono max-w-3xl mx-auto leading-relaxed">
+          {{ t('landing.referral.compatibilityNotice') }}
+        </div>
+
         <!-- 官方结算提示 -->
-        <div class="mt-8 text-center text-xs font-mono text-zinc-500">
+        <div class="mt-4 text-center text-xs font-mono text-zinc-500">
           {{ t('landing.referral.note') }}
         </div>
       </section>

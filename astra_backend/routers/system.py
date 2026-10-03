@@ -743,6 +743,11 @@ CHANNEL_SPECS = (
     ("okx", "OKX", "okx_invite_url"),
 )
 
+PARTNER_CHANNEL_SPECS = (
+    ("binance", "Binance", "binance_invite_url"),
+    ("gate", "Gate.io", "gate_invite_url"),
+)
+
 
 def _invite_code(url: str) -> str:
     """从邀请链接里取「给人看的短码」（纯展示用，不是鉴权值）。
@@ -766,7 +771,7 @@ def _invite_code(url: str) -> str:
 
 
 def _channel_payload() -> list[dict[str, Any]]:
-    """三条通道的载荷。
+    """OKX 系统官方通道的载荷。
 
     ⚠️ **刻意不含经纪商 code**（2026-09，仓库所有者拍板）：那个值要跟订单一起发出去，
     是归属标识，**不该出现在任何用户看得到的界面上** —— 摆出来等于邀请别人照着改。
@@ -782,6 +787,17 @@ def _channel_payload() -> list[dict[str, Any]]:
     return channels
 
 
+def _partner_channel_payload() -> list[dict[str, Any]]:
+    """社区生态推广通道载荷（币安 / Gate 等；仅供开户返佣，不作为系统 API 执行渠道）。"""
+    refresh_settings()
+    channels = []
+    for key, name, attr in PARTNER_CHANNEL_SPECS:
+        url = str(getattr(settings, attr, "") or "").strip()
+        channels.append({"key": key, "name": name, "invite_url": url,
+                         "code": _invite_code(url) if url else ""})
+    return channels
+
+
 @router.get("/api/v1/referral-channels")
 def referral_channels() -> dict[str, Any]:
     """公开只读：注册/返佣通道（用户可见；**不需要任何鉴权**）。
@@ -791,4 +807,7 @@ def referral_channels() -> dict[str, Any]:
       与用户是否走过下列链接**无关**；
     - 本接口这几条链接是给用户**开户**用的入口（顺带可叠加节点返佣）。
     """
-    return {"channels": _channel_payload()}
+    return {
+        "channels": _channel_payload(),
+        "partner_channels": _partner_channel_payload(),
+    }

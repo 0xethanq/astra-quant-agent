@@ -13,7 +13,7 @@
 
 AstraQuant combines large language models (macro, technical, and microstructure analysis) with deterministic Python risk management and OKX-native conditional order execution.
 
-[Preview](#preview) · [Quick Start](#quick-start) · [Architecture](#system-architecture) · [Market Factors](#market-microstructure-factors) · [Risk Control](#capital-management--risk-control) · [Deploy](#deploy) · [Code Map](#code-map)
+[Preview](#preview) · [Quick Start](#quick-start) · [Referral](#exchange-referral--fee-rebates) · [Architecture](#system-architecture) · [Market Factors](#market-microstructure-factors) · [Risk Control](#capital-management--risk-control) · [Deploy](#deploy) · [Code Map](#code-map)
 
 </div>
 
@@ -54,6 +54,18 @@ git clone https://github.com/0xethanq/astra-quant-agent.git && cd astra-quant-ag
 | **API Documentation** | `http://localhost:8080/docs` | OpenAPI schema & endpoint specifications |
 
 > **Fail-Closed Default**: AstraQuant boots in **paper trading mode (`demo`)** by default. Live execution is physically blocked until exchange credentials are provided and validated via read-only balance snapshots.
+
+---
+
+## Exchange Referral & Fee Rebates
+
+> **Trading API Compatibility Notice**: AstraQuant's autonomous execution engine **only supports OKX native API**. Binance and Gate.io are community partner links provided solely for registration discounts and fee rebates; our automated trading system does not support direct API execution on other exchanges.
+
+| Exchange | Role & Compatibility | Referral Link | Code | Special Note |
+|---|---|---|---|---|
+| **OKX** | **Native Trading Supported** (Official Engine Target) | [Register on OKX](https://www.mitxcqvwnhj.com/join/48039151) | `48039151` | Supports new accounts & **dormant accounts (inactive > 180 days)** |
+| **Binance** | Partner Promotion Only (No API Trading) | [Register on Binance](https://www.bsmkweb.cc/activity/referral-entry/CPA?ref=CPA_00N8UVQ2OG) | `CPA_00N8UVQ2OG` | Exclusive fee rebate link; not supported by trading engine |
+| **Gate.io** | Partner Promotion Only (No API Trading) | [Register on Gate](https://www.gatesites.net/share/MCHDBKYF) | `MCHDBKYF` | Exclusive fee rebate link; not supported by trading engine |
 
 ---
 

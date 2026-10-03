@@ -34,6 +34,7 @@ export interface ReferralChannel {
 }
 
 const channels: Ref<ReferralChannel[]> = ref([]);
+const partnerChannels: Ref<ReferralChannel[]> = ref([]);
 const loaded = ref(false);
 let inflight: Promise<ReferralChannel[]> | null = null;
 
@@ -50,11 +51,14 @@ export function useReferralChannels() {
   async function load(): Promise<ReferralChannel[]> {
     if (loaded.value) return channels.value;
     if (inflight) return inflight;
-    inflight = http<{ channels?: ReferralChannel[] }>('/api/v1/referral-channels')
+    inflight = http<{ channels?: ReferralChannel[]; partner_channels?: ReferralChannel[] }>('/api/v1/referral-channels')
       .then((res) => {
         // 只保留「真的有地址」的 OKX 通道：其余条目既不渲染也不报错
         channels.value = (res?.channels || []).filter(
           (c) => !!c?.invite_url && isOkxChannel(c),
+        );
+        partnerChannels.value = (res?.partner_channels || []).filter(
+          (c) => !!c?.invite_url,
         );
         loaded.value = true;
         return channels.value;
@@ -63,6 +67,7 @@ export function useReferralChannels() {
         // 取不到就保持空 ⇒ 调用方整块不渲染。**不回落写死链接**。
         loaded.value = true;
         channels.value = [];
+        partnerChannels.value = [];
         return channels.value;
       })
       .finally(() => {
@@ -71,5 +76,5 @@ export function useReferralChannels() {
     return inflight;
   }
 
-  return { channels, loaded, load };
+  return { channels, partnerChannels, loaded, load };
 }
