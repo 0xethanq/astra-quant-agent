@@ -25,8 +25,8 @@ import { fmtDateTime } from '../../../utils/format'
 import { useI18n } from '../../../composables/useI18n'
 import { useLlmCtx } from './injection'
 import { AlertCircle, ArrowDown, ArrowUp, CheckCircle2, Clock, History, Plus,
-  RefreshCw, Save, Search, ShieldAlert, X, Server, Brain, Timer, Route, Trash2,
-  Sparkles, Info, Cpu } from 'lucide-vue-next'
+  RefreshCw, Save, Search, ShieldAlert, X, Server, Brain, Timer, Route,
+  Sparkles, Cpu } from 'lucide-vue-next'
 import BaseLoadingAnnounce from '../../../components/base/BaseLoadingAnnounce.vue';
 
 const { t } = useI18n()
@@ -65,8 +65,6 @@ const {
   healthWarnings,
   providerHealth,
   cacheStatus,
-  cacheLoading,
-  clearL1Cache,
 } = useLlmCtx()
 
 /** 紧凑型 Token 数量格式化：101.45M / 71.94M / 122.5K */
@@ -496,14 +494,14 @@ const bandFacts = () => [
       </div>
     </section>
 
-    <!-- ══ 2026 大模型 Token 消耗量与缓存监控 ══ -->
+    <!-- ══ 2026 大模型 Token 消耗量统计 ══ -->
     <section v-if="cacheStatus" class="card">
       <header class="card-head">
         <h2 class="card-title">
           <Cpu :size="14" class="pv-icon-brand" />
           {{ t('admin.llm.tokenUsageTitle') }}
         </h2>
-        <div class="flex items-center gap-2">
+        <div class="pv-token-badges">
           <span
             class="badge mono badge-up"
             :title="`Total: ${Number(cacheStatus.model_stats?.total_tokens || 0).toLocaleString()} Tokens`"
@@ -518,16 +516,6 @@ const bandFacts = () => [
             {{ t('admin.llm.estimatedSpendBadge') }}: ≈ ${{ cacheStatus.estimated_spend_usd }} USD
           </span>
         </div>
-        <button
-          type="button"
-          class="btn btn-ghost btn-sm ml-auto"
-          :disabled="cacheLoading"
-          :title="t('admin.llm.clearL1CacheTitle')"
-          @click="clearL1Cache"
-        >
-          <Trash2 :size="14" />
-          <span>{{ t('admin.llm.clearL1Cache') }}</span>
-        </button>
       </header>
 
       <!-- 4 大核心 Token 消耗量指标磁贴 -->
@@ -627,64 +615,10 @@ const bandFacts = () => [
             <span class="pv-legend-dot is-reasoning" />
             <span>Reasoning ({{ reasoningTokenPct }}%)</span>
           </div>
-          <div class="pv-legend-item ml-auto">
+          <div class="pv-legend-item pv-legend-cached">
             <span class="pv-legend-dot is-cached" />
             <span>Cached: {{ Number(cacheStatus.total_saved_tokens ?? 0).toLocaleString() }} (≈ ${{ cacheStatus.estimated_saved_usd ?? '0.00' }})</span>
           </div>
-        </div>
-      </div>
-
-      <!-- 当前主脑激活协议 Hero Banner -->
-      <div v-if="cacheStatus.capabilities?.primary_protocol" class="pv-protocol-hero">
-        <div class="pv-protocol-hero-head">
-          <div class="flex items-center gap-2">
-            <span class="pv-protocol-dot-pulse" />
-            <span class="text-xs font-semibold text-[var(--ds-color-text-primary)]">
-              {{ t('admin.llm.currentActiveProtocol') }}: <strong>{{ cacheStatus.capabilities.primary_protocol }}</strong>
-            </span>
-          </div>
-          <span class="badge mono text-4xs">
-            {{ cfg?.active_model_id || cacheStatus.active_model || 'Active Model' }}
-          </span>
-        </div>
-        <div class="pv-protocol-hero-params">
-          <div class="pv-param-item">
-            <span class="pv-param-k">{{ t('admin.llm.cacheThreshold') }}:</span>
-            <span class="pv-param-v mono">≥ {{ cacheStatus.capabilities.threshold_tokens }} Tokens</span>
-          </div>
-          <div class="pv-param-item">
-            <span class="pv-param-k">TTL:</span>
-            <span class="pv-param-v">{{ cacheStatus.capabilities.ttl_tier }}</span>
-          </div>
-          <div class="pv-param-item">
-            <span class="pv-param-k">{{ t('admin.llm.callHitDistribution') }}:</span>
-            <span class="pv-param-v mono">{{ cacheStatus.model_stats?.cache_hit_calls ?? 0 }} / {{ cacheStatus.model_stats?.cache_reporting_calls ?? 0 }} ({{ cacheStatus.model_stats?.call_hit_rate ?? 0 }}%)</span>
-          </div>
-          <div class="pv-param-item">
-            <span class="pv-param-k">{{ t('admin.llm.l1CacheEntries') }}:</span>
-            <span class="pv-param-v mono">{{ cacheStatus.l1_query_cache?.in_memory_entries ?? 0 }} {{ t('admin.llm.l1ItemsUnit') }} (Hit: {{ cacheStatus.l1_query_cache?.hits ?? 0 }})</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- 运维机制说明 Notice -->
-      <div class="pv-cache-notice">
-        <Info :size="13" class="pv-notice-icon" />
-        <span class="pv-notice-text">
-          {{ t('admin.llm.cronTtlNotice') }}
-        </span>
-      </div>
-
-      <!-- 生态协议兼容矩阵 (收敛于底部，轻量呈现) -->
-      <div class="pv-ecosystem-row">
-        <span class="label-caps">{{ t('admin.llm.supportedProtocols') }}:</span>
-        <div class="flex flex-wrap gap-1.5 items-center">
-          <span class="badge mono text-4xs" :class="(cacheStatus.capabilities?.claude_extended_cache || cacheStatus.capabilities?.claude_ephemeral) ? 'badge-up' : ''">Claude 1h</span>
-          <span class="badge mono text-4xs" :class="(cacheStatus.capabilities?.deepseek_disk_cache || cacheStatus.capabilities?.deepseek_prefix) ? 'badge-up' : ''">DeepSeek HBM</span>
-          <span class="badge mono text-4xs" :class="(cacheStatus.capabilities?.openai_auto_prefix || cacheStatus.capabilities?.openai_prefix) ? 'badge-up' : ''">OpenAI Auto</span>
-          <span class="badge mono text-4xs" :class="(cacheStatus.capabilities?.gemini_implicit_cache || cacheStatus.capabilities?.gemini_context) ? 'badge-up' : ''">Gemini Implicit</span>
-          <span class="badge mono text-4xs" :class="cacheStatus.capabilities?.qwen_kimi_dual ? 'badge-up' : ''">Qwen/Kimi Dual</span>
-          <span class="badge mono text-4xs" :class="cacheStatus.capabilities?.session_affinity_active ? 'badge-accent' : ''">Session Affinity</span>
         </div>
       </div>
     </section>
@@ -775,6 +709,10 @@ const bandFacts = () => [
   display: flex;
   flex-direction: column;
   gap: var(--ds-space-4);
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
 }
 
 /* ══ 状态带 ══ */
@@ -1097,6 +1035,12 @@ const bandFacts = () => [
 .pv-icon-accent {
   color: var(--ds-color-brand);
 }
+.pv-token-badges {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
 
 .pv-stat-grid {
   display: grid;
@@ -1107,11 +1051,15 @@ const bandFacts = () => [
 @media (max-width: 900px) {
   .pv-stat-grid {
     grid-template-columns: repeat(2, 1fr);
+    gap: var(--ds-space-2);
+    padding: var(--ds-space-3);
   }
 }
-@media (max-width: 520px) {
+@media (max-width: 480px) {
   .pv-stat-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--ds-space-2);
+    padding: var(--ds-space-3);
   }
 }
 
@@ -1123,6 +1071,8 @@ const bandFacts = () => [
   border-radius: var(--r-ctl);
   background-color: var(--ds-color-bg-surface-inset);
   border: 1px solid var(--ds-color-border-subtle);
+  min-width: 0;
+  overflow: hidden;
 }
 .pv-stat-label {
   display: flex;
@@ -1133,6 +1083,9 @@ const bandFacts = () => [
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--ds-color-text-description);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .pv-stat-val {
   font-size: var(--text-xl);
@@ -1141,6 +1094,8 @@ const bandFacts = () => [
   color: var(--ds-color-text-primary);
   line-height: 1.2;
   font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .pv-stat-val.is-up {
   color: var(--up);
@@ -1163,7 +1118,7 @@ const bandFacts = () => [
 }
 
 .pv-breakdown-section {
-  margin: 0 var(--ds-space-4) var(--ds-space-3);
+  margin: 0 var(--ds-space-4) var(--ds-space-4);
   padding: var(--ds-space-3) var(--ds-space-4);
   border-radius: var(--r-ctl);
   background-color: var(--ds-color-bg-surface-inset);
@@ -1171,11 +1126,20 @@ const bandFacts = () => [
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+}
+@media (max-width: 600px) {
+  .pv-breakdown-section {
+    margin: 0 var(--ds-space-3) var(--ds-space-3);
+    padding: var(--ds-space-3);
+  }
 }
 .pv-breakdown-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: var(--ds-space-2);
 }
 .pv-breakdown-count {
   font-size: var(--text-4xs);
@@ -1209,19 +1173,31 @@ const bandFacts = () => [
 .pv-breakdown-legend {
   display: flex;
   align-items: center;
-  gap: var(--ds-space-3);
+  flex-wrap: wrap;
+  gap: 6px var(--ds-space-3);
   font-size: var(--text-4xs);
   color: var(--ds-color-text-secondary);
+  min-width: 0;
 }
 .pv-legend-item {
   display: flex;
   align-items: center;
   gap: 6px;
+  white-space: nowrap;
+}
+.pv-legend-cached {
+  margin-left: auto;
+}
+@media (max-width: 600px) {
+  .pv-legend-cached {
+    margin-left: 0;
+  }
 }
 .pv-legend-dot {
   width: 6px;
   height: 6px;
   border-radius: var(--r-pill);
+  flex-shrink: 0;
 }
 .pv-legend-dot.is-input {
   background-color: var(--brand);
@@ -1235,80 +1211,6 @@ const bandFacts = () => [
 }
 .pv-legend-dot.is-cached {
   background-color: var(--up);
-}
-
-.pv-protocol-hero {
-  margin: 0 var(--ds-space-4) var(--ds-space-3);
-  padding: var(--ds-space-3) var(--ds-space-4);
-  border-radius: var(--r-ctl);
-  background-color: var(--ds-color-bg-surface-inset);
-  border: 1px solid var(--astra-brand-line);
-  display: flex;
-  flex-direction: column;
-  gap: var(--ds-space-2);
-}
-.pv-protocol-hero-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--ds-space-2);
-}
-.pv-protocol-dot-pulse {
-  width: 7px;
-  height: 7px;
-  border-radius: var(--r-pill);
-  background-color: var(--up);
-  box-shadow: 0 0 6px var(--up);
-}
-.pv-protocol-hero-params {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--ds-space-4);
-  font-size: var(--text-3xs);
-}
-.pv-param-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.pv-param-k {
-  color: var(--ds-color-text-placeholder);
-}
-.pv-param-v {
-  color: var(--ds-color-text-secondary);
-  font-weight: 500;
-}
-
-.pv-cache-notice {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  margin: 0 var(--ds-space-4) var(--ds-space-3);
-  padding: 8px 12px;
-  border-radius: var(--r-ctl);
-  background-color: var(--ds-color-bg-card);
-  border: 1px dashed var(--ds-color-border-subtle);
-  font-size: var(--text-4xs);
-  color: var(--ds-color-text-description);
-  line-height: var(--leading-body);
-}
-.pv-notice-icon {
-  color: var(--brand);
-  flex-shrink: 0;
-  margin-top: 1px;
-}
-.pv-notice-text {
-  flex: 1;
-}
-
-.pv-ecosystem-row {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--ds-space-2);
-  padding: 0 var(--ds-space-4) var(--ds-space-4);
-  font-size: var(--text-4xs);
 }
 
 /* ══ 供应商清单 ══ */

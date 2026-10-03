@@ -29,7 +29,7 @@ const { currentView, selectedProvider } = llm
 </script>
 
 <template>
-  <div class="space-y-4 max-w-4xl 2xl:max-w-6xl mx-auto font-sans text-xs">
+  <div class="space-y-4 max-w-4xl 2xl:max-w-6xl mx-auto font-sans text-xs w-full min-w-0 overflow-x-hidden">
     <ProviderListView v-if="currentView === 'list'" />
     <ProviderDetailView v-else-if="currentView === 'detail' && selectedProvider" />
 
