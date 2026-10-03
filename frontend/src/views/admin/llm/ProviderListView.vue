@@ -508,13 +508,7 @@ const bandFacts = () => [
           >
             {{ t('admin.llm.totalTokensBadge') }}: {{ fmtTokensCompact(cacheStatus.model_stats?.total_tokens) }}
           </span>
-          <span
-            v-if="cacheStatus.estimated_spend_usd != null"
-            class="badge mono"
-            :title="`Estimated API Spend: $${cacheStatus.estimated_spend_usd} USD`"
-          >
-            {{ t('admin.llm.estimatedSpendBadge') }}: ≈ ${{ Number(cacheStatus.estimated_spend_usd).toFixed(2) }}
-          </span>
+
         </div>
       </header>
 
