@@ -295,7 +295,9 @@ class GatewayStore:
                    COALESCE(SUM(total_tokens),0) total_tokens,
                    COALESCE(SUM(input_tokens),0) input_tokens_total,
                    COALESCE(SUM(output_tokens),0) output_tokens_total,
-                   COALESCE(SUM(reasoning_tokens),0) reasoning_tokens_total,
+                   COALESCE(SUM(CASE WHEN total_tokens > (COALESCE(input_tokens, 0) + COALESCE(output_tokens, 0)) 
+                                     THEN total_tokens - (COALESCE(input_tokens, 0) + COALESCE(output_tokens, 0))
+                                     ELSE COALESCE(reasoning_tokens, 0) END), 0) reasoning_tokens_total,
                    COALESCE(SUM(cached_tokens),0) cached_tokens_total,
                    SUM(CASE WHEN cache_status='hit' THEN 1 ELSE 0 END) cache_hit_calls,
                    SUM(CASE WHEN cache_status IN ('hit','miss') THEN 1 ELSE 0 END) cache_reporting_calls,
@@ -324,8 +326,12 @@ class GatewayStore:
             stats["reporting_input_tokens"] = reporting_input
             stats["hit_input_tokens"] = hit_input
             stats["token_cache_rate"] = (
-                round(stats["cached_tokens_total"] / reporting_input * 100, 1)
+                round(stats["cached_tokens_total"] / reporting_input * 100, 2)
                 if reporting_input > 0 else None
+            )
+            stats["all_time_token_cache_rate"] = (
+                round(stats["cached_tokens_total"] / stats["input_tokens_total"] * 100, 2)
+                if stats["input_tokens_total"] > 0 else None
             )
             stats["hit_token_efficiency"] = (
                 round(stats["cached_tokens_total"] / hit_input * 100, 1)

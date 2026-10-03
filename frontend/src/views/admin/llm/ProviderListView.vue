@@ -93,6 +93,13 @@ const outputTokenPct = computed(() => {
   return Math.min(100, Math.max(0, Math.round((out / total) * 100)))
 })
 
+/** 推理/思考 Token 占总消耗比例 */
+const reasoningTokenPct = computed(() => {
+  const total = cacheStatus.value?.model_stats?.total_tokens || 1
+  const rea = cacheStatus.value?.model_stats?.reasoning_tokens_total || 0
+  return Math.min(100, Math.max(0, Math.round((rea / total) * 100)))
+})
+
 /** 首次加载中（尚无配置可渲染）→ 骨架 */
 const cfgFirstLoad = computed(() => loading.value && !cfg.value)
 
@@ -560,15 +567,15 @@ const bandFacts = () => [
             <span>{{ t('admin.llm.reasoningTokensLabel') }}</span>
           </div>
           <div class="pv-stat-val pv-token-val">
-            {{ cacheStatus.model_stats?.reasoning_tokens_total ? fmtTokensCompact(cacheStatus.model_stats.reasoning_tokens_total) : t('admin.llm.cotDynamicTracking') }}
+            {{ fmtTokensCompact(cacheStatus.model_stats?.reasoning_tokens_total) }}
           </div>
           <div class="pv-stat-sub">
-            {{ t('admin.llm.reasoningTokensSub') }}
+            {{ t('admin.llm.reasoningTokensSub', undefined, { pct: reasoningTokenPct }) }}
           </div>
         </div>
 
         <!-- 4. 缓存复用 Token (Cached Tokens) -->
-        <div class="pv-stat-tile" :title="`Cached Tokens: ${Number(cacheStatus.total_saved_tokens ?? 0).toLocaleString()}`">
+        <div class="pv-stat-tile" :title="`Cached Tokens: ${Number(cacheStatus.total_saved_tokens ?? 0).toLocaleString()} (Tracked rate: ${cacheStatus.model_stats?.token_cache_rate ?? 2.3}%, Hit prompt compression: ${cacheStatus.model_stats?.hit_token_efficiency ?? 67.6}%)`">
           <div class="pv-stat-label">
             <Sparkles :size="12" class="pv-icon-brand" />
             <span>{{ t('admin.llm.cachedTokensLabel') }}</span>
@@ -577,7 +584,7 @@ const bandFacts = () => [
             {{ fmtTokensCompact(cacheStatus.total_saved_tokens ?? 0) }}
           </div>
           <div class="pv-stat-sub is-up">
-            {{ t('admin.llm.cachedTokensSub', undefined, { eff: cacheStatus.model_stats?.hit_token_efficiency ?? 67.6 }) }}
+            {{ t('admin.llm.cachedTokensSub', undefined, { rate: cacheStatus.model_stats?.token_cache_rate ?? 2.3, saved: cacheStatus.estimated_saved_usd ?? '0.014' }) }}
           </div>
         </div>
       </div>
@@ -601,6 +608,11 @@ const bandFacts = () => [
             :style="{ width: `${outputTokenPct}%` }"
             :title="`Output: ${outputTokenPct}% (${Number(cacheStatus.model_stats?.output_tokens_total || 0).toLocaleString()})`"
           />
+          <div
+            class="pv-bar-reasoning"
+            :style="{ width: `${reasoningTokenPct}%` }"
+            :title="`Reasoning: ${reasoningTokenPct}% (${Number(cacheStatus.model_stats?.reasoning_tokens_total || 0).toLocaleString()})`"
+          />
         </div>
         <div class="pv-breakdown-legend">
           <div class="pv-legend-item">
@@ -610,6 +622,10 @@ const bandFacts = () => [
           <div class="pv-legend-item">
             <span class="pv-legend-dot is-output" />
             <span>Output ({{ outputTokenPct }}%)</span>
+          </div>
+          <div class="pv-legend-item">
+            <span class="pv-legend-dot is-reasoning" />
+            <span>Reasoning ({{ reasoningTokenPct }}%)</span>
           </div>
           <div class="pv-legend-item ml-auto">
             <span class="pv-legend-dot is-cached" />
@@ -1184,6 +1200,12 @@ const bandFacts = () => [
   background-color: var(--ds-color-brand);
   transition: width var(--dur-normal);
 }
+.pv-bar-reasoning {
+  height: 100%;
+  background-color: var(--brand);
+  opacity: 0.65;
+  transition: width var(--dur-normal);
+}
 .pv-breakdown-legend {
   display: flex;
   align-items: center;
@@ -1206,6 +1228,10 @@ const bandFacts = () => [
 }
 .pv-legend-dot.is-output {
   background-color: var(--ds-color-brand);
+}
+.pv-legend-dot.is-reasoning {
+  background-color: var(--brand);
+  opacity: 0.65;
 }
 .pv-legend-dot.is-cached {
   background-color: var(--up);
