@@ -284,16 +284,19 @@ class GatewayStore:
             rows = connection.execute("SELECT * FROM model_calls ORDER BY id DESC LIMIT ?", (max(1, min(limit, 200)),)).fetchall()
         return [dict(row) for row in rows]
 
-    def model_stats(self) -> dict[str, Any]:
+    def model_stats(self, detailed: bool = False) -> dict[str, Any]:
         with self.connect() as connection:
             row = connection.execute(
                 """SELECT COUNT(*) total_calls,
                    SUM(CASE WHEN status='success' THEN 1 ELSE 0 END) successful_calls,
                    COALESCE(ROUND(AVG(duration_ms)),0) avg_duration_ms,
                    COALESCE(SUM(total_tokens),0) total_tokens,
+                   COALESCE(SUM(input_tokens),0) input_tokens_total,
                    COALESCE(SUM(cached_tokens),0) cached_tokens_total,
                    SUM(CASE WHEN cache_status='hit' THEN 1 ELSE 0 END) cache_hit_calls,
-                   SUM(CASE WHEN cache_status IN ('hit','miss') THEN 1 ELSE 0 END) cache_reporting_calls
+                   SUM(CASE WHEN cache_status IN ('hit','miss') THEN 1 ELSE 0 END) cache_reporting_calls,
+                   COALESCE(SUM(CASE WHEN cache_status IN ('hit','miss') THEN input_tokens ELSE 0 END), 0) reporting_input_tokens,
+                   COALESCE(SUM(CASE WHEN cache_status='hit' THEN input_tokens ELSE 0 END), 0) hit_input_tokens
                    FROM model_calls"""
             ).fetchone()
         stats: dict[str, Any] = {
@@ -307,6 +310,21 @@ class GatewayStore:
             round(stats["cache_hit_calls"] / stats["cache_reporting_calls"] * 100, 1)
             if stats["cache_reporting_calls"] else None
         )
+        if detailed:
+            stats["call_hit_rate"] = stats["cache_hit_rate"]
+            stats["input_tokens_total"] = int(row["input_tokens_total"] or 0)
+            reporting_input = int(row["reporting_input_tokens"] or 0)
+            hit_input = int(row["hit_input_tokens"] or 0)
+            stats["reporting_input_tokens"] = reporting_input
+            stats["hit_input_tokens"] = hit_input
+            stats["token_cache_rate"] = (
+                round(stats["cached_tokens_total"] / reporting_input * 100, 1)
+                if reporting_input > 0 else None
+            )
+            stats["hit_token_efficiency"] = (
+                round(stats["cached_tokens_total"] / hit_input * 100, 1)
+                if hit_input > 0 else None
+            )
         return stats
 
     def set_state(self, key: str, value: str) -> None:

@@ -361,7 +361,7 @@ def admin_get_llm_cache_status(x_astra_session: str | None = Header(default=None
     from astra_backend.llm.capabilities import detect_caching_capabilities, estimate_cache_savings_usd
 
     store = GatewayStore(DB_PATH)
-    stats = store.model_stats()
+    stats = store.model_stats(detailed=True)
     l1_stats = get_query_cache_stats()
 
     cached_tokens_total = int(stats.get("cached_tokens_total") or 0)

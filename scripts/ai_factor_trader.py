@@ -1137,19 +1137,42 @@ def single_trader_cycle(func):
 # =============================================================================
 # 观望/拦单明细渲染（2026-10 三态可观测性）
 # =============================================================================
+def _clean_diagnostic_reason(reason: str) -> str:
+    """清洗观望原因文本，去除尾部重复冗余的'观望'词缀及标点符号。"""
+    if not reason:
+        return ""
+    r = str(reason).strip()
+    redundant_suffixes = (
+        "，观望", "。观望", "；观望", "、观望",
+        "故观望", "保持观望", "暂观望", "，保持观望",
+        "观望", "保持等待", "等待"
+    )
+    for sfx in redundant_suffixes:
+        if r.endswith(sfx):
+            r = r[:-len(sfx)].rstrip("，。；、 ")
+            break
+    return r
+
+
 def _format_entry_diagnostics(diag) -> str:
-    """把 `entry_execution.ENTRY_DIAGNOSTICS` 渲染成一行日志文本。
+    """把 `entry_execution.ENTRY_DIAGNOSTICS` 渲染成清晰优雅的日志文本。
 
     三态：`模型` = 大模型自己输出 WAIT；`风控` = 物理层拦下了它的开仓意图；
     `未作答` = 该标的未出现在模型响应里（契约允许省略，按 fail-closed 兜底）。
     纯展示函数：任何异常都由调用方吞掉，**绝不影响交易**。
     """
-    label = {"model": "模型", "gate": "风控", "omitted": "未作答"}
     parts = []
     for d in diag:
         source = str(d.get("source") or "model")
-        conf = f"{float(d.get('confidence') or 0.0):.0f}%" if source == "model" else "-"
-        parts.append(f"{d.get('name')}[{label.get(source, source)}{conf}]{d.get('reason') or ''}")
+        name = str(d.get("name") or "?")
+        reason = _clean_diagnostic_reason(d.get("reason") or "")
+        if source == "model":
+            conf = f"{float(d.get('confidence') or 0.0):.0f}%"
+            parts.append(f"{name} [模型 {conf}]: {reason}")
+        elif source == "gate":
+            parts.append(f"{name} [风控拦截]: {reason}")
+        else:
+            parts.append(f"{name} [未作答]: {reason or '无新鲜决策，兜底观望'}")
     return " | ".join(parts)
 
 
@@ -1331,8 +1354,12 @@ def execute_portfolio():
         # 否则"没有这行"会被误读成"没有观望"，而两者含义完全相反。
         if not cb_active and pool_is_trustworthy() and not session_restricted:
             _detail = _format_entry_diagnostics(_entry_diag) or "全标的均未产生观望"
-            _line = (f"[{timestamp_full}] 🔍 观望明细 "
-                     f"({_omitted}/{len(all_factors)} 未作答): {_detail}\n")
+            total_symbols = len(all_factors)
+            if _omitted == 0:
+                _audit_scope = f"全量 {total_symbols} 标的已审"
+            else:
+                _audit_scope = f"{total_symbols} 标的 · {_omitted} 漏答兜底"
+            _line = f"[{timestamp_full}] 🔍 标的观望归因 ({_audit_scope}): {_detail}\n"
             with open(LOG_FILE, "a", encoding="utf-8") as _fh:
                 _fh.write(_line)
             print(_line.strip())

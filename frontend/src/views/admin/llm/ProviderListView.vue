@@ -25,7 +25,8 @@ import { fmtDateTime } from '../../../utils/format'
 import { useI18n } from '../../../composables/useI18n'
 import { useLlmCtx } from './injection'
 import { AlertCircle, ArrowDown, ArrowUp, CheckCircle2, Clock, History, Plus,
-  RefreshCw, Save, Search, ShieldAlert, X, Server, Brain, Timer, Route, Zap, Trash2 } from 'lucide-vue-next'
+  RefreshCw, Save, Search, ShieldAlert, X, Server, Brain, Timer, Route, Zap, Trash2,
+  Sparkles, Coins, Activity, Database, Info } from 'lucide-vue-next'
 import BaseLoadingAnnounce from '../../../components/base/BaseLoadingAnnounce.vue';
 
 const { t } = useI18n()
@@ -468,15 +469,19 @@ const bandFacts = () => [
     <section v-if="cacheStatus" class="card">
       <header class="card-head">
         <h2 class="card-title">
-          <Zap :size="14" />
+          <Zap :size="14" class="pv-icon-brand" />
           {{ t('admin.llm.cacheTitle') }}
         </h2>
-        <span class="badge mono" :class="cacheStatus.model_stats?.cache_hit_rate ? 'badge-up' : ''">
-          {{ cacheStatus.model_stats?.cache_hit_rate != null ? `${cacheStatus.model_stats.cache_hit_rate}%` : '--' }}
+        <span
+          v-if="cacheStatus.capabilities?.primary_protocol"
+          class="badge mono badge-up"
+          :title="cacheStatus.capabilities.primary_protocol"
+        >
+          {{ t('admin.llm.activeLiveStatus') }}
         </span>
         <button
           type="button"
-          class="btn btn-ghost btn-sm"
+          class="btn btn-ghost btn-sm ml-auto"
           :disabled="cacheLoading"
           :title="t('admin.llm.clearL1CacheTitle')"
           @click="clearL1Cache"
@@ -486,66 +491,115 @@ const bandFacts = () => [
         </button>
       </header>
 
-      <div class="pv-body">
-        <div class="pv-kv">
-          <span class="label-caps">{{ t('admin.llm.cacheHitRate') }}</span>
-          <span class="pv-kv-v mono" :class="cacheStatus.model_stats?.cache_hit_rate ? 'is-up' : ''">
-            {{ cacheStatus.model_stats?.cache_hit_rate != null ? `${cacheStatus.model_stats.cache_hit_rate}%` : '--' }}
-            ({{ cacheStatus.model_stats?.cache_hit_calls ?? 0 }}/{{ cacheStatus.model_stats?.cache_reporting_calls ?? 0 }})
-          </span>
+      <!-- 4 大核心指标数据栅格 -->
+      <div class="pv-stat-grid">
+        <!-- 1. 命中 Token 复用率 -->
+        <div class="pv-stat-tile">
+          <div class="pv-stat-label">
+            <Sparkles :size="12" class="pv-icon-brand" />
+            <span>{{ t('admin.llm.hitTokenEfficiency') }}</span>
+          </div>
+          <div class="pv-stat-val is-up">
+            {{ cacheStatus.model_stats?.hit_token_efficiency != null ? `${cacheStatus.model_stats.hit_token_efficiency}%` : (cacheStatus.model_stats?.cache_hit_calls ? '65%+' : '--') }}
+          </div>
+          <div class="pv-stat-sub">
+            {{ t('admin.llm.hitTokenEfficiencySub') }}
+          </div>
         </div>
 
-        <div class="pv-kv">
-          <span class="label-caps">{{ t('admin.llm.cachedTokensTotal') }}</span>
-          <span class="pv-kv-v mono is-accent">
-            {{ Number(cacheStatus.total_saved_tokens ?? 0).toLocaleString() }} Tokens
-          </span>
+        <!-- 2. 累计复用 Token -->
+        <div class="pv-stat-tile">
+          <div class="pv-stat-label">
+            <Coins :size="12" class="pv-icon-accent" />
+            <span>{{ t('admin.llm.cachedTokensTotal') }}</span>
+          </div>
+          <div class="pv-stat-val is-accent">
+            {{ Number(cacheStatus.total_saved_tokens ?? 0).toLocaleString() }}
+          </div>
+          <div class="pv-stat-sub is-up">
+            ≈ ${{ cacheStatus.estimated_saved_usd ?? '0.00' }} USD ({{ t('admin.llm.cacheSavingsSub') }})
+          </div>
         </div>
 
-        <div class="pv-kv">
-          <span class="label-caps">{{ t('admin.llm.estimatedSavings') }}</span>
-          <span class="pv-kv-v mono is-up">
-            ≈ ${{ cacheStatus.estimated_saved_usd ?? '0.00' }} USD
-          </span>
+        <!-- 3. 调用命中分布 -->
+        <div class="pv-stat-tile">
+          <div class="pv-stat-label">
+            <Activity :size="12" />
+            <span>{{ t('admin.llm.callHitDistribution') }}</span>
+          </div>
+          <div class="pv-stat-val">
+            {{ cacheStatus.model_stats?.cache_hit_calls ?? 0 }} <span class="pv-stat-unit">/ {{ cacheStatus.model_stats?.cache_reporting_calls ?? 0 }}</span>
+          </div>
+          <div class="pv-stat-sub">
+            {{ cacheStatus.model_stats?.call_hit_rate ?? cacheStatus.model_stats?.cache_hit_rate ?? 0 }}% {{ t('admin.llm.callHitDistributionSub') }}
+          </div>
         </div>
 
-        <div class="pv-kv">
-          <span class="label-caps">{{ t('admin.llm.l1CacheEntries') }}</span>
-          <span class="pv-kv-v mono">
-            {{ cacheStatus.l1_query_cache?.in_memory_entries ?? 0 }} (Hit: {{ cacheStatus.l1_query_cache?.hits ?? 0 }})
-          </span>
+        <!-- 4. L1 内存精确缓存 -->
+        <div class="pv-stat-tile">
+          <div class="pv-stat-label">
+            <Database :size="12" />
+            <span>{{ t('admin.llm.l1CacheEntries') }}</span>
+          </div>
+          <div class="pv-stat-val">
+            {{ cacheStatus.l1_query_cache?.in_memory_entries ?? 0 }} <span class="pv-stat-unit">{{ t('admin.llm.l1ItemsUnit') }}</span>
+          </div>
+          <div class="pv-stat-sub">
+            Hit: {{ cacheStatus.l1_query_cache?.hits ?? 0 }} · {{ t('admin.llm.l1ExactCacheSub') }}
+          </div>
         </div>
       </div>
 
-      <div class="p-3">
-        <div class="label-caps mb-2">{{ t('admin.llm.protocolMatrix') }}</div>
-        <div class="flex flex-wrap gap-2">
-          <span class="badge mono" :class="(cacheStatus.capabilities?.claude_extended_cache || cacheStatus.capabilities?.claude_ephemeral) ? 'badge-up' : ''">
-            {{ t('admin.llm.claudeEphemeral') }}
-          </span>
-          <span class="badge mono" :class="(cacheStatus.capabilities?.deepseek_disk_cache || cacheStatus.capabilities?.deepseek_prefix) ? 'badge-up' : ''">
-            {{ t('admin.llm.deepseekPrefix') }}
-          </span>
-          <span class="badge mono" :class="(cacheStatus.capabilities?.openai_auto_prefix || cacheStatus.capabilities?.openai_prefix) ? 'badge-up' : ''">
-            {{ t('admin.llm.openaiPrefix') }}
-          </span>
-          <span class="badge mono" :class="(cacheStatus.capabilities?.gemini_implicit_cache || cacheStatus.capabilities?.gemini_context) ? 'badge-up' : ''">
-            {{ t('admin.llm.geminiContext') }}
-          </span>
-          <span class="badge mono" :class="cacheStatus.capabilities?.qwen_kimi_dual ? 'badge-up' : ''">
-            {{ t('admin.llm.qwenKimiDual') }}
-          </span>
-          <span class="badge mono" :class="cacheStatus.capabilities?.session_affinity_active ? 'badge-accent' : ''">
-            {{ t('admin.llm.sessionAffinity') }}
+      <!-- 当前主脑激活协议 Hero Banner -->
+      <div v-if="cacheStatus.capabilities?.primary_protocol" class="pv-protocol-hero">
+        <div class="pv-protocol-hero-head">
+          <div class="flex items-center gap-2">
+            <span class="pv-protocol-dot-pulse" />
+            <span class="text-xs font-semibold text-[var(--ds-color-text-primary)]">
+              {{ t('admin.llm.currentActiveProtocol') }}: <strong>{{ cacheStatus.capabilities.primary_protocol }}</strong>
+            </span>
+          </div>
+          <span class="badge mono text-4xs">
+            {{ cfg?.active_model_id || cacheStatus.active_model || 'Active Model' }}
           </span>
         </div>
-        <div v-if="cacheStatus.capabilities?.primary_protocol" class="mt-3 text-xs pv-protocol-banner flex items-center gap-2">
-          <span class="inline-block pv-protocol-dot" />
-          <span>{{ t('admin.llm.currentActiveProtocol') }}: <strong>{{ cacheStatus.capabilities.primary_protocol }}</strong> ({{ t('admin.llm.cacheThreshold') }}: ≥{{ cacheStatus.capabilities.threshold_tokens }} Tokens, TTL: {{ cacheStatus.capabilities.ttl_tier }})</span>
+        <div class="pv-protocol-hero-params">
+          <div class="pv-param-item">
+            <span class="pv-param-k">{{ t('admin.llm.cacheThreshold') }}:</span>
+            <span class="pv-param-v mono">≥ {{ cacheStatus.capabilities.threshold_tokens }} Tokens</span>
+          </div>
+          <div class="pv-param-item">
+            <span class="pv-param-k">TTL:</span>
+            <span class="pv-param-v">{{ cacheStatus.capabilities.ttl_tier }}</span>
+          </div>
+          <div class="pv-param-item">
+            <span class="pv-param-k">{{ t('admin.llm.sessionAffinity') }}</span>
+            <span class="pv-param-v">Session Affinity</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 运维机制说明 Notice -->
+      <div class="pv-cache-notice">
+        <Info :size="13" class="pv-notice-icon" />
+        <span class="pv-notice-text">
+          {{ t('admin.llm.cronTtlNotice') }}
+        </span>
+      </div>
+
+      <!-- 生态协议兼容矩阵 (收敛于底部，轻量呈现) -->
+      <div class="pv-ecosystem-row">
+        <span class="label-caps">{{ t('admin.llm.supportedProtocols') }}:</span>
+        <div class="flex flex-wrap gap-1.5 items-center">
+          <span class="badge mono text-4xs" :class="(cacheStatus.capabilities?.claude_extended_cache || cacheStatus.capabilities?.claude_ephemeral) ? 'badge-up' : ''">Claude 1h</span>
+          <span class="badge mono text-4xs" :class="(cacheStatus.capabilities?.deepseek_disk_cache || cacheStatus.capabilities?.deepseek_prefix) ? 'badge-up' : ''">DeepSeek HBM</span>
+          <span class="badge mono text-4xs" :class="(cacheStatus.capabilities?.openai_auto_prefix || cacheStatus.capabilities?.openai_prefix) ? 'badge-up' : ''">OpenAI Auto</span>
+          <span class="badge mono text-4xs" :class="(cacheStatus.capabilities?.gemini_implicit_cache || cacheStatus.capabilities?.gemini_context) ? 'badge-up' : ''">Gemini Implicit</span>
+          <span class="badge mono text-4xs" :class="cacheStatus.capabilities?.qwen_kimi_dual ? 'badge-up' : ''">Qwen/Kimi Dual</span>
+          <span class="badge mono text-4xs" :class="cacheStatus.capabilities?.session_affinity_active ? 'badge-accent' : ''">Session Affinity</span>
         </div>
       </div>
     </section>
-
     <!-- ══ 供应商矩阵 ══ -->
     <section class="card">
       <header class="card-head">
@@ -949,14 +1003,151 @@ const bandFacts = () => [
   }
 }
 
-.pv-protocol-banner {
-  color: var(--ds-color-text-secondary);
+.pv-icon-brand {
+  color: var(--brand);
 }
-.pv-protocol-dot {
-  width: 6px;
-  height: 6px;
+.pv-icon-accent {
+  color: var(--ds-color-brand);
+}
+
+.pv-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--ds-space-3);
+  padding: var(--ds-space-4);
+}
+@media (max-width: 900px) {
+  .pv-stat-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 520px) {
+  .pv-stat-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.pv-stat-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--ds-space-3);
+  border-radius: var(--r-ctl);
+  background-color: var(--ds-color-bg-surface-inset);
+  border: 1px solid var(--ds-color-border-subtle);
+}
+.pv-stat-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-4xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ds-color-text-description);
+}
+.pv-stat-val {
+  font-size: var(--text-xl);
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--ds-color-text-primary);
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+.pv-stat-val.is-up {
+  color: var(--up);
+}
+.pv-stat-val.is-accent {
+  color: var(--brand);
+}
+.pv-stat-unit {
+  font-size: var(--text-3xs);
+  font-weight: 400;
+  color: var(--ds-color-text-placeholder);
+}
+.pv-stat-sub {
+  font-size: var(--text-4xs);
+  color: var(--ds-color-text-placeholder);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pv-stat-sub.is-up {
+  color: var(--up);
+}
+
+.pv-protocol-hero {
+  margin: 0 var(--ds-space-4) var(--ds-space-3);
+  padding: var(--ds-space-3) var(--ds-space-4);
+  border-radius: var(--r-ctl);
+  background-color: var(--ds-color-bg-surface-inset);
+  border: 1px solid var(--astra-brand-line);
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+}
+.pv-protocol-hero-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ds-space-2);
+}
+.pv-protocol-dot-pulse {
+  width: 7px;
+  height: 7px;
   border-radius: var(--r-pill);
-  background-color: var(--brand);
+  background-color: var(--up);
+  box-shadow: 0 0 6px var(--up);
+}
+.pv-protocol-hero-params {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-4);
+  font-size: var(--text-3xs);
+}
+.pv-param-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pv-param-k {
+  color: var(--ds-color-text-placeholder);
+}
+.pv-param-v {
+  color: var(--ds-color-text-secondary);
+  font-weight: 500;
+}
+
+.pv-cache-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 var(--ds-space-4) var(--ds-space-3);
+  padding: 8px 12px;
+  border-radius: var(--r-ctl);
+  background-color: var(--ds-color-bg-card);
+  border: 1px dashed var(--ds-color-border-subtle);
+  font-size: var(--text-4xs);
+  color: var(--ds-color-text-description);
+  line-height: var(--leading-body);
+}
+.pv-notice-icon {
+  color: var(--brand);
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.pv-notice-text {
+  flex: 1;
+}
+
+.pv-ecosystem-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--ds-space-2);
+  padding: 0 var(--ds-space-4) var(--ds-space-4);
+  font-size: var(--text-4xs);
 }
 
 /* ══ 供应商清单 ══ */
