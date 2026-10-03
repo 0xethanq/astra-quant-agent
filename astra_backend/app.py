@@ -24,7 +24,7 @@ from astra_gateway.secrets import save_secrets
 from astra_backend.audit import record as audit_record
 from astra_backend.okx_trade_service import account_snapshot as okx_account_snapshot
 from astra_backend.notifications import diagnose_channel, test_channel
-from astra_backend.account_baseline import load_account_baseline, update_initial_capital
+from astra_backend.account_baseline import load_account_baseline, update_initial_capital, update_reset_time
 from astra_backend.llm_manager import test_llm_connection, fetch_remote_models
 from astra_backend.dependencies import (
     DATA_DIR,

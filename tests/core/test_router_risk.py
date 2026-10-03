@@ -26,6 +26,7 @@ from fastapi import HTTPException
 from astra_backend.routers import risk as A
 from astra_backend.schemas import (
     InitialCapitalUpdate,
+    ResetTimeUpdate,
     InstrumentAddRequest,
     InstrumentDeleteRequest,
     ManualCloseRequest,
@@ -307,6 +308,24 @@ class AccountBaselineTests(_Base):
         self.assertEqual(payload["initial_capital"], 10000.0)
         self.assertTrue(out["updated"])
         self.assertEqual(out["reset_time"], "2026-01-01T00:00:00+08:00")
+
+    def test_update_reset_time_checks_phrase_and_calls_updater(self):
+        fn_rt = mock.MagicMock(return_value={"previous_reset_time": "1970-01-01 00:00:00",
+                                             "reset_time": "2026-09-01 00:00:00"})
+        self._start(mock.patch.object(A, "update_reset_time", fn_rt))
+        with self.assertRaises(HTTPException) as ctx:
+            A.admin_update_reset_time(
+                ResetTimeUpdate(reset_time="2026-09-01 00:00:00", confirmation="WRONG"),
+                x_astra_session="t")
+        self.assertEqual(ctx.exception.status_code, 400)
+        fn_rt.assert_not_called()
+
+        out = A.admin_update_reset_time(
+            ResetTimeUpdate(reset_time="2026-09-01 00:00:00", confirmation="UPDATE RESET TIME"),
+            x_astra_session="t")
+        fn_rt.assert_called_once_with("2026-09-01 00:00:00")
+        self.assertTrue(out["updated"])
+        self.assertEqual(out["reset_time"], "2026-09-01 00:00:00")
 
 
 class InstrumentsListTests(_Base):

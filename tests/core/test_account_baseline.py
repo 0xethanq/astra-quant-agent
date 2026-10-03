@@ -349,6 +349,24 @@ class InteractionTests(_Base):
         self.assertEqual(out["reset_time"], "1970-01-01 00:00:00")
         self.assertEqual(out["evolution_start_time"], "2026-09-01 00:00:00")
 
+    def test_update_reset_time_valid_and_preserves_other_fields(self):
+        AB.update_initial_capital(5000.0)
+        AB.update_evolution_start_time("2026-08-01")
+        res = AB.update_reset_time("2026-09-15 12:00:00")
+        self.assertEqual(res["reset_time"], "2026-09-15 12:00:00")
+        self.assertEqual(res["initial_capital"], 5000.0)
+        self.assertEqual(res["evolution_start_time"], "2026-08-01 00:00:00")
+        loaded = AB.load_account_baseline()
+        self.assertEqual(loaded["reset_time"], "2026-09-15 12:00:00")
+
+    def test_update_reset_time_invalid_raises_value_error(self):
+        with self.assertRaises(ValueError):
+            AB.update_reset_time("")
+        with self.assertRaises(ValueError):
+            AB.update_reset_time("not-a-date")
+        with self.assertRaises(ValueError):
+            AB.update_reset_time("2024-01-01 00:00:00")
+
 
 if __name__ == "__main__":
     unittest.main()

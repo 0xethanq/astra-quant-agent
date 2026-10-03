@@ -115,3 +115,56 @@ def update_evolution_start_time(start_time: str) -> dict[str, Any]:
             if os.path.exists(temp_path):
                 os.unlink(temp_path)
         return updated
+
+
+def update_reset_time(reset_time: str) -> dict[str, Any]:
+    """更新台账起算基线时刻（过滤更早的人工历史交易与前朝旧单）。"""
+    st = str(reset_time or "").strip()
+    if not st:
+        raise ValueError("台账起算时间不能为空")
+    if len(st) == 10:
+        st = f"{st} 00:00:00"
+    parsed_dt = None
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"):
+        try:
+            parsed_dt = datetime.strptime(st, fmt)
+            st = parsed_dt.strftime("%Y-%m-%d %H:%M:%S")
+            break
+        except ValueError:
+            continue
+    if parsed_dt is None:
+        raise ValueError(f"时间格式不合法：{reset_time}，请使用 YYYY-MM-DD HH:MM:SS")
+
+    if st < "2026-01-01 00:00:00":
+        raise ValueError(f"台账起算时间不得早于 2026-01-01 00:00:00：{st}")
+    now_bj = datetime.now(BJ_TZ).replace(tzinfo=None)
+    if parsed_dt > now_bj + timedelta(days=1):
+        raise ValueError(f"台账起算时间不得晚于未来时间：{st}")
+
+    from astra_backend.file_locks import file_lock
+
+    with file_lock(BASELINE_FILE):
+        previous = load_account_baseline()
+        updated = {
+            **previous,
+            "reset_time": st,
+            "reset_time_updated_at": datetime.now(BJ_TZ).strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        BASELINE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        fd, temp_path = tempfile.mkstemp(prefix=".account-baseline-", suffix=".json", dir=BASELINE_FILE.parent)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                json.dump(updated, handle, ensure_ascii=False, indent=2)
+                handle.write("\n")
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.chmod(temp_path, 0o600)
+            os.replace(temp_path, BASELINE_FILE)
+            os.chmod(BASELINE_FILE, 0o600)
+        finally:
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+        return {
+            "previous_reset_time": previous.get("reset_time"),
+            **updated,
+        }

@@ -138,6 +138,8 @@ export const enLedger = {
   modeLive: 'Live',
   modeDemo: 'Demo',
   countRecords: '{a} / {b} records',
+  scopeCycleBadge: 'Cycle',
+  scopeAllBadge: 'All-Time',
   loadAllHistory: 'All-Time History',
   loadCycleHistory: 'Current Reset Cycle',
   loadedAll: 'Loaded all-time history ({n} closed trades)',

@@ -173,6 +173,11 @@ class InitialCapitalUpdate(BaseModel):
     confirmation: str = Field(min_length=1, max_length=80)
 
 
+class ResetTimeUpdate(BaseModel):
+    reset_time: str = Field(min_length=10, max_length=30)
+    confirmation: str = Field(min_length=1, max_length=80)
+
+
 class GatewayReplayRequest(BaseModel):
     confirmation: str
 

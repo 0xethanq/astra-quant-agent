@@ -34,7 +34,7 @@ async function loadFullLedger() {
     const res = await fetch(`/api/v1/public/ledger?all_time=${allTimeScope.value ? 1 : 0}`);
     if (res.ok) {
       const json = await res.json();
-      if (Array.isArray(json?.trades) && json.trades.length > 0) {
+      if (Array.isArray(json?.trades)) {
         fullTrades.value = json.trades;
         if (isUserToggle.value) {
           const count = json.closed_count || fullTrades.value.length;
@@ -256,7 +256,8 @@ const truncation = computed<{ kept: number; total: number } | null>(() => {
           class="rounded-full px-2 py-0.5 border text-3xs font-mono font-medium"
           style="background-color: var(--surface-2); border-color: var(--line-1); color: var(--ink-2)"
         >
-          {{ t('dash.ledger.countRecords', undefined, { a: filtered.length, b: all.length }) }}
+          <span :class="allTimeScope ? 'text-[var(--ds-color-amber)]' : 'text-[var(--accent)]'">{{ allTimeScope ? t('dash.ledger.scopeAllBadge') : t('dash.ledger.scopeCycleBadge') }}</span>
+          · {{ t('dash.ledger.countRecords', undefined, { a: filtered.length, b: all.length }) }}
         </span>
       </div>
 

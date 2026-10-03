@@ -78,6 +78,13 @@ def public_ledger(all_time: bool = Query(default=False)) -> dict[str, Any]:
     if not all_time:
         try:
             reset_time, _ = read_reset_initial_state(str(data_dir))
+            # 防穿透：若未显式设定 reset_time（或为 1970 占位符），回退至自进化起算时间或环境基线
+            if not reset_time or str(reset_time) <= "2026-01-01 00:00:00":
+                from astra_backend.dashboard_payload.readers import read_json
+                acc_init = read_json(str(data_dir / "account_initial_state.json"), {})
+                evo_fallback = str(acc_init.get("evolution_start_time") or os.environ.get("ASTRA_EVOLUTION_START_TIME") or "")
+                if evo_fallback and evo_fallback > "2026-01-01 00:00:00":
+                    reset_time = evo_fallback
         except Exception:
             reset_time = "1970-01-01 00:00:00"
 

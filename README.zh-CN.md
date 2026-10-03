@@ -6,7 +6,7 @@
 
 ### 基于多大模型分析与确定性代码风控的加密货币自主量化交易系统
 
-[![Release](https://img.shields.io/badge/Release-v8.6.0-00E599.svg?style=flat-square)](https://github.com/0xethanq/astra-quant-agent/releases)
+[![Release](https://img.shields.io/badge/Release-v8.6.1-00E599.svg?style=flat-square)](https://github.com/0xethanq/astra-quant-agent/releases)
 [![License](https://img.shields.io/badge/License-AGPLv3%20%2B%20Commons%20Clause-blue.svg?style=flat-square)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.11-3776AB.svg?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![Vue 3](https://img.shields.io/badge/Vue-3.5%2B-4FC08D.svg?style=flat-square&logo=vuedotjs&logoColor=white)](https://vuejs.org/)

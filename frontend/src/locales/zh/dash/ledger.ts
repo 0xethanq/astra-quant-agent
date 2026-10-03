@@ -139,6 +139,8 @@ export const zhLedger = {
   modeLive: '实盘 (Live)',
   modeDemo: '模拟 (Demo)',
   countRecords: '{a} / {b} 笔记录',
+  scopeCycleBadge: '本期',
+  scopeAllBadge: '全量',
   loadAllHistory: '全量历史',
   loadCycleHistory: '本期战绩',
   loadedAll: '已载入全量历史台账（共 {n} 笔平仓）',

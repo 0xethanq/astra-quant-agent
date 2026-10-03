@@ -361,6 +361,7 @@ from scripts.ledger.holdings import (
 
 def build_lifecycle_ledger():
     reset_time = "1970-01-01 00:00:00"
+    acc = {}
     if os.path.exists(INITIAL_STATE_FILE):
         try:
             with open(INITIAL_STATE_FILE, "r", encoding="utf-8") as f:
@@ -368,6 +369,13 @@ def build_lifecycle_ledger():
                 reset_time = acc.get("reset_time", "1970-01-01 00:00:00")
         except Exception:
             pass
+
+    # 审计：防纪元占位符击穿台账（2026-10 修复）
+    # 若 reset_time 缺失或为 1970 占位符（<= 2026-01-01），回退至 evolution_start_time
+    if not reset_time or str(reset_time) <= "2026-01-01 00:00:00":
+        evo_fallback = str(acc.get("evolution_start_time") or os.environ.get("ASTRA_EVOLUTION_START_TIME") or "")
+        if evo_fallback and evo_fallback > "2026-01-01 00:00:00":
+            reset_time = evo_fallback
 
     existing_closed_ids = set()
     old_trades = []
@@ -516,6 +524,21 @@ def build_lifecycle_ledger():
     if _purged_holdings:
         print(f"[sync_full_ledger] 清理失效持仓行 {len(_purged_holdings)} 条："
               f"{', '.join(_purged_holdings[:8])}")
+
+    # 清理早于起算基线 (reset_time) 的外部历史平仓单（防历史旧单粘滞污染）
+    if reset_time and reset_time > "2026-01-01 00:00:00":
+        cleaned_trades_map = {}
+        purged_legacy_count = 0
+        for tid, trade in trades_map.items():
+            if trade.get("status") == "closed":
+                c_time = str(trade.get("close_time") or trade.get("time") or "")
+                if c_time and c_time < reset_time:
+                    purged_legacy_count += 1
+                    continue
+            cleaned_trades_map[tid] = trade
+        if purged_legacy_count:
+            print(f"[sync_full_ledger] 清理早于起算基线 ({reset_time}) 的历史平仓 {purged_legacy_count} 条")
+        trades_map = cleaned_trades_map
 
     combined_trades = sorted(
         trades_map.values(),

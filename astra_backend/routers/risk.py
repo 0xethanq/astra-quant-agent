@@ -5,7 +5,7 @@ from fastapi import APIRouter, Body, Header, HTTPException, Query
 
 from astra_backend.config import settings, refresh_settings
 from astra_backend.settings_store import update_env, remove_env
-from astra_backend.account_baseline import update_initial_capital
+from astra_backend.account_baseline import update_initial_capital, update_reset_time
 from astra_backend.audit import record as audit_record
 from astra_backend import risk_config
 from astra_backend.dependencies import (
@@ -16,6 +16,7 @@ from astra_backend.schemas import (
     RiskConfigUpdate,
     RiskResetRequest,
     InitialCapitalUpdate,
+    ResetTimeUpdate,
     InstrumentAddRequest,
     InstrumentDeleteRequest,
     ManualCloseRequest,
@@ -208,6 +209,29 @@ def admin_update_account_baseline(payload: InitialCapitalUpdate, x_astra_session
         "updated": True,
         **result,
         "effect": "主页累计盈亏、累计 ROI 与权益基准线将按新本金重算；历史起算时间保持不变。",
+    }
+
+
+@router.put("/api/v1/admin/account-baseline/reset-time")
+def admin_update_reset_time(payload: ResetTimeUpdate, x_astra_session: str | None = Header(default=None, alias="X-Astra-Session")) -> dict[str, Any]:
+    actor = require_superadmin(x_astra_session)
+    if payload.confirmation.strip().upper() != "UPDATE RESET TIME":
+        raise HTTPException(status_code=400, detail="确认短语必须精确为：UPDATE RESET TIME")
+    try:
+        fn_update = app_attr("update_reset_time", update_reset_time)
+        result = fn_update(payload.reset_time)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    rec_audit = app_attr("audit_record", audit_record)
+    rec_audit("account.reset_time.update", "success", {
+        "actor": actor["username"],
+        "previous_reset_time": result["previous_reset_time"],
+        "reset_time": result["reset_time"],
+    })
+    return {
+        "updated": True,
+        **result,
+        "effect": "台账起算基线已更新，下次同步将自动清理更早的历史成交。",
     }
 
 
