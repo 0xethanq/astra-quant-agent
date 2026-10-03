@@ -64,6 +64,7 @@ CREATE TABLE IF NOT EXISTS model_calls (
   prompt_transport TEXT NOT NULL DEFAULT 'python-direct',
   input_tokens INTEGER,
   output_tokens INTEGER,
+  reasoning_tokens INTEGER DEFAULT 0,
   total_tokens INTEGER,
   cached_tokens INTEGER,
   cache_status TEXT NOT NULL DEFAULT '',
@@ -81,6 +82,7 @@ CREATE INDEX IF NOT EXISTS idx_model_calls_caller ON model_calls(caller, id DESC
 #: 「上游上报未命中」与「上游根本没上报」分开（不可判定 ≠ 0），`usage_keys`
 #: 只留 usage 顶层键名供诊断上游到底报了什么（无任何内容）。
 MIGRATION_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("reasoning_tokens", "INTEGER DEFAULT 0"),
     ("cached_tokens", "INTEGER"),
     ("cache_status", "TEXT NOT NULL DEFAULT ''"),
     ("usage_keys", "TEXT NOT NULL DEFAULT ''"),
@@ -269,7 +271,7 @@ class GatewayStore:
         columns = (
             "caller", "model", "reasoning_effort", "status", "started_at", "duration_ms",
             "input_chars", "output_chars", "prompt_fingerprint", "prompt_transport",
-            "input_tokens", "output_tokens", "total_tokens", "cached_tokens",
+            "input_tokens", "output_tokens", "reasoning_tokens", "total_tokens", "cached_tokens",
             "cache_status", "usage_keys", "error_type",
         )
         with self.connect() as connection:
@@ -292,6 +294,8 @@ class GatewayStore:
                    COALESCE(ROUND(AVG(duration_ms)),0) avg_duration_ms,
                    COALESCE(SUM(total_tokens),0) total_tokens,
                    COALESCE(SUM(input_tokens),0) input_tokens_total,
+                   COALESCE(SUM(output_tokens),0) output_tokens_total,
+                   COALESCE(SUM(reasoning_tokens),0) reasoning_tokens_total,
                    COALESCE(SUM(cached_tokens),0) cached_tokens_total,
                    SUM(CASE WHEN cache_status='hit' THEN 1 ELSE 0 END) cache_hit_calls,
                    SUM(CASE WHEN cache_status IN ('hit','miss') THEN 1 ELSE 0 END) cache_reporting_calls,
@@ -313,6 +317,8 @@ class GatewayStore:
         if detailed:
             stats["call_hit_rate"] = stats["cache_hit_rate"]
             stats["input_tokens_total"] = int(row["input_tokens_total"] or 0)
+            stats["output_tokens_total"] = int(row["output_tokens_total"] or 0)
+            stats["reasoning_tokens_total"] = int(row["reasoning_tokens_total"] or 0)
             reporting_input = int(row["reporting_input_tokens"] or 0)
             hit_input = int(row["hit_input_tokens"] or 0)
             stats["reporting_input_tokens"] = reporting_input

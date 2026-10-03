@@ -358,13 +358,19 @@ def admin_get_llm_cache_status(x_astra_session: str | None = Header(default=None
     from astra_gateway.store import GatewayStore
     from astra_backend.llm.query_cache import get_query_cache_stats
     from astra_gateway.cache_warmer import warmup_mode
-    from astra_backend.llm.capabilities import detect_caching_capabilities, estimate_cache_savings_usd
+    from astra_backend.llm.capabilities import (
+        detect_caching_capabilities,
+        estimate_cache_savings_usd,
+        estimate_total_spend_usd,
+    )
 
     store = GatewayStore(DB_PATH)
     stats = store.model_stats(detailed=True)
     l1_stats = get_query_cache_stats()
 
     cached_tokens_total = int(stats.get("cached_tokens_total") or 0)
+    input_tokens_total = int(stats.get("input_tokens_total") or 0)
+    output_tokens_total = int(stats.get("output_tokens_total") or 0)
     l1_saved_tokens = int(l1_stats.get("saved_tokens_total") or 0)
     total_saved_tokens = cached_tokens_total + l1_saved_tokens
 
@@ -375,6 +381,8 @@ def admin_get_llm_cache_status(x_astra_session: str | None = Header(default=None
     capabilities = detect_caching_capabilities(active_model, active_format)
     # 基于行业厂商动态真实折扣（Claude 90%, Gemini 75%, DeepSeek 75%~90%, OpenAI 50%）估算节约金额
     estimated_saved_usd = estimate_cache_savings_usd(active_model, total_saved_tokens)
+    # 估算大模型累计总支出（USD）
+    estimated_spend_usd = estimate_total_spend_usd(active_model, input_tokens_total, output_tokens_total, cached_tokens_total)
 
     return {
         "ok": True,
@@ -385,6 +393,7 @@ def admin_get_llm_cache_status(x_astra_session: str | None = Header(default=None
         "capabilities": capabilities,
         "total_saved_tokens": total_saved_tokens,
         "estimated_saved_usd": estimated_saved_usd,
+        "estimated_spend_usd": estimated_spend_usd,
     }
 
 

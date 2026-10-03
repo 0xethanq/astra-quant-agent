@@ -29,7 +29,24 @@ class ModelCallTelemetry:
         input_tokens = usage.get("prompt_tokens") or usage.get("input_tokens") or 0
         output_tokens = usage.get("completion_tokens") or usage.get("output_tokens") or 0
         total_tokens = usage.get("total_tokens") or (input_tokens + output_tokens)
-        cached_raw = usage.get("cached_tokens")
+
+        # 深度提取思维链推理 Token（OpenAI o1/o3, DeepSeek-R1, Gemini 2.5/3.x Thinking）
+        reasoning_raw = (
+            usage.get("reasoning_tokens")
+            or (usage.get("completion_tokens_details") or {}).get("reasoning_tokens")
+            or (usage.get("output_tokens_details") or {}).get("reasoning_tokens")
+        )
+        try:
+            reasoning_tokens = int(reasoning_raw) if reasoning_raw is not None else 0
+        except (TypeError, ValueError):
+            reasoning_tokens = 0
+
+        # 深度提取缓存 Token（顶层 cached_tokens、OpenAI prompt_tokens_details、Gemini input_tokens_details）
+        cached_raw = (
+            usage.get("cached_tokens")
+            or (usage.get("prompt_tokens_details") or {}).get("cached_tokens")
+            or (usage.get("input_tokens_details") or {}).get("cached_tokens")
+        )
         # 三态判定（2026-09-29 事故后固化）：**不可判定 ≠ 0**。
         #   hit        上游明确上报命中（cached > 0）
         #   miss       上游明确上报了缓存字段但为 0
@@ -64,6 +81,7 @@ class ModelCallTelemetry:
             "prompt_transport": "python-direct",
             "input_tokens": input_tokens,
             "output_tokens": output_tokens,
+            "reasoning_tokens": reasoning_tokens,
             "total_tokens": total_tokens,
             "cached_tokens": cached_tokens,
             "cache_status": cache_status,

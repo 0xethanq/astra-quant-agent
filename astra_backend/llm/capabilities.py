@@ -162,3 +162,46 @@ def estimate_cache_savings_usd(model_id: str, cached_tokens: int) -> float:
         rate_per_m = 1.25  # 行业平均
     return round(float(cached_tokens) * (rate_per_m / 1_000_000.0), 4)
 
+
+def estimate_total_spend_usd(model_id: str, input_tokens: int, output_tokens: int, cached_tokens: int = 0) -> float:
+    """根据大模型厂商官方标准定价动态估算累计 Token 支出（USD）。"""
+    if (input_tokens + output_tokens) <= 0:
+        return 0.0
+    m = (model_id or "").lower()
+
+    # 官方基准价（每 1M Tokens，USD）：(input_price_per_m, output_price_per_m, cached_input_price_per_m)
+    if "claude-3-5" in m or "claude-3.5" in m or "claude-3-7" in m or "claude-3.7" in m:
+        p_in, p_out, p_cache = 3.00, 15.00, 0.30
+    elif "claude" in m and "haiku" in m:
+        p_in, p_out, p_cache = 0.80, 4.00, 0.08
+    elif "deepseek-reasoner" in m or "deepseek-r1" in m:
+        p_in, p_out, p_cache = 0.55, 2.19, 0.14
+    elif "deepseek" in m:
+        p_in, p_out, p_cache = 0.14, 0.28, 0.035
+    elif "gemini" in m:
+        if "pro" in m:
+            p_in, p_out, p_cache = 1.25, 5.00, 0.3125
+        else:  # flash family (gemini-1.5-flash, gemini-2.0-flash, gemini-2.5-flash, gemini-3.8-flash)
+            p_in, p_out, p_cache = 0.075, 0.30, 0.01875
+    elif "gpt-4o-mini" in m:
+        p_in, p_out, p_cache = 0.15, 0.60, 0.075
+    elif "gpt-4o" in m:
+        p_in, p_out, p_cache = 2.50, 10.00, 1.25
+    elif "o1" in m or "o3" in m or "o4" in m:
+        p_in, p_out, p_cache = 15.00, 60.00, 7.50
+    elif "qwen" in m:
+        p_in, p_out, p_cache = 0.20, 0.60, 0.05
+    elif "kimi" in m:
+        p_in, p_out, p_cache = 0.30, 0.90, 0.10
+    else:
+        p_in, p_out, p_cache = 0.50, 1.50, 0.15
+
+    # 实际未缓存输入 Token = 总输入 - 缓存复用
+    uncached_in = max(0, input_tokens - cached_tokens)
+    cost = (
+        (uncached_in / 1_000_000.0) * p_in
+        + (cached_tokens / 1_000_000.0) * p_cache
+        + (output_tokens / 1_000_000.0) * p_out
+    )
+    return round(cost, 4)
+

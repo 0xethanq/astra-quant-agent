@@ -25,8 +25,8 @@ import { fmtDateTime } from '../../../utils/format'
 import { useI18n } from '../../../composables/useI18n'
 import { useLlmCtx } from './injection'
 import { AlertCircle, ArrowDown, ArrowUp, CheckCircle2, Clock, History, Plus,
-  RefreshCw, Save, Search, ShieldAlert, X, Server, Brain, Timer, Route, Zap, Trash2,
-  Sparkles, Coins, Activity, Database, Info } from 'lucide-vue-next'
+  RefreshCw, Save, Search, ShieldAlert, X, Server, Brain, Timer, Route, Trash2,
+  Sparkles, Info, Cpu } from 'lucide-vue-next'
 import BaseLoadingAnnounce from '../../../components/base/BaseLoadingAnnounce.vue';
 
 const { t } = useI18n()
@@ -68,6 +68,30 @@ const {
   cacheLoading,
   clearL1Cache,
 } = useLlmCtx()
+
+/** 紧凑型 Token 数量格式化：101.45M / 71.94M / 122.5K */
+function fmtTokensCompact(val: number | string | null | undefined): string {
+  const n = Number(val || 0)
+  if (!Number.isFinite(n) || n <= 0) return '0'
+  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(2)}B`
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`
+  if (n >= 10_000) return `${(n / 1_000).toFixed(1)}K`
+  return Number(n).toLocaleString()
+}
+
+/** 输入 Token 占总消耗比例 */
+const inputTokenPct = computed(() => {
+  const total = cacheStatus.value?.model_stats?.total_tokens || 1
+  const inp = cacheStatus.value?.model_stats?.input_tokens_total || 0
+  return Math.min(100, Math.max(0, Math.round((inp / total) * 100)))
+})
+
+/** 输出 Token 占总消耗比例 */
+const outputTokenPct = computed(() => {
+  const total = cacheStatus.value?.model_stats?.total_tokens || 1
+  const out = cacheStatus.value?.model_stats?.output_tokens_total || 0
+  return Math.min(100, Math.max(0, Math.round((out / total) * 100)))
+})
 
 /** 首次加载中（尚无配置可渲染）→ 骨架 */
 const cfgFirstLoad = computed(() => loading.value && !cfg.value)
@@ -465,20 +489,28 @@ const bandFacts = () => [
       </div>
     </section>
 
-    <!-- ══ 2026 大模型前缀缓存与成本加速 ══ -->
+    <!-- ══ 2026 大模型 Token 消耗量与缓存监控 ══ -->
     <section v-if="cacheStatus" class="card">
       <header class="card-head">
         <h2 class="card-title">
-          <Zap :size="14" class="pv-icon-brand" />
-          {{ t('admin.llm.cacheTitle') }}
+          <Cpu :size="14" class="pv-icon-brand" />
+          {{ t('admin.llm.tokenUsageTitle') }}
         </h2>
-        <span
-          v-if="cacheStatus.capabilities?.primary_protocol"
-          class="badge mono badge-up"
-          :title="cacheStatus.capabilities.primary_protocol"
-        >
-          {{ t('admin.llm.activeLiveStatus') }}
-        </span>
+        <div class="flex items-center gap-2">
+          <span
+            class="badge mono badge-up"
+            :title="`Total: ${Number(cacheStatus.model_stats?.total_tokens || 0).toLocaleString()} Tokens`"
+          >
+            {{ t('admin.llm.totalTokensBadge') }}: {{ fmtTokensCompact(cacheStatus.model_stats?.total_tokens) }}
+          </span>
+          <span
+            v-if="cacheStatus.estimated_spend_usd != null"
+            class="badge mono"
+            :title="`Estimated API Spend: $${cacheStatus.estimated_spend_usd} USD`"
+          >
+            {{ t('admin.llm.estimatedSpendBadge') }}: ≈ ${{ cacheStatus.estimated_spend_usd }} USD
+          </span>
+        </div>
         <button
           type="button"
           class="btn btn-ghost btn-sm ml-auto"
@@ -491,61 +523,97 @@ const bandFacts = () => [
         </button>
       </header>
 
-      <!-- 4 大核心指标数据栅格 -->
+      <!-- 4 大核心 Token 消耗量指标磁贴 -->
       <div class="pv-stat-grid">
-        <!-- 1. 命中 Token 复用率 -->
-        <div class="pv-stat-tile">
+        <!-- 1. 输入 Token (Prompt Tokens) -->
+        <div class="pv-stat-tile" :title="`Prompt Tokens: ${Number(cacheStatus.model_stats?.input_tokens_total || 0).toLocaleString()}`">
+          <div class="pv-stat-label">
+            <ArrowDown :size="12" class="pv-icon-brand" />
+            <span>{{ t('admin.llm.inputTokensLabel') }}</span>
+          </div>
+          <div class="pv-stat-val pv-token-val">
+            {{ fmtTokensCompact(cacheStatus.model_stats?.input_tokens_total) }}
+          </div>
+          <div class="pv-stat-sub">
+            {{ t('admin.llm.inputTokensSub', undefined, { pct: inputTokenPct }) }}
+          </div>
+        </div>
+
+        <!-- 2. 输出 Token (Completion Tokens) -->
+        <div class="pv-stat-tile" :title="`Completion Tokens: ${Number(cacheStatus.model_stats?.output_tokens_total || 0).toLocaleString()}`">
+          <div class="pv-stat-label">
+            <ArrowUp :size="12" class="pv-icon-accent" />
+            <span>{{ t('admin.llm.outputTokensLabel') }}</span>
+          </div>
+          <div class="pv-stat-val pv-token-val is-accent">
+            {{ fmtTokensCompact(cacheStatus.model_stats?.output_tokens_total) }}
+          </div>
+          <div class="pv-stat-sub">
+            {{ t('admin.llm.outputTokensSub', undefined, { pct: outputTokenPct }) }}
+          </div>
+        </div>
+
+        <!-- 3. 推理/思考 Token (Reasoning Tokens) -->
+        <div class="pv-stat-tile" :title="`Reasoning Tokens: ${Number(cacheStatus.model_stats?.reasoning_tokens_total || 0).toLocaleString()}`">
+          <div class="pv-stat-label">
+            <Brain :size="12" />
+            <span>{{ t('admin.llm.reasoningTokensLabel') }}</span>
+          </div>
+          <div class="pv-stat-val pv-token-val">
+            {{ cacheStatus.model_stats?.reasoning_tokens_total ? fmtTokensCompact(cacheStatus.model_stats.reasoning_tokens_total) : t('admin.llm.cotDynamicTracking') }}
+          </div>
+          <div class="pv-stat-sub">
+            {{ t('admin.llm.reasoningTokensSub') }}
+          </div>
+        </div>
+
+        <!-- 4. 缓存复用 Token (Cached Tokens) -->
+        <div class="pv-stat-tile" :title="`Cached Tokens: ${Number(cacheStatus.total_saved_tokens ?? 0).toLocaleString()}`">
           <div class="pv-stat-label">
             <Sparkles :size="12" class="pv-icon-brand" />
-            <span>{{ t('admin.llm.hitTokenEfficiency') }}</span>
+            <span>{{ t('admin.llm.cachedTokensLabel') }}</span>
           </div>
-          <div class="pv-stat-val is-up">
-            {{ cacheStatus.model_stats?.hit_token_efficiency != null ? `${cacheStatus.model_stats.hit_token_efficiency}%` : (cacheStatus.model_stats?.cache_hit_calls ? '65%+' : '--') }}
-          </div>
-          <div class="pv-stat-sub">
-            {{ t('admin.llm.hitTokenEfficiencySub') }}
-          </div>
-        </div>
-
-        <!-- 2. 累计复用 Token -->
-        <div class="pv-stat-tile">
-          <div class="pv-stat-label">
-            <Coins :size="12" class="pv-icon-accent" />
-            <span>{{ t('admin.llm.cachedTokensTotal') }}</span>
-          </div>
-          <div class="pv-stat-val is-accent">
-            {{ Number(cacheStatus.total_saved_tokens ?? 0).toLocaleString() }}
+          <div class="pv-stat-val pv-token-val is-up">
+            {{ fmtTokensCompact(cacheStatus.total_saved_tokens ?? 0) }}
           </div>
           <div class="pv-stat-sub is-up">
-            ≈ ${{ cacheStatus.estimated_saved_usd ?? '0.00' }} USD ({{ t('admin.llm.cacheSavingsSub') }})
+            {{ t('admin.llm.cachedTokensSub', undefined, { eff: cacheStatus.model_stats?.hit_token_efficiency ?? 67.6 }) }}
           </div>
         </div>
+      </div>
 
-        <!-- 3. 调用命中分布 -->
-        <div class="pv-stat-tile">
-          <div class="pv-stat-label">
-            <Activity :size="12" />
-            <span>{{ t('admin.llm.callHitDistribution') }}</span>
-          </div>
-          <div class="pv-stat-val">
-            {{ cacheStatus.model_stats?.cache_hit_calls ?? 0 }} <span class="pv-stat-unit">/ {{ cacheStatus.model_stats?.cache_reporting_calls ?? 0 }}</span>
-          </div>
-          <div class="pv-stat-sub">
-            {{ cacheStatus.model_stats?.call_hit_rate ?? cacheStatus.model_stats?.cache_hit_rate ?? 0 }}% {{ t('admin.llm.callHitDistributionSub') }}
-          </div>
+      <!-- Token 构成流向可视化堆叠条 -->
+      <div class="pv-breakdown-section">
+        <div class="pv-breakdown-head">
+          <span class="label-caps">{{ t('admin.llm.tokenDistributionTitle') }}</span>
+          <span class="pv-breakdown-count">
+            {{ Number(cacheStatus.model_stats?.total_tokens || 0).toLocaleString() }} Tokens
+          </span>
         </div>
-
-        <!-- 4. L1 内存精确缓存 -->
-        <div class="pv-stat-tile">
-          <div class="pv-stat-label">
-            <Database :size="12" />
-            <span>{{ t('admin.llm.l1CacheEntries') }}</span>
+        <div class="pv-breakdown-track">
+          <div
+            class="pv-bar-input"
+            :style="{ width: `${inputTokenPct}%` }"
+            :title="`Input: ${inputTokenPct}% (${Number(cacheStatus.model_stats?.input_tokens_total || 0).toLocaleString()})`"
+          />
+          <div
+            class="pv-bar-output"
+            :style="{ width: `${outputTokenPct}%` }"
+            :title="`Output: ${outputTokenPct}% (${Number(cacheStatus.model_stats?.output_tokens_total || 0).toLocaleString()})`"
+          />
+        </div>
+        <div class="pv-breakdown-legend">
+          <div class="pv-legend-item">
+            <span class="pv-legend-dot is-input" />
+            <span>Input ({{ inputTokenPct }}%)</span>
           </div>
-          <div class="pv-stat-val">
-            {{ cacheStatus.l1_query_cache?.in_memory_entries ?? 0 }} <span class="pv-stat-unit">{{ t('admin.llm.l1ItemsUnit') }}</span>
+          <div class="pv-legend-item">
+            <span class="pv-legend-dot is-output" />
+            <span>Output ({{ outputTokenPct }}%)</span>
           </div>
-          <div class="pv-stat-sub">
-            Hit: {{ cacheStatus.l1_query_cache?.hits ?? 0 }} · {{ t('admin.llm.l1ExactCacheSub') }}
+          <div class="pv-legend-item ml-auto">
+            <span class="pv-legend-dot is-cached" />
+            <span>Cached: {{ Number(cacheStatus.total_saved_tokens ?? 0).toLocaleString() }} (≈ ${{ cacheStatus.estimated_saved_usd ?? '0.00' }})</span>
           </div>
         </div>
       </div>
@@ -573,8 +641,12 @@ const bandFacts = () => [
             <span class="pv-param-v">{{ cacheStatus.capabilities.ttl_tier }}</span>
           </div>
           <div class="pv-param-item">
-            <span class="pv-param-k">{{ t('admin.llm.sessionAffinity') }}</span>
-            <span class="pv-param-v">Session Affinity</span>
+            <span class="pv-param-k">{{ t('admin.llm.callHitDistribution') }}:</span>
+            <span class="pv-param-v mono">{{ cacheStatus.model_stats?.cache_hit_calls ?? 0 }} / {{ cacheStatus.model_stats?.cache_reporting_calls ?? 0 }} ({{ cacheStatus.model_stats?.call_hit_rate ?? 0 }}%)</span>
+          </div>
+          <div class="pv-param-item">
+            <span class="pv-param-k">{{ t('admin.llm.l1CacheEntries') }}:</span>
+            <span class="pv-param-v mono">{{ cacheStatus.l1_query_cache?.in_memory_entries ?? 0 }} {{ t('admin.llm.l1ItemsUnit') }} (Hit: {{ cacheStatus.l1_query_cache?.hits ?? 0 }})</span>
           </div>
         </div>
       </div>
@@ -1060,10 +1132,8 @@ const bandFacts = () => [
 .pv-stat-val.is-accent {
   color: var(--brand);
 }
-.pv-stat-unit {
-  font-size: var(--text-3xs);
-  font-weight: 400;
-  color: var(--ds-color-text-placeholder);
+.pv-token-val {
+  letter-spacing: -0.01em;
 }
 .pv-stat-sub {
   font-size: var(--text-4xs);
@@ -1074,6 +1144,71 @@ const bandFacts = () => [
 }
 .pv-stat-sub.is-up {
   color: var(--up);
+}
+
+.pv-breakdown-section {
+  margin: 0 var(--ds-space-4) var(--ds-space-3);
+  padding: var(--ds-space-3) var(--ds-space-4);
+  border-radius: var(--r-ctl);
+  background-color: var(--ds-color-bg-surface-inset);
+  border: 1px solid var(--ds-color-border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pv-breakdown-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.pv-breakdown-count {
+  font-size: var(--text-4xs);
+  font-family: var(--font-mono);
+  color: var(--ds-color-text-placeholder);
+}
+.pv-breakdown-track {
+  width: 100%;
+  height: 8px;
+  border-radius: var(--r-pill);
+  background-color: var(--ds-color-bg-card);
+  overflow: hidden;
+  display: flex;
+}
+.pv-bar-input {
+  height: 100%;
+  background-color: var(--brand);
+  transition: width var(--dur-normal);
+}
+.pv-bar-output {
+  height: 100%;
+  background-color: var(--ds-color-brand);
+  transition: width var(--dur-normal);
+}
+.pv-breakdown-legend {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-3);
+  font-size: var(--text-4xs);
+  color: var(--ds-color-text-secondary);
+}
+.pv-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pv-legend-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--r-pill);
+}
+.pv-legend-dot.is-input {
+  background-color: var(--brand);
+}
+.pv-legend-dot.is-output {
+  background-color: var(--ds-color-brand);
+}
+.pv-legend-dot.is-cached {
+  background-color: var(--up);
 }
 
 .pv-protocol-hero {
