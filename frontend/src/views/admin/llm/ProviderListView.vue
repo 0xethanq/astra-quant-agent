@@ -513,7 +513,7 @@ const bandFacts = () => [
             class="badge mono"
             :title="`Estimated API Spend: $${cacheStatus.estimated_spend_usd} USD`"
           >
-            {{ t('admin.llm.estimatedSpendBadge') }}: ≈ ${{ cacheStatus.estimated_spend_usd }} USD
+            {{ t('admin.llm.estimatedSpendBadge') }}: ≈ ${{ Number(cacheStatus.estimated_spend_usd).toFixed(2) }}
           </span>
         </div>
       </header>
@@ -572,7 +572,7 @@ const bandFacts = () => [
             {{ fmtTokensCompact(cacheStatus.total_saved_tokens ?? 0) }}
           </div>
           <div class="pv-stat-sub is-up">
-            {{ t('admin.llm.cachedTokensSub', undefined, { rate: cacheStatus.model_stats?.token_cache_rate ?? 2.3, saved: cacheStatus.estimated_saved_usd ?? '0.014' }) }}
+            {{ t('admin.llm.cachedTokensSub', undefined, { rate: `${cacheStatus.model_stats?.token_cache_rate ?? 2.3}%` }) }}
           </div>
         </div>
       </div>
@@ -617,7 +617,7 @@ const bandFacts = () => [
           </div>
           <div class="pv-legend-item pv-legend-cached">
             <span class="pv-legend-dot is-cached" />
-            <span>Cached: {{ Number(cacheStatus.total_saved_tokens ?? 0).toLocaleString() }} (≈ ${{ cacheStatus.estimated_saved_usd ?? '0.00' }})</span>
+            <span>Cached ({{ fmtTokensCompact(cacheStatus.total_saved_tokens ?? 0) }})</span>
           </div>
         </div>
       </div>
