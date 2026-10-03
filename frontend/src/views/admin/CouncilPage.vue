@@ -503,7 +503,7 @@ onMounted(loadData);
         <header class="card-head">
           <div>
             <h2 class="card-title">{{ t('admin.council.consensusLabel') }}</h2>
-            <p class="card-sub">{{ t('admin.council.timeoutHint') }}</p>
+            <p class="card-sub">{{ t('admin.council.desc') }}</p>
           </div>
           <div class="cn-head-actions">
             <button type="button" class="btn btn-ghost btn-sm" :disabled="!auth.isSuperadmin" @click="applySuite('hedge_fund_desk')">
@@ -1129,6 +1129,9 @@ onMounted(loadData);
   display: flex;
   flex-direction: column;
   padding: var(--ds-space-1) 0;
+  max-height: 60vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .cn-seat {
   display: flex;

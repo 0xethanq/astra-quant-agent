@@ -426,6 +426,19 @@ READONLY_OUTPUT_SCHEMA = """==== 【严格 JSON 规范契约与完整输出骨�
       "market_structure": "4H大势多头，1H均线回踩企稳",
       "factor_evidence": "1H MACD柱=45.2加速度+12.8，RSI=61.5，CVD=+680万U，OBI=+28.5%，VWAP上方0.44%，费率0.0036%，R:R=2.5",
       "volume_and_oi": "量能缩量企稳，主力净流入"
+    },
+    "ETH-USDT-SWAP": {
+      "action": "SELL_SHORT",
+      "confidence": 85.0,
+      "leverage": 3,
+      "margin_usdt": 100.0,
+      "entry_price": 2720.0,
+      "take_profit_price": 2600.0,
+      "stop_loss_price": 2780.0,
+      "summary_reason": "顶背离遇阻承压放量做空",
+      "market_structure": "4H震荡偏弱，1H反弹遇阻承压",
+      "factor_evidence": "1H MACD柱=-8.5加速度-1.2，RSI=68.2，CVD=-420万U，OBI=-35.0%，VWAP下方0.52%，费率0.0082%，R:R=2.0",
+      "volume_and_oi": "反弹缩量受阻，主力净流出"
     }
   }
 }

@@ -74,8 +74,8 @@ const ocoCoverage = computed(() => {
 <template>
   <div class="dsh-card">
     <!-- 6 个核心指标单元格 -->
-    <div class="grid grid-cols-2 gap-2 p-2 sm:grid-cols-3 xl:grid-cols-6 bg-[var(--surface-1)]">
-      <div class="rounded-lg bg-[var(--surface-2)]/30 hover:bg-[var(--surface-2)]/70 transition-colors flex flex-col justify-between">
+    <div class="grid grid-cols-2 gap-2 p-2.5 sm:grid-cols-3 xl:grid-cols-6 bg-[var(--surface-1)]">
+      <div class="rounded-xl bg-[var(--surface-2)]/40 hover:bg-[var(--surface-2)]/80 border border-white/[0.03] hover:border-white/[0.08] p-3 transition-all flex flex-col justify-between">
         <BaseStat
           :label="t('dash.matrix.kpi.equity')"
           :value="totalEquity"
@@ -84,7 +84,7 @@ const ocoCoverage = computed(() => {
           <!-- 今日盈亏：总权益未知时这一行整块不渲染；今日盈亏本身在下方的「今日已实现」有专格。 -->
           <template v-if="totalEquityNum !== null" #extra>
             <div class="flex items-center gap-2 mt-1">
-              <span class="num text-xs font-semibold" :class="todayNet >= 0 ? 'up' : 'down'">
+              <span class="num text-xs font-semibold px-2 py-0.5 rounded-md" :class="todayNet >= 0 ? 'up bg-[var(--up-bg)] border border-[var(--up-line)]' : 'down bg-[var(--down-bg)] border border-[var(--down-line)]'">
                 <template v-if="todayNet !== 0">{{ arrow(todayNet) }} </template>{{ fmtSigned(todayNet) }}
               </span>
             </div>
@@ -92,7 +92,7 @@ const ocoCoverage = computed(() => {
         </BaseStat>
       </div>
 
-      <div class="rounded-lg bg-[var(--surface-2)]/30 hover:bg-[var(--surface-2)]/70 transition-colors flex flex-col justify-between">
+      <div class="rounded-xl bg-[var(--surface-2)]/40 hover:bg-[var(--surface-2)]/80 border border-white/[0.03] hover:border-white/[0.08] p-3 transition-all flex flex-col justify-between">
         <BaseStat
           :label="t('dash.matrix.kpi.todayPnl')"
           :value="fmtSigned(todayNet)"
@@ -102,7 +102,7 @@ const ocoCoverage = computed(() => {
         />
       </div>
 
-      <div class="rounded-lg bg-[var(--surface-2)]/30 hover:bg-[var(--surface-2)]/70 transition-colors flex flex-col justify-between">
+      <div class="rounded-xl bg-[var(--surface-2)]/40 hover:bg-[var(--surface-2)]/80 border border-white/[0.03] hover:border-white/[0.08] p-3 transition-all flex flex-col justify-between">
         <BaseStat
           :label="t('dash.matrix.kpi.floatPnl')"
           :value="fmtSigned(floatPnl)"
@@ -112,7 +112,7 @@ const ocoCoverage = computed(() => {
         />
       </div>
 
-      <div class="rounded-lg bg-[var(--surface-2)]/30 hover:bg-[var(--surface-2)]/70 transition-colors flex flex-col justify-between">
+      <div class="rounded-xl bg-[var(--surface-2)]/40 hover:bg-[var(--surface-2)]/80 border border-white/[0.03] hover:border-white/[0.08] p-3 transition-all flex flex-col justify-between">
         <BaseStat
           :label="t('dash.matrix.kpi.ls')"
           :value="`${longCount} / ${shortCount}`"
@@ -120,7 +120,7 @@ const ocoCoverage = computed(() => {
         />
       </div>
 
-      <div class="rounded-lg bg-[var(--surface-2)]/30 hover:bg-[var(--surface-2)]/70 transition-colors flex flex-col justify-between">
+      <div class="rounded-xl bg-[var(--surface-2)]/40 hover:bg-[var(--surface-2)]/80 border border-white/[0.03] hover:border-white/[0.08] p-3 transition-all flex flex-col justify-between">
         <BaseStat
           :label="t('dash.matrix.kpi.margin')"
           :value="`${fmtNum(marginUsage, 1)}%`"
@@ -130,7 +130,7 @@ const ocoCoverage = computed(() => {
         />
       </div>
 
-      <div class="rounded-lg bg-[var(--surface-2)]/30 hover:bg-[var(--surface-2)]/70 transition-colors flex flex-col justify-between">
+      <div class="rounded-xl bg-[var(--surface-2)]/40 hover:bg-[var(--surface-2)]/80 border border-white/[0.03] hover:border-white/[0.08] p-3 transition-all flex flex-col justify-between">
         <BaseStat
           :label="t('dash.matrix.kpi.oco')"
           :value="`${ocoCoverage.pct}%`"

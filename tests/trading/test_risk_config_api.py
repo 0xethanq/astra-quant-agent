@@ -346,7 +346,7 @@ class PromptRiskContractTests(unittest.TestCase):
             self.assertIn("全系统同向持仓上限: 5 笔", budget)
             self.assertIn("金字塔加仓: 已禁用", budget)   # scale=0 自动切换禁令文案
             self.assertIn("盈亏比 R:R 硬底线: 2.0", budget)
-            self.assertIn("新开仓最低置信度门禁: 80%", budget)
+            self.assertIn("新开仓最低置信度门禁: 68%", budget)
             self.assertIn("止损后同标的冷静期: 30 分钟", budget)
             # System 宪法保持逐字不变（快照安全）。
             # ★ 2026-09-30 重钉：`_SYSTEM_CORE` / `_PYRAMID` 已删除（那是提示词正文，

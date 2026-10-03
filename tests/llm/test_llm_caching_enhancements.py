@@ -38,8 +38,19 @@ class TransportCachingSpecTests(unittest.TestCase):
         self.assertIsInstance(payload["system"], list)
         self.assertEqual(len(payload["system"]), 1)
         self.assertEqual(payload["system"][0]["type"], "text")
-        self.assertEqual(payload["system"][0]["cache_control"], {"type": "ephemeral"})
+        # 默认 2026 规范：1h 扩展生命周期，避免 15 分钟交易周期击穿短缓存
+        self.assertEqual(payload["system"][0]["cache_control"], {"type": "ephemeral", "ttl": "1h"})
         self.assertEqual(payload["system"][0]["text"], long_sys)
+
+        # 显式 5m 回退测试
+        with patch.dict("os.environ", {"ASTRA_LLM_CACHE_TTL": "5m"}):
+            _, _, payload_5m = build_request_spec(
+                model="claude-3-7-sonnet",
+                messages=[{"role": "system", "content": long_sys}, {"role": "user", "content": "Analyze market"}],
+                base_url="https://api.anthropic.com/v1",
+                api_format="claude_messages",
+            )
+            self.assertEqual(payload_5m["system"][0]["cache_control"], {"type": "ephemeral"})
 
     def test_openai_session_affinity_injection(self):
         _, headers_chat, payload_chat = build_request_spec(
@@ -49,6 +60,8 @@ class TransportCachingSpecTests(unittest.TestCase):
             api_format="openai_chat",
         )
         self.assertIn("X-Session-ID", headers_chat)
+        self.assertIn("X-Astra-Affinity", headers_chat)
+        self.assertIn("X-Channel-Affinity", headers_chat)
         self.assertTrue(headers_chat["X-Session-ID"].startswith("astra-"))
         self.assertEqual(payload_chat["user"], headers_chat["X-Session-ID"])
 
@@ -59,6 +72,8 @@ class TransportCachingSpecTests(unittest.TestCase):
             api_format="openai_responses",
         )
         self.assertIn("X-Session-ID", headers_resp)
+        self.assertIn("X-Astra-Affinity", headers_resp)
+        self.assertIn("X-Channel-Affinity", headers_resp)
         self.assertEqual(payload_resp["user"], headers_resp["X-Session-ID"])
 
     def test_parse_llm_response_hit_ratio_calculation(self):
@@ -161,6 +176,52 @@ class CouncilSharedPrefixTests(unittest.TestCase):
             prefix1 = u1[:u1.index("【本席位提交指令】")]
             prefix2 = u2[:u2.index("【本席位提交指令】")]
             self.assertEqual(prefix1, prefix2)
+
+
+class CachingCapabilitiesAndSavingsTests(unittest.TestCase):
+    def test_detect_caching_capabilities_claude(self):
+        from astra_backend.llm.capabilities import detect_caching_capabilities
+        caps = detect_caching_capabilities("claude-3-7-sonnet", "claude_messages")
+        self.assertTrue(caps["claude_ephemeral"])
+        self.assertTrue(caps["claude_extended_cache"])
+        self.assertEqual(caps["threshold_tokens"], 1024)
+        self.assertIn("1h (Extended)", caps["ttl_tier"])
+
+    def test_detect_caching_capabilities_gemini(self):
+        from astra_backend.llm.capabilities import detect_caching_capabilities
+        caps = detect_caching_capabilities("gemini-3.8-flash", "openai_chat")
+        self.assertTrue(caps["gemini_context"])
+        self.assertTrue(caps["gemini_implicit_cache"])
+        self.assertEqual(caps["threshold_tokens"], 2048)
+        self.assertIn("隐式自动前缀缓存", caps["primary_protocol"])
+
+    def test_detect_caching_capabilities_deepseek(self):
+        from astra_backend.llm.capabilities import detect_caching_capabilities
+        caps = detect_caching_capabilities("deepseek-reasoner", "openai_chat")
+        self.assertTrue(caps["deepseek_prefix"])
+        self.assertTrue(caps["deepseek_disk_cache"])
+        self.assertEqual(caps["threshold_tokens"], 64)
+        self.assertIn("硬盘落盘缓存", caps["primary_protocol"])
+
+    def test_detect_caching_capabilities_qwen_kimi(self):
+        from astra_backend.llm.capabilities import detect_caching_capabilities
+        caps_q = detect_caching_capabilities("qwen-max", "openai_chat")
+        self.assertTrue(caps_q["qwen_kimi_dual"])
+        caps_k = detect_caching_capabilities("kimi-k3", "openai_chat")
+        self.assertTrue(caps_k["qwen_kimi_dual"])
+
+    def test_estimate_cache_savings_usd(self):
+        from astra_backend.llm.capabilities import estimate_cache_savings_usd
+        # 0 tokens
+        self.assertEqual(estimate_cache_savings_usd("gpt-4o", 0), 0.0)
+        # Claude (2.70 / 1M)
+        self.assertEqual(estimate_cache_savings_usd("claude-3-7-sonnet", 1_000_000), 2.70)
+        # DeepSeek (0.21 / 1M)
+        self.assertEqual(estimate_cache_savings_usd("deepseek-chat", 1_000_000), 0.21)
+        # Gemini Flash (0.1125 / 1M)
+        self.assertEqual(estimate_cache_savings_usd("gemini-2.5-flash", 1_000_000), 0.1125)
+        # Gemini Pro (0.9375 / 1M)
+        self.assertEqual(estimate_cache_savings_usd("gemini-2.5-pro", 1_000_000), 0.9375)
 
 
 if __name__ == "__main__":

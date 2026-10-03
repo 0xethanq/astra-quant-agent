@@ -42,7 +42,7 @@ export const zhAdminOverview = {
   hudEffortStd: '标准',
   hudArbiter: '多模型参谋仲裁',
   hudVenueRoute: 'OKX V5 REST 直签 · 私有账户',
-  hudRiskLine: '风控熔断与物理校验',
+  hudRiskLine: '物理风控与熔断',
   hudPhysicalBlock: '日亏熔断 + 报价几何',
   hudPipeReady: '行情不完整 / 几何非法硬锁拒单',
   hudBreakerReady: '熔断门禁就绪',

@@ -45,9 +45,9 @@ export const enAdminAbout = {
   commitsTitle: "Pending Updates (Latest Commits):",
 
   // ── added by the rebuild (batch 8) ──
-  productTitle: 'Enterprise Product Profile',
-  pitchTitle: 'Core Engineering Positioning',
-  pitchBody: 'Institutional-grade autonomous OKX perpetual trading OS powered by multi-model adversarial council debate, 7-tier microstructure calculus verification, and deterministic physical risk control.',
+  productTitle: 'Product Profile',
+  pitchTitle: 'System Positioning',
+  pitchBody: 'Autonomous OKX perpetual trading system powered by multi-model analysis and deterministic Python physical risk control.',
   bandVersion: 'System version',
   bandControlPlane: 'Gateway control plane',
   bandRuntime: 'Runtime',

@@ -43,7 +43,7 @@ def _fixture_pool(path):
 
 
 def setUpModule():
-    """PoolCapacity 断言同向上限=3（基线）；隔离生产 .env 当前套件值；池换成夹具。"""
+    """PoolCapacity 断言同向上限=4（基线）；隔离生产 .env 当前套件值；池换成夹具。"""
     global _POOL_SCOPE
     pin_baseline_risk_env()
     tmp = tempfile.TemporaryDirectory()
@@ -164,7 +164,7 @@ class PoolCapacityNotHardcodedTests(unittest.TestCase):
             self.assertGreaterEqual(fixture_pool, 6, "夹具池至少 6 条（本用例的基线前提）")
             cap, same = effective_max_positions(fixture_pool)
             self.assertEqual(cap, fixture_pool, "并发持仓上限应随标的池自动伸缩")
-            self.assertEqual(same, 3, "同向持仓上限应固定为 3(防 Beta 踩踏)，不随池扩容放大")
+            self.assertEqual(same, 4, "同向持仓上限应固定为 4(防 Beta 踩踏)，不随池扩容放大")
 
         live_cap, live_same = effective_max_positions(len(aft.TARGET_INSTRUMENTS))
         self.assertEqual(aft.MAX_CONCURRENT_POSITIONS, live_cap,

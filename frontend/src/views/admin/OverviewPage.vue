@@ -681,9 +681,12 @@ function parseAuditContext(action: string, detail: any): { label: string; tag: s
   border: 1px solid var(--up-line);
 }
 .ov-hud-badge.is-shield {
-  background: rgba(103, 153, 254, 0.1);
-  color: var(--ds-color-brand);
-  border: 1px solid rgba(103, 153, 254, 0.25);
+  background: rgba(16, 185, 129, 0.1);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  font-size: var(--text-4xs);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
 }
 .ov-hud-link-arrow {
   margin-left: auto;
@@ -813,6 +816,10 @@ function parseAuditContext(action: string, detail: any): { label: string; tag: s
   flex-direction: column;
   /* 批 114：窄屏（移动端 390px）卡片宽度不足时允许横向平滑滚动，不裁切右侧时间与状态 */
   overflow-x: auto;
+  max-height: 520px;
+  overflow-y: auto;
+  touch-action: pan-x pan-y;
+  overscroll-behavior-x: contain;
 }
 .ov-stream-item {
   display: grid;
@@ -1101,6 +1108,8 @@ function parseAuditContext(action: string, detail: any): { label: string; tag: s
   flex-direction: column;
   /* 批 114：窄屏（移动端 390px）允许横向平滑滚动，不裁切右侧详情指示与时间 */
   overflow-x: auto;
+  touch-action: pan-x pan-y;
+  overscroll-behavior-x: contain;
 }
 .ov-audit-row {
   display: grid;
@@ -1205,6 +1214,9 @@ function parseAuditContext(action: string, detail: any): { label: string; tag: s
   border-radius: var(--r-xs);
   background: rgba(0, 0, 0, 0.4);
   border: 1px solid rgba(255, 255, 255, 0.06);
+  max-height: 360px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .ov-json-code {
   margin: 0;

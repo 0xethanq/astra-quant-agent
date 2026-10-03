@@ -1,15 +1,15 @@
 export const enAbout = {
   title: 'About AstraQuant',
-  desc: 'Institutional-Grade Autonomous Quant Trading OS · Adversarial Multi-Model Council · 7-Tier Microstructure Calculus · Deterministic Physical Risk Control',
-  pitch: '"Cognition belongs to the models; physical verification belongs to the calculus; deterministic discipline belongs to the Python risk base."',
+  desc: 'Autonomous Crypto Trading System · Multi-Model Analysis · Derivative Microstructure Factors · Deterministic Code Risk Control',
+  pitch: '"Models propose analytical hypotheses, quantitative factors verify market structure, and deterministic Python code enforces risk limits and stop-losses."',
   arch: {
     title: 'Core Architectural Pillars',
-    stack: 'FastAPI + Vue 3 Institutional Workstation · OKX V5 Native Direct Signing',
+    stack: 'FastAPI + Vue 3 Trading Workstation · OKX V5 Native Direct Signing',
     points: [
-      '[Adversarial Council] Multi-model trading desk cross-examination & game-theoretic arbitration eliminating single-agent blindspots',
-      '[Microstructure Calculus] 7-tier derivative matrix (CVD orderflow, L2 OBI depth, options IV surface, VWAP footprint) for physical verification',
-      '[Deterministic Risk] Zero-trust Python physical risk gate + 100% exchange cloud OCO protection with absolute fail-closed veto',
-      '[Enterprise Prompt Caching] Shared prefix broadcast (>90% cache hit) and Zone 0~4 monotonic volatility hierarchy with sub-second TTFT',
+      '[Model Synergy] Specialized multi-model division of labor (Macro, Trend, Microstructure) to reduce single-model bias',
+      '[Data Verification] Ingesting CVD order flow, orderbook depth OBI, options IV skew, and VWAP for structural validation',
+      '[Deterministic Risk] Python physical risk gates + 100% exchange-side cloud OCO stop-losses with veto authority',
+      '[Prompt Caching] Shared-prefix prompt caching (>90% hit rate) with tiered volatility hierarchy for low latency and lower cost',
     ],
   },
   repo: { title: 'Open-Source Repository', visit: 'Visit GitHub Repo', starHint: 'Stars & architectural discussions welcome' },

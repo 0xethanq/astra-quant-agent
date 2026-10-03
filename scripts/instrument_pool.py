@@ -76,6 +76,11 @@ DEFAULT_INSTRUMENTS = [
     {"instId": "ETH-USDT-SWAP", "name": "ETH", "type": "crypto", "ccy": "ETH", "tier": "tier_1_bluechip", "max_leverage": 12, "sl_atr_mult": 1.8, "base_sz": 1, "precision": 2, "ctVal": 0.1, "tickSz": "0.01", "minSz": "0.01", "risk_per_trade_usd": 0.0},
     {"instId": "SOL-USDT-SWAP", "name": "SOL", "type": "crypto", "ccy": "SOL", "tier": "tier_2_momentum", "max_leverage": 6, "sl_atr_mult": 2.2, "base_sz": 1, "precision": 2, "ctVal": 1.0, "tickSz": "0.01", "minSz": "0.01", "risk_per_trade_usd": 0.0},
     {"instId": "XRP-USDT-SWAP", "name": "XRP", "type": "crypto", "ccy": "XRP", "tier": "tier_2_momentum", "max_leverage": 6, "sl_atr_mult": 2.2, "base_sz": 1, "precision": 4, "ctVal": 100.0, "tickSz": "0.0001", "minSz": "0.01", "risk_per_trade_usd": 0.0},
+    {"instId": "SUI-USDT-SWAP", "name": "SUI", "type": "crypto", "ccy": "SUI", "tier": "tier_2_momentum", "max_leverage": 6, "sl_atr_mult": 2.2, "base_sz": 1, "precision": 4, "ctVal": 1.0, "tickSz": "0.0001", "minSz": "1.0", "risk_per_trade_usd": 0.0},
+    {"instId": "AVAX-USDT-SWAP", "name": "AVAX", "type": "crypto", "ccy": "AVAX", "tier": "tier_2_momentum", "max_leverage": 6, "sl_atr_mult": 2.2, "base_sz": 1, "precision": 3, "ctVal": 1.0, "tickSz": "0.001", "minSz": "0.1", "risk_per_trade_usd": 0.0},
+    {"instId": "LINK-USDT-SWAP", "name": "LINK", "type": "crypto", "ccy": "LINK", "tier": "tier_2_momentum", "max_leverage": 6, "sl_atr_mult": 2.2, "base_sz": 1, "precision": 3, "ctVal": 1.0, "tickSz": "0.001", "minSz": "0.1", "risk_per_trade_usd": 0.0},
+    {"instId": "OP-USDT-SWAP", "name": "OP", "type": "crypto", "ccy": "OP", "tier": "tier_2_momentum", "max_leverage": 6, "sl_atr_mult": 2.2, "base_sz": 1, "precision": 5, "ctVal": 1.0, "tickSz": "0.00001", "minSz": "1.0", "risk_per_trade_usd": 0.0},
+    {"instId": "BNB-USDT-SWAP", "name": "BNB", "type": "crypto", "ccy": "BNB", "tier": "tier_2_momentum", "max_leverage": 6, "sl_atr_mult": 2.2, "base_sz": 1, "precision": 1, "ctVal": 0.01, "tickSz": "0.1", "minSz": "1.0", "risk_per_trade_usd": 0.0},
 ]
 
 

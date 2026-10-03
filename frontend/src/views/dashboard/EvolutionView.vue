@@ -291,7 +291,7 @@ const md = computed(() => (store.data as any)?.ai_trading_memory_md || '');
               {{ t('dash.evolution.memory.title') }}
             </h2>
 
-            <BaseEmpty v-if="!rules.length" :text="t('dash.evolution.memory.empty')" />
+            <BaseEmpty v-if="!rules.length" :text="t('dash.evolution.memory.empty')" :desc="t('dash.evolution.memory.desc')" />
 
             <div v-else class="space-y-2.5">
               <div

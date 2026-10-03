@@ -177,6 +177,19 @@ async function handleLogin() {
   background-color: var(--ds-color-bg-page);
   overflow: hidden;
 }
+.auth-page::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 640px;
+  height: 640px;
+  background: radial-gradient(circle, rgba(16, 185, 129, 0.07) 0%, rgba(6, 78, 59, 0.02) 45%, transparent 70%);
+  pointer-events: none;
+  border-radius: 50%;
+  filter: blur(40px);
+}
 
 /* 顶部操作条 */
 .auth-topbar {

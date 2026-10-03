@@ -417,7 +417,7 @@ onMounted(() => {
     <!-- ══════════════════════════════════════════════════
          视图 1：三路系统运行日志控制台
          ══════════════════════════════════════════════════ -->
-    <div v-if="currentHubTab === 'logs'" id="dc-panel-logs" role="tabpanel" aria-labelledby="dc-tab-logs" tabindex="0">
+    <div v-if="currentHubTab === 'logs'" id="dc-panel-logs" role="tabpanel" aria-labelledby="dc-tab-logs" tabindex="0" class="dc-panel">
       <section class="card dc-console">
         <header class="card-head dc-head">
         <div class="dc-head-left">
@@ -587,7 +587,7 @@ onMounted(() => {
     <!-- ══════════════════════════════════════════════════
          视图 2：全系统报错汇总大盘 (Error Center)
          ══════════════════════════════════════════════════ -->
-    <div v-else-if="currentHubTab === 'errors'" id="dc-panel-errors" role="tabpanel" aria-labelledby="dc-tab-errors" tabindex="0">
+    <div v-else-if="currentHubTab === 'errors'" id="dc-panel-errors" role="tabpanel" aria-labelledby="dc-tab-errors" tabindex="0" class="dc-panel">
     <section class="card flex flex-col flex-1 min-h-[400px]">
       <header class="card-head dc-head">
         <div class="dc-head-left">
@@ -718,7 +718,7 @@ onMounted(() => {
     <!-- ══════════════════════════════════════════════════
          视图 3：AI 决策卷宗 (AI Brain Decisions)
          ══════════════════════════════════════════════════ -->
-    <div v-else-if="currentHubTab === 'decisions'" id="dc-panel-decisions" role="tabpanel" aria-labelledby="dc-tab-decisions" tabindex="0">
+    <div v-else-if="currentHubTab === 'decisions'" id="dc-panel-decisions" role="tabpanel" aria-labelledby="dc-tab-decisions" tabindex="0" class="dc-panel">
     <section class="card flex flex-col flex-1 min-h-[400px]">
       <header class="card-head dc-head">
         <div class="dc-head-left">
@@ -841,14 +841,15 @@ onMounted(() => {
     <!-- ══════════════════════════════════════════════════
          视图 4：操作审计流水
          ══════════════════════════════════════════════════ -->
-    <div v-else id="dc-panel-audit" role="tabpanel" aria-labelledby="dc-tab-audit" tabindex="0">
+    <div v-else id="dc-panel-audit" role="tabpanel" aria-labelledby="dc-tab-audit" tabindex="0" class="dc-panel">
       <AuditPage embedded />
     </div>
   </div>
 </template>
 
 <style scoped>
-.dc {
+.dc,
+.dc-panel {
   display: flex;
   flex-direction: column;
   gap: var(--ds-space-4);

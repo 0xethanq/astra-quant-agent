@@ -358,28 +358,23 @@ def admin_get_llm_cache_status(x_astra_session: str | None = Header(default=None
     from astra_gateway.store import GatewayStore
     from astra_backend.llm.query_cache import get_query_cache_stats
     from astra_gateway.cache_warmer import warmup_mode
+    from astra_backend.llm.capabilities import detect_caching_capabilities, estimate_cache_savings_usd
 
     store = GatewayStore(DB_PATH)
     stats = store.model_stats()
     l1_stats = get_query_cache_stats()
 
-    # 预估节约金额（基于行业平均输入缓存折扣 ~1.50 USD / 1M cached tokens）
     cached_tokens_total = int(stats.get("cached_tokens_total") or 0)
     l1_saved_tokens = int(l1_stats.get("saved_tokens_total") or 0)
     total_saved_tokens = cached_tokens_total + l1_saved_tokens
-    estimated_saved_usd = round(total_saved_tokens * 0.0000015, 4)
 
     active_runtime = get_active_llm_runtime() or {}
     active_model = str(active_runtime.get("model") or "")
     active_format = str(active_runtime.get("api_format") or "")
 
-    capabilities = {
-        "claude_ephemeral": "claude" in active_model.lower() or active_format == "claude_messages",
-        "deepseek_prefix": "deepseek" in active_model.lower(),
-        "openai_prefix": active_format in ("openai_chat", "openai_responses") and not ("deepseek" in active_model.lower() or "claude" in active_model.lower()),
-        "gemini_context": "gemini" in active_model.lower(),
-        "session_affinity_active": True,
-    }
+    capabilities = detect_caching_capabilities(active_model, active_format)
+    # 基于行业厂商动态真实折扣（Claude 90%, Gemini 75%, DeepSeek 75%~90%, OpenAI 50%）估算节约金额
+    estimated_saved_usd = estimate_cache_savings_usd(active_model, total_saved_tokens)
 
     return {
         "ok": True,

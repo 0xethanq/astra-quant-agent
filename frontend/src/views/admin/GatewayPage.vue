@@ -274,7 +274,7 @@ onMounted(() => {
     <!-- 页签：运行单元三块（被吸收页各自保留页头动作行，按钮一个不少） -->
     <BaseTabs v-model="activeTab" :items="tabs" :label="t('admin.gateway.tabsLabel')" baseId="gw" />
 
-    <div v-if="activeTab === 'dispatch'" id="gw-panel-dispatch" role="tabpanel" aria-labelledby="gw-tab-dispatch" tabindex="0">
+    <div v-if="activeTab === 'dispatch'" id="gw-panel-dispatch" role="tabpanel" aria-labelledby="gw-tab-dispatch" tabindex="0" class="gw-panel">
 
     <!-- 拉取失败（无任何数据） -->
     <div v-if="error && !gw" role="alert" class="state-block is-error">
@@ -375,9 +375,9 @@ onMounted(() => {
           <div class="gw-job gw-job-head">
             <span />
             <span>{{ t('admin.gateway.scheduler.colJob') }}</span>
-            <span>{{ t('admin.gateway.scheduler.colTrigger') }}</span>
-            <span>{{ t('admin.gateway.scheduler.colLastRun') }}</span>
-            <span>{{ t('admin.gateway.scheduler.colStatus') }}</span>
+            <span class="gw-job-cell">{{ t('admin.gateway.scheduler.colTrigger') }}</span>
+            <span class="gw-job-cell">{{ t('admin.gateway.scheduler.colLastRun') }}</span>
+            <span class="text-right sm:text-left">{{ t('admin.gateway.scheduler.colStatus') }}</span>
           </div>
           <div v-for="j in jobs" :key="j.name" class="gw-job" :class="{ 'is-overdue': j.overdue }">
             <span class="dsh-status-dot" :class="j.overdue ? 'error' : 'active'" aria-hidden="true" />
@@ -651,14 +651,15 @@ onMounted(() => {
     </BaseDialog>
     </div>
 
-    <div v-else id="gw-panel-workers" role="tabpanel" aria-labelledby="gw-tab-workers" tabindex="0">
+    <div v-else id="gw-panel-workers" role="tabpanel" aria-labelledby="gw-tab-workers" tabindex="0" class="gw-panel">
       <AgentsPage embedded />
     </div>
   </div>
 </template>
 
 <style scoped>
-.gw {
+.gw,
+.gw-panel {
   display: flex;
   flex-direction: column;
   gap: var(--ds-space-4);
@@ -710,6 +711,16 @@ onMounted(() => {
   min-height: var(--row-h);
   padding: 0 var(--ds-space-4);
   border-bottom: 1px solid var(--ds-color-border-default);
+}
+@media (max-width: 640px) {
+  .gw-job {
+    grid-template-columns: 6px minmax(0, 1fr) auto;
+    gap: var(--ds-space-2);
+    padding: 0 var(--ds-space-3);
+  }
+  .gw-job-cell {
+    display: none;
+  }
 }
 .gw-job:last-child {
   border-bottom: 0;

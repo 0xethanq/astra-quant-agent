@@ -73,3 +73,92 @@ def _detect_api_format(url: str, model_id: str) -> str:
     if "responses" in u:
         return "openai_responses"
     return "openai_chat"
+
+
+def detect_caching_capabilities(model_id: str, api_format: str = "") -> dict[str, Any]:
+    """2026 大模型前缀缓存协议能力与规格判定。
+
+    覆盖最新主流厂商前缀缓存协议与特性：
+    - Anthropic Claude：支持 1h / 5m 分级 TTL 显式扩展缓存断点（cache_control）
+    - Google Gemini：Gemini 2.5/3.x 原生隐式自动前缀缓存（门槛 2048 Tokens，0 存储费，减免 75%）
+    - DeepSeek：HBM + NVMe SSD 上下文硬盘落盘缓存（门槛 64 Tokens，减免 75%~90%）
+    - OpenAI：全自动前缀缓存 + 显式断点与保留策略（门槛 1024 Tokens，128 步长）
+    - 阿里百炼 (Qwen) / Moonshot (Kimi)：显式 + 隐式双模缓存与 1h TTL
+    - 一致性会话粘性路由 (Session Affinity)：跨反代防轮询打散
+    """
+    m = (model_id or "").lower()
+    fmt = (api_format or "").lower()
+
+    is_claude = "claude" in m or fmt == "claude_messages"
+    is_deepseek = "deepseek" in m
+    is_gemini = "gemini" in m
+    is_qwen = "qwen" in m
+    is_kimi = "kimi" in m or "moonshot" in m
+    is_openai_proto = fmt in ("openai_chat", "openai_responses") or not fmt
+    is_openai_family = not (is_claude or is_deepseek or is_gemini or is_qwen or is_kimi) and is_openai_proto
+
+    if is_claude:
+        primary_protocol = "Claude 1h 扩展缓存 / 显式断点 (90% 减免)"
+        threshold_tokens = 1024 if "haiku" not in m else 2048
+        ttl_tier = "1h (Extended) / 5m"
+    elif is_gemini:
+        primary_protocol = "Gemini 隐式自动前缀缓存 (75% 减免)"
+        threshold_tokens = 2048 if ("2.5" in m or "flash" in m) else 4096
+        ttl_tier = "滑动窗口 (自动)"
+    elif is_deepseek:
+        primary_protocol = "DeepSeek 硬盘落盘缓存 (HBM+SSD, 75%~90% 减免)"
+        threshold_tokens = 64
+        ttl_tier = "跨请求落盘单元持久化"
+    elif is_qwen or is_kimi:
+        primary_protocol = "百炼 / Kimi 双模缓存 (80%~90% 减免)"
+        threshold_tokens = 1024
+        ttl_tier = "1h / 5m 可配"
+    else:
+        primary_protocol = "OpenAI 自动/显式前缀缓存 (50%~80% 减免)"
+        threshold_tokens = 1024
+        ttl_tier = "5~10m 滑动"
+
+    return {
+        # 兼容旧键
+        "claude_ephemeral": is_claude,
+        "deepseek_prefix": is_deepseek,
+        "openai_prefix": is_openai_family or (is_openai_proto and not (is_claude or is_deepseek)),
+        "gemini_context": is_gemini,
+        "session_affinity_active": True,
+        # 2026 最新协议增强键
+        "claude_extended_cache": is_claude,
+        "gemini_implicit_cache": is_gemini,
+        "deepseek_disk_cache": is_deepseek,
+        "openai_auto_prefix": is_openai_family or is_openai_proto,
+        "qwen_kimi_dual": is_qwen or is_kimi,
+        "primary_protocol": primary_protocol,
+        "threshold_tokens": threshold_tokens,
+        "ttl_tier": ttl_tier,
+    }
+
+
+def estimate_cache_savings_usd(model_id: str, cached_tokens: int) -> float:
+    """按模型厂商真实折扣动态估算缓存节约金额（USD）。"""
+    if not cached_tokens or cached_tokens <= 0:
+        return 0.0
+    m = (model_id or "").lower()
+    # 每 1M cached tokens 估算节约（USD）
+    if "claude" in m:
+        rate_per_m = 2.70  # $3.00 base -> $0.30 cached, save $2.70/1M
+    elif "deepseek" in m:
+        rate_per_m = 0.21  # ¥2.00 base -> ¥0.50 cached, save ¥1.50/1M ≈ $0.21/1M
+    elif "gemini" in m:
+        if "pro" in m:
+            rate_per_m = 0.9375  # $1.25 base -> $0.3125 cached, save $0.9375/1M
+        else:
+            rate_per_m = 0.1125  # $0.15 base -> $0.0375 cached, save $0.1125/1M
+    elif "gpt-4o-mini" in m:
+        rate_per_m = 0.075  # $0.15 base -> $0.075 cached
+    elif "gpt-4o" in m:
+        rate_per_m = 1.25  # $2.50 base -> $1.25 cached
+    elif "o1" in m or "o3" in m or "o4" in m:
+        rate_per_m = 7.50  # $15.00 base -> $7.50 cached
+    else:
+        rate_per_m = 1.25  # 行业平均
+    return round(float(cached_tokens) * (rate_per_m / 1_000_000.0), 4)
+

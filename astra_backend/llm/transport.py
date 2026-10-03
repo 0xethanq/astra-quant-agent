@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import socket
 import time
 import urllib.error
@@ -121,9 +122,17 @@ def _parse_llm_response(target_format: str, res_json: Dict[str, Any]) -> Tuple[s
         except (TypeError, ValueError):
             pass
     cache_creation = usage.get("cache_creation_input_tokens")
+    if cache_creation is None and isinstance(usage.get("cache_creation"), dict):
+        c_dict = usage.get("cache_creation")
+        cache_creation = sum(int(v) for v in c_dict.values() if isinstance(v, (int, float)))
     if cache_creation is not None:
         try:
             usage["cache_creation_tokens"] = int(cache_creation)
+        except (TypeError, ValueError):
+            pass
+    if usage.get("prompt_cache_miss_tokens") is not None:
+        try:
+            usage["cache_miss_tokens"] = int(usage["prompt_cache_miss_tokens"])
         except (TypeError, ValueError):
             pass
 
@@ -186,6 +195,8 @@ def build_request_spec(
             "anthropic-version": "2023-06-01",
             "anthropic-beta": "prompt-caching-2024-07-31",
             "X-Session-ID": affinity_id,
+            "X-Astra-Affinity": affinity_id,
+            "X-Channel-Affinity": affinity_id,
         }
         if api_key:
             headers["x-api-key"] = api_key
@@ -203,11 +214,16 @@ def build_request_spec(
             sys_combined = "\n\n".join(system_chunks)
             # 2026 Claude Prompt Caching: >=1000 字符长系统提示词注入 ephemeral 缓存断点
             if len(sys_combined) >= 1000:
+                cache_ctrl: Dict[str, Any] = {"type": "ephemeral"}
+                # 2026 扩展缓存 TTL：支持 1h 扩展生命周期，避免 15 分钟交易周期击穿 5m 短缓存
+                ttl_pref = os.getenv("ASTRA_LLM_CACHE_TTL", "1h").strip().lower()
+                if ttl_pref in ("1h", "1hour", "extended"):
+                    cache_ctrl["ttl"] = "1h"
                 payload["system"] = [
                     {
                         "type": "text",
                         "text": sys_combined,
-                        "cache_control": {"type": "ephemeral"},
+                        "cache_control": cache_ctrl,
                     }
                 ]
             else:
@@ -242,6 +258,8 @@ def build_request_spec(
             "Content-Type": "application/json",
             "User-Agent": "AstraQuant/8.3 (OpenAI-Responses)",
             "X-Session-ID": affinity_id,
+            "X-Astra-Affinity": affinity_id,
+            "X-Channel-Affinity": affinity_id,
         }
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
@@ -266,6 +284,8 @@ def build_request_spec(
             "Content-Type": "application/json",
             "User-Agent": "AstraQuant/8.3 (OpenAI-Chat)",
             "X-Session-ID": affinity_id,
+            "X-Astra-Affinity": affinity_id,
+            "X-Channel-Affinity": affinity_id,
         }
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"

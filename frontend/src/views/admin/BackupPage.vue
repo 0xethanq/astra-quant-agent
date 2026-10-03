@@ -422,7 +422,7 @@ onMounted(load)
 
     <BaseTabs v-model="activeTab" :items="tabs" :label="t('admin.backup.tabsLabel')" baseId="bk" />
 
-    <div v-if="activeTab === 'backup'" id="bk-panel-backup" role="tabpanel" aria-labelledby="bk-tab-backup" tabindex="0">
+    <div v-if="activeTab === 'backup'" id="bk-panel-backup" role="tabpanel" aria-labelledby="bk-tab-backup" tabindex="0" class="bk-panel">
 
     <div v-if="loadError && !simple" role="alert" class="state-block is-error">
       <span class="state-icon"><AlertTriangle :size="17" /></span>
@@ -655,18 +655,19 @@ onMounted(load)
     </template>
     </div>
 
-    <div v-else-if="activeTab === 'policy'" id="bk-panel-policy" role="tabpanel" aria-labelledby="bk-tab-policy" tabindex="0">
+    <div v-else-if="activeTab === 'policy'" id="bk-panel-policy" role="tabpanel" aria-labelledby="bk-tab-policy" tabindex="0" class="bk-panel">
       <PolicySnapshotPage embedded />
     </div>
 
-    <div v-else id="bk-panel-version" role="tabpanel" aria-labelledby="bk-tab-version" tabindex="0">
+    <div v-else id="bk-panel-version" role="tabpanel" aria-labelledby="bk-tab-version" tabindex="0" class="bk-panel">
       <AboutPage embedded />
     </div>
   </div>
 </template>
 
 <style scoped>
-.bk {
+.bk,
+.bk-panel {
   display: flex;
   flex-direction: column;
   gap: var(--ds-space-4);

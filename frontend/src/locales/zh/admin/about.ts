@@ -45,9 +45,9 @@ export const zhAdminAbout = {
   commitsTitle: "待同步更新内容 (最新提交)：",
 
   // ── 推倒重来新增（批 8）──
-  productTitle: '机构级产品信息',
-  pitchTitle: '系统核心工程定位',
-  pitchBody: '多模型对抗交叉质询、7层高频量化因子微积分验证、确定性物理风控一票否决的 OKX 永续合约自主量化交易操作系统。',
+  productTitle: '产品信息',
+  pitchTitle: '系统定位',
+  pitchBody: '结合多大模型分析与确定性 Python 物理风控的 OKX 永续合约自主量化交易系统。',
   bandVersion: '系统版本',
   bandControlPlane: '网关控制面',
   bandRuntime: '运行环境',

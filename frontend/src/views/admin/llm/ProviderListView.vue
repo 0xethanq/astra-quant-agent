@@ -520,21 +520,28 @@ const bandFacts = () => [
       <div class="p-3">
         <div class="label-caps mb-2">{{ t('admin.llm.protocolMatrix') }}</div>
         <div class="flex flex-wrap gap-2">
-          <span class="badge mono" :class="cacheStatus.capabilities?.claude_ephemeral ? 'badge-up' : ''">
+          <span class="badge mono" :class="(cacheStatus.capabilities?.claude_extended_cache || cacheStatus.capabilities?.claude_ephemeral) ? 'badge-up' : ''">
             {{ t('admin.llm.claudeEphemeral') }}
           </span>
-          <span class="badge mono" :class="cacheStatus.capabilities?.deepseek_prefix ? 'badge-up' : ''">
+          <span class="badge mono" :class="(cacheStatus.capabilities?.deepseek_disk_cache || cacheStatus.capabilities?.deepseek_prefix) ? 'badge-up' : ''">
             {{ t('admin.llm.deepseekPrefix') }}
           </span>
-          <span class="badge mono" :class="cacheStatus.capabilities?.openai_prefix ? 'badge-up' : ''">
+          <span class="badge mono" :class="(cacheStatus.capabilities?.openai_auto_prefix || cacheStatus.capabilities?.openai_prefix) ? 'badge-up' : ''">
             {{ t('admin.llm.openaiPrefix') }}
           </span>
-          <span class="badge mono" :class="cacheStatus.capabilities?.gemini_context ? 'badge-up' : ''">
+          <span class="badge mono" :class="(cacheStatus.capabilities?.gemini_implicit_cache || cacheStatus.capabilities?.gemini_context) ? 'badge-up' : ''">
             {{ t('admin.llm.geminiContext') }}
+          </span>
+          <span class="badge mono" :class="cacheStatus.capabilities?.qwen_kimi_dual ? 'badge-up' : ''">
+            {{ t('admin.llm.qwenKimiDual') }}
           </span>
           <span class="badge mono" :class="cacheStatus.capabilities?.session_affinity_active ? 'badge-accent' : ''">
             {{ t('admin.llm.sessionAffinity') }}
           </span>
+        </div>
+        <div v-if="cacheStatus.capabilities?.primary_protocol" class="mt-3 text-xs pv-protocol-banner flex items-center gap-2">
+          <span class="inline-block pv-protocol-dot" />
+          <span>{{ t('admin.llm.currentActiveProtocol') }}: <strong>{{ cacheStatus.capabilities.primary_protocol }}</strong> ({{ t('admin.llm.cacheThreshold') }}: ≥{{ cacheStatus.capabilities.threshold_tokens }} Tokens, TTL: {{ cacheStatus.capabilities.ttl_tier }})</span>
         </div>
       </div>
     </section>
@@ -940,6 +947,16 @@ const bandFacts = () => [
   .pv-audit-err {
     grid-column: 2;
   }
+}
+
+.pv-protocol-banner {
+  color: var(--ds-color-text-secondary);
+}
+.pv-protocol-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--r-pill);
+  background-color: var(--brand);
 }
 
 /* ══ 供应商清单 ══ */

@@ -25,6 +25,7 @@ import {
   X,
   Github,
   ExternalLink,
+  Lock,
 } from 'lucide-vue-next';
 import { useI18n } from '../../composables/useI18n';
 import { OFFICIAL_REPO } from '../../config/version';
@@ -49,7 +50,7 @@ function openExternal(url: string) {
 
 // 终端部署命令复制
 const copiedCmd = ref(false);
-const DOCKER_CMD = 'git clone https://github.com/AstraQuant/AstraQuant.git && cd AstraQuant && docker compose up -d';
+const DOCKER_CMD = 'git clone https://github.com/0xethanq/astra-quant-agent.git && cd astra-quant-agent && ./setup.sh';
 
 async function copyCommand() {
   try {
@@ -184,26 +185,45 @@ onMounted(() => {
 
     <!-- 2. 主页面内容 -->
     <main class="flex-1 w-full flex flex-col items-center">
-      <!-- HERO 首屏：居中开阔、从容自信（解封 max-w-4xl 锁死，大屏从容展布） -->
-      <section class="w-full max-w-5xl lg:max-w-6xl px-4 sm:px-8 pt-24 sm:pt-36 pb-24 flex flex-col items-center text-center relative z-10">
+      <!-- HERO 首屏：从容舒展、机构级科技质感 -->
+      <section class="w-full max-w-5xl lg:max-w-6xl px-4 sm:px-8 pt-20 sm:pt-32 pb-20 flex flex-col items-center text-center relative z-10">
+        <!-- 顶部微药丸徽章 -->
+        <div class="inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/[0.06] px-4 py-1.5 text-xs font-mono text-emerald-400 mb-8 backdrop-blur-md shadow-sm">
+          <span class="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          <span>ASTRAQUANT v8.5.1 · AUTONOMOUS QUANT OS</span>
+        </div>
+
         <!-- 主标题 -->
-        <h1 class="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold tracking-tight text-white leading-[1.12] max-w-5xl">
+        <h1 class="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold tracking-tight text-white leading-[1.14] max-w-5xl">
           {{ t('landing.hero.titlePart1') }}
-          <span class="text-emerald-400 block mt-3">
+          <span class="block mt-3 bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 bg-clip-text text-transparent">
             {{ t('landing.hero.titleHighlight') }}
           </span>
         </h1>
 
         <!-- 副标题 -->
-        <p class="mt-8 text-base sm:text-lg md:text-xl text-zinc-400 leading-relaxed max-w-3xl">
+        <p class="mt-6 text-base sm:text-lg md:text-xl text-zinc-300/90 leading-relaxed max-w-3xl font-light">
           {{ t('landing.hero.subtitle') }}
         </p>
+
+        <!-- 三重安全信任承诺 -->
+        <div class="mt-6 flex flex-wrap items-center justify-center gap-3 text-xs font-mono text-zinc-400">
+          <span class="px-3 py-1 rounded-md bg-white/[0.03] border border-white/[0.06] flex items-center gap-1.5">
+            <ShieldCheck class="h-3.5 w-3.5 text-emerald-400" /> {{ t('landing.hero.trust1') }}
+          </span>
+          <span class="px-3 py-1 rounded-md bg-white/[0.03] border border-white/[0.06] flex items-center gap-1.5">
+            <Lock class="h-3.5 w-3.5 text-emerald-400" /> {{ t('landing.hero.trust2') }}
+          </span>
+          <span class="px-3 py-1 rounded-md bg-white/[0.03] border border-white/[0.06] flex items-center gap-1.5">
+            <Globe class="h-3.5 w-3.5 text-emerald-400" /> {{ t('landing.hero.trust3') }}
+          </span>
+        </div>
 
         <!-- 行动按钮：启动终端 + 跳转 GitHub -->
         <div class="mt-10 flex flex-wrap items-center justify-center gap-4">
           <button
             type="button"
-            class="h-12 sm:h-13 px-8 sm:px-9 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-black text-sm sm:text-base font-bold cursor-pointer inline-flex items-center gap-2.5 shadow-xl shadow-emerald-500/15 transition-all active:scale-95"
+            class="h-12 sm:h-13 px-8 sm:px-9 rounded-xl bg-gradient-to-r from-emerald-400 to-teal-400 hover:from-emerald-300 hover:to-teal-300 text-black text-sm sm:text-base font-bold cursor-pointer inline-flex items-center gap-2.5 shadow-xl shadow-emerald-500/20 transition-all active:scale-95"
             @click="navTo('/trading')"
           >
             <span>{{ t('landing.hero.ctaPrimary') }}</span>
@@ -212,7 +232,7 @@ onMounted(() => {
 
           <button
             type="button"
-            class="h-12 sm:h-13 px-7 sm:px-8 rounded-xl border border-white/[0.1] bg-zinc-900/60 hover:bg-zinc-800 text-zinc-200 text-sm sm:text-base font-medium transition-colors inline-flex items-center gap-2.5 cursor-pointer"
+            class="h-12 sm:h-13 px-7 sm:px-8 rounded-xl border border-white/[0.1] bg-zinc-900/60 hover:bg-zinc-800 text-zinc-200 text-sm sm:text-base font-medium transition-colors inline-flex items-center gap-2.5 cursor-pointer backdrop-blur-md"
             @click="openExternal(OFFICIAL_REPO)"
           >
             <Github class="h-4.5 w-4.5" aria-hidden="true" />
@@ -227,14 +247,15 @@ onMounted(() => {
       </section>
 
       <!-- 3. OKX 原生直连遥测带（单一交易所执行通道） -->
-      <section id="execution" class="w-full border-y border-white/[0.04] bg-[#090b10]/60 py-5 px-4 sm:px-8">
+      <section id="execution" class="w-full border-y border-white/[0.04] bg-[#090b10]/60 py-4 px-4 sm:px-8 backdrop-blur-md">
         <div class="max-w-6xl xl:max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-xs sm:text-sm font-mono">
-          <div class="text-zinc-400 uppercase tracking-wider font-medium">
-            {{ t('landing.executionBar.title') }}
+          <div class="text-zinc-400 tracking-wider font-medium flex items-center gap-2">
+            <span class="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+            <span>{{ t('landing.executionBar.title') }}</span>
           </div>
 
           <div class="flex flex-wrap items-center justify-center gap-6 sm:gap-10 text-zinc-300">
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2 px-3 py-1 rounded-full bg-white/[0.02] border border-white/[0.04]">
               <span class="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" aria-hidden="true" />
               <span class="font-semibold">{{ t('landing.executionBar.okx') }}</span>
               <span class="text-emerald-400 text-xs ms-0.5">({{ t('landing.executionBar.latencyOkx') }})</span>
@@ -243,7 +264,7 @@ onMounted(() => {
         </div>
       </section>
 
-      <!-- 4. 为什么选择 AstraQuant (经典 6 宫格特性卡片) -->
+      <!-- 4. 为什么选择 AstraQuant (现代 Bento Grid 特性架构) -->
       <section id="features" class="w-full max-w-6xl xl:max-w-7xl px-4 sm:px-8 py-24 sm:py-32">
         <div class="text-center max-w-3xl mx-auto mb-16">
           <span class="rounded-full border border-white/[0.08] bg-zinc-900/60 px-3.5 py-1.5 text-xs font-mono text-zinc-300 uppercase tracking-wider font-semibold">
@@ -257,59 +278,91 @@ onMounted(() => {
           </p>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8 text-left">
-          <!-- 特性 1: 24/7 AI 自动化交易 -->
-          <div class="rounded-2xl border border-white/[0.08] bg-[#0c0e15] p-7 sm:p-8 hover:border-emerald-500/30 hover:shadow-xl hover:shadow-emerald-500/5 transition-all">
-            <div class="h-11 w-11 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 mb-5">
-              <Zap class="h-5 w-5" />
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-left">
+          <!-- 特性 1: 7 梯队微观因子引擎 (Span 2) -->
+          <div class="md:col-span-2 rounded-2xl border border-white/[0.08] bg-gradient-to-b from-[#0e121a] to-[#090b10] p-7 sm:p-8 hover:border-emerald-500/30 transition-all flex flex-col justify-between group shadow-xl">
+            <div>
+              <div class="flex items-center justify-between mb-4">
+                <span class="text-3xs font-mono font-bold tracking-wider text-cyan-400 uppercase bg-cyan-500/10 border border-cyan-500/20 px-2.5 py-0.5 rounded-full">T0 - T4 MICROSTRUCTURE</span>
+                <span class="text-xs font-mono text-zinc-500">T0 / T0.5 / T1 / T4</span>
+              </div>
+              <h3 class="text-xl sm:text-2xl font-bold text-white flex items-center gap-2.5">
+                <Dna class="h-6 w-6 text-cyan-400 shrink-0" />
+                <span>{{ t('landing.features.f2Title') }}</span>
+              </h3>
+              <p class="mt-3 text-sm text-zinc-400 leading-relaxed max-w-2xl">{{ t('landing.features.f2Desc') }}</p>
             </div>
-            <h3 class="text-lg sm:text-xl font-bold text-white">{{ t('landing.features.f1Title') }}</h3>
-            <p class="mt-3 text-sm text-zinc-400 leading-relaxed">{{ t('landing.features.f1Desc') }}</p>
+            <!-- Mini Matrix Visualizer -->
+            <div class="mt-6 pt-5 border-t border-white/[0.06] grid grid-cols-2 sm:grid-cols-4 gap-3 font-mono text-xs">
+              <div class="p-3 rounded-xl bg-black/40 border border-white/[0.04]">
+                <div class="text-zinc-500 text-3xs">T0 Funding</div>
+                <div class="text-emerald-400 font-semibold mt-1">+0.0042%</div>
+              </div>
+              <div class="p-3 rounded-xl bg-black/40 border border-white/[0.04]">
+                <div class="text-zinc-500 text-3xs">T0.5 CVD</div>
+                <div class="text-emerald-400 font-semibold mt-1">+8.5M U</div>
+              </div>
+              <div class="p-3 rounded-xl bg-black/40 border border-white/[0.04]">
+                <div class="text-zinc-500 text-3xs">T1 OBI</div>
+                <div class="text-emerald-400 font-semibold mt-1">+32.5%</div>
+              </div>
+              <div class="p-3 rounded-xl bg-black/40 border border-white/[0.04]">
+                <div class="text-zinc-500 text-3xs">T4 MACD a</div>
+                <div class="text-emerald-400 font-semibold mt-1">+12.8 a</div>
+              </div>
+            </div>
           </div>
 
-          <!-- 特性 2: 7 梯队量化因子引擎 -->
-          <div class="rounded-2xl border border-white/[0.08] bg-[#0c0e15] p-7 sm:p-8 hover:border-emerald-500/30 hover:shadow-xl hover:shadow-emerald-500/5 transition-all">
-            <div class="h-11 w-11 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400 mb-5">
-              <Dna class="h-5 w-5" />
+          <!-- 特性 2: 24/7 AI 全自动量化交易 (Span 1) -->
+          <div class="rounded-2xl border border-white/[0.08] bg-[#0c0e15] p-7 sm:p-8 hover:border-emerald-500/30 transition-all flex flex-col justify-between group shadow-xl">
+            <div>
+              <div class="h-11 w-11 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 mb-5">
+                <Zap class="h-5 w-5" />
+              </div>
+              <h3 class="text-lg sm:text-xl font-bold text-white">{{ t('landing.features.f1Title') }}</h3>
+              <p class="mt-3 text-sm text-zinc-400 leading-relaxed">{{ t('landing.features.f1Desc') }}</p>
             </div>
-            <h3 class="text-lg sm:text-xl font-bold text-white">{{ t('landing.features.f2Title') }}</h3>
-            <p class="mt-3 text-sm text-zinc-400 leading-relaxed">{{ t('landing.features.f2Desc') }}</p>
+            <div class="mt-6 pt-4 border-t border-white/[0.06] text-xs font-mono text-emerald-400/90 flex items-center gap-2">
+              <span class="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span>24/7 AI AUTONOMOUS LOOP</span>
+            </div>
           </div>
 
-          <!-- 特性 3: 数理风控 -->
-          <div class="rounded-2xl border border-white/[0.08] bg-[#0c0e15] p-7 sm:p-8 hover:border-emerald-500/30 hover:shadow-xl hover:shadow-emerald-500/5 transition-all">
-            <div class="h-11 w-11 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 mb-5">
-              <Crosshair class="h-5 w-5" />
+          <!-- 特性 3: 数理物理风控硬防线 (Span 1) -->
+          <div class="rounded-2xl border border-white/[0.08] bg-[#0c0e15] p-7 sm:p-8 hover:border-emerald-500/30 transition-all flex flex-col justify-between group shadow-xl">
+            <div>
+              <div class="h-11 w-11 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 mb-5">
+                <Crosshair class="h-5 w-5" />
+              </div>
+              <h3 class="text-lg sm:text-xl font-bold text-white">{{ t('landing.features.f3Title') }}</h3>
+              <p class="mt-3 text-sm text-zinc-400 leading-relaxed">{{ t('landing.features.f3Desc') }}</p>
             </div>
-            <h3 class="text-lg sm:text-xl font-bold text-white">{{ t('landing.features.f3Title') }}</h3>
-            <p class="mt-3 text-sm text-zinc-400 leading-relaxed">{{ t('landing.features.f3Desc') }}</p>
+            <div class="mt-6 pt-4 border-t border-white/[0.06] text-xs font-mono text-zinc-400 flex items-center justify-between">
+              <span>Fail-Closed</span>
+              <span class="text-emerald-400 font-semibold">100% OCO</span>
+            </div>
           </div>
 
-          <!-- 特性 4: OKX 原生深度直连与统一账户 -->
-          <div class="rounded-2xl border border-white/[0.08] bg-[#0c0e15] p-7 sm:p-8 hover:border-emerald-500/30 hover:shadow-xl hover:shadow-emerald-500/5 transition-all">
-            <div class="h-11 w-11 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 mb-5">
-              <Globe class="h-5 w-5" />
+          <!-- 特性 4: OKX 原生直连 & 本地私有化自部署 (Span 2) -->
+          <div class="md:col-span-2 rounded-2xl border border-white/[0.08] bg-gradient-to-b from-[#0e121a] to-[#090b10] p-7 sm:p-8 hover:border-emerald-500/30 transition-all flex flex-col justify-between group shadow-xl">
+            <div>
+              <div class="flex items-center justify-between mb-4">
+                <span class="text-3xs font-mono font-bold tracking-wider text-emerald-400 uppercase bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 rounded-full">OKX NATIVE V5 · PRIVATE DEPLOYMENT</span>
+                <span class="text-xs font-mono text-emerald-400">100% Self-Hosted</span>
+              </div>
+              <h3 class="text-xl sm:text-2xl font-bold text-white flex items-center gap-2.5">
+                <Globe class="h-6 w-6 text-emerald-400 shrink-0" />
+                <span>{{ t('landing.features.f4Title') }} · {{ t('landing.features.f5Title') }}</span>
+              </h3>
+              <p class="mt-3 text-sm text-zinc-400 leading-relaxed max-w-2xl">
+                {{ t('landing.features.f4Desc') }}
+              </p>
             </div>
-            <h3 class="text-lg sm:text-xl font-bold text-white">{{ t('landing.features.f4Title') }}</h3>
-            <p class="mt-3 text-sm text-zinc-400 leading-relaxed">{{ t('landing.features.f4Desc') }}</p>
-          </div>
-
-          <!-- 特性 5: 本地私有 -->
-          <div class="rounded-2xl border border-white/[0.08] bg-[#0c0e15] p-7 sm:p-8 hover:border-emerald-500/30 hover:shadow-xl hover:shadow-emerald-500/5 transition-all">
-            <div class="h-11 w-11 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 mb-5">
-              <ShieldCheck class="h-5 w-5" />
+            <div class="mt-6 pt-4 border-t border-white/[0.06] flex flex-wrap items-center gap-6 text-xs font-mono text-zinc-400">
+              <span class="flex items-center gap-1.5"><Globe class="h-3.5 w-3.5 text-emerald-400" /> OKX V5 REST/WS</span>
+              <span class="flex items-center gap-1.5"><ShieldCheck class="h-3.5 w-3.5 text-emerald-400" /> AES-256 Local</span>
+              <span class="flex items-center gap-1.5"><Landmark class="h-3.5 w-3.5 text-emerald-400" /> TP1 / TP2 OCO</span>
             </div>
-            <h3 class="text-lg sm:text-xl font-bold text-white">{{ t('landing.features.f5Title') }}</h3>
-            <p class="mt-3 text-sm text-zinc-400 leading-relaxed">{{ t('landing.features.f5Desc') }}</p>
-          </div>
-
-          <!-- 特性 6: 极客工程 -->
-          <div class="rounded-2xl border border-white/[0.08] bg-[#0c0e15] p-7 sm:p-8 hover:border-emerald-500/30 hover:shadow-xl hover:shadow-emerald-500/5 transition-all">
-            <div class="h-11 w-11 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 mb-5">
-              <Landmark class="h-5 w-5" />
-            </div>
-            <h3 class="text-lg sm:text-xl font-bold text-white">{{ t('landing.features.f6Title') }}</h3>
-            <p class="mt-3 text-sm text-zinc-400 leading-relaxed">{{ t('landing.features.f6Desc') }}</p>
           </div>
         </div>
       </section>
@@ -337,20 +390,23 @@ onMounted(() => {
           <div
             v-for="ch in channels"
             :key="ch.key"
-            class="rounded-2xl border border-white/[0.08] bg-[#0c0e15] p-7 sm:p-8 flex flex-col justify-between hover:border-emerald-500/30 hover:shadow-xl hover:shadow-emerald-500/5 transition-all"
+            class="rounded-2xl border border-emerald-500/20 bg-gradient-to-b from-[#111520] to-[#0c0e15] p-7 sm:p-8 flex flex-col justify-between hover:border-emerald-500/40 hover:shadow-2xl hover:shadow-emerald-500/10 transition-all shadow-xl"
           >
             <div>
               <div class="flex items-center justify-between mb-5">
-                <span class="font-bold text-lg text-white font-mono">{{ ch.name }}</span>
-                <span class="rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-mono px-2.5 py-0.5">
+                <div class="flex items-center gap-2">
+                  <span class="font-bold text-lg text-white font-mono">{{ ch.name }}</span>
+                  <span class="rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-3xs font-mono px-2 py-0.5">OKX VERIFIED</span>
+                </div>
+                <span class="rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-mono font-semibold px-2.5 py-1">
                   {{ t('landing.referral.rateTier') }}
                 </span>
               </div>
 
               <!-- 邀请码展示（若存在） -->
-              <div v-if="ch.code" class="text-sm font-mono text-zinc-400 mb-5 bg-[#07080c] p-3 rounded-xl border border-white/[0.06] flex items-center justify-between">
-                <span class="text-zinc-500">{{ t('landing.referral.codeLabel') }}</span>
-                <span class="text-zinc-200 font-bold select-all">{{ ch.code }}</span>
+              <div v-if="ch.code" class="text-sm font-mono text-zinc-300 mb-6 bg-black/50 p-3.5 rounded-xl border border-white/[0.08] flex items-center justify-between">
+                <span class="text-zinc-500 text-xs">{{ t('landing.referral.codeLabel') }}</span>
+                <span class="text-emerald-400 font-bold tracking-wider select-all">{{ ch.code }}</span>
               </div>
             </div>
 
@@ -358,7 +414,7 @@ onMounted(() => {
             <div class="pt-5 border-t border-white/[0.06] flex items-center gap-3">
               <button
                 type="button"
-                class="flex-1 h-11 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-black text-sm font-semibold inline-flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95"
+                class="flex-1 h-11 rounded-xl bg-gradient-to-r from-emerald-400 to-teal-400 hover:from-emerald-300 hover:to-teal-300 text-black text-sm font-semibold inline-flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95 shadow-md shadow-emerald-500/10"
                 @click="openExternal(ch.invite_url)"
               >
                 <span>{{ t('landing.referral.openAccount') }}</span>
@@ -396,22 +452,35 @@ onMounted(() => {
           {{ t('landing.quickstart.subtitle') }}
         </p>
 
-        <!-- 一键复制终端框 -->
-        <div class="mt-8 w-full max-w-2xl mx-auto rounded-2xl border border-white/[0.08] bg-[#0c0e15] px-5 py-4 flex items-center justify-between gap-4 font-mono text-sm text-left shadow-2xl">
-          <div class="flex items-center gap-3 overflow-x-auto text-zinc-300">
-            <span class="text-emerald-400 font-bold select-none text-base">&gt;</span>
-            <span class="text-zinc-200 select-all whitespace-nowrap">{{ DOCKER_CMD }}</span>
+        <!-- macOS 极客终端卡片 -->
+        <div class="mt-8 w-full max-w-2xl mx-auto rounded-2xl border border-white/[0.08] bg-[#0c0e15] overflow-hidden shadow-2xl text-left">
+          <!-- 终端窗口控制条 -->
+          <div class="px-4 py-3 bg-[#080a0f] border-b border-white/[0.05] flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="h-3 w-3 rounded-full bg-rose-500/80 inline-block" />
+              <span class="h-3 w-3 rounded-full bg-amber-500/80 inline-block" />
+              <span class="h-3 w-3 rounded-full bg-emerald-500/80 inline-block" />
+            </div>
+            <span class="text-3xs font-mono text-zinc-500 select-none">bash — astraquant@localhost:~</span>
+            <div class="w-10" />
           </div>
-          <button
-            type="button"
-            class="px-3.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-semibold text-zinc-200 hover:text-white transition-colors cursor-pointer flex items-center gap-2 shrink-0 border border-white/[0.06]"
-            :aria-label="copiedCmd ? t('landing.quickstart.copied') : t('landing.quickstart.copyCmd')"
-            @click="copyCommand"
-          >
-            <Check v-if="copiedCmd" class="h-3.5 w-3.5 text-emerald-400" />
-            <Copy v-else class="h-3.5 w-3.5" />
-            <span>{{ copiedCmd ? t('landing.quickstart.copied') : t('landing.quickstart.copyCmd') }}</span>
-          </button>
+          <!-- 终端内容区 -->
+          <div class="p-5 flex items-center justify-between gap-4 font-mono text-xs sm:text-sm">
+            <div class="flex items-center gap-3 overflow-x-auto text-zinc-300">
+              <span class="text-emerald-400 font-bold select-none text-base">&gt;</span>
+              <span class="text-zinc-200 select-all whitespace-nowrap">{{ DOCKER_CMD }}</span>
+            </div>
+            <button
+              type="button"
+              class="px-3.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-semibold text-zinc-200 hover:text-white transition-colors cursor-pointer flex items-center gap-2 shrink-0 border border-white/[0.08]"
+              :aria-label="copiedCmd ? t('landing.quickstart.copied') : t('landing.quickstart.copyCmd')"
+              @click="copyCommand"
+            >
+              <Check v-if="copiedCmd" class="h-3.5 w-3.5 text-emerald-400" />
+              <Copy v-else class="h-3.5 w-3.5" />
+              <span>{{ copiedCmd ? t('landing.quickstart.copied') : t('landing.quickstart.copyCmd') }}</span>
+            </button>
+          </div>
         </div>
       </section>
     </main>
