@@ -9,7 +9,13 @@ command -v "$PYTHON_BIN" >/dev/null 2>&1 || { echo "ERROR: Python 3 is required"
 
 # OKX connectivity is V5 API Key direct signing only — no Node.js, no npm,
 # no CLI binary. Market data is zero-process REST (www.okx.com -> aws.okx.com).
-"$PYTHON_BIN" -m venv "$VENV_DIR"
+if ! "$PYTHON_BIN" -m venv "$VENV_DIR" 2>/dev/null; then
+  echo "❌ ERROR: 创建 Python 虚拟环境 ($VENV_DIR) 失败。" >&2
+  echo "   常见原因：系统缺少 python3-venv 模块（尤其在全新 Ubuntu / Debian 系统上）。" >&2
+  echo "   请先执行以下命令安装基础组件后重试：" >&2
+  echo "     sudo apt update && sudo apt install -y python3-venv python3-pip git" >&2
+  exit 1
+fi
 "$VENV_DIR/bin/pip" install --upgrade pip --quiet
 "$VENV_DIR/bin/pip" install -r "$ROOT/requirements.txt"
 

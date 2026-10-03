@@ -228,9 +228,34 @@ def construct_full_market_prompt(packages: List[Dict[str, Any]], pos_summary: st
                           "本标的**不得**据此臆测资金博弈与筹码位置，"
                           "只能按 4H/1H 结构与本周期风控预算行事")
 
+        regime_desc = p.get('market_regime')
+        if not regime_desc or regime_desc == "--":
+            m4h_s = str(p.get("macro_4h") or "")
+            s1h_s = str(p.get("structure_1h") or "")
+            try:
+                adx_num = float(adx_val) if adx_val != "--" else 0.0
+            except (TypeError, ValueError):
+                adx_num = 0.0
+            if "BULL" in m4h_s and "BULL" in s1h_s and adx_num >= 20.0:
+                regime_desc = "STRONG_TREND_BULL (多头主升)"
+            elif "BEAR" in m4h_s and "BEAR" in s1h_s and adx_num >= 20.0:
+                regime_desc = "STRONG_TREND_BEAR (空头主跌)"
+            elif "RANGE" in m4h_s or "CHOP" in s1h_s or (0.0 < adx_num < 20.0):
+                regime_desc = "CHOP_RANGE (区间震荡·严禁追单)"
+            elif m4h_s and s1h_s:
+                regime_desc = "TRANSITION (过渡整理)"
+            else:
+                regime_desc = "--"
+        elif regime_desc == "STRONG_TREND_BULL":
+            regime_desc = "STRONG_TREND_BULL (多头主升)"
+        elif regime_desc == "STRONG_TREND_BEAR":
+            regime_desc = "STRONG_TREND_BEAR (空头主跌)"
+        elif regime_desc == "CHOP_RANGE":
+            regime_desc = "CHOP_RANGE (区间震荡·严禁追单)"
+
         info = f"""---------------------------------------------------------
 【{p['name']} ({p['instId']})】| 数据质量: {quality} | 现价: {p['price']} | 24H涨跌: {p['chg24h']}% | 盘口买/卖: {p['bidPx']}/{p['askPx']}
-- 🏛️ 三重滤网宏观结构: 4H宏观大势={(p.get('macro_4h') or '--')} | 1H波段结构={(p.get('structure_1h') or '--')}
+- 🏛️ 三重滤网宏观结构: 4H宏观大势={(p.get('macro_4h') or '--')} | 1H波段结构={(p.get('structure_1h') or '--')} | 标的体制={regime_desc}
 {tier_block}
 - 💰 T2 期限与资金成本: 季度基差年化={_t(smd, 'basis_annualized_pct')}% | 杠杆借贷利率={_t(smd, 'loan_rate_usdt')}%
 - 👑 顶级聪明钱 (SmartMoney Top100 加权流): {("加权做多占比=" + str(sm.get('weighted_long_pct')) + "% | 24H净流入=" + str(sm.get('net_flow_usdt', '--')) + " | 多头均价=" + str(sm.get('avg_long_entry', '--')) + " | 空头均价=" + str(sm.get('avg_short_entry', '--')) + " | " + str(sm.get('top_win_rate', ''))) if sm.get('available') else "该项（Top100 加权多空比/净流）无公开 V5 等价接口 ⇒ 本行不构成证据；**持仓方向的替代证据见 T0 的「精英账户比 / 精英持仓比 / 精英背离」**（OKX 官方 top-trader 端点，真实可得）。禁止臆测填充"}"""

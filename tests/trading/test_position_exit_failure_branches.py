@@ -358,6 +358,40 @@ class ExitFailureBranchTest(unittest.TestCase):
         self.assertGreater(t["trailingStopPx"], 0, "建 tracker 时必须带止损线")
         self.assertGreater(t["takeProfitPx"], 0, "建 tracker 时必须带止盈线")
         self.assertEqual(t["entryTime"], "2026-09-21 12:00:00")
+        self.assertIn("market_regime", t, "建 tracker 时必须记录市场体制")
+
+    def test_chop_regime_adaptive_time_stop(self):
+        """震荡市紧凑时间止损：持仓超过 0.625x 阈值即触发时间止损释放保证金。"""
+        # _Rig 注入 TIME_STOP_HOURS=24.0，震荡市阈值为 15.0h；持仓 16 小时在常规市（24h）不触发，但在震荡市（15h）触发
+        f_chop = _f(market_regime="CHOP")
+        rig = _Rig(entry_ts=int(time.time()) - int(16 * HOUR))
+        ok, detail, trackers, key = self._run(rig, f_chop)
+        self.assertTrue(ok)
+        self.assertEqual(detail, "时间止损")
+        self.assertNotIn(key, trackers)
+        self.assertTrue(any("时间止损" in a for a in rig.actions))
+
+    def test_normal_regime_does_not_prematurely_time_stop_at_3_hours(self):
+        """正常趋势市不提前时间止损：持仓 16 小时（< 24h）必须继续持有监控。"""
+        f_trend = _f(market_regime="BULL_TREND")
+        rig = _Rig(entry_ts=int(time.time()) - int(16 * HOUR))
+        ok, detail, trackers, key = self._run(rig, f_trend)
+        self.assertFalse(ok)
+        self.assertEqual(detail, "持仓监控中")
+        self.assertIn(key, trackers)
+
+    def test_chop_regime_adaptive_breakeven_trigger(self):
+        """震荡市敏捷保本：浮盈达 0.9x ATR 提前锁定保本，防止微利回吐成巨亏。"""
+        # 现价 70000，avgPx 70000，ATR 800。浮盈 760 = 0.95*ATR
+        # 在震荡市（CHOP），0.95*ATR >= 0.9*ATR ⇒ 启动保本提损到 entry * 1.002
+        f_chop = _f(price=70050.0, atr=800.0, market_regime="CHOP")
+        # high_water 为 70760 (浮盈 760)，当前跌回 70050 (低于保本线 70140)
+        rig = _Rig(floor=70140.0, stage_desc="🛡️ 保本一档(+0.2%)", old_sl=68000.0,
+                    high_water=70760.0)
+        ok, detail, trackers, key = self._run(rig, f_chop)
+        self.assertTrue(ok)
+        self.assertEqual(detail, "已阶梯锁利")
+        self.assertNotIn(key, trackers)
 
 
 class CrossVenueExitRoutingTest(unittest.TestCase):

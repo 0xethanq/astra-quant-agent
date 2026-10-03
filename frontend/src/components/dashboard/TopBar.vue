@@ -77,7 +77,7 @@ function go(path: string) {
           type="button"
           class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium cursor-pointer transition-colors border border-transparent whitespace-nowrap"
           :class="activeTabKey === tab.key
-            ? 'bg-[var(--surface-2)] text-[var(--ink-strong)] font-semibold border-white/10'
+            ? 'bg-[var(--surface-2)] text-[var(--ink-strong)] font-semibold border-[var(--line-1)]'
             : 'text-[var(--ink-2)] hover:bg-[var(--surface-2)] hover:text-[var(--ink-1)]'"
           :aria-current="activeTabKey === tab.key ? 'page' : undefined"
           @click="go(tab.path)"
@@ -90,7 +90,7 @@ function go(path: string) {
           type="button"
           class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium cursor-pointer transition-colors border border-transparent whitespace-nowrap"
           :class="route.path === '/docs'
-            ? 'bg-[var(--surface-2)] text-[var(--ink-strong)] font-semibold border-white/10'
+            ? 'bg-[var(--surface-2)] text-[var(--ink-strong)] font-semibold border-[var(--line-1)]'
             : 'text-[var(--ink-2)] hover:bg-[var(--surface-2)] hover:text-[var(--ink-1)]'"
           :aria-current="route.path === '/docs' ? 'page' : undefined"
           @click="go('/docs')"

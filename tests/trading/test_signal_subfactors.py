@@ -232,3 +232,48 @@ class InstitutionalSetupTest(_Base):
             vol_ratio=1.3, macd_accel=0.5, macd_hist=0.5, is_bull_candle_15m=True,
             volatility_channel={"atr_pct": 1.0}, microstructure={"spread_bps": 0.3})
         self.assertEqual(tag, "🚀 动量突破")
+
+    def test_chop_market_with_low_adx_suppresses_breakout_setups(self):
+        """震荡市防绞肉：低 ADX（< 20）判定为震荡市，严禁追突破与破位追空。"""
+        # Setup 3 追涨在低 ADX 下被拦截
+        _, _, tag_long = self._score(
+            price=100.0, ema9=99.0, ema21=98.0, ema55=97.0, rsi=60.0,
+            vol_ratio=1.3, macd_accel=0.5, macd_hist=0.5, is_bull_candle_15m=True,
+            trend_momentum={"adx_1h": 14.0})
+        self.assertEqual(tag_long, "⚪ 观望", "低 ADX 震荡市严禁追突破")
+
+        # Setup 4 追空在低 ADX 下被拦截
+        _, _, tag_short = self._score(
+            price=100.0, ema9=101.0, ema21=102.0, ema55=103.0, rsi=35.0,
+            vol_ratio=1.3, macd_accel=-0.5, macd_hist=-0.5, is_bear_candle_15m=True,
+            trend_momentum={"adx_1h": 14.0})
+        self.assertEqual(tag_short, "⚪ 观望", "低 ADX 震荡市严禁杀跌追空")
+
+    def test_chop_market_allows_extreme_mean_reversion_at_boundaries(self):
+        """震荡市唯一允许形态：箱体极值边缘均值回归（Setup 5）在低 ADX 下仍正常放行。"""
+        score, action, tag = self._score(
+            price=100.0, ema9=100.0, ema21=100.0, ema55=100.0,
+            rsi=25.0, vwap_bias=-0.90, is_bull_candle_15m=True,
+            trend_momentum={"adx_1h": 14.0})
+        self.assertEqual(tag, "💎 极值回归")
+        self.assertEqual(action, "BUY_LONG")
+        self.assertGreaterEqual(score, 2.2)
+
+    def test_chop_market_suppresses_action_on_plain_observation(self):
+        """震荡市防绞肉：低 ADX 且为 ⚪ 观望 时，即使临时子因子累加过线也不开仓（强制 HOLD）。"""
+        _, action, tag = self._score(
+            price=100.0, ema9=102.0, ema21=101.0, ema55=100.0,
+            rsi=50.0, vol_ratio=1.0, obv_flow="BULL_FLOW",
+            macd_accel=0.2, macd_hist=0.2, is_bull_candle_15m=False,
+            trend_momentum={"adx_1h": 14.0})
+        self.assertEqual(tag, "⚪ 观望")
+        self.assertEqual(action, "HOLD")
+
+    def test_strong_trend_with_high_adx_enables_breakout_setups(self):
+        """强趋势验证：高 ADX（≥ 22）时，突破类形态顺利放行。"""
+        _, action, tag = self._score(
+            price=100.0, ema9=99.0, ema21=98.0, ema55=97.0, rsi=60.0,
+            vol_ratio=1.3, macd_accel=0.5, macd_hist=0.5, is_bull_candle_15m=True,
+            trend_momentum={"adx_1h": 28.0})
+        self.assertEqual(tag, "🚀 动量突破")
+        self.assertEqual(action, "BUY_LONG")

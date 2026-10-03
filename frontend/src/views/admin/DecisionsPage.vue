@@ -662,15 +662,15 @@ onMounted(() => {
         <!-- 0 报错健康态 -->
         <div
           v-else-if="!criticalIssues.length"
-          class="flex flex-col items-center justify-center p-12 text-center border border-white/[0.04] rounded-2xl bg-[#0c0e15]"
+          class="flex flex-col items-center justify-center p-12 text-center border border-[var(--line-1)] rounded-2xl bg-[var(--surface-head)]"
         >
           <div class="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center mb-3">
             <CheckCircle2 :size="24" class="text-emerald-400" />
           </div>
-          <h3 class="text-sm font-semibold text-zinc-200 mb-1">
+          <h3 class="text-sm font-semibold text-[var(--ink-strong)] mb-1">
             {{ t('admin.decisions.errorsEmpty') }}
           </h3>
-          <p class="text-xs text-zinc-400 max-w-md">
+          <p class="text-xs text-[var(--ink-2)] max-w-md">
             {{ t('admin.decisions.errorsEmptyDesc') }}
           </p>
         </div>
@@ -686,26 +686,26 @@ onMounted(() => {
           <article
             v-for="item in filteredIssues"
             :key="item.key"
-            class="p-4 rounded-xl border border-rose-500/20 bg-[#12080a] flex flex-col gap-2.5 transition-colors"
+            class="p-4 rounded-xl border border-[var(--down-line)] bg-[var(--down-bg)] flex flex-col gap-2.5 transition-colors"
           >
             <div class="flex items-center justify-between gap-3 flex-wrap">
               <div class="flex items-center gap-2">
                 <span class="badge badge-down font-mono font-bold">{{ item.level }}</span>
-                <span class="badge bg-zinc-800 text-zinc-300 font-mono">{{ item.sourceName }}</span>
-                <time class="text-3xs font-mono text-zinc-400">{{ item.time || '--' }}</time>
+                <span class="badge font-mono">{{ item.sourceName }}</span>
+                <time class="text-3xs font-mono text-[var(--ink-2)]">{{ item.time || '--' }}</time>
               </div>
               <CopyButton :text="item.raw" :title="t('admin.decisions.copyError')" />
             </div>
 
             <!-- 主错误行 -->
-            <p class="text-xs font-mono text-rose-300 font-medium break-all whitespace-pre-wrap leading-relaxed">
+            <p class="text-xs font-mono text-[var(--down)] font-medium break-all whitespace-pre-wrap leading-relaxed">
               {{ item.msg }}
             </p>
 
             <!-- 附加堆栈 (如果有) -->
             <div
               v-if="item.extra && item.extra.length"
-              class="p-2.5 rounded-lg bg-black/60 border border-white/[0.04] font-mono text-3xs text-zinc-400 overflow-x-auto whitespace-pre leading-relaxed"
+              class="p-2.5 rounded-lg bg-[var(--surface-input)] border border-[var(--line-1)] font-mono text-3xs text-[var(--ink-2)] overflow-x-auto whitespace-pre leading-relaxed"
             >
               <div v-for="(ex, ei) in item.extra" :key="ei">{{ ex }}</div>
             </div>
@@ -799,37 +799,37 @@ onMounted(() => {
           <div
             v-for="(d, idx) in filteredDecisions"
             :key="idx"
-            class="rounded-xl border border-white/[0.06] bg-[#0c0e15] p-3.5 flex flex-col justify-between hover:border-emerald-500/20 transition-colors"
+            class="rounded-xl border border-[var(--line-1)] bg-[var(--surface-2)] p-3.5 flex flex-col justify-between hover:border-[var(--ds-color-border-hover)] transition-colors"
           >
             <div>
               <div class="flex items-center justify-between gap-2 mb-2">
                 <div class="flex items-center gap-2">
-                  <span class="font-mono font-bold text-sm text-white">{{ d.instId }}</span>
+                  <span class="font-mono font-bold text-sm text-[var(--ink-strong)]">{{ d.instId }}</span>
                   <span class="badge" :class="decisionActionTone(d.action)">
                     <component :is="decisionActionIcon(d.action)" :size="11" class="inline -mt-0.5 me-0.5" />
                     {{ d.action }}
                   </span>
                 </div>
-                <time class="text-3xs font-mono text-zinc-400">{{ d.timestamp ? fmtDateTime(d.timestamp).slice(5) : '--' }}</time>
+                <time class="text-3xs font-mono text-[var(--ink-2)]">{{ d.timestamp ? fmtDateTime(d.timestamp).slice(5) : '--' }}</time>
               </div>
 
               <!-- 决策理由与推演 -->
-              <p class="text-xs text-zinc-300 leading-relaxed line-clamp-3 mb-3">
+              <p class="text-xs text-[var(--ink-1)] leading-relaxed line-clamp-3 mb-3">
                 {{ d.reason || t('admin.decisions.noDecisionsReason') }}
               </p>
             </div>
 
             <!-- 置信度进度条 -->
-            <div class="pt-2 border-t border-white/[0.04] flex items-center justify-between gap-3 text-3xs font-mono">
-              <span class="text-zinc-500">{{ t('admin.decisions.confidence') }}</span>
+            <div class="pt-2 border-t border-[var(--line-1)] flex items-center justify-between gap-3 text-3xs font-mono">
+              <span class="text-[var(--ink-2)]">{{ t('admin.decisions.confidence') }}</span>
               <div class="flex items-center gap-2 flex-1 max-w-[140px]">
-                <div class="flex-1 h-1.5 rounded-full bg-zinc-800 overflow-hidden">
+                <div class="flex-1 h-1.5 rounded-full bg-[var(--surface-3)] overflow-hidden">
                   <div
                     class="h-full bg-emerald-400 rounded-full"
                     :style="{ width: `${Math.min(100, Math.max(0, (d.confidence || 0) * 100))}%` }"
                   />
                 </div>
-                <span class="font-bold text-zinc-200">{{ fmtPct(d.confidence || 0) }}</span>
+                <span class="font-bold text-[var(--ink-strong)]">{{ fmtPct(d.confidence || 0) }}</span>
               </div>
             </div>
           </div>

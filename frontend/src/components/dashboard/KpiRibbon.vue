@@ -75,7 +75,7 @@ const ocoCoverage = computed(() => {
   <div class="dsh-card">
     <!-- 6 个核心指标单元格 -->
     <div class="grid grid-cols-2 gap-2 p-2.5 sm:grid-cols-3 xl:grid-cols-6 bg-[var(--surface-1)]">
-      <div class="rounded-xl bg-[var(--surface-2)]/40 hover:bg-[var(--surface-2)]/80 border border-white/[0.03] hover:border-white/[0.08] p-3 transition-all flex flex-col justify-between">
+      <div class="rounded-xl bg-[var(--surface-2)] hover:bg-[var(--surface-3)] border border-[var(--line-1)] hover:border-[var(--ds-color-border-hover)] p-3 transition-all flex flex-col justify-between">
         <BaseStat
           :label="t('dash.matrix.kpi.equity')"
           :value="totalEquity"
@@ -92,7 +92,7 @@ const ocoCoverage = computed(() => {
         </BaseStat>
       </div>
 
-      <div class="rounded-xl bg-[var(--surface-2)]/40 hover:bg-[var(--surface-2)]/80 border border-white/[0.03] hover:border-white/[0.08] p-3 transition-all flex flex-col justify-between">
+      <div class="rounded-xl bg-[var(--surface-2)] hover:bg-[var(--surface-3)] border border-[var(--line-1)] hover:border-[var(--ds-color-border-hover)] p-3 transition-all flex flex-col justify-between">
         <BaseStat
           :label="t('dash.matrix.kpi.todayPnl')"
           :value="fmtSigned(todayNet)"
@@ -102,7 +102,7 @@ const ocoCoverage = computed(() => {
         />
       </div>
 
-      <div class="rounded-xl bg-[var(--surface-2)]/40 hover:bg-[var(--surface-2)]/80 border border-white/[0.03] hover:border-white/[0.08] p-3 transition-all flex flex-col justify-between">
+      <div class="rounded-xl bg-[var(--surface-2)] hover:bg-[var(--surface-3)] border border-[var(--line-1)] hover:border-[var(--ds-color-border-hover)] p-3 transition-all flex flex-col justify-between">
         <BaseStat
           :label="t('dash.matrix.kpi.floatPnl')"
           :value="fmtSigned(floatPnl)"
@@ -112,7 +112,7 @@ const ocoCoverage = computed(() => {
         />
       </div>
 
-      <div class="rounded-xl bg-[var(--surface-2)]/40 hover:bg-[var(--surface-2)]/80 border border-white/[0.03] hover:border-white/[0.08] p-3 transition-all flex flex-col justify-between">
+      <div class="rounded-xl bg-[var(--surface-2)] hover:bg-[var(--surface-3)] border border-[var(--line-1)] hover:border-[var(--ds-color-border-hover)] p-3 transition-all flex flex-col justify-between">
         <BaseStat
           :label="t('dash.matrix.kpi.ls')"
           :value="`${longCount} / ${shortCount}`"
@@ -120,7 +120,7 @@ const ocoCoverage = computed(() => {
         />
       </div>
 
-      <div class="rounded-xl bg-[var(--surface-2)]/40 hover:bg-[var(--surface-2)]/80 border border-white/[0.03] hover:border-white/[0.08] p-3 transition-all flex flex-col justify-between">
+      <div class="rounded-xl bg-[var(--surface-2)] hover:bg-[var(--surface-3)] border border-[var(--line-1)] hover:border-[var(--ds-color-border-hover)] p-3 transition-all flex flex-col justify-between">
         <BaseStat
           :label="t('dash.matrix.kpi.margin')"
           :value="`${fmtNum(marginUsage, 1)}%`"
@@ -130,7 +130,7 @@ const ocoCoverage = computed(() => {
         />
       </div>
 
-      <div class="rounded-xl bg-[var(--surface-2)]/40 hover:bg-[var(--surface-2)]/80 border border-white/[0.03] hover:border-white/[0.08] p-3 transition-all flex flex-col justify-between">
+      <div class="rounded-xl bg-[var(--surface-2)] hover:bg-[var(--surface-3)] border border-[var(--line-1)] hover:border-[var(--ds-color-border-hover)] p-3 transition-all flex flex-col justify-between">
         <BaseStat
           :label="t('dash.matrix.kpi.oco')"
           :value="`${ocoCoverage.pct}%`"

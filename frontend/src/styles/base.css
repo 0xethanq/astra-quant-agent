@@ -22,9 +22,7 @@ html {
 body {
   margin: 0;
   background-color: var(--ds-color-bg-page, #07080c);
-  background-image:
-    radial-gradient(circle at 50% -120px, rgba(16, 185, 129, 0.045) 0%, rgba(99, 102, 241, 0.02) 50%, transparent 80%),
-    radial-gradient(circle at 0% 40%, rgba(16, 185, 129, 0.018) 0%, transparent 40%);
+  background-image: var(--ds-bg-gradient);
   background-attachment: fixed;
   color: var(--ds-color-text-secondary);
   font-family: var(--ds-font-body);

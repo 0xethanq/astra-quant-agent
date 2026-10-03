@@ -287,10 +287,10 @@ const truncation = computed<{ kept: number; total: number } | null>(() => {
       <!-- 汇总指标 HUD -->
       <div class="dsh-card">
         <div class="grid grid-cols-2 gap-2 p-2.5 sm:grid-cols-3 xl:grid-cols-6 bg-[var(--surface-1)]">
-          <div class="rounded-xl bg-[var(--surface-2)]/40 hover:bg-[var(--surface-2)]/80 border border-white/[0.03] hover:border-white/[0.08] p-3 transition-all">
+          <div class="rounded-xl bg-[var(--surface-2)] hover:bg-[var(--surface-3)] border border-[var(--line-1)] hover:border-[var(--ds-color-border-hover)] p-3 transition-all">
             <BaseStat :label="t('dash.ledger.summary.total')" :value="fmtNum(filtered.length, 0)" />
           </div>
-          <div class="rounded-xl bg-[var(--surface-2)]/40 hover:bg-[var(--surface-2)]/80 border border-white/[0.03] hover:border-white/[0.08] p-3 transition-all">
+          <div class="rounded-xl bg-[var(--surface-2)] hover:bg-[var(--surface-3)] border border-[var(--line-1)] hover:border-[var(--ds-color-border-hover)] p-3 transition-all">
             <BaseStat
               :label="t('dash.ledger.summary.winRate')"
               :value="winRate != null ? fmtNum(winRate, 1) + '%' : '--'"
@@ -298,13 +298,13 @@ const truncation = computed<{ kept: number; total: number } | null>(() => {
               delta-tone="muted"
             />
           </div>
-          <div class="rounded-xl bg-[var(--surface-2)]/40 hover:bg-[var(--surface-2)]/80 border border-white/[0.03] hover:border-white/[0.08] p-3 transition-all">
+          <div class="rounded-xl bg-[var(--surface-2)] hover:bg-[var(--surface-3)] border border-[var(--line-1)] hover:border-[var(--ds-color-border-hover)] p-3 transition-all">
             <BaseStat :label="t('dash.ledger.summary.net')" :value="fmtSigned(netSum)" />
           </div>
-          <div class="rounded-xl bg-[var(--surface-2)]/40 hover:bg-[var(--surface-2)]/80 border border-white/[0.03] hover:border-white/[0.08] p-3 transition-all">
+          <div class="rounded-xl bg-[var(--surface-2)] hover:bg-[var(--surface-3)] border border-[var(--line-1)] hover:border-[var(--ds-color-border-hover)] p-3 transition-all">
             <BaseStat :label="t('dash.ledger.summary.fees')" :value="feeSum ? `-${fmtNum(feeSum, 2)}` : fmtNum(0, 2)" />
           </div>
-          <div class="rounded-xl bg-[var(--surface-2)]/40 hover:bg-[var(--surface-2)]/80 border border-white/[0.03] hover:border-white/[0.08] p-3 transition-all">
+          <div class="rounded-xl bg-[var(--surface-2)] hover:bg-[var(--surface-3)] border border-[var(--line-1)] hover:border-[var(--ds-color-border-hover)] p-3 transition-all">
             <BaseStat
               :label="t('dash.ledger.summary.fundingNet')"
               :value="fmtSigned(fundingSum)"
@@ -313,7 +313,7 @@ const truncation = computed<{ kept: number; total: number } | null>(() => {
               :hint="t('dash.ledger.summary.fundingNetHint')"
             />
           </div>
-          <div class="rounded-xl bg-[var(--surface-2)]/40 hover:bg-[var(--surface-2)]/80 border border-white/[0.03] hover:border-white/[0.08] p-3 transition-all">
+          <div class="rounded-xl bg-[var(--surface-2)] hover:bg-[var(--surface-3)] border border-[var(--line-1)] hover:border-[var(--ds-color-border-hover)] p-3 transition-all">
             <BaseStat
               :label="t('dash.ledger.summary.pf')"
               :value="perf.profit_factor != null ? fmtNum(perf.profit_factor, 2) : '--'"

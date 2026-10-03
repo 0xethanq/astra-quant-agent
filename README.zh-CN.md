@@ -6,7 +6,7 @@
 
 ### 基于多大模型分析与确定性代码风控的加密货币自主量化交易系统
 
-[![Release](https://img.shields.io/badge/Release-v8.5.1-00E599.svg?style=flat-square)](https://github.com/0xethanq/astra-quant-agent/releases)
+[![Release](https://img.shields.io/badge/Release-v8.6.0-00E599.svg?style=flat-square)](https://github.com/0xethanq/astra-quant-agent/releases)
 [![License](https://img.shields.io/badge/License-AGPLv3%20%2B%20Commons%20Clause-blue.svg?style=flat-square)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.11-3776AB.svg?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![Vue 3](https://img.shields.io/badge/Vue-3.5%2B-4FC08D.svg?style=flat-square&logo=vuedotjs&logoColor=white)](https://vuejs.org/)
@@ -133,6 +133,19 @@ AstraQuant 摒弃简单滞后指标，结合高频衍生品微观数据进行综
 ---
 
 ## 部署指南
+
+> 💡 **云服务器安全组与端口配置提示（避坑必读）**：
+> 在公网云服务器（阿里云 / 腾讯云 / AWS / 各类海外 VPS）部署前，请在服务商控制台安全组入站规则中确认放行：
+> - **8080 (TCP 入站)**：AstraQuant 操盘大屏与管理控制面（公网访问必须）；
+> - **22 (TCP 入站)**：SSH 远程终端连接与运维管理；
+> - **443 (TCP 出站)**：直连 OKX REST API 与 LLM 推理网关。
+>
+> ⚠️ **交易安全红线**：OKX API 密钥仅需勾选 **读取** 与 **交易** 权限，**严禁开启提现权限**；强烈建议在 OKX 控制台绑定服务器静态公网 IP。
+
+| 部署方式 | 宿主机依赖 | 特点与适用场景 | 推荐度 |
+|---|---|---|:---:|
+| **Docker 容器（推荐）** | 仅需 `Docker` 与 `Docker Compose` | 零宿主机依赖、多阶段自动打包前端、进程自愈看门狗 | ⭐⭐⭐⭐⭐ |
+| **Linux 裸机部署** | `Python 3.11+` (`python3-venv`), `Node.js 18+`, `Git` | 本地源码调试、二次开发与极低内存实例 | ⭐⭐⭐ |
 
 ### 选项 A：Docker 容器（推荐）
 

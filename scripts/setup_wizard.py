@@ -152,7 +152,21 @@ def run_wizard(non_interactive: bool = False) -> None:
         updates[f"{prefix}API_KEY"] = api_key
         updates[f"{prefix}SECRET_KEY"] = secret_key
         updates[f"{prefix}PASSPHRASE"] = passphrase
-        print(f"{GREEN}✓ 已暂存 OKX 凭证{RESET}\n")
+        print(f"{GREEN}✓ 已暂存 OKX 凭证{RESET}")
+        test_okx = input(f"{DIM}是否立即验证 OKX 接口连通性？[y/N]: {RESET}").strip().lower()
+        if test_okx in ("y", "yes"):
+            print(f"{CYAN}正在验证 OKX V5 接口...{RESET}")
+            try:
+                import scripts.okx_rest as okx_probe
+                from scripts.okx_runtime import OKXEnvironment
+                probe_env = OKXEnvironment(mode=env_name, api_key=api_key, secret_key=secret_key, passphrase=passphrase, base_url="https://www.okx.com")
+                rows = okx_probe.positions(env=probe_env)
+                print(f"{GREEN}✓ OKX 鉴权成功！当前持仓数: {len(rows)}{RESET}\n")
+            except Exception as exc:
+                print(f"{YELLOW}⚠ 探测提示: {exc}{RESET}")
+                print(f"{DIM}  (凭证已保存，您仍可在启动后于控制台进一步配置 IP 白名单或排查网络){RESET}\n")
+        else:
+            print("")
     else:
         print(f"{YELLOW}⚠ 暂未填写完整 OKX 凭证，部署后可在控制台 /admin/security 填入{RESET}\n")
 
@@ -195,7 +209,22 @@ def run_wizard(non_interactive: bool = False) -> None:
     updates["LLM_REASONING_EFFORT"] = effort
     if llm_key:
         updates["LLM_API_KEY"] = llm_key
-        print(f"{GREEN}✓ 已配置大模型: {model} @ {base_url}{RESET}\n")
+        print(f"{GREEN}✓ 已配置大模型: {model} @ {base_url}{RESET}")
+        test_llm = input(f"{DIM}是否测试大模型网络响应？[y/N]: {RESET}").strip().lower()
+        if test_llm in ("y", "yes"):
+            print(f"{CYAN}正在测试大模型网络响应...{RESET}")
+            try:
+                import urllib.request, time
+                req_url = f"{base_url.rstrip('/')}/models"
+                req = urllib.request.Request(req_url, headers={"Authorization": f"Bearer {llm_key}", "User-Agent": "AstraQuant-Setup/1.0"})
+                t0 = time.time()
+                with urllib.request.urlopen(req, timeout=5) as resp:
+                    print(f"{GREEN}✓ 大模型接口响应正常 (HTTP {resp.status}, 耗时: {time.time()-t0:.2f}s){RESET}\n")
+            except Exception as exc:
+                print(f"{YELLOW}⚠ 探测提示: 无法连通 /models 端点 ({exc}){RESET}")
+                print(f"{DIM}  (部分厂商可能未开放 /models 列表，密钥已成功保存){RESET}\n")
+        else:
+            print("")
     else:
         print(f"{YELLOW}⚠ 暂未填写 API Key，部署后可在后台 /admin/llm 填入{RESET}\n")
 

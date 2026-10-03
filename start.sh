@@ -94,6 +94,8 @@ if [ "$NEED_BUILD" = "1" ]; then
         cd "$ROOT_DIR"
     else
         echo "⚠️ Warning: npm is not installed. Please build frontend manually via 'cd frontend && npm install && npm run build'."
+        echo "   👉 推荐方案：直接使用 Docker 一键启动，无需在宿主机安装 Node.js/npm："
+        echo "      ./deploy/docker-start.sh"
     fi
 fi
 

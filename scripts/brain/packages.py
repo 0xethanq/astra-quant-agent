@@ -356,4 +356,19 @@ def fetch_single_instrument_package(item: Dict[str, Any], *,
     #    供 calculus_snapshot.json / 台账兜底读取链使用；**不再计算任何东西**。
     pkg["quant_factors"] = load_quant_factor_tiers(inst_id)
     pkg["data_quality"] = "valid" if required_market_data else "invalid"
+
+    # 标的体制状态（综合 4H 宏观、1H 结构与 1H ADX 趋势强度）
+    m4h = str(pkg.get("macro_4h") or "")
+    s1h = str(pkg.get("structure_1h") or "")
+    adx_v = float(pkg.get("adx_1h", 0.0) or 0.0)
+    if "BULL" in m4h and "BULL" in s1h and adx_v >= 20.0:
+        pkg["market_regime"] = "STRONG_TREND_BULL"
+    elif "BEAR" in m4h and "BEAR" in s1h and adx_v >= 20.0:
+        pkg["market_regime"] = "STRONG_TREND_BEAR"
+    elif "RANGE" in m4h or "CHOP" in s1h or (0.0 < adx_v < 20.0):
+        pkg["market_regime"] = "CHOP_RANGE"
+    elif m4h and s1h:
+        pkg["market_regime"] = "TRANSITION"
+    else:
+        pkg["market_regime"] = None
     return pkg

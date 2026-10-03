@@ -235,6 +235,10 @@
   --ds-btn-ghost-hover-border: rgba(255, 255, 255, 0.12);
 
   --ds-shadow-card: inset 0 1px 0 0 rgba(255, 255, 255, 0.09), inset 0 0 0 1px rgba(255, 255, 255, 0.02), 0 8px 32px -4px rgba(0, 0, 0, 0.55);
+  --ds-shadow-card-hover: inset 0 1px 0 0 rgba(255, 255, 255, 0.15), inset 0 0 0 1px rgba(255, 255, 255, 0.03), 0 16px 36px -4px rgba(0, 0, 0, 0.65);
+  --ds-bg-gradient: radial-gradient(circle at 50% -120px, rgba(16, 185, 129, 0.045) 0%, rgba(99, 102, 241, 0.02) 50%, transparent 80%),
+    radial-gradient(circle at 0% 40%, rgba(16, 185, 129, 0.018) 0%, transparent 40%);
+  --ds-color-bg-sidebar: #090a0f;
   /* 浮层阴影：多阶柔化与微发丝倒角，弹窗与下拉脱离层叠感 */
   --astra-shadow-float: inset 0 1px 0 0 rgba(255, 255, 255, 0.12), 0 20px 48px -8px rgba(0, 0, 0, 0.75);
   --astra-shadow-dialog: inset 0 1px 0 0 rgba(255, 255, 255, 0.15), inset 0 0 0 1px rgba(255, 255, 255, 0.04), 0 24px 64px -12px rgba(0, 0, 0, 0.85);
@@ -254,23 +258,24 @@
   --ds-color-text-placeholder: #94a3b8;
   --ds-color-text-inverse: #ffffff;
 
-  --ds-color-bg-page: #eaedf2;
+  --ds-color-bg-page: #f8fafc;
   --ds-color-bg-surface-1: #ffffff;
-  --ds-color-bg-surface-2: #e2e6ee;
-  --ds-color-bg-surface-3: #d5dbe6;
+  --ds-color-bg-surface-2: #f1f5f9;
+  --ds-color-bg-surface-3: #e2e8f0;
   --ds-color-bg-surface-4: #cbd5e1;
   --ds-color-bg-surface-5: #94a3b8;
-  --ds-color-bg-overlay: rgba(255, 255, 255, 0.98);
+  --ds-color-bg-overlay: rgba(255, 255, 255, 0.95);
   --ds-color-bg-surface-raised: #ffffff;
-  --ds-color-bg-hover: rgba(15, 23, 42, 0.05);
+  --ds-color-bg-hover: rgba(15, 23, 42, 0.04);
   --ds-color-bg-input: #ffffff;
   --ds-color-bg-input-hover: #f8fafc;
-  --ds-color-bg-code: rgba(15, 23, 42, 0.05);
+  --ds-color-bg-code: rgba(15, 23, 42, 0.04);
+  --ds-color-bg-sidebar: #ffffff;
 
   --ds-color-border-subtle: rgba(15, 23, 42, 0.05);
   --ds-color-border-default: rgba(15, 23, 42, 0.08);
   --ds-color-border-divider: rgba(15, 23, 42, 0.06);
-  --ds-color-border-hover: rgba(15, 23, 42, 0.16);
+  --ds-color-border-hover: rgba(16, 185, 129, 0.36);
   --ds-color-border-strong: rgba(15, 23, 42, 0.22);
   --ds-color-border-secondary: rgba(15, 23, 42, 0.07);
   --ds-color-border-input: rgba(15, 23, 42, 0.12);
@@ -278,9 +283,9 @@
 
   --ds-color-scrollbar: rgba(15, 23, 42, 0.15);
 
-  --ds-btn-primary-bg: #0f172a;
+  --ds-btn-primary-bg: #10b981;
   --ds-btn-primary-text: #ffffff;
-  --ds-btn-primary-hover-bg: #1e293b;
+  --ds-btn-primary-hover-bg: #059669;
   --ds-btn-secondary-bg: #ffffff;
   --ds-btn-secondary-text: #0f172a;
   --ds-btn-secondary-border: rgba(15, 23, 42, 0.12);
@@ -290,6 +295,8 @@
   --ds-btn-ghost-hover-border: rgba(15, 23, 42, 0.12);
 
   --ds-shadow-card: 0 1px 3px rgba(15, 23, 42, 0.03), 0 4px 12px -2px rgba(15, 23, 42, 0.04);
+  --ds-shadow-card-hover: 0 2px 6px rgba(15, 23, 42, 0.04), 0 10px 24px -4px rgba(15, 23, 42, 0.08);
+  --ds-bg-gradient: none;
   --astra-shadow-float: 0 12px 32px -6px rgba(15, 23, 42, 0.10), 0 0 0 1px rgba(15, 23, 42, 0.06);
   --astra-shadow-dialog: 0 20px 48px -10px rgba(15, 23, 42, 0.16), 0 0 0 1px rgba(15, 23, 42, 0.08);
   --astra-overlay-scrim: rgba(15, 23, 42, 0.35);
@@ -438,10 +445,10 @@
   --ds-shadow-card: inset 0 1px 0 0 rgba(255, 255, 255, 0.09), inset 0 0 0 1px rgba(255, 255, 255, 0.02), 0 8px 32px -4px rgba(0, 0, 0, 0.55);
 }
 :root[data-theme='light'] {
-  --ds-color-bg-surface-card: rgba(255, 255, 255, 0.85);
-  --ds-color-bg-surface-inset: rgba(248, 249, 250, 0.75);
-  --grad-surface: linear-gradient(180deg, rgba(255, 255, 255, 0.6) 0%, rgba(250, 250, 250, 0.2) 100%);
-  --ds-shadow-card: inset 0 1px 0 0 rgba(255, 255, 255, 0.8), 0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 14px -2px rgba(0, 0, 0, 0.05);
+  --ds-color-bg-surface-card: #ffffff;
+  --ds-color-bg-surface-inset: #f8fafc;
+  --grad-surface: linear-gradient(180deg, rgba(255, 255, 255, 0.9) 0%, rgba(250, 250, 250, 0.4) 100%);
+  --ds-shadow-card: 0 1px 3px rgba(15, 23, 42, 0.03), 0 4px 12px -2px rgba(15, 23, 42, 0.04);
 }
 
 /* =========================================================================
@@ -452,7 +459,7 @@
   /* 画布与分层：动态映射到 --ds-* 规范令牌，自适应浅色与深色主题 */
   --surface-0: var(--ds-color-bg-page);
   --surface-header: var(--ds-color-bg-overlay);
-  --surface-sidebar: var(--ds-color-bg-page);
+  --surface-sidebar: var(--ds-color-bg-sidebar, var(--ds-color-bg-page));
   --surface-1: var(--ds-color-bg-surface-card);
   --surface-2: var(--ds-color-bg-surface-2);
   --surface-3: var(--ds-color-bg-surface-3);

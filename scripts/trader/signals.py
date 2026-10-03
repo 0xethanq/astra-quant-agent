@@ -92,6 +92,14 @@ def evaluate_asset_signal(f, *, asset_class_profiles, is_in_stop_cooldown, load_
     vol_ratio = f.get("vol_ratio")
     regime = f.get("market_regime")
     struct_1h = f.get("structure_1h")
+    t4 = f.get("trend_momentum", {}) if isinstance(f.get("trend_momentum"), dict) else {}
+    adx_val = t4.get("adx_1h") if t4.get("adx_1h") is not None else (f.get("adx_1h") if f.get("adx_1h") is not None else f.get("adx"))
+    try:
+        adx_num = float(adx_val) if adx_val is not None else None
+    except (TypeError, ValueError):
+        adx_num = None
+    # 明确测得低 ADX（< 20 且 > 0）判定为低动量震荡市；未提供 ADX 保持中性
+    is_weak_chop = bool(adx_num is not None and 0.0 < adx_num < 20.0)
 
     is_bull_c = f.get("is_bull_candle_15m")
     is_bear_c = f.get("is_bear_candle_15m")
@@ -110,9 +118,9 @@ def evaluate_asset_signal(f, *, asset_class_profiles, is_in_stop_cooldown, load_
     elif regime == "BEAR_TREND" and e21_slope is not None and e21_slope < -0.02:
         score_trend = -1.2 - (0.3 if struct_1h == "LH_LL" else 0.0)
     elif ema9 > ema21 > ema55:
-        score_trend = 0.6
+        score_trend = 0.6 if not is_weak_chop else 0.0
     elif ema9 < ema21 < ema55:
-        score_trend = -0.6
+        score_trend = -0.6 if not is_weak_chop else 0.0
 
     # -------------------------------------------------------------------------
     # 📊 Sub-Factor 2: Volume & MACD Acceleration (-1.5 ~ +1.5)
@@ -272,15 +280,15 @@ def evaluate_asset_signal(f, *, asset_class_profiles, is_in_stop_cooldown, load_
         strategy_desc = f"【1H机构顺势】反弹测试EMA21/55阻力带右侧收阴遇阻(RSI={rsi:.1f}, MACD柱={c_hist:+.2f})，顺势做空"
         reasons = ["1H单边主跌结构", "EMA阻力带量能衰竭遇阻", "MACD 动能向下发散"]
 
-    # Setup 3: 🚀 动量挤压突破 (Momentum Squeeze Breakout)
-    elif (px > ema9) and (55.0 <= rsi <= 74.0) and vol_ratio is not None and vol_ratio >= 1.3 and macd_accel is not None and macd_accel > 0 and is_bull_c and not cooldown_long and (c_a >= -0.2) and not is_high_jerk_shock:
+    # Setup 3: 🚀 动量挤压突破 (Momentum Squeeze Breakout) —— 震荡市严禁追涨
+    elif (not is_weak_chop) and (px > ema9) and (55.0 <= rsi <= 74.0) and vol_ratio is not None and vol_ratio >= 1.3 and macd_accel is not None and macd_accel > 0 and is_bull_c and not cooldown_long and (c_a >= -0.2) and not is_high_jerk_shock:
         strategy_tag = "🚀 动量突破"
         raw_alpha_score = max(raw_alpha_score, 2.5)
         strategy_desc = f"【动量爆发】放量突破前高动能发散(量能={vol_ratio}x, MACD加速度={c_a:+.2f})，顺势追涨"
         reasons = ["动量主升放量突破", f"成交量放大 {vol_ratio} 倍", "MACD 正加速度扩张"]
 
-    # Setup 4: 🌪️ 破位放量追空 (Breakdown Acceleration)
-    elif (px < ema9) and (26.0 <= rsi <= 45.0) and vol_ratio is not None and vol_ratio >= 1.3 and macd_accel is not None and macd_accel < 0 and is_bear_c and not cooldown_short and (c_a <= 0.2) and not is_high_jerk_shock:
+    # Setup 4: 🌪️ 破位放量追空 (Breakdown Acceleration) —— 震荡市严禁杀跌
+    elif (not is_weak_chop) and (px < ema9) and (26.0 <= rsi <= 45.0) and vol_ratio is not None and vol_ratio >= 1.3 and macd_accel is not None and macd_accel < 0 and is_bear_c and not cooldown_short and (c_a <= 0.2) and not is_high_jerk_shock:
         strategy_tag = "🌪️ 破位追空"
         raw_alpha_score = min(raw_alpha_score, -2.5)
         strategy_desc = f"【空头加速】击穿前低关键支撑放量下泄(量能={vol_ratio}x, MACD加速度={c_a:+.2f})，顺势破位做空"
@@ -310,10 +318,17 @@ def evaluate_asset_signal(f, *, asset_class_profiles, is_in_stop_cooldown, load_
     final_score = round(raw_alpha_score, 1)
 
     # Action Decision based on Adaptive Entry Threshold
+    # 震荡市防绞肉：若处于低ADX无趋势震荡市，且未触发极值反转形态（仍为观望），坚决 HOLD 不追单
     action = "HOLD"
     if final_score >= entry_threshold and not cooldown_long:
-        action = "BUY_LONG"
+        if is_weak_chop and strategy_tag == "⚪ 观望":
+            action = "HOLD"
+        else:
+            action = "BUY_LONG"
     elif final_score <= -entry_threshold and not cooldown_short:
-        action = "SELL_SHORT"
+        if is_weak_chop and strategy_tag == "⚪ 观望":
+            action = "HOLD"
+        else:
+            action = "SELL_SHORT"
 
     return final_score, action, reasons, strategy_tag, strategy_desc

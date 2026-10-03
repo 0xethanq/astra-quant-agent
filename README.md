@@ -6,7 +6,7 @@
 
 ### Autonomous Crypto Trading System with Multi-LLM Analysis & Deterministic Risk Control
 
-[![Release](https://img.shields.io/badge/Release-v8.5.1-00E599.svg?style=flat-square)](https://github.com/0xethanq/astra-quant-agent/releases)
+[![Release](https://img.shields.io/badge/Release-v8.6.0-00E599.svg?style=flat-square)](https://github.com/0xethanq/astra-quant-agent/releases)
 [![License](https://img.shields.io/badge/License-AGPLv3%20%2B%20Commons%20Clause-blue.svg?style=flat-square)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.11-3776AB.svg?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![Vue 3](https://img.shields.io/badge/Vue-3.5%2B-4FC08D.svg?style=flat-square&logo=vuedotjs&logoColor=white)](https://vuejs.org/)
@@ -133,6 +133,19 @@ Risk rules are enforced strictly by Python code (`scripts/risk_constants.py`). B
 ---
 
 ## Deploy
+
+> 💡 **Cloud Server Security Group & Port Notice**:
+> When deploying on a cloud VPS (AWS, GCP, DigitalOcean, Alibaba Cloud, etc.), verify inbound firewall rules in your cloud console:
+> - **8080 (TCP Inbound)**: AstraQuant Trading Workstation & Admin Plane;
+> - **22 (TCP Inbound)**: SSH remote access and server operations;
+> - **443 (TCP Outbound)**: OKX V5 REST API & LLM gateway connectivity.
+>
+> ⚠️ **API Security Redline**: OKX API Key requires only **Read** and **Trade** permissions. **Never enable Withdrawal permissions**. IP binding to your static server IP is strongly advised.
+
+| Mode | Host Prerequisites | Highlights & Target | Recommendation |
+|---|---|---|:---:|
+| **Docker Compose (Recommended)** | `Docker` & `Docker Compose` | Zero host dependency, auto multi-stage build, supervised watchdog | ⭐⭐⭐⭐⭐ |
+| **Bare Metal Linux / macOS** | `Python 3.11+` (`python3-venv`), `Node.js 18+`, `Git` | Local source development and memory-constrained environments | ⭐⭐⭐ |
 
 ### Docker (Recommended)
 

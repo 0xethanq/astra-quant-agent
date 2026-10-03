@@ -131,6 +131,7 @@ def manage_position_tp_and_trailing(f, curr_pos, trackers, timestamp_full, execu
             "decision_source": _decision_source,
             "adopted_role": _adopted_role,
             "strategy_tag": strat_tag if strat_tag != "⚪ 观望" else ("🌊 顺势回踩" if is_long else "⚡ 阻力抛压"),
+            "market_regime": f.get("market_regime") or "UNKNOWN",
             "entryPx": entry_px,
             "entryTs": now_ts,
             "entryTime": timestamp_full,
@@ -269,30 +270,36 @@ def manage_position_tp_and_trailing(f, curr_pos, trackers, timestamp_full, execu
         return True, "保护失效安全退出"
     t["cloudProtection"] = {"verifiedAt": timestamp_full, "detail": protection_detail}
 
+    pos_regime = str(t.get("market_regime") or f.get("market_regime") or "UNKNOWN")
+    is_chop_pos = (pos_regime in ("CHOP", "CHOP_RANGE"))
+
     # 2. Volatility Time-Stop Exit (持仓超最长持仓时间且缩量横盘 → 时间止损，参数见后台风控管理页)
     hold_duration_sec = now_ts - t["entryTs"]
-    if hold_duration_sec > TIME_STOP_HOURS * 3600 and abs(cur_profit_px) < TIME_STOP_ATR_BAND * atr:
+    # 震荡市紧凑时间止损：若在震荡市入场，2.5 小时无突破即主动释放资金，不空耗 4 小时
+    max_hold_hours = (TIME_STOP_HOURS * 0.625) if is_chop_pos else TIME_STOP_HOURS
+    if hold_duration_sec > max_hold_hours * 3600 and abs(cur_profit_px) < TIME_STOP_ATR_BAND * atr:
         closed, close_detail = close_position_confirmed(inst_id, "long" if is_long else "short", pos_sz, venue=pos_venue)
         if not closed:
             executed_actions.append(f"[{name}] 时间止损平仓失败，仓位仍保留: {close_detail}")
             return False, "平仓失败"
         close_fee = _close_fee(pos_sz, ct_val, cur_px, TAKER_FEE_RATE)
-        executed_actions.append(f"[{name}] ⌛ 超过 {TIME_STOP_HOURS:g} 小时无波动横盘，时间止损平仓释放保证金")
+        executed_actions.append(f"[{name}] ⌛ 超过 {max_hold_hours:g} 小时无波动横盘，时间止损平仓释放保证金")
         record_trade(_close_trade_payload(
             is_long=is_long, timestamp_full=timestamp_full, name=name,
             action_type="时间止损", side_suffix="无波动出场",
             pos_sz=pos_sz, cur_px=cur_px, fee=close_fee, pnl=curr_pos["upl"],
-            remark=f"持仓超 {TIME_STOP_HOURS:g} 小时无突破，主动平仓释放配比",
+            remark=f"持仓超 {max_hold_hours:g} 小时无突破，主动平仓释放配比",
         ))
         if pos_key in trackers: del trackers[pos_key]
         return True, "时间止损"
 
     # 3. Three-Tier Ratchet Profit-Locking & Momentum Take-Profit Engine
-    # Tier 1: Breakeven Lock at +1.5x ATR (~1.0R profit, covers taker fee + 0.20% cushion)
+    # 震荡市敏捷保本：震荡市振幅窄，若达到 0.9x ATR 浮盈（约 0.6R~0.7R），即提前启动保本提损，杜绝浮盈变巨亏
+    # Tier 1: Breakeven Lock at +1.5x ATR (常规) / +0.9x ATR (震荡市敏捷保本)
     # Tier 2: Solid Wave Profit Lock at +2.2x ATR (~1.6R profit, lock in at least +1.0x ATR profit)
     # Tier 3: Kinetic Momentum Pullback Exit (Symmetric >= 2.0x ATR peak profit with 0.75x ATR pullback)
     
-    tier1_breakeven_trigger = 1.5 * atr
+    tier1_breakeven_trigger = (0.9 * atr) if is_chop_pos else (1.5 * atr)
     tier2_lock_trigger = 2.2 * atr
     momentum_tp_trigger = 2.0 * atr
     momentum_pullback_buffer = 0.75 * atr
