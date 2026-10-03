@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-ASTRA AI Brain Six-Crypto Quantitative Trading Decision Engine (ai_brain_trader.py)
-Batch ingests six crypto perpetuals into one macro-context LLM call.
+ASTRA AI Brain Quantitative Trading Decision Engine (ai_brain_trader.py)
+Batch ingests crypto perpetuals from the instrument pool into one macro-context LLM call.
 Maintains a validated live decision cache and durable Web audit history.
 """
 
@@ -514,16 +514,16 @@ def build_risk_budget_text(usdt_available: float = None) -> str:
         + (f"{rc.MAX_CONCURRENT_POSITIONS_CAP} 笔 (执行层硬拦截)\n" if rc.MAX_CONCURRENT_POSITIONS_CAP > 0
            else "未单独设限 (0=不额外收紧；实际受标的池容量与同向上限约束)\n")
         + (
-            f"- 组合风险总预算(跨所合算): {rc.PORTFOLIO_RISK_BUDGET_USDT:.2f} USDT (执行层按总名义敞口强制)\n"
+            f"- 组合风险总预算: {rc.PORTFOLIO_RISK_BUDGET_USDT:.2f} USDT (执行层按总名义敞口强制)\n"
             if rc.PORTFOLIO_RISK_BUDGET_USDT > 0 else
-            "- 组合风险总预算(跨所合算): 未设上限 (0=引擎不封顶，仅受单标的/同向/并发上限约束)\n"
+            "- 组合风险总预算: 未设上限 (0=引擎不封顶，仅受单标的/同向/并发上限约束)\n"
         )
         # 审计 P2-1：同向敞口上限现已真执行（下单前入场闸门拒开），
         # 这里必须同源披露，否则"提示词口径 == 代码口径"又多一处例外。
         + (
-            f"- 跨所同向敞口上限: {rc.MAX_TOTAL_EXPOSURE_USDT:.2f} USDT (同一标同方向跨所合计名义额，含本单；超出执行层拒开)\n"
+            f"- 同向敞口上限: {rc.MAX_TOTAL_EXPOSURE_USDT:.2f} USDT (同一标同方向合计名义额，含本单；超出执行层拒开)\n"
             if rc.MAX_TOTAL_EXPOSURE_USDT > 0 else
-            "- 跨所同向敞口上限: 未设上限 (0=不限制；仍受单标的/同向/并发上限约束)\n"
+            "- 同向敞口上限: 未设上限 (0=不限制；仍受单标的/同向/并发上限约束)\n"
         )
         + f"- 最长持仓时间: {rc.TIME_STOP_HOURS:g} 小时 (超时且横盘无突破将被时间止损离场；横盘判定带宽 ±{rc.TIME_STOP_ATR_BAND:.0%} ATR)\n"
         f"- 单笔杠杆区间: {rc.MIN_LEVERAGE:g}x ~ {rc.MAX_LEVERAGE:g}x (在区间内按信号强度自主裁决；区间外执行层自动钳制)\n"
@@ -737,7 +737,7 @@ def execute_batch_ai_brain_cycle(
     usdt_available: float = None,
     policy_snapshot: Optional[Dict[str, Any]] = None,
 ) -> Optional[Dict[str, Any]]:
-    """Fetch all six crypto symbols, call the LLM once, then persist an auditable result."""
+    """Fetch all symbols in the instrument pool, call the LLM once, then persist an auditable result."""
     base_url, api_key = get_cpa_client_config()
     if not api_key:
         print("[AI Brain Batch] Error: CPA API Key not found")

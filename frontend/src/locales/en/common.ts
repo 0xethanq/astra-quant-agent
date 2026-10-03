@@ -137,7 +137,7 @@ export const enCommon = {
   brand: {
     name: 'AstraQuant',
     nameEn: 'AstraQuant',
-    tagline: 'Institutional Autonomous Quant Trading OS (Adversarial Council · 7-Tier Calculus · Physical Risk)',
+    tagline: 'Institutional Autonomous Quant Trading OS (Adversarial Council · 7-Tier Microstructure Factors · Physical Risk)',
     official: 'Official',
     license: 'AGPL-3.0 + Commons Clause',
   },

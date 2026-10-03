@@ -1028,7 +1028,7 @@ def execute_ai_position_management(real_pos_dict, trackers, timestamp_full, exec
     )
 
 # =============================================================================
-# 🧠 AstraQuant v6.8.1 Multi-Factor Scoring & Strategy Setup Classifier
+# 🧠 AstraQuant Multi-Factor Scoring & Strategy Setup Classifier
 # =============================================================================
 def evaluate_asset_signal(f):
     """连续多因子量化评分（-5.0 ~ +5.0）。实现见 scripts/trader/signals.py。

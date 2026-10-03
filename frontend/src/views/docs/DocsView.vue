@@ -250,7 +250,7 @@ onUnmounted(() => {
           </div>
 
           <p class="text-xs sm:text-sm leading-body font-sans text-[var(--ink-2)]">
-            <strong>AstraQuant</strong> 是一套专为高波动加密货币（Crypto）设计的<strong>OKX 原生全自动波段量化决策与执行操作系统</strong>。系统通过 OKX V5 REST API 纯 Python 直签执行私有账户与交易请求，运行在严格的北京时间（UTC+8）自然日财务基准之上，聚焦 1H~4H 大级别顺势波段，践行<strong>“认知交给大模型，微结构交给7层微积分，底线交给确定性物理风控”</strong>的工程哲学。
+            <strong>AstraQuant</strong> 是一套专为高波动加密货币（Crypto）设计的<strong>OKX 原生全自动波段量化决策与执行操作系统</strong>。系统通过 OKX V5 REST API 纯 Python 直签执行私有账户与交易请求，运行在严格的北京时间（UTC+8）自然日财务基准之上，聚焦 1H~4H 大级别顺势波段，践行<strong>“认知交给大模型，微结构交给7梯队微观因子，底线交给确定性物理风控”</strong>的工程哲学。
           </p>
 
           <!-- 4 Core Pillars Grid -->
@@ -318,10 +318,10 @@ onUnmounted(() => {
               </p>
             </div>
             <div class="dsh-card-sub p-3.5 space-y-1.5">
-              <div class="font-bold text-xs text-[var(--ink-strong)]">7 梯队量化微积分矩阵</div>
+              <div class="font-bold text-xs text-[var(--ink-strong)]">7 梯队微观结构因子矩阵</div>
               <p class="text-[var(--ink-2)] leading-body">
                 • <strong>微结构全景透视</strong>：T0 费率/OI 与精英多空比、T0.5 CVD 累计成交量差与大单净流入、T1 L2 深度与 OBI 盘口失衡度、T1.5 期权 IV 波动率曲面与 Max Pain、T2 期限基差、T3 VWAP 筹码中枢与 VPVR、T4 MACD 加速度与 ADX 动量。<br>
-                • <strong>数据白盒下钻</strong>：点击任一行标的即可呼出全因子微积分白盒抽屉与完整思考轨迹 (CoT)。
+                • <strong>数据白盒下钻</strong>：点击任一行标的即可呼出全量微结构因子白盒抽屉与完整思考轨迹 (CoT)。
               </p>
             </div>
           </div>

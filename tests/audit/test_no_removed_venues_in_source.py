@@ -91,6 +91,12 @@ ALLOWLIST: dict[tuple[str, str], str] = {
         "同上：`CRYPTO_PLATFORMS` / `CRYPTO_SPECIFIC_KEYWORDS` 是新闻**来源白名单与"
         "主题词表**（判断一条快讯是不是币圈新闻），不是交易所集成面。"
         "Binance 仍是加密行业的新闻主体，保留该关键词是内容判定，不是回潮。",
+    ("astra_backend/config.py", "binance"):
+        "生态合作推广返佣链接设置（BINANCE_INVITE_URL / binance_invite_url），"
+        "仅供关于页与落地页展示，系统不包含该平台的 API 直连与执行适配器。",
+    ("astra_backend/routers/system.py", "binance"):
+        "公开只读生态合作返佣通道元数据（/api/v1/referral-channels partner_channels），"
+        "仅供前端动态渲染推广卡片，系统不包含该平台的 API 直连与执行适配器。",
 }
 
 

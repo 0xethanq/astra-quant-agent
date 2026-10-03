@@ -345,7 +345,7 @@ def scan_risk_gates_and_ai_brain(*,
     ASSET_MARGIN_CAP = effective_single_asset_margin(usdt_available)
 
     brain_cache = {}
-    # One LLM call covers the full six-instrument universe and all active positions.
+    # One LLM call covers the full instrument universe and all active positions.
     if not cb_active and execute_batch_ai_brain_cycle and not session_restricted:
         try:
             pos_desc = "当前系统总" + venue_position_span(

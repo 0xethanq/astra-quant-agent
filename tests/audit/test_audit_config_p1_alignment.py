@@ -144,7 +144,7 @@ class PromptRiskBudgetAlignmentTests(_SandboxBase):
             "ASTRA_MAX_SCALE_IN_COUNT": "金字塔加仓",
             "ASTRA_MIN_SCALE_IN_PROFIT_RATIO": f"{self.rc.MIN_SCALE_IN_PROFIT_RATIO:.1%}",
             "ASTRA_MIN_SCALE_IN_CONFIDENCE": f"{self.rc.MIN_SCALE_IN_CONFIDENCE:g}%",
-            "ASTRA_MAX_TOTAL_EXPOSURE_USDT": "跨所同向敞口上限",
+            "ASTRA_MAX_TOTAL_EXPOSURE_USDT": "同向敞口上限",
             "ASTRA_SCALE_OUT_ENABLED": "分批止盈机制",
             "ASTRA_SCALE_OUT_RATIO": f"{self.rc.SCALE_OUT_RATIO:.0%}",
             "ASTRA_SCALE_OUT_TRIGGER_ATR": f"{self.rc.SCALE_OUT_TRIGGER_ATR:g}x ATR",

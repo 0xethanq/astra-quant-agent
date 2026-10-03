@@ -5,7 +5,7 @@
  * 1. 顶部紧凑状态与工位模式换挡（标准工作台 / 沉浸工位模式）
  * 2. 核心指标 HUD 区域（低饱和黑白分层卡片）
  * 3. 首屏直达核心工位：左侧主图表 + 右侧持仓挂单与 OKX 账户
- * 4. 底部多因子微积分动力学矩阵
+ * 4. 底部 7 梯队微观结构因子矩阵
  */
 import { computed, ref } from 'vue';
 import { useDashboardStore } from '../../stores/dashboard';
@@ -113,7 +113,7 @@ function pick(instId: string) {
           </div>
         </div>
 
-        <!-- 因子动能微积分动力学矩阵 -->
+        <!-- 7 梯队微观结构因子矩阵 -->
         <FactorMatrix @pick-symbol="pick" />
       </template>
     </DataGate>

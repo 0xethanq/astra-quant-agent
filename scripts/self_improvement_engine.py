@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-ASTRA AI LLM-Native Self-Improvement & Strategy Evolution Engine v6.8.1 (self_improvement_engine.py)
+ASTRA AI LLM-Native Self-Improvement & Strategy Evolution Engine (self_improvement_engine.py)
 Focuses purely on Crypto Alpha generation & dynamic quantitative risk adaptation.
 Eliminates rigid cooldown bans in favor of dynamic volatility-adjusted thresholds,
 asymmetric Kelly bet-sizing, and LLM cognitive post-mortem lessons.

@@ -49,8 +49,8 @@ GROUPS = [
 _PARAMS: list[dict[str, Any]] = [
     # ── 组1 仓位与敞口 ──
     {"key": "ASTRA_PORTFOLIO_RISK_BUDGET_USDT", "group": "exposure", "tier": "internal",
-     "label": "组合风险总预算（全所资金池）", "label_en": "Portfolio Risk Budget",
-     "desc": "全系统三所合计可支配的风险预算总上限（USDT）。0 = 自动按持仓上限×单标的保证金绝对封顶派生。",
+     "label": "组合风险总预算（账户资金池）", "label_en": "Portfolio Risk Budget",
+     "desc": "全系统可支配的组合风险预算总上限（USDT）。0 = 自动按持仓上限×单标的保证金绝对封顶派生。",
      "type": "float", "min": 0.0, "max": 1000000.0, "step": 100.0, "unit": "USDT", "display_scale": 1},
     {"key": "ASTRA_MAX_CONCURRENT_POSITIONS", "group": "exposure", "tier": "core",
      "label": "最高持仓数（总仓位上限）", "label_en": "Max Concurrent Positions",
@@ -73,8 +73,8 @@ _PARAMS: list[dict[str, Any]] = [
      "desc": "单标的累计保证金的绝对金额封顶（USDT；0 = 不设绝对硬顶，纯按比例）。实际生效取 min(本值, 余额×占比上限)，小资金账户自动收紧。",
      "type": "float", "min": 0.0, "max": 100000.0, "step": 10.0, "unit": "USDT", "display_scale": 1},
     {"key": "ASTRA_MAX_TOTAL_EXPOSURE_USDT", "group": "exposure", "tier": "internal",
-     "label": "跨所同向敞口上限", "label_en": "Cross-Venue Same-Side Exposure Cap",
-     "desc": "同一标同方向的跨所合计名义敞口上限（USDT，0 = 不限制）。发送前核算：已开同向名义额 + 本单名义额超过即拒开（不夹取）。",
+     "label": "单标同向总敞口上限", "label_en": "Consolidated Same-Side Exposure Cap",
+     "desc": "同一标的同方向的合并名义敞口上限（USDT，0 = 不限制）。发送前核算：已开同向名义额 + 本单名义额超过即拒开（不夹取）。",
      "type": "float", "min": 0.0, "max": 1000000.0, "step": 50.0, "unit": "USDT", "display_scale": 1},
     {"key": "ASTRA_MIN_LEVERAGE", "group": "exposure", "tier": "core",
      "label": "单笔杠杆下限", "label_en": "Min Leverage",
