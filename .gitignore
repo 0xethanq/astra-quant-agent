@@ -184,3 +184,9 @@ data/*.sqlite3
 
 # 观测栈的令牌文件（内容 = ASTRA_ADMIN_TOKEN）：绝不入库，只走文件挂载
 deploy/observability/metrics_token
+
+# Trellis 本地资产（本机工作流/任务/工作区，不进入远端仓库）
+# 用户 2026-11-16 决策：Trellis 配置、spec、任务、workspace 全部本地保留。
+# .gitattributes 仅用于 journal merge=union，同样只服务本地工作区。
+/.trellis/
+/.gitattributes
