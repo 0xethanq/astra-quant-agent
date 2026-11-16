@@ -33,6 +33,20 @@ else
     chmod 600 "$ROOT_DIR/.env"
 fi
 
+# 2.5 双容器调度所有权：backend 必须关闭内置网关看护，否则它会在自己的 PID
+#     命名空间里拉起 worker，独立 gateway 容器看不到该进程 ⇒ 健康检查永远失败、
+#     每 60s 重试并争抢同一个 flock。`.env` 是应用配置 SSOT（会覆盖 compose 的
+#     environment），故这里直接保证 .env 中的取值。
+if grep -q '^ASTRA_STANDALONE_GATEWAY=' "$ROOT_DIR/.env"; then
+    if sed --version >/dev/null 2>&1; then
+        sed -i 's/^ASTRA_STANDALONE_GATEWAY=.*/ASTRA_STANDALONE_GATEWAY=true/' "$ROOT_DIR/.env"
+    else
+        sed -i '' 's/^ASTRA_STANDALONE_GATEWAY=.*/ASTRA_STANDALONE_GATEWAY=true/' "$ROOT_DIR/.env"
+    fi
+else
+    printf '\nASTRA_STANDALONE_GATEWAY=true\n' >> "$ROOT_DIR/.env"
+fi
+
 # 3. 检查 Docker 与 Docker Compose 命令
 if command -v docker &> /dev/null && docker compose version &> /dev/null; then
     COMPOSE_CMD="docker compose"
