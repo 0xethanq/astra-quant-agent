@@ -4,24 +4,25 @@ ASTRA runs independently of QwenPaw. The product is composed of:
 
 - `astra_backend.app`: standalone FastAPI control plane and read-only monitoring API.
 - `astra_gateway.worker`: the AstraQuant-native, single-owner scheduler and durable notification-delivery worker for the 15-minute trader, 60-second factor refresh, 10-minute news refresh, daily reports, evolution review, and nightly backup.
-- `scripts/`: strategy and execution modules, run as isolated Python processes.
-- `.env` + encrypted ASTRA Secret Store: LLM, OKX API Key, and notification credentials. A complete OKX key trio is required for private requests and trading; public market data needs no credentials.
+- `backend/scripts/`: strategy and execution modules, run as isolated Python processes.
+- `backend/.env` + encrypted ASTRA Secret Store: LLM, OKX API Key, and notification credentials. A complete OKX key trio is required for private requests and trading; public market data needs no credentials.
 - Native OKX V5 REST signing: the single private connectivity path for the strategy, control plane, and ledger.
 
 ## Install
 
 ```sh
-sh deploy/install.sh
-. .venv/bin/activate
+sh backend/deploy/install.sh
+. backend/.venv/bin/activate
+cd backend
 ```
 
-The installer creates the Python environment, installs requirements, copies `env.example` only when `.env` is absent, and restricts `.env` to mode `0600`. Node.js/npm is needed only if you build the Vue frontend from source (`cd frontend && npm install && npm run build`), not for backend installation or OKX connectivity.
+The installer creates the Python environment, installs requirements, copies `backend/env.example` only when `backend/.env` is absent, and restricts `backend/.env` to mode `0600`. Node.js/npm is needed only if you build the Vue frontend from source (`cd frontend && npm install && npm run build`), not for backend installation or OKX connectivity.
 
 Set `LLM_*` and a random `ASTRA_SETUP_TOKEN` before the first launch. Open `/admin` to complete administrator setup, then configure **API Key / Secret Key / Passphrase** in Account Access. Create separate **DEMO and LIVE** trios, grant only necessary read/trade permissions (never withdrawal), and bind server IPs where possible. Keep `ASTRA_OKX_ENV=demo` for initial validation.
 
 The admin form stores credentials locally with **Fernet encryption**; **blank fields keep existing values**. Direct `OKX_DEMO_*` / `OKX_LIVE_*` entries in `.env` are a plaintext bootstrapping alternative. Never commit either credentials or encryption material. Both services need access to the same project configuration and secret store under appropriate file permissions.
 
-An incomplete selected profile is **NOT READY**: private operations and trading fail closed. Public REST market data remains available without a key. Server restarts no longer depend on a short-lived login grant: persist `data/astra_secrets.enc` and its matching `data/.astra_secret_key`. Revoked keys, changed IP restrictions, and network faults can still prevent exchange access.
+An incomplete selected profile is **NOT READY**: private operations and trading fail closed. Public REST market data remains available without a key. Server restarts no longer depend on a short-lived login grant: persist `backend/data/astra_secrets.enc` and its matching `backend/data/.astra_secret_key`. Revoked keys, changed IP restrictions, and network faults can still prevent exchange access.
 
 The authenticated `GET /api/v1/admin/okx/runtime` (management session in `X-Astra-Session`) reports `environment`, `mode_configured`, `live_configured`, `demo_configured`, `fingerprint`, `base_url`, `connection: "static-v5-key"`, and `status: "READY" | "NOT_READY"`; `not_ready_reason` is present when unconfigured. This is a **local configuration check**, not an exchange connectivity or permission test. Use a read-only account snapshot to confirm connectivity before enabling trading.
 
@@ -31,28 +32,30 @@ To deploy with zero host dependencies on a remote server:
 
 ```sh
 # 1. Prepare configuration
-cp env.example .env && vim .env
+cp backend/env.example backend/.env && vim backend/.env
 
 # 2. Build and launch with Docker Compose
 docker compose up -d --build
-# Or run: ./deploy/docker-start.sh
+# Or run: ./backend/deploy/docker-start.sh
 ```
 
-Both `astra-backend` (Web & API) and `astra-gateway` (quant scheduler worker) will start automatically with persistent volumes for `data/`, `logs/`, and `backups/`.
+Both `astra-backend` (Web & API) and `astra-gateway` (quant scheduler worker) will start automatically with persistent volumes for `backend/data/`, `backend/logs/`, and `backend/backups/`.
 
 ## Run Locally (Native Python)
 
 Terminal 1:
 
 ```sh
-. .venv/bin/activate
+. backend/.venv/bin/activate
+cd backend
 python -m uvicorn astra_backend.app:app --host 0.0.0.0 --port 8080
 ```
 
 Terminal 2:
 
 ```sh
-. .venv/bin/activate
+. backend/.venv/bin/activate
+cd backend
 python -m astra_gateway.worker
 ```
 
@@ -79,7 +82,7 @@ No HTTP trade-trigger endpoint is exposed except the separately enabled, confirm
   `suggested_tp1_price` / `suggested_tp2_price`）。默认只允许向有利方向移动且
   变动 ≥ `ASTRA_TP_AMEND_MIN_STEP_ATR` × ATR；分批已发生后只允许调整 tp2。
   允许下调需显式 `ASTRA_TP_ALLOW_ADVERSE=1`（通知与台账会标红）。
-- 事件流水：`data/scale_out_events.jsonl`（只追加）。后台台账按平仓单 `clOrdId`
+- 事件流水：`backend/data/scale_out_events.jsonl`（只追加）。后台台账按平仓单 `clOrdId`
   前缀 `SO` 把"首批分批止盈"与"AI 主动止盈平仓"分开 —— 旧实现按盈亏金额猜原因，
   于是分批止盈一直显示成"目标止盈达成"，看不出它发生过。
 
@@ -95,13 +98,13 @@ Add the `[program:astra-backend]` block from the container supervisor configurat
 
 ## systemd
 
-Copy `deploy/astra-quant.service` and `deploy/astra-gateway.service` to `/etc/systemd/system/`, update `WorkingDirectory` and `EnvironmentFile`, then:
+Copy `backend/deploy/astra-quant.service` and `backend/deploy/astra-gateway.service` to `/etc/systemd/system/`, update `WorkingDirectory` and `EnvironmentFile`, then:
 
 ```sh
 sudo systemctl daemon-reload
 sudo systemctl enable --now astra-quant astra-gateway
 ```
 
-Before enabling `astra-gateway`, disable the old QwenPaw cron jobs to prevent duplicate execution. Do not run both schedulers simultaneously. The current Gateway worker owns the scheduler; the legacy `astra_backend.scheduler` and `deploy/astra-scheduler.service` are retained only for compatibility and must not run alongside it.
+Before enabling `astra-gateway`, disable the old QwenPaw cron jobs to prevent duplicate execution. Do not run both schedulers simultaneously. The current Gateway worker owns the scheduler; the legacy `astra_backend.scheduler` and `backend/deploy/astra-scheduler.service` are retained only for compatibility and must not run alongside it.
 
 Before starting the Gateway, open `/admin` and verify the selected DEMO key profile and a read-only account snapshot. A `NOT_READY` runtime response means trading must remain disabled; `READY` alone does not prove exchange acceptance or override risk controls. Ensure the dedicated service user can read the project configuration and matching encrypted store/key; do not print their contents for diagnostics.

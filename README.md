@@ -23,17 +23,17 @@ AstraQuant combines large language models (macro, technical, and microstructure 
 
 | | |
 |---|---|
-| **Quant Trading Workstation**<br>![Live Workstation](docs/images/v850_live_dashboard.png) | **Chain-of-Thought (CoT) Decision Drawer**<br>![Chain of Thought](docs/images/v850_trajectory_cot.png) |
-| **Execution Risk Control Center**<br>![Risk Control](docs/images/v850_risk_control.png) | **Multi-Model Committee Board**<br>![Council Board](docs/images/v850_council_board.png) |
+| **Quant Trading Workstation**<br>![Live Workstation](backend/docs/images/v850_live_dashboard.png) | **Chain-of-Thought (CoT) Decision Drawer**<br>![Chain of Thought](backend/docs/images/v850_trajectory_cot.png) |
+| **Execution Risk Control Center**<br>![Risk Control](backend/docs/images/v850_risk_control.png) | **Multi-Model Committee Board**<br>![Council Board](backend/docs/images/v850_council_board.png) |
 
 <details>
 <summary><b>Additional Interface Previews</b> (Click to expand: Prompt Studio, Evolution, Admin, Security)</summary>
 
 | | |
 |---|---|
-| **Prompt Engineering Studio**<br>![Prompt Studio](docs/images/v850_prompt_studio.png) | **Closed-Loop Self-Evolution Hub**<br>![Self Evolution](docs/images/v850_self_evolution.png) |
-| **LLM Gateway & Thinking Config**<br>![LLM Hub](docs/images/v850_llm_hub.png) | **System Governance & Admin Overview**<br>![Admin Overview](docs/images/v850_admin_overview.png) |
-| **Security & Credential Plaza**<br>![Security Plaza](docs/images/v850_security_plaza.png) | **Factor Telemetry Table**<br>![Factor Matrix](docs/images/v850_calculus_factors.png) |
+| **Prompt Engineering Studio**<br>![Prompt Studio](backend/docs/images/v850_prompt_studio.png) | **Closed-Loop Self-Evolution Hub**<br>![Self Evolution](backend/docs/images/v850_self_evolution.png) |
+| **LLM Gateway & Thinking Config**<br>![LLM Hub](backend/docs/images/v850_llm_hub.png) | **System Governance & Admin Overview**<br>![Admin Overview](backend/docs/images/v850_admin_overview.png) |
+| **Security & Credential Plaza**<br>![Security Plaza](backend/docs/images/v850_security_plaza.png) | **Factor Telemetry Table**<br>![Factor Matrix](backend/docs/images/v850_calculus_factors.png) |
 
 </details>
 
@@ -44,7 +44,7 @@ AstraQuant combines large language models (macro, technical, and microstructure 
 ```bash
 git clone https://github.com/0xethanq/astra-quant-agent.git && cd astra-quant-agent
 ./setup.sh                  # Interactive onboarding wizard (recommended)
-# Container launch: ./deploy/docker-start.sh | Bare-metal: ./deploy/install.sh && ./start.sh
+# Container launch: ./backend/deploy/docker-start.sh | Bare-metal: ./backend/deploy/install.sh && ./start.sh
 ```
 
 | Service Surface | Local Access URL | Role & Purpose |
@@ -152,7 +152,7 @@ Risk rules are enforced strictly by Python code (`scripts/risk_constants.py`). B
 ```bash
 git clone https://github.com/0xethanq/astra-quant-agent.git && cd astra-quant-agent
 ./setup.sh                  # Interactive CLI onboarding wizard
-./deploy/docker-start.sh    # Builds and launches backend & gateway daemons
+./backend/deploy/docker-start.sh    # Builds and launches backend & gateway daemons
 docker compose ps           # Check container health
 ```
 
@@ -160,7 +160,7 @@ docker compose ps           # Check container health
 
 ```bash
 git clone https://github.com/0xethanq/astra-quant-agent.git && cd astra-quant-agent
-sh deploy/install.sh        # Installs Python environment & dependencies
+sh backend/deploy/install.sh        # Installs Python environment & dependencies
 ./setup.sh                  # Prepares .env configuration
 cd frontend && npm install && npm run build && cd ..
 ./start.sh                  # Starts control plane on http://0.0.0.0:8080
@@ -172,14 +172,14 @@ cd frontend && npm install && npm run build && cd ..
 
 ```bash
 # Tier 0: Core Quant & Execution Gates (~20s)
-.venv/bin/pytest tests/trading tests/venues tests/risk tests/backtest -n auto -q
+backend/.venv/bin/pytest backend/tests/trading tests/venues tests/risk tests/backtest -n auto -q
 
 # Tier 1: Multi-Model & Frontend Integration Gates (~60s)
-.venv/bin/pytest tests/llm tests/ui tests/core -n auto -q
+backend/.venv/bin/pytest backend/tests/llm tests/ui tests/core -n auto -q
 cd frontend && npm run build && npx vue-tsc --noEmit && node --test tests/*.test.mjs && cd ..
 
 # Tier 2: Architectural Audit & Invariant Gates (~90s)
-.venv/bin/pytest tests/audit tests/extraction tests/ops -n auto -q
+backend/.venv/bin/pytest backend/tests/audit tests/extraction tests/ops -n auto -q
 ```
 
 ---
@@ -191,16 +191,16 @@ cd frontend && npm run build && npx vue-tsc --noEmit && node --test tests/*.test
 
 | Domain | Specification Document | Key Scope |
 |---|---|---|
-| **Architecture Overview** | [`docs/STRUCTURE_OVERVIEW.md`](docs/STRUCTURE_OVERVIEW.md) | Layered architecture and subsystem directory layout |
-| **Backend Layering** | [`astra_backend/README.md`](astra_backend/README.md) | Backend layering (L0 Facade / L1 Wiring / L2 Routes / L3 Domain / L4 Subpackages) |
-| **Runtime Scripts & Daemons**| [`scripts/README.md`](scripts/README.md) | Runtime scripts & daemons (38 root-level scripts, daemons, and scheduling mechanics) |
-| **Prompt Engineering** | [`docs/PROMPT_GUIDE.md`](docs/PROMPT_GUIDE.md) | JSON-only prompt library, 8 semantic slots, council doctrines |
-| **Failure Semantics** | [`docs/FAILURE_SEMANTICS.md`](docs/FAILURE_SEMANTICS.md) | Real-world failure post-mortems and defensive invariants |
-| **Beijing Time Contract** | [`docs/BEIJING_TIME_CONTRACT.md`](docs/BEIJING_TIME_CONTRACT.md) | Unified UTC+8 financial accounting and settlement foundation |
+| **Architecture Overview** | [`backend/docs/STRUCTURE_OVERVIEW.md`](backend/docs/STRUCTURE_OVERVIEW.md) | Layered architecture and subsystem directory layout |
+| **Backend Layering** | [`backend/astra_backend/README.md`](backend/astra_backend/README.md) | Backend layering (L0 Facade / L1 Wiring / L2 Routes / L3 Domain / L4 Subpackages) |
+| **Runtime Scripts & Daemons**| [`backend/scripts/README.md`](backend/scripts/README.md) | Runtime scripts & daemons (38 root-level scripts, daemons, and scheduling mechanics) |
+| **Prompt Engineering** | [`backend/docs/PROMPT_GUIDE.md`](backend/docs/PROMPT_GUIDE.md) | JSON-only prompt library, 8 semantic slots, council doctrines |
+| **Failure Semantics** | [`backend/docs/FAILURE_SEMANTICS.md`](backend/docs/FAILURE_SEMANTICS.md) | Real-world failure post-mortems and defensive invariants |
+| **Beijing Time Contract** | [`backend/docs/BEIJING_TIME_CONTRACT.md`](backend/docs/BEIJING_TIME_CONTRACT.md) | Unified UTC+8 financial accounting and settlement foundation |
 | **Frontend Architecture** | [`frontend/src/components/admin/README.md`](frontend/src/components/admin/README.md) | Frontend components & state (Vue 3, composables, stores) |
 | **Standalone Deployment** | [`STANDALONE.md`](STANDALONE.md) | Environment configuration and host-native execution |
 | **Disaster Recovery** | [`RECOVERY_GUIDE.md`](RECOVERY_GUIDE.md) | Emergency liquidation and state recovery playbooks |
-| **Observability** | [`deploy/observability/README.md`](deploy/observability/README.md) | Prometheus metrics scraping and Grafana dashboards |
+| **Observability** | [`backend/deploy/observability/README.md`](backend/deploy/observability/README.md) | Prometheus metrics scraping and Grafana dashboards |
 
 **Continuous Governance Gates:**
 

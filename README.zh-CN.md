@@ -23,17 +23,17 @@ AstraQuant 将大语言模型多维度研判（宏观趋势、技术形态、盘
 
 | | |
 |---|---|
-| **机构量化交易大屏**<br>![交易工作台](docs/images/v850_live_dashboard.png) | **决策思维链 (CoT) 抽屉**<br>![思维链详情](docs/images/v850_trajectory_cot.png) |
-| **物理风控管理中心**<br>![风控管理](docs/images/v850_risk_control.png) | **多模型协同投委会看板**<br>![投委会看板](docs/images/v850_council_board.png) |
+| **机构量化交易大屏**<br>![交易工作台](backend/docs/images/v850_live_dashboard.png) | **决策思维链 (CoT) 抽屉**<br>![思维链详情](backend/docs/images/v850_trajectory_cot.png) |
+| **物理风控管理中心**<br>![风控管理](backend/docs/images/v850_risk_control.png) | **多模型协同投委会看板**<br>![投委会看板](backend/docs/images/v850_council_board.png) |
 
 <details>
 <summary><b>展开查看更多系统界面</b>（提示词工坊、自进化、系统治理、安全凭证等）</summary>
 
 | | |
 |---|---|
-| **提示词工程工坊**<br>![提示词工坊](docs/images/v850_prompt_studio.png) | **闭环经验自进化中枢**<br>![经验自进化](docs/images/v850_self_evolution.png) |
-| **大模型网关与思考配置**<br>![大模型中枢](docs/images/v850_llm_hub.png) | **系统治理与运维概览**<br>![系统治理](docs/images/v850_admin_overview.png) |
-| **安全与密钥凭证管理**<br>![安全中心](docs/images/v850_security_plaza.png) | **多维因子遥测矩阵**<br>![量化因子矩阵](docs/images/v850_calculus_factors.png) |
+| **提示词工程工坊**<br>![提示词工坊](backend/docs/images/v850_prompt_studio.png) | **闭环经验自进化中枢**<br>![经验自进化](backend/docs/images/v850_self_evolution.png) |
+| **大模型网关与思考配置**<br>![大模型中枢](backend/docs/images/v850_llm_hub.png) | **系统治理与运维概览**<br>![系统治理](backend/docs/images/v850_admin_overview.png) |
+| **安全与密钥凭证管理**<br>![安全中心](backend/docs/images/v850_security_plaza.png) | **多维因子遥测矩阵**<br>![量化因子矩阵](backend/docs/images/v850_calculus_factors.png) |
 
 </details>
 
@@ -44,7 +44,7 @@ AstraQuant 将大语言模型多维度研判（宏观趋势、技术形态、盘
 ```bash
 git clone https://github.com/0xethanq/astra-quant-agent.git && cd astra-quant-agent
 ./setup.sh                  # 交互式向导（推荐，2分钟完成基础环境配置）
-# 容器启动：./deploy/docker-start.sh | 裸机环境：./deploy/install.sh && ./start.sh
+# 容器启动：./backend/deploy/docker-start.sh | 裸机环境：./backend/deploy/install.sh && ./start.sh
 ```
 
 | 服务入口 | 本地访问链接 | 访问定位 |
@@ -152,7 +152,7 @@ AstraQuant 摒弃简单滞后指标，结合高频衍生品微观数据进行综
 ```bash
 git clone https://github.com/0xethanq/astra-quant-agent.git && cd astra-quant-agent
 ./setup.sh                  # 交互式初始化向导
-./deploy/docker-start.sh    # 构建并拉起后台与网关容器
+./backend/deploy/docker-start.sh    # 构建并拉起后台与网关容器
 docker compose ps           # 检查容器运行状态
 ```
 
@@ -160,7 +160,7 @@ docker compose ps           # 检查容器运行状态
 
 ```bash
 git clone https://github.com/0xethanq/astra-quant-agent.git && cd astra-quant-agent
-sh deploy/install.sh        # 安装 Python 虚拟环境与依赖
+sh backend/deploy/install.sh        # 安装 Python 虚拟环境与依赖
 ./setup.sh                  # 配置 .env 环境
 cd frontend && npm install && npm run build && cd ..
 ./start.sh                  # 启动控制面服务 (http://0.0.0.0:8080)
@@ -172,14 +172,14 @@ cd frontend && npm install && npm run build && cd ..
 
 ```bash
 # Tier 0: 核心量化业务门 (~20秒)
-.venv/bin/pytest tests/trading tests/venues tests/risk tests/backtest -n auto -q
+backend/.venv/bin/pytest backend/tests/trading tests/venues tests/risk tests/backtest -n auto -q
 
 # Tier 1: 模型与前端集成门 (~60秒)
-.venv/bin/pytest tests/llm tests/ui tests/core -n auto -q
+backend/.venv/bin/pytest backend/tests/llm tests/ui tests/core -n auto -q
 cd frontend && npm run build && npx vue-tsc --noEmit && node --test tests/*.test.mjs && cd ..
 
 # Tier 2: 全量架构审计门 (~90秒)
-.venv/bin/pytest tests/audit tests/extraction tests/ops -n auto -q
+backend/.venv/bin/pytest backend/tests/audit tests/extraction tests/ops -n auto -q
 ```
 
 ---
@@ -191,16 +191,16 @@ cd frontend && npm run build && npx vue-tsc --noEmit && node --test tests/*.test
 
 | 领域 | 规范文档 | 核心说明 |
 |---|---|---|
-| **架构全景** | [`docs/STRUCTURE_OVERVIEW.md`](docs/STRUCTURE_OVERVIEW.md) | 分层架构与各子目录核心职责划分 |
-| **后端分层** | [`astra_backend/README.md`](astra_backend/README.md) | 后端分层 (L0 门面 / L1 装配 / L2 路由 / L3 领域 / L4 子包架构与新模块约定) |
-| **哪个是入口/守护** | [`scripts/README.md`](scripts/README.md) | 哪个是入口/守护 (38 个根层脚本用途、调度入口、守护进程与双拼写 import 铁律) |
-| **提示词工程** | [`docs/PROMPT_GUIDE.md`](docs/PROMPT_GUIDE.md) | 提示词正文 JSON 库、8 大语义插槽与席位模板 |
-| **失败语义手册** | [`docs/FAILURE_SEMANTICS.md`](docs/FAILURE_SEMANTICS.md) | 真实事故复盘与防御性不变量清单 |
-| **北京时间契约** | [`docs/BEIJING_TIME_CONTRACT.md`](docs/BEIJING_TIME_CONTRACT.md) | 统一 UTC+8 财务结算与时间戳基线 |
+| **架构全景** | [`backend/docs/STRUCTURE_OVERVIEW.md`](backend/docs/STRUCTURE_OVERVIEW.md) | 分层架构与各子目录核心职责划分 |
+| **后端分层** | [`backend/astra_backend/README.md`](backend/astra_backend/README.md) | 后端分层 (L0 门面 / L1 装配 / L2 路由 / L3 领域 / L4 子包架构与新模块约定) |
+| **哪个是入口/守护** | [`backend/scripts/README.md`](backend/scripts/README.md) | 哪个是入口/守护 (38 个根层脚本用途、调度入口、守护进程与双拼写 import 铁律) |
+| **提示词工程** | [`backend/docs/PROMPT_GUIDE.md`](backend/docs/PROMPT_GUIDE.md) | 提示词正文 JSON 库、8 大语义插槽与席位模板 |
+| **失败语义手册** | [`backend/docs/FAILURE_SEMANTICS.md`](backend/docs/FAILURE_SEMANTICS.md) | 真实事故复盘与防御性不变量清单 |
+| **北京时间契约** | [`backend/docs/BEIJING_TIME_CONTRACT.md`](backend/docs/BEIJING_TIME_CONTRACT.md) | 统一 UTC+8 财务结算与时间戳基线 |
 | **前端组件** | [`frontend/src/components/admin/README.md`](frontend/src/components/admin/README.md) | 前端组件与 Composables (Vue 3 管理后台与操盘看板组件、状态与业务逻辑划分) |
 | **独立部署** | [`STANDALONE.md`](STANDALONE.md) | 本地独立部署与环境变量配置手册 |
 | **应急止损** | [`RECOVERY_GUIDE.md`](RECOVERY_GUIDE.md) | 紧急平仓与状态冷恢复实操预案 |
-| **可观测性** | [`deploy/observability/README.md`](deploy/observability/README.md) | Prometheus 指标采集与 Grafana 监控大屏 |
+| **可观测性** | [`backend/deploy/observability/README.md`](backend/deploy/observability/README.md) | Prometheus 指标采集与 Grafana 监控大屏 |
 
 **持续治理与防腐烂门禁：**
 

@@ -93,9 +93,12 @@ function criticalTooltips(body) {
   // 只有"无条件渲染该字段"的插值才算文本出口。
   // 三元表达式 `{{ cond ? field : other }}` 把字段限制在单一分支里 ——
   // 而 tooltip 往往正是在**另一个**分支（告警态）才需要它，故不算出口。
+  // ⚠️ 只排除**真三元**：`?.` 是可选链，不是条件分支。旧写法 `!expr.includes('?')`
+  // 会把 `fmtTokensCompact(model_stats?.reasoning_tokens_total)` 误判成三元，
+  // 于是明明可见的 Token 数值被当成"没有文本出口"（实测假红）。
   const interpolations = [...body.matchAll(/\{\{([\s\S]*?)\}\}/g)]
     .map((m) => m[1])
-    .filter((expr) => !expr.includes('?'))
+    .filter((expr) => !expr.replace(/\?\./g, '').includes('?'))
     .join('\n');
   const out = [];
 

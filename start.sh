@@ -6,6 +6,7 @@
 set -e
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+APP_DIR="$ROOT_DIR/backend"
 cd "$ROOT_DIR"
 
 echo "🚀 [AstraQuant] Initializing system environment..."
@@ -23,30 +24,31 @@ echo "🚀 [AstraQuant] Initializing system environment..."
 #    同一文件里却有一处已经用了 .venv ⇒ 本身就是不一致的。
 PY="${PYTHON_BIN:-}"
 if [ -z "$PY" ]; then
-    for cand in "$ROOT_DIR/.venv/bin/python" "$ROOT_DIR/.venv/bin/python3"; do
+    for cand in "$APP_DIR/.venv/bin/python" "$APP_DIR/.venv/bin/python3"; do
         [ -x "$cand" ] && { PY="$cand"; break; }
     done
 fi
 [ -n "$PY" ] || PY="$(command -v python3 2>/dev/null || true)"
 if [ -z "$PY" ] || [ ! -x "$PY" ]; then
-    echo "❌ Error: 找不到 Python 解释器（既无 .venv/bin/python，PATH 里也没有 python3）。"
-    echo "   请先执行：./deploy/install.sh   —— 它会创建 .venv 并装好依赖。"
+    echo "❌ Error: 找不到 Python 解释器（既无 backend/.venv/bin/python，PATH 里也没有 python3）。"
+    echo "   请先执行：./backend/deploy/install.sh   —— 它会创建 backend/.venv 并装好依赖。"
     exit 1
 fi
 echo "🐍 使用解释器: $PY"
 
 # 2. Check or create .env
-if [ ! -f .env ]; then
-    if [ -f env.example ]; then
-        echo "📝 Creating .env from env.example..."
-        cp env.example .env
+if [ ! -f "$APP_DIR/.env" ]; then
+    if [ -f "$APP_DIR/env.example" ]; then
+        echo "📝 Creating backend/.env from backend/env.example..."
+        cp "$APP_DIR/env.example" "$APP_DIR/.env"
+        chmod 600 "$APP_DIR/.env"
     else
-        echo "⚠️ Warning: env.example not found, please configure .env manually."
+        echo "⚠️ Warning: backend/env.example not found, please configure backend/.env manually."
     fi
 fi
 
 # 3. Create required runtime directories
-mkdir -p data logs backups
+mkdir -p "$APP_DIR/data" "$APP_DIR/logs" "$APP_DIR/backups"
 
 # ---------------------------------------------------------------------------
 # 2.5 改名前置检查（fail-closed）：`r20` → `astra` 的运行态数据是否已迁移。
@@ -60,8 +62,8 @@ mkdir -p data logs backups
 # 退出码 3 = 检测到遗留；0 = 无需迁移；其它 = 检查本身出问题（同样停下）。
 # 全新安装与已迁移实例都返回 0，不受影响。
 # ---------------------------------------------------------------------------
-if [ -f "$ROOT_DIR/scripts/migrate_r20_to_astra.py" ]; then
-    "$PY" "$ROOT_DIR/scripts/migrate_r20_to_astra.py" --check || {
+if [ -f "$APP_DIR/scripts/migrate_r20_to_astra.py" ]; then
+    "$PY" "$APP_DIR/scripts/migrate_r20_to_astra.py" --check || {
         rc=$?
         if [ "$rc" != "0" ]; then
             echo "❌ [Entrypoint] 启动前检查未通过（退出码 $rc）：拒绝在未迁移的数据上启动。" >&2
@@ -72,9 +74,9 @@ fi
 
 
 # 3.1 Initialize default instrument pool if not present (prevents untrusted pool blocking entry)
-if [ ! -f "data/instrument_pool.json" ]; then
+if [ ! -f "$APP_DIR/data/instrument_pool.json" ]; then
     echo "📋 Initializing default instrument pool..."
-    "$PY" -c "from scripts.instrument_pool import save_instruments, DEFAULT_INSTRUMENTS; save_instruments(DEFAULT_INSTRUMENTS)" 2>/dev/null || true
+    PYTHONPATH="$APP_DIR" "$PY" -c "from scripts.instrument_pool import save_instruments, DEFAULT_INSTRUMENTS; save_instruments(DEFAULT_INSTRUMENTS)" 2>/dev/null || true
 fi
 
 # 4. Check Node.js and build frontend if dist doesn't exist or if src was updated
@@ -95,10 +97,12 @@ if [ "$NEED_BUILD" = "1" ]; then
     else
         echo "⚠️ Warning: npm is not installed. Please build frontend manually via 'cd frontend && npm install && npm run build'."
         echo "   👉 推荐方案：直接使用 Docker 一键启动，无需在宿主机安装 Node.js/npm："
-        echo "      ./deploy/docker-start.sh"
+        echo "      ./backend/deploy/docker-start.sh"
     fi
 fi
 
 # 5. Start Backend Engine
 echo "✨ Launching AstraQuant on http://0.0.0.0:8080 ..."
+export PYTHONPATH="$APP_DIR"
+cd "$APP_DIR"
 exec "$PY" -m uvicorn astra_backend.app:app --host 0.0.0.0 --port 8080

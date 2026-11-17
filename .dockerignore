@@ -1,29 +1,31 @@
 .git
 .gitignore
 .venv
+backend/.venv
 venv
 ENV
 __pycache__
+backend/**/__pycache__
 *.py[cod]
 *$py.class
 *.so
 .pytest_cache
-tests
+backend/tests
 
 # 前端本地开发缓存（由 Docker 多阶段重新构建）
 frontend/node_modules
 frontend/dist
 
 # 敏感与运行时数据（必须通过 Volume 挂载，绝不打入镜像）
-.env
-.env.local
-..env.lock
-.env.lock
-data/
-!data/prompt_library.json
-!data/.gitkeep
-logs/
-backups/
+backend/.env
+backend/.env.local
+backend/..env.lock
+backend/.env.lock
+backend/data/
+!backend/data/prompt_library.json
+!backend/data/.gitkeep
+backend/logs/
+backend/backups/
 *.log
 *.tar.gz
 *.zip

@@ -23,21 +23,21 @@
    - 完整 `.git/` 仓库（保留所有本地分支、Commit 历史与远程 origin 跟踪）；
    - 后端全部模块 `astra_backend/`（L0-L4 架构、风控引擎与接口路由）；
    - 前端全部源码 `frontend/`（Vue 3 + TypeScript 纯净工程）；
-   - 量化与算子脚本 `scripts/`（全量 33 个策略、复盘、执行与分析脚本）；
-   - 自动化测试用例 `tests/`（涵盖审计、量化、UI 与风控门禁）；
-   - 部署编排配置 `deploy/`、`Dockerfile`、`docker-compose.yml`；
-   - 系统设计与架构文档 `docs/`。
+   - 量化与算子脚本 `backend/scripts/`（全量 33 个策略、复盘、执行与分析脚本）；
+   - 自动化测试用例 `backend/tests/`（涵盖审计、量化、UI 与风控门禁）；
+   - 部署编排配置 `backend/deploy/`、`Dockerfile`、`docker-compose.yml`；
+   - 系统设计与架构文档 `backend/docs/`。
 2. **免编译前端静态产物**：
    - `frontend/dist/`：打包前已通过 411 项测试与 `vue-tsc` 严格校验，新电脑即使暂未安装 Node.js/npm，后端也能直接静态挂载并托管 UI 控制台。
 3. **初始配置与接手规范**：
    - `AGENTS.md`：新电脑 Harness Agent 的架构规范、测试门禁与执行军规；
-   - `env.example`：标准环境变量配置模板。
+   - `backend/env.example`：标准环境变量配置模板。
 
 ### ❌ 彻底剔除的运行数据与敏感项
 - 数据库与业务状态：已排除全部 SQLite 数据库（`*.db` / `*.sqlite3`）、交易账本、决策历史、监控快照等；
-- 个人私密凭证：已排除 `.env` 及 Fernet 加密密钥文件（`astra_secrets.enc` / `.astra_secret_key`）；
-- 本地历史日志与备份：已排除 `logs/*.log` 与 `backups/*`；
-- 平台相关二进制环境：已排除 Python `.venv/` 与 `frontend/node_modules/`（避免跨机器架构导致的动态链接库不兼容问题）；
+- 个人私密凭证：已排除 `backend/.env` 及 Fernet 加密密钥文件（`astra_secrets.enc` / `.astra_secret_key`）；
+- 本地历史日志与备份：已排除 `backend/logs/*.log` 与 `backend/backups/*`；
+- 平台相关二进制环境：已排除 Python `backend/.venv/` 与 `frontend/node_modules/`（避免跨机器架构导致的动态链接库不兼容问题）；
 - 运行缓存与文件锁：已排除全部 `*.lock`、`*.pid`、`__pycache__`、`.pytest_cache`。
 
 ---
@@ -56,7 +56,7 @@ tar -xzvf astra_clean_project.tar.gz
 cd astra
 
 # 3. 赋予核心脚本执行权限
-chmod +x start.sh deploy/install.sh
+chmod +x start.sh backend/deploy/install.sh
 ```
 
 ### 通道 B：直接通过 GitHub 在线 Clone（极速·纯源码）
@@ -65,7 +65,7 @@ chmod +x start.sh deploy/install.sh
 # 1. 克隆完整仓库
 git clone https://github.com/0xethanq/astra-quant-agent.git astra-quant-agent
 cd astra
-chmod +x start.sh deploy/install.sh
+chmod +x start.sh backend/deploy/install.sh
 
 # 2. 编译前端静态资源（需 Node.js 18+）
 cd frontend
@@ -87,23 +87,23 @@ cd ..
 ### 2. 初始化环境配置 (.env)
 由于项目本体不含任何私密凭据，首次启动前请基于模板创建个人配置文件：
 ```bash
-cp env.example .env
-chmod 600 .env
+cp backend/env.example backend/.env
+chmod 600 backend/.env
 ```
-用编辑器打开 `.env`：
+用编辑器打开 `backend/.env`：
 - 若仅用于本地离线开发或回测：保持 `ASTRA_OKX_ENV=demo`，暂不填入真实 Key 即可；
 - 若需要调用大语言模型（LLM）：配置 `LLM_API_KEY` 与对应的 `LLM_BASE_URL`；
-- 若接入实盘/模拟盘：通过管理后台 `/admin` 进行 Fernet 加密录入，或直接在 `.env` 中按需配置。
+- 若接入实盘/模拟盘：通过管理后台 `/admin` 进行 Fernet 加密录入，或直接在 `backend/.env` 中按需配置。
 
 ### 3. 一键安装依赖并初始化数据结构
 ```bash
 # 使用官方标准化安装脚本
-sh deploy/install.sh
+sh backend/deploy/install.sh
 
 # 激活虚拟环境
-source .venv/bin/activate
+source backend/.venv/bin/activate
 ```
-*该脚本会自动创建专属 `.venv` 虚拟环境、安装 `requirements.txt` 全部依赖，并初始化基础交易池数据。*
+*该脚本会自动创建专属 `backend/.venv` 虚拟环境、安装 `backend/requirements.txt` 全部依赖，并初始化基础交易池数据。*
 
 ---
 
@@ -133,10 +133,12 @@ source .venv/bin/activate
 每次启动或进行代码修改后，务必执行门禁验证确保环境正常：
 ```bash
 # 激活环境
-source .venv/bin/activate
+source backend/.venv/bin/activate
 
 # 运行后端审计与风控基础测试
+cd backend
 pytest tests/audit/test_admin_token_duplication_contract.py tests/llm/test_llm_resilience.py tests/ui/test_dashboard_cache.py
+cd ..
 
 # 前端类型检查与组件测试（如有 node 环境）
 cd frontend
@@ -166,8 +168,8 @@ cd ..
 - **原因**：未将项目根目录加入 Python 搜索路径，或未激活 `.venv`。
 - **解决办法**：
   ```bash
-  source .venv/bin/activate
-  export PYTHONPATH=".:scripts:$PYTHONPATH"
+  source backend/.venv/bin/activate
+  export PYTHONPATH="backend:backend/scripts:$PYTHONPATH"
   ```
 
 ### Q2: 浏览器打开 8080 端口显示 404 或白屏？
