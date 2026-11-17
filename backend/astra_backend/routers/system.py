@@ -11,7 +11,7 @@ from fastapi import APIRouter, Header, HTTPException, Request
 from astra_backend.version import __version__, APP_NAME, get_version
 from astra_backend.config import settings, refresh_settings
 from astra_backend.settings_store import update_env
-from astra_backend.account_baseline import load_account_baseline
+from astra_backend.account_baseline import load_account_baseline, update_initial_capital
 from astra_backend.audit import recent as recent_audit, record as audit_record
 from astra_backend.dependencies import (
     ROOT, DATA_DIR, SCRIPTS_DIR, STARTED_AT,
@@ -584,6 +584,11 @@ def system_setup_apply(
         env_updates["ASTRA_MIN_SCALE_IN_CONFIDENCE"] = "68.0"
         env_updates["ASTRA_STOP_COOLDOWN_MINUTES"] = "15"
 
+    # 首次接入向导的初始本金基线（可选）。只写基线，不改 reset_time：
+    # 用户若要从当前权益重新起算，可另在后台设置统计起点。
+    if payload.initial_capital is not None:
+        update_initial_capital(float(payload.initial_capital))
+
     if payload.admin_password and len(payload.admin_password) >= 12:
         env_updates["ASTRA_ADMIN_TOKEN"] = payload.admin_password.strip()
         if not admin_auth.has_users():
@@ -661,7 +666,11 @@ def system_setup_apply(
             pass
 
     refresh_settings()
-    audit_record("system.setup_wizard", "success", {"env": env_updates.get("ASTRA_OKX_ENV"), "risk": payload.risk_profile})
+    audit_record("system.setup_wizard", "success", {
+        "env": env_updates.get("ASTRA_OKX_ENV"),
+        "risk": payload.risk_profile,
+        "initial_capital": payload.initial_capital,
+    })
     return {"ok": True, "message": "配置已成功保存并生效，引擎已同步更新"}
 
 

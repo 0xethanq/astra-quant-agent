@@ -44,6 +44,8 @@ const llmTestResult = ref<{ ok: boolean; msg?: string } | null>(null);
 
 // Step 3: Risk
 const riskProfile = ref<'conservative' | 'balanced' | 'aggressive'>('balanced');
+// 初始本金基线：留空沿用现有基线，填写则覆盖（用于累计盈亏/ROI 口径）。
+const initialCapital = ref('');
 const adminPassword = ref('');
 
 const saving = ref(false);
@@ -55,6 +57,20 @@ const derivedLlmConfig = computed(() => {
     baseUrl: customBaseUrl.value.trim() || 'https://api.openai.com/v1',
     model: customModel.value.trim() || 'gpt-4o',
   };
+});
+
+/** 非空时必须是一个大于 0 的有限数；空串表示“沿用现有基线”。 */
+const initialCapitalError = computed(() => {
+  const raw = initialCapital.value.trim();
+  if (!raw) return '';
+  const value = Number(raw);
+  return Number.isFinite(value) && value > 0 ? '' : t('dash.firstRun.capitalBaselineInvalid');
+});
+
+const parsedInitialCapital = computed<number | undefined>(() => {
+  if (initialCapitalError.value) return undefined;
+  const raw = initialCapital.value.trim();
+  return raw ? Number(raw) : undefined;
 });
 
 async function testOkxConnection() {
@@ -133,6 +149,7 @@ async function handleApply() {
         llm_model: cfg.model,
         llm_reasoning_effort: 'high',
         risk_profile: riskProfile.value,
+        initial_capital: parsedInitialCapital.value,
         admin_password: adminPassword.value.trim(),
       }),
     });
@@ -366,6 +383,30 @@ async function handleApply() {
       <!-- Step 3: Risk & Finish -->
       <div v-show="currentStep === 3" class="space-y-3">
         <div>
+          <label class="t-label mb-1 block" for="wiz-initial-capital">
+            {{ t('dash.firstRun.capitalBaseline') }}
+          </label>
+          <input
+            id="wiz-initial-capital"
+            v-model="initialCapital"
+            type="text"
+            class="input w-full font-mono text-xs"
+            :class="{ 'is-bad': !!initialCapitalError }"
+            :aria-invalid="!!initialCapitalError || undefined"
+            :placeholder="t('dash.firstRun.capitalBaselinePlaceholder')"
+            inputmode="decimal"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <p v-if="initialCapitalError" role="alert" class="mt-1 text-3xs text-rose-400">
+            {{ initialCapitalError }}
+          </p>
+          <p v-else class="mt-1 text-3xs leading-body" style="color: var(--ink-3)">
+            {{ t('dash.firstRun.capitalBaselineHint') }}
+          </p>
+        </div>
+
+        <div>
           <label class="t-label mb-1.5 block">{{ t('dash.firstRun.riskProfile') }}</label>
           <div class="space-y-2">
             <button
@@ -415,7 +456,7 @@ async function handleApply() {
           <button
             type="button"
             class="btn btn-primary btn-sm"
-            :disabled="saving"
+            :disabled="saving || !!initialCapitalError"
             @click="handleApply"
           >
             <Loader2 v-if="saving" class="h-3.5 w-3.5 animate-spin shrink-0" />

@@ -469,4 +469,7 @@ class SystemSetupRequest(BaseModel):
     llm_model: str = Field(default="deepseek-chat")
     llm_reasoning_effort: str = Field(default="high")
     risk_profile: str = Field(default="balanced")
+    # 初始本金基线：可选。留空表示沿用现有基线（全新安装默认 10,000）。
+    # 它只影响累计盈亏/ROI 口径，不会改动已有交易台账的起算时间。
+    initial_capital: float | None = Field(default=None, gt=0, le=1_000_000_000)
     admin_password: str = Field(default="")

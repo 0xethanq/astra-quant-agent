@@ -27,11 +27,15 @@ import hmac
 import json
 import os
 import re
+import socket
+import ssl
+import time
 import urllib.parse
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Mapping, Sequence
 
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from scripts.okx_runtime import OKXEnvironment, current_environment
@@ -84,6 +88,11 @@ USER_AGENT = (
 )
 DEFAULT_TIMEOUT = 20
 
+#: 只对**幂等 GET** 做网络重试。POST（下单/撤单/改单/平仓）绝不自动重试：
+#: 网络中断时交易所可能已经受理了请求，盲重试会造成重复成交。
+NETWORK_RETRY_ATTEMPTS = 3
+NETWORK_RETRY_BACKOFF_SECONDS = 0.4
+
 
 class OKXNotConfigured(RuntimeError):
     """No static V5 API Key for the selected LIVE/DEMO environment (fail-closed)."""
@@ -91,6 +100,17 @@ class OKXNotConfigured(RuntimeError):
 
 def _timestamp() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+def _retryable_transport_error(exc: BaseException) -> bool:
+    """判定一次失败是否值得对**幂等 GET** 重试。
+
+    业务错误（401/403 等 4xx、OKX 返回码）不重试 —— 重试只会重复同一次拒绝。
+    TLS EOF / 连接重置 / 超时 / 429 / 5xx 属于瞬时传输问题，重试有意义。
+    """
+    if isinstance(exc, HTTPError):
+        return exc.code in {429, 500, 502, 503, 504}
+    return isinstance(exc, (URLError, TimeoutError, ConnectionError, socket.timeout, ssl.SSLError))
 
 
 def _fmt(value: Any) -> Any:
@@ -231,33 +251,47 @@ def request(
     else:
         request_path = path
         body_text = json.dumps(payload, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
-    timestamp = _timestamp()
-    prehash = timestamp + method + request_path + body_text
-    signature = base64.b64encode(
-        hmac.new(selected.secret_key.encode(), prehash.encode(), hashlib.sha256).digest()
-    ).decode()
-    headers = {
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-        "User-Agent": USER_AGENT,
-        "OK-ACCESS-KEY": selected.api_key,
-        "OK-ACCESS-SIGN": signature,
-        "OK-ACCESS-TIMESTAMP": timestamp,
-        "OK-ACCESS-PASSPHRASE": selected.passphrase,
-    }
-    if selected.simulated:
-        headers["x-simulated-trading"] = "1"
-    http_request = Request(
-        selected.base_url + request_path,
-        data=body_text.encode("utf-8") if body_text else None,
-        headers=headers,
-        method=method,
-    )
-    try:
-        with urlopen(http_request, timeout=timeout) as response:
-            payload_json = json.loads(response.read().decode("utf-8") or "{}")
-    except Exception as exc:
-        raise RuntimeError(f"OKX V5 网络请求失败：{type(exc).__name__}: {exc}") from exc
+    # 重试只对幂等 GET 生效；POST 的签名与请求各只发一次（见上方常量注释）。
+    attempts = NETWORK_RETRY_ATTEMPTS if method == "GET" else 1
+    last_exc: BaseException | None = None
+    for attempt in range(attempts):
+        # 每次尝试重新签名：重试时时间戳必须仍然落在 OKX 的有效窗口内。
+        timestamp = _timestamp()
+        prehash = timestamp + method + request_path + body_text
+        signature = base64.b64encode(
+            hmac.new(selected.secret_key.encode(), prehash.encode(), hashlib.sha256).digest()
+        ).decode()
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "User-Agent": USER_AGENT,
+            "OK-ACCESS-KEY": selected.api_key,
+            "OK-ACCESS-SIGN": signature,
+            "OK-ACCESS-TIMESTAMP": timestamp,
+            "OK-ACCESS-PASSPHRASE": selected.passphrase,
+        }
+        if selected.simulated:
+            headers["x-simulated-trading"] = "1"
+        http_request = Request(
+            selected.base_url + request_path,
+            data=body_text.encode("utf-8") if body_text else None,
+            headers=headers,
+            method=method,
+        )
+        try:
+            with urlopen(http_request, timeout=timeout) as response:
+                payload_json = json.loads(response.read().decode("utf-8") or "{}")
+            break
+        except Exception as exc:
+            last_exc = exc
+            if attempt + 1 < attempts and _retryable_transport_error(exc):
+                time.sleep(NETWORK_RETRY_BACKOFF_SECONDS * (attempt + 1))
+                continue
+            raise RuntimeError(f"OKX V5 网络请求失败：{type(exc).__name__}: {exc}") from exc
+    else:  # pragma: no cover - 最后一次尝试必然 break 或 raise
+        raise RuntimeError(
+            f"OKX V5 网络请求失败：{type(last_exc).__name__}: {last_exc}"
+        ) from last_exc
     if not isinstance(payload_json, dict):
         raise RuntimeError("OKX V5 invalid response envelope")
     data = payload_json.get("data") or []

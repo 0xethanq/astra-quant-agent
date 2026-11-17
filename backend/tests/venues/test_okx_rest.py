@@ -15,11 +15,13 @@ import hashlib
 import hmac
 import inspect
 import json
+import ssl
 import unittest
 import urllib.parse
 from decimal import Decimal
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+from urllib.error import HTTPError, URLError
 
 import scripts.okx_rest as okx_rest
 from scripts.okx_runtime import freeze_environment, unfreeze_environment
@@ -113,6 +115,50 @@ class OKXRestHttpBoundaryTests(unittest.TestCase):
 
     def test_okx_not_configured_is_runtime_error_subclass(self):
         self.assertTrue(issubclass(okx_rest.OKXNotConfigured, RuntimeError))
+
+    # -- 瞬时传输错误重试（只限幂等 GET）--------------------------------------
+
+    def test_transient_tls_error_on_get_is_retried_then_succeeds(self):
+        """OKX/Cloudflare 偶发 TLS EOF 时，余额/持仓等 GET 应自动重试。"""
+        freeze_environment(DEMO_ENV)
+        self.urlopen.side_effect = [
+            URLError(ssl.SSLError("unexpected eof while reading")),
+            _response(data=[{"ccy": "USDT"}]),
+        ]
+        with patch.object(okx_rest.time, "sleep", return_value=None) as sleep:
+            rows = okx_rest.balances()
+        self.assertEqual(rows, [{"ccy": "USDT"}])
+        self.assertEqual(self.urlopen.call_count, 2, "GET 应重试一次后成功")
+        sleep.assert_called_once()
+
+    def test_get_gives_up_after_three_transport_attempts(self):
+        freeze_environment(DEMO_ENV)
+        self.urlopen.side_effect = URLError(ssl.SSLError("unexpected eof"))
+        with patch.object(okx_rest.time, "sleep", return_value=None):
+            with self.assertRaises(RuntimeError) as ctx:
+                okx_rest.positions()
+        self.assertIn("网络请求失败", str(ctx.exception))
+        self.assertEqual(self.urlopen.call_count, okx_rest.NETWORK_RETRY_ATTEMPTS)
+
+    def test_mutating_request_is_never_retried_on_network_error(self):
+        """⚠️ 下单/撤单等 POST 不自动重试：请求可能已被交易所受理，重试会重复成交。"""
+        freeze_environment(DEMO_ENV)
+        self.urlopen.side_effect = URLError(ssl.SSLError("unexpected eof"))
+        with patch.object(okx_rest.time, "sleep", return_value=None) as sleep:
+            with self.assertRaises(RuntimeError):
+                okx_rest.cancel_order("BTC-USDT-SWAP", "42")
+        self.assertEqual(self.urlopen.call_count, 1)
+        sleep.assert_not_called()
+
+    def test_business_error_is_not_retried(self):
+        """401/403 这类业务/鉴权错误重试无意义，只请求一次。"""
+        freeze_environment(DEMO_ENV)
+        self.urlopen.side_effect = HTTPError(
+            "https://www.okx.com/api/v5/account/balance", 401, "Unauthorized", {}, None)
+        with patch.object(okx_rest.time, "sleep", return_value=None):
+            with self.assertRaises(RuntimeError):
+                okx_rest.balances()
+        self.assertEqual(self.urlopen.call_count, 1)
 
     # -- 错误语义 ------------------------------------------------------------
 
