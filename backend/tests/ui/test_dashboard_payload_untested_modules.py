@@ -295,6 +295,19 @@ class BuildFactorsListTest(_Base):
         btc = next(r for r in out if r["instId"] == "BTC-USDT-SWAP")
         self.assertEqual(btc["fundingRate"], "1.2346%", "应保留 4 位小数")
 
+    def test_funding_rate_null_from_lib_is_dash_not_crash(self):
+        """字段存在但值为 `null` 时必须落 `--`，不能对 None 做 `:.4f`。
+
+        旧实现只在键**存在**时格式化，于是 `funding_rate_pct: null`
+        抛 `TypeError: unsupported format string passed to NoneType.__format__`，
+        整个看板缓存周期失败 → 页面显示 OFFLINE、账户区全空。
+        """
+        out, _ = self._build(lib={"instruments": [
+            {"instId": "BTC-USDT-SWAP",
+             "smart_money_derivatives": {"funding_rate_pct": None}}]})
+        btc = next(r for r in out if r["instId"] == "BTC-USDT-SWAP")
+        self.assertEqual(btc["fundingRate"], "--")
+
     def test_position_is_attached_by_instid(self):
         out, _ = self._build(positions=[{"instId": "BTC-USDT-SWAP", "pos": "1"}])
         b = {r["instId"]: r for r in out}

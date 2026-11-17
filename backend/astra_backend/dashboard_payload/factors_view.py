@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 import os
 
+from astra_backend.dashboard_payload.factors import funding_rate_text
 from astra_backend.dashboard_payload.readers import read_json
 from astra_backend.time_utils import beijing_text
 from scripts.instrument_pool import load_instruments
@@ -75,7 +76,7 @@ def build_factors_list(decisions_file, state_file, factor_file, positions, times
         rr_ratio = ai_thought.get("risk_reward_evaluation", "盈亏比评估中")
 
         raw_t = ai_info.get("raw_ticker", {})
-        funding_r = ai_info.get("raw_funding_rate") or (f"{lib_item.get('smart_money_derivatives', {}).get('funding_rate_pct', 0.0):.4f}%" if "funding_rate_pct" in lib_item.get("smart_money_derivatives", {}) else "--")
+        funding_r = ai_info.get("raw_funding_rate") or funding_rate_text(lib_item)
         oi_str = ai_info.get("raw_oi") or lib_item.get("smart_money_derivatives", {}).get("oi_usd", "--")
         taker_str = ai_info.get("raw_taker_vol") or lib_item.get("volume_money_flow", {}).get("taker_net_usd", "--")
         ls_str = ai_info.get("raw_ls_ratio") or lib_item.get("smart_money_derivatives", {}).get("long_short_ratio", "--")

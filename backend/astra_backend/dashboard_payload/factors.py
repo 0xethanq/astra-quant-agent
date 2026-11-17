@@ -16,7 +16,8 @@ from astra_backend.dashboard_payload.market import _safe_float
 from scripts.instrument_pool import load_instruments
 
 __all__ = ["load_position_trackers", "enrich_position_risk_fields",
-           "_load_local_factor_library", "_build_factors_from_local_files"]
+           "_load_local_factor_library", "_build_factors_from_local_files",
+           "funding_rate_text"]
 
 
 def load_position_trackers(tracker_file: str | os.PathLike[str]):
@@ -95,7 +96,7 @@ def _load_local_factor_library(factor_file: str | os.PathLike[str]):
     return {}
 
 
-def _funding_rate_text(lib_item: dict) -> str:
+def funding_rate_text(lib_item: dict) -> str:
     """资金费率展示文本：**缺失/None 一律 `--`**，不可拿 0.0 冒充真实值。
 
     旧实现先取 `.get(..., 0.0)` 再 `:.4f`，字段存在但值为 `null` 时
@@ -193,7 +194,7 @@ def _build_factors_from_local_files(factor_file: str | os.PathLike[str], decisio
             "chg24h": chg_val,
             "bidPx": raw_t.get("bidPx", ins.get("price", lib_item.get("microstructure", {}).get("bid_px", "--"))),
             "askPx": raw_t.get("askPx", ins.get("price", lib_item.get("microstructure", {}).get("ask_px", "--"))),
-            "fundingRate": ai_info.get("raw_funding_rate") or _funding_rate_text(lib_item),
+            "fundingRate": ai_info.get("raw_funding_rate") or funding_rate_text(lib_item),
             "oiUsd": ai_info.get("raw_oi") or lib_item.get("smart_money_derivatives", {}).get("oi_usd", "--"),
             "takerNetUsd": ai_info.get("raw_taker_vol") or lib_item.get("volume_money_flow", {}).get("taker_net_usd", "--"),
             "lsRatio": ai_info.get("raw_ls_ratio") or lib_item.get("smart_money_derivatives", {}).get("long_short_ratio", "--"),

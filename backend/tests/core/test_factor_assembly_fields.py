@@ -67,6 +67,13 @@ class RemainingFieldsTest(unittest.TestCase):
         self.assertEqual(texted["fundingRate"], "0.0123%")
         self.assertIsInstance(texted["fundingRate"], str, "库来源 ⇒ 带百分号字符串")
 
+    def test_funding_rate_null_from_lib_is_dash_not_crash(self):
+        """字段存在但值为 `null` 时必须落 `--`，不能对 None 做 `:.4f`。"""
+        row = self._run(lib={"instruments": [{"instId": "BTC-USDT-SWAP",
+                                              "smart_money_derivatives":
+                                                  {"funding_rate_pct": None}}]})
+        self.assertEqual(row["fundingRate"], "--")
+
     def test_strategy_tag_and_action_follow_the_three_states(self):
         for action, tag in (("BUY_LONG", "🟢 建议做多"), ("SELL_SHORT", "🔴 建议做空"),
                             ("WAIT", "⚪ AI观望")):
