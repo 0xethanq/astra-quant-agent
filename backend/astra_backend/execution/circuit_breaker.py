@@ -3,7 +3,6 @@ from __future__ import annotations
 import datetime
 import json
 import os
-import threading
 import time
 from pathlib import Path
 from typing import Dict, Any, Tuple, Optional
@@ -23,123 +22,9 @@ DATA_DIR = ROOT / "data"
 NEWS_SENTIMENT_FILE = DATA_DIR / "news_sentiment.json"
 CIRCUIT_BREAKER_FILE = DATA_DIR / "circuit_breaker.json"
 LEDGER_JSON_FILE = DATA_DIR / "trading_ledger.json"
-# 审计 A2（数据诚实→fail-closed）：台账是逐所拼合的，任一所在同步周期内拉取
-# 失败时其平仓亏损缺席，日亏求和天然偏小；此时「未触限」不可判定，按本模块
-# 「不可判定=不放松」纪律暂停开仓（宁停不错，与状态文件损坏同策）。
-
-
-
-def _sync_status_path():
-    """调用时解析（测试 patch 模块 DATA_DIR 即封闭，律①）。"""
-    return DATA_DIR / "ledger_sync_status.json"
-
-
-_LAST_AUTO_HEAL_ATTEMPT: float = 0.0
-_AUTO_HEAL_LOCK = threading.Lock()
-
-
-def _trigger_ledger_sync_heal() -> None:
-    """当旁车过旧或损坏时，在后台异步触发一次台账同步，实现不可判定状态的自动自愈。"""
-    global _LAST_AUTO_HEAL_ATTEMPT
-    # 批E 测试封闭闸：测试或显式禁用环境下绝对不触发同步
-    if str(os.environ.get("ASTRA_LEDGER_SYNC_DISABLED", "")).strip().lower() in ("1", "true", "yes"):
-        return
-    now = time.time()
-    with _AUTO_HEAL_LOCK:
-        if now - _LAST_AUTO_HEAL_ATTEMPT < 120.0:
-            return
-        _LAST_AUTO_HEAL_ATTEMPT = now
-
-    def _heal_worker():
-        try:
-            sync_script = ROOT / "scripts" / "sync_full_ledger.py"
-            if not sync_script.exists():
-                return
-            from astra_backend.spawn import run_script
-            run_script(sync_script, timeout=60, label="sync_full_ledger_auto_heal")
-        except Exception:
-            pass
-
-    t = threading.Thread(target=_heal_worker, name="ledger_sync_auto_heal", daemon=True)
-    t.start()
-
-
-def _effective_sidecar_max_age(max_age_seconds: float = 2700.0) -> float:
-    raw = str(os.environ.get("ASTRA_LEDGER_SYNC_MAX_AGE_SECONDS", "2700")).strip()
-    if raw:
-        try:
-            val = float(raw)
-            if val > 0:
-                return val
-        except (TypeError, ValueError):
-            pass
-    return max_age_seconds
-
-
-def _ledger_sync_sidecar_state(max_age_seconds: float = 2700.0) -> tuple[list[str], str]:
-    """读台账同步旁车，返回 `(failed_venues, unknown_reason)`（第一百四十四刀）。
-
-    - `unknown_reason == ""` ⇒ 判定有效；
-    - 非空 ⇒ **不可判定**：旁车**损坏**或**过旧**（> `max_age_seconds`）——
-      此时"跨所同步是否完整"无从得知，当日亏损求和**可能不完整**。
-
-    ⚠️ **修正一处不实陈述**：旧 docstring 写"过旧场景由 ledger 文件 file_health 的
-    STALE 通道兜底"，但两个调用方（本模块 `is_circuit_breaker_active` 与 trader 侧
-    `circuit_guard`）**都没有**任何 STALE/file_health 检查（全仓 grep 仅命中那句注释本身）
-    ⇒ 该补偿**并不存在**。本刀先把"不可判定"**如实暴露**（调用方打印 warn），
-    **行为保持不变**（仍不据此禁开仓）——方向是否改为 fail-closed 需人工拍板。
-
-    缺失旁车仍是 `([], "")`（全新环境尚未同步过，不应把开仓全停）。
-    """
-    try:
-        path = _sync_status_path()
-        if not path.exists():
-            return [], ""
-        with open(path, "r", encoding="utf-8") as f:
-            payload = json.load(f)
-        generated_at = str(payload.get("generated_at") or "")
-        effective_max_age = _effective_sidecar_max_age(max_age_seconds)
-        if generated_at:
-            ts = datetime.datetime.fromisoformat(generated_at)
-            age = (datetime.datetime.now(ts.tzinfo) - ts).total_seconds()
-            if age > effective_max_age:
-                _trigger_ledger_sync_heal()
-                return [], f"旁车过旧（{age:.0f}s > {effective_max_age:.0f}s）"
-        failed = []
-        for v, d in (payload.get("venues") or {}).items():
-            if not (isinstance(d, dict) and d.get("status") == "failed"):
-                continue
-            reason = str(d.get("reason") or "").lower()
-            # 审计：若失败原因是该所未配置有效凭证（免密只读行情模式），无账户台账可同步，
-            # 绝不能作为"当日亏损不可判全"的理由熔断其他已配置场所（如 OKX）的开仓。
-            is_unconfigured_error = any(
-                token in reason for token in (
-                    "-2015", "invalid api-key", "invalid key", "需显式设",
-                    "not configured", "未配置", "未提供", "missing credential"
-                )
-            )
-            if is_unconfigured_error:
-                try:
-                    from astra_backend.exchanges import venue_credentials
-                    ak, sk = venue_credentials(str(v), str(payload.get("environment") or ""))
-                    if not (ak and sk):
-                        continue
-                except Exception:
-                    pass
-            failed.append(str(v))
-        return failed, ""
-    except Exception as exc:
-        _trigger_ledger_sync_heal()
-        return [], f"旁车损坏/不可读（{exc!r}）"
-
-
-def _ledger_sync_failed_venues(max_age_seconds: float = 2700.0) -> list[str]:
-    """**兼容壳**：只返回 failed 列表（调用方签名与既有测试契约不变）。
-
-    ⚠️ 注意它的盲区：**不可判定的情形不会体现在这个列表里**（旁车损坏/过旧都返回 `[]`）。
-    需要区分"没有失败所"与"不知道"的调用方，请用 `_ledger_sync_sidecar_state`。
-    """
-    return _ledger_sync_sidecar_state(max_age_seconds)[0]
+# 2026-11-17（用户拍板）：系统已收口为 OKX 单所，原“跨所台账同步完整性”闸门
+# 已无对象。`ledger_sync_status.json` 仍由 sync_full_ledger 写入、仍供 data_health
+# 显示 PARTIAL，但**不再参与开仓熔断**：单次同步失败不应停掉整个系统。
 # 审计③(2026-09-13)：文件名分裂修复——旧值（复数 .json）与 trader 活文件
 # stop_cooldown.json（单数）互不可见；若后端接平仓写复数而 trader 消费单数，冷却
 # 静默失效。归一到既成事实文件名（两边 key/schema 本就同构）。
@@ -325,23 +210,8 @@ def is_circuit_breaker_active(usdt_available: Optional[float] = None, fetch_cand
             return True, f"熔断状态文件损坏，安全暂停开仓: {e}"
 
     if LEDGER_JSON_FILE.exists():
-        # 第一百四十七刀：与 trader 孪生版**结构对称** —— 旁车读取本身若抛（助手理论上
-        # 内部已全覆盖，但"理论上不会抛"不是契约），也必须 fail-closed，而不是让异常
-        # 逃出本函数（逃出去由调用方决定，方向就不可控了）。
-        try:
-            _failed_venues, _sidecar_unknown = _ledger_sync_sidecar_state()
-            if _sidecar_unknown:
-                # ⚠️ 用户拍板 fail-closed（第一百四十四刀）：**不可判定 ≠ 安全** ——
-                # 旁车损坏/过旧 ⇒ "跨所同步是否完整"无从得知 ⇒ 当日亏损求和可能不完整，
-                # 此时必须禁开仓（仓位管理与既有保护不受影响）。
-                return True, (f"台账同步状态不可判定（{_sidecar_unknown}）⇒ 当日亏损求和不可判全，"
-                              "安全暂停开仓")
-            if _failed_venues:
-                return True, ("台账跨所同步不完整（失败所: " + ",".join(_failed_venues) +
-                              "），当日亏损求和不可判全，安全暂停开仓")
-        except Exception as _sidecar_exc:      # noqa: BLE001 - 风险路径：宁可停，不可漏
-            # 与 trader 孪生版**同范围**：整个旁车判定块都在保护范围内
-            return True, f"台账同步旁车检查不可用，安全暂停开仓: {_sidecar_exc}"
+        # 2026-11-17：台账同步旁车不再参与熔断（单所口径，失败只在 data_health 报
+        # PARTIAL）。这里只保留当日亏损限额这条独立风险闸门。
         try:
             with open(LEDGER_JSON_FILE, "r", encoding="utf-8") as f:
                 ledger = json.load(f)

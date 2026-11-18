@@ -8,7 +8,6 @@
 | 105 | 黑天鹅哨兵已熔断 ⇒ 直接把哨兵理由作为熔断理由返回 |
 | 115 | 熔断状态文件 `active`/`triggered` 且未过期 ⇒ 熔断 |
 | 117 | 熔断状态文件**损坏** ⇒ 熔断（不是"当作没熔断"） |
-| 138 | 台账同步旁车检查**不可用** ⇒ 熔断 |
 | 149 | 环境不可判定 ⇒ 当日亏损**保守全计**（宁停不漏） |
 | 155 | 日亏损风控数据**读取失败** ⇒ 熔断 |
 
@@ -72,47 +71,24 @@ class CircuitBreakerActiveFailClosedTest(unittest.TestCase):
         tripped, why = self._call()
         self.assertFalse(tripped, f"已过期的熔断记录不该继续拦着：{why!r}")
 
-    # ── 138 / 149 / 155：台账与日亏损 ─────────────────────────────────
-    def test_sidecar_check_unavailable_trips(self):
-        self.ledger_file.write_text(json.dumps({"trades": []}), encoding="utf-8")
-        with patch(f"{CB_MODULE}._ledger_sync_sidecar_state",
-                   side_effect=RuntimeError("sidecar boom")):
-            tripped, why = self._call(ledger={"trades": []})
-        self.assertTrue(tripped, "台账同步旁车检查不可用 ⇒ 不可判定 ⇒ 必须熔断")
-        self.assertIn("旁车检查不可用", why)
-
-    def test_unknown_sidecar_state_trips(self):
-        with patch(f"{CB_MODULE}._ledger_sync_sidecar_state", lambda: ([], "SIDECAR_UNKNOWN")):
-            tripped, why = self._call(ledger={"trades": []})
-        self.assertTrue(tripped, "同步状态不可判定 ⇒ 熔断")
-        self.assertIn("不可判定", why)
-
-    def test_failed_venues_trip(self):
-        with patch(f"{CB_MODULE}._ledger_sync_sidecar_state", lambda: (["gate"], None)):
-            tripped, why = self._call(ledger={"trades": []})
-        self.assertTrue(tripped, "有场所同步失败 ⇒ 当日亏损求和不完整 ⇒ 熔断")
-        self.assertIn("gate", why)
-
+    # ── 149 / 155：台账与日亏损 ─────────────────────────────────────
     def test_undecidable_environment_counts_all_pnl(self):
         """环境不可判定 ⇒ `_mode=""` ⇒ **保守全计**（demo/live 不互抵）⇒ 亏损超限要熔断。"""
         def boom():
             raise RuntimeError("env down")
-        with patch(f"{CB_MODULE}._ledger_sync_sidecar_state", lambda: ([], None)), \
-             patch(f"{CB_MODULE}.ledger_daily_closed_pnl", lambda ledger, mode, today: -300.0):
+        with patch(f"{CB_MODULE}.ledger_daily_closed_pnl", lambda ledger, mode, today: -300.0):
             tripped, why = self._call(ledger={"trades": []}, env=boom, cap=100.0)
         self.assertTrue(tripped, "环境读不到时不许因「不知道盈亏算谁的」就放行")
         self.assertIn("触及单日最大风控熔断限额", why)
 
     def test_unreadable_ledger_trips(self):
         self.ledger_file.write_text("{ 坏台账", encoding="utf-8")
-        with patch(f"{CB_MODULE}._ledger_sync_sidecar_state", lambda: ([], None)):
-            tripped, why = self._call()
+        tripped, why = self._call()
         self.assertTrue(tripped, "日亏损数据读不到 ⇒ 不可判定 ⇒ 必须熔断")
         self.assertIn("日亏损风控数据读取失败", why)
 
     def test_clean_state_does_not_trip(self):
-        with patch(f"{CB_MODULE}._ledger_sync_sidecar_state", lambda: ([], None)), \
-             patch(f"{CB_MODULE}.ledger_daily_closed_pnl", lambda ledger, mode, today: 5.0):
+        with patch(f"{CB_MODULE}.ledger_daily_closed_pnl", lambda ledger, mode, today: 5.0):
             tripped, why = self._call(ledger={"trades": []})
         self.assertFalse(tripped, f"一切正常不得误熔断：{why!r}")
         self.assertEqual(why, "")

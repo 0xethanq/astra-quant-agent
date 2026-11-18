@@ -31,9 +31,10 @@ LEDGER_SYNC_STATUS_FILE = os.path.join(DATA_DIR, "ledger_sync_status.json")
 #: 本轮同步中被准入清单挡掉的**活动持仓**（模块级：`_write_sync_status` 与同步主体
 #: 不在同一函数内；每轮同步开始时由同步主体清空）。
 _UNMANAGED_LIVE: list = []
-# 审计 A2（数据诚实）：逐所台账同步状态旁车。任一 fetch 失败只 print-warn 后
-# 返回 []，与「该所确无平仓」在 trading_ledger.json 里不可分辨；旁车记录
-# ok/failed(原因)/failed(截断风险)，供 data_health/前台显式 PARTIAL。
+# 数据诚实：OKX 单所台账同步状态旁车。fetch 失败只 print-warn 后返回 []，
+# 与「确实没有平仓」在 trading_ledger.json 里不可分辨；旁车记录
+# ok/failed(原因)/truncated，供 data_health 显式 PARTIAL。
+# 2026-11-17 起该旁车**不再参与开仓熔断**（单所口径）。
 _FETCH_STATUS = {}
 
 
@@ -114,8 +115,11 @@ def unmanaged_positions_payload(unmanaged, *, limit: int = UNMANAGED_LIST_MAX):
 
 
 def _write_sync_status(env):
-    """原子写旁车；读侧一律容错缺文件（旧版本无旁车=按 OK 不误伤）。
-    路径按调用时 DATA_DIR 解析——测试 patch 模块 DATA_DIR 即封闭（律①）。"""
+    """原子写 OKX 单所同步旁车；读侧一律容错缺文件（旧版本无旁车=按 OK 不误伤）。
+
+    路径按调用时 DATA_DIR 解析——测试 patch 模块 DATA_DIR 即封闭（律①）。
+    `venues` 形状保持不变以兼容 data_health 读取；当前只会出现 `okx`。
+    """
     _dir = DATA_DIR
     target = os.path.join(_dir, "ledger_sync_status.json")
     payload = {

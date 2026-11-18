@@ -70,25 +70,23 @@ class TestTraderBreakerLiveWiring(unittest.TestCase):
         with open(self.ledger, "w", encoding="utf-8") as f:
             json.dump(rows, f)
         p_ledger = patch.object(aft, "LEDGER_JSON_FILE", self.ledger)
-        p_sidecar = patch.object(cb, "_sync_status_path",
-                                 lambda: Path(os.path.join(self.tmp, "ledger_sync_status.json")))
         if sidecar is not None:
             with open(os.path.join(self.tmp, "ledger_sync_status.json"), "w", encoding="utf-8") as f:
                 json.dump(sidecar, f)
         mode = mode
-        with p_ledger, p_sidecar, \
+        with p_ledger, \
              patch.object(aft, "check_black_swan_sentinel", lambda: (False, "")), \
              patch.object(aft, "current_environment", lambda: type("E", (), {"mode": mode})()), \
              patch.object(aft, "effective_daily_loss_limit", lambda _u=None: 150.0):
             return aft.is_circuit_breaker_active(usdt_available=1000.0)
 
-    def test_sidecar_failed_venue_halts_opening_in_trader(self):
+    def test_sidecar_failed_venue_does_not_halt_opening_in_trader(self):
+        """单所口径：OKX 同步失败只在看板报 PARTIAL，不再停 trader 开仓。"""
         active, reason = self._run(
             [_closed_row(-10.0, "demo")],
-            sidecar={"venues": {"gate": {"status": "failed"}, "okx": {"status": "ok"}}})
-        self.assertTrue(active, "gate 同步失败必须让 trader 活函数暂停开仓")
-        self.assertIn("gate", reason)
-        self.assertIn("台账跨所同步不完整", reason)
+            sidecar={"venues": {"okx": {"status": "failed"}}})
+        self.assertFalse(active, f"OKX 同步失败不应再熔断：{reason!r}")
+        self.assertEqual(reason, "")
 
     def test_env_mix_cannot_mask_daily_loss(self):
         # demo 当日真亏 -160（>限额150），live 镜像 +159 —— 混算=-1 不触限；带轴必须熔断
@@ -109,20 +107,13 @@ class TestTraderBreakerLiveWiring(unittest.TestCase):
         active, _ = self._run([_closed_row(-10.0, "demo")])  # 无 sidecar 文件
         self.assertFalse(active)
 
-    def test_corrupt_sidecar_fails_closed_in_trader(self):
-        """旁车**损坏** ⇒ trader 侧熔断判定必须 **fail-closed（禁开仓）**。
-
-        ⚠️ 契约变更（2026-09-20，第一百四十四刀，**用户拍板**）：此前本用例断言
-        `assertFalse(active)`（与旧注释"损坏→[]（不误停）"一致）—— 而"损坏"其实是
-        **不可判定**（跨所同步是否完整无从得知），把它读成"各所正常"正是
-        "不可判定 ≠ 安全"要禁止的。名字本来就写着 `fails_closed`，现在行为与名字一致。
-        """
+    def test_corrupt_sidecar_does_not_halt_in_trader(self):
+        """单所口径：旁车损坏由 data_health 报 PARTIAL，不再阻止 trader 开仓。"""
         os.makedirs(self.tmp, exist_ok=True)
         with open(os.path.join(self.tmp, "ledger_sync_status.json"), "w") as f:
             f.write("{half")
         active, reason = self._run([_closed_row(-10.0, "demo")])
-        self.assertTrue(active, "不可判定 ⇒ fail-closed（用户拍板）")
-        self.assertIn("不可判定", reason)
+        self.assertFalse(active, f"旁车损坏不应再熔断：{reason!r}")
 
 
 class TestRoutingPolicySingleSource(unittest.TestCase):

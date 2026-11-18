@@ -61,8 +61,9 @@ def merge_ledger_sync_status(source_errors: List[str], data_dir, *, datetime) ->
 
     - 文件不存在 / 解析失败 / 结构不符 → 静默跳过；
     - `generated_at` 解析失败或超过 2700 秒 → 静默跳过；
-    - 某所 `status == "failed"` → 追加一条；否则若 `truncated`/`truncated_at`
+    - OKX 的 `status == "failed"` → 追加一条；否则若 `truncated`/`truncated_at`
       存在 → 追加"分页未取尽"（两者是 **elif**，不重复报）。
+      `venues` 形状仍按兼容读取，但当前只会出现 `okx`。
     """
     try:
         _lss = os.path.join(data_dir, "ledger_sync_status.json")
@@ -83,9 +84,9 @@ def merge_ledger_sync_status(source_errors: List[str], data_dir, *, datetime) ->
                         # 批C：分页化后该标记仅在「历史分页未取尽且仍停在基线窗口之内」时出现
                         # （早期版本按单页 len>=100 反推，会把「已覆盖在册窗口」误报成截断）。
                         source_errors.append(f"ledger-{_v}: 历史分页未取尽（仍在基线窗口内），可能存在截断")
-                # 无主活动持仓（2026-09-20 实测：某外所 -2416.7）：交易所有仓、
-                # 却不在准入清单 ⇒ **没进台账** ⇒ 风险界面看不到，而开仓侧又把它当
-                # "外部仓"永久拒开。这条必须显式上报：它意味着**可能无人管理的敞口**。
+                # 无主活动持仓（2026-09-20 实测）：交易所有仓却不在准入清单
+                # ⇒ **没进台账** ⇒ 风险界面看不到，而开仓侧又把它当"外部仓"
+                # 永久拒开。这条必须显式上报：它意味着**可能无人管理的敞口**。
                 _unm = _ls.get("unmanaged_positions")
                 if isinstance(_unm, dict) and int(_unm.get("count") or 0) > 0:
                     _items = [i for i in (_unm.get("items") or []) if isinstance(i, dict)]

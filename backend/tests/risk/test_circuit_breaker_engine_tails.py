@@ -314,99 +314,6 @@ class LedgerStatsTests(unittest.TestCase):
         self.assertEqual(out["net_realized"], 0.0)
 
 
-# ───────────────────── 旁车 ─────────────────────
-class SidecarTests(_Sandbox, unittest.TestCase):
-    def _sidecar(self, payload, *, raw=None):
-        p = self.data / "ledger_sync_status.json"
-        p.write_text(raw if raw is not None else json.dumps(payload), encoding="utf-8")
-        return cb._ledger_sync_sidecar_state()
-
-    def test_a_missing_sidecar_is_not_unknown(self):
-        self.assertEqual(cb._ledger_sync_sidecar_state(), ([], ""))
-
-    def test_a_fresh_clean_sidecar_reports_nothing(self):
-        self.assertEqual(self._sidecar({"venues": {}, "generated_at": ""}), ([], ""))
-
-    def test_a_failed_venue_is_reported(self):
-        failed, unknown = self._sidecar({"venues": {"gate": {"status": "failed",
-                                                             "reason": "timeout"}}})
-        self.assertEqual(failed, ["gate"])
-        self.assertEqual(unknown, "")
-
-    def test_a_stale_sidecar_is_unknown(self):
-        # 第 61/62 行 —— 过旧 ⇒ 不可判定
-        old = (datetime.datetime.now(datetime.timezone.utc)
-               - datetime.timedelta(seconds=99999)).isoformat()
-        failed, unknown = self._sidecar({"venues": {}, "generated_at": old})
-        self.assertEqual(failed, [])
-        self.assertIn("旁车过旧", unknown)
-
-    def test_a_fresh_sidecar_is_not_unknown(self):
-        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
-        self.assertEqual(self._sidecar({"venues": {}, "generated_at": now})[1], "")
-
-    def test_a_corrupt_sidecar_is_unknown(self):
-        # 第 86/87 行
-        _, unknown = self._sidecar(None, raw="{ broken")
-        self.assertIn("旁车损坏/不可读", unknown)
-
-    def test_an_unconfigured_venue_is_not_counted_as_failed(self):
-        # 第 70–84 行：免密只读行情模式下的失败不算"台账不可判全"。
-        # ⚠️ 必须把 `venue_credentials` 打桩 —— 否则它会读到**真实凭证**
-        #    （实测：连 `venue_credentials("gate", "")` 都返回 32/64 字符的 live key），
-        #    豁免分支永远不触发，用例变成"测生产环境"。
-        with patch("astra_backend.exchanges.venue_credentials",
-                   lambda v, e: ("", "")):
-            for reason in ("-2015 invalid api-key", "未配置凭证", "missing credential",
-                           "invalid api-key", "not configured", "未提供", "需显式设"):
-                with self.subTest(reason=reason):
-                    failed, _ = self._sidecar({"venues": {
-                        "gate": {"status": "failed", "reason": reason}}})
-                    self.assertEqual(failed, [], f"{reason!r} 不应熔断其他已配置场所")
-
-    def test_the_exemption_tokens_are_matched_case_insensitively(self):
-        with patch("astra_backend.exchanges.venue_credentials",
-                   lambda v, e: ("", "")):
-            failed, _ = self._sidecar({"venues": {
-                "gate": {"status": "failed", "reason": "INVALID API-KEY expired"}}})
-        self.assertEqual(failed, [])
-
-    def test_an_unconfigured_venue_with_real_credentials_still_counts(self):
-        with patch("astra_backend.exchanges.venue_credentials",
-                   lambda v, e: ("AK", "SK")):
-            failed, _ = self._sidecar({"venues": {
-                "gate": {"status": "failed", "reason": "invalid api-key"}}})
-        self.assertEqual(failed, ["gate"], "凭证其实在 ⇒ 仍视为真实失败")
-
-    def test_a_non_credential_failure_reason_is_never_exempted(self):
-        with patch("astra_backend.exchanges.venue_credentials",
-                   lambda v, e: ("", "")):
-            failed, _ = self._sidecar({"venues": {
-                "gate": {"status": "failed", "reason": "timeout"}}})
-        self.assertEqual(failed, ["gate"])
-
-    def test_a_credential_lookup_failure_still_counts_the_venue(self):
-        # 第 82/83 行 —— 查凭证本身抛 ⇒ 不豁免（宁可停）
-        with patch("astra_backend.exchanges.venue_credentials",
-                   side_effect=RuntimeError("boom")):
-            failed, _ = self._sidecar({"venues": {
-                "gate": {"status": "failed", "reason": "invalid api-key"}}})
-        self.assertEqual(failed, ["gate"])
-
-    def test_a_non_dict_venue_entry_is_ignored(self):
-        failed, unknown = self._sidecar({"venues": {"gate": "junk"}})
-        self.assertEqual((failed, unknown), ([], ""))
-
-    def test_a_non_failed_status_is_ignored(self):
-        failed, _ = self._sidecar({"venues": {"gate": {"status": "ok"}}})
-        self.assertEqual(failed, [])
-
-    def test_the_compat_shell_returns_only_the_list(self):
-        # 第 96 行
-        self._sidecar({"venues": {"gate": {"status": "failed", "reason": "x"}}})
-        self.assertEqual(cb._ledger_sync_failed_venues(), ["gate"])
-
-
 # ───────────────────── 冷却（薄壳） ─────────────────────
 class CooldownShellTests(_Sandbox, unittest.TestCase):
     def test_reading_cooldown_state_uses_the_current_file_path(self):
@@ -505,37 +412,25 @@ class CircuitBreakerActiveTests(_Sandbox, unittest.TestCase):
         self.assertTrue(tripped)
         self.assertIn("熔断状态文件损坏", why)
 
-    def test_a_corrupt_sidecar_trips(self):
+    def test_a_corrupt_sidecar_does_not_trip(self):
         (self.data / "ledger_sync_status.json").write_text("{ broken", encoding="utf-8")
         tripped, why = self._active(ledger=[_closed(-1.0)])
-        self.assertTrue(tripped)
-        self.assertIn("台账同步状态不可判定", why)
+        self.assertFalse(tripped, f"旁车损坏不应再熔断：{why!r}")
 
-    def test_a_stale_sidecar_trips(self):
+    def test_a_stale_sidecar_does_not_trip(self):
         old = (datetime.datetime.now(datetime.timezone.utc)
                - datetime.timedelta(seconds=99999)).isoformat()
         (self.data / "ledger_sync_status.json").write_text(
             json.dumps({"venues": {}, "generated_at": old}), encoding="utf-8")
         tripped, why = self._active(ledger=[_closed(-1.0)])
-        self.assertTrue(tripped)
-        self.assertIn("旁车过旧", why)
+        self.assertFalse(tripped, f"旁车过旧不应再熔断：{why!r}")
 
-    def test_a_failed_venue_trips(self):
-        # 第 293–295 行
+    def test_a_failed_okx_venue_does_not_trip(self):
         (self.data / "ledger_sync_status.json").write_text(
-            json.dumps({"venues": {"gate": {"status": "failed",
-                                            "reason": "timeout"}}}), encoding="utf-8")
+            json.dumps({"venues": {"okx": {"status": "failed",
+                                           "reason": "timeout"}}}), encoding="utf-8")
         tripped, why = self._active(ledger=[_closed(-1.0)])
-        self.assertTrue(tripped)
-        self.assertIn("gate", why)
-
-    def test_a_sidecar_exception_trips(self):
-        # 第 296–298 行 —— 「理论上不会抛」不是契约
-        with patch.object(cb, "_ledger_sync_sidecar_state",
-                          side_effect=RuntimeError("boom")):
-            tripped, why = self._active(ledger=[_closed(-1.0)])
-        self.assertTrue(tripped)
-        self.assertIn("旁车检查不可用", why)
+        self.assertFalse(tripped, f"OKX 同步失败不应再熔断开仓：{why!r}")
 
     def test_daily_loss_beyond_the_cap_trips(self):
         # 第 311/312 行

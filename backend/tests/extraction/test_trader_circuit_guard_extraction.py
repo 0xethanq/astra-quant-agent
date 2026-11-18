@@ -64,25 +64,9 @@ def _normalize(node: ast.AST) -> str:
     return ast.dump(node, include_attributes=False)
 
 
-#: ⚠️ **文档化差异**（第一百四十四刀新增本表）：本门要求搬运后函数体逐字，
-#: 表外任何改动照旧翻红；表内差异在比较前先把"新文本"还原成"旧文本"。
-#:
-#: 本刀唯一一条：`is_circuit_breaker_active` 里把"台账同步旁车**不可判定**"
-#: （旁车损坏/过旧）**如实披露**出来。旧 docstring 声称这类场景由 ledger 的
-#: file_health STALE 通道兜底，但两个调用方都没有该检查（全仓 grep 只命中那句注释）
-#: ⇒ 补偿不存在。用户拍板 **fail-closed**：不可判定 ⇒ 禁开仓（可见 + 有行为）。
-DELTA_REWRITES = (
-    ("""            from astra_backend.execution.circuit_breaker import (
-                _ledger_sync_sidecar_state as _sidecar_state)
-            _failed_venues, _sidecar_unknown = _sidecar_state()
-            if _sidecar_unknown:
-                # 与模块版同源（第一百四十四刀，用户拍板 fail-closed）：不可判定 ⇒ 禁开仓
-                return True, (f"台账同步状态不可判定（{_sidecar_unknown}）⇒ "
-                              "当日亏损求和不可判全，安全暂停开仓")
-""",
-     """            _failed_venues = _ledger_sync_failed_venues()
-"""),
-)
+#: 2026-11-17：OKX 单所化后，`circuit_guard.is_circuit_breaker_active` 里的
+#: 台账同步旁车分支已删除，函数体回到抽取基线形状；不再需要差异重写表。
+DELTA_REWRITES = ()
 
 
 class CircuitGuardVerbatimTest(unittest.TestCase):

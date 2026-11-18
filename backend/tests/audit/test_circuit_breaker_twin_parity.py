@@ -22,10 +22,13 @@
 ## 判据与自检
 
 - **不做**：两份实现的决策序列必须完全一致；
-- **自检 1（非空）**：事件数 ≥ 8 且必须包含 旁车不可判 / 失败所 / 熔断文件活跃 三类事件，
-  否则说明抽取器坏了（抽取器一坏，本门会"永远绿"）；
-- **自检 2（有牙齿）**：把"旁车不可判 ⇒ 禁开仓"这一支从一份实现里删掉，对拍**必须**报不等
-  —— 这正是历史漂移的形状（一边加了闸，另一边没有）。
+- **自检 1（非空）**：事件数 ≥ 8 且必须包含 哨兵 / 熔断文件活跃 / 日亏损超限
+  三类事件，否则说明抽取器坏了（抽取器一坏，本门会"永远绿"）；
+- **自检 2（有牙齿）**：把"哨兵触发 ⇒ 禁开仓"这一支从一份实现里删掉，对拍**必须**
+  报不等 —— 这正是历史漂移的形状（一边加了闸，另一边没有）。
+
+> 2026-11-17：OKX 单所化后，两侧的台账同步旁车分支已同时删除；本门不再要求
+> SIDECAR_UNKNOWN / FAILED_VENUES 事件，改为对哨兵分支做有牙齿自检。
 """
 
 from __future__ import annotations
@@ -46,8 +49,6 @@ _NORMALIZERS: "list[tuple[re.Pattern, str]]" = [
     (re.compile(r"(CIRCUIT_BREAKER_FILE|circuit_breaker_file)"), "CB_FILE"),
     (re.compile(r"os\.path\.exists\(\s*LEDGER_FILE\s*\)|LEDGER_FILE\.exists\(\)"), "EXISTS(LEDGER)"),
     (re.compile(r"os\.path\.exists\(\s*CB_FILE\s*\)|CB_FILE\.exists\(\)"), "EXISTS(CB)"),
-    (re.compile(r"_sidecar_unknown"), "SIDECAR_UNKNOWN"),
-    (re.compile(r"(_?failed_venues)"), "FAILED_VENUES"),
     (re.compile(r"bs_active"), "SENTINEL_ACTIVE"),
     (re.compile(r"today_pnl\s*<\s*-_?loss_cap"), "PNL_OVER_CAP"),
     (re.compile(r"active\s+and\s+\(expires_at.*"), "CB_ACTIVE_AND_UNEXPIRED"),
@@ -115,7 +116,7 @@ class TwinParityTest(unittest.TestCase):
         self.assertGreaterEqual(len(self.trader), 8)
         for label, events in (("backend", self.backend), ("trader", self.trader)):
             joined = "\n".join(events)
-            for need in ("SIDECAR_UNKNOWN", "FAILED_VENUES", "CB_ACTIVE"):
+            for need in ("SENTINEL_ACTIVE", "CB_ACTIVE", "PNL_OVER_CAP"):
                 with self.subTest(impl=label, need=need):
                     self.assertIn(need, joined, "关键判定事件缺席（抽取或实现真缺）")
 
@@ -125,10 +126,9 @@ class TwinParityTest(unittest.TestCase):
                          "熔断判定的两份实现已漂移 —— 要么同步两边，要么写清为何允许不同")
 
     def test_gate_has_teeth(self):
-        """有牙齿自检：删掉一份实现里的"旁车不可判 ⇒ 禁开仓"分支，对拍必须报不等。"""
+        """有牙齿自检：删掉一份实现里的"哨兵触发 ⇒ 禁开仓"分支，对拍必须报不等。"""
         src = TRADER.read_text(encoding="utf-8")
-        mutated = re.sub(r"\n\s*if _sidecar_unknown:\n(?:\s+.*\n)+?(?=\s*if _failed_venues:)",
-                         "\n", src)
+        mutated = re.sub(r"\n\s*if bs_active:\n\s+return True, bs_reason\n", "\n", src)
         self.assertNotEqual(mutated, src, "变异没生效 ⇒ 这条自检本身失效")
         self.assertNotEqual(decision_events(mutated), self.backend,
                             "删掉一边的闸之后对拍仍是绿的 ⇒ 本门没有牙齿")

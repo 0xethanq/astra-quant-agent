@@ -118,25 +118,11 @@ def is_circuit_breaker_active(usdt_available: float = None, *, circuit_breaker_f
 
     # 3. Daily Max Loss Limit Check from lifecycle ledger using Beijing close_time.
     if os.path.exists(ledger_json_file):
-        # 审计回马枪④2(2026-09-13)：上轮 A2 的「同步失败所→禁开仓」加固只进了
-        # astra_backend.execution.circuit_breaker 模块版，而活路径走本函数（孪生漂移），
-        # 等于闸装了死副本。现从模块导入同一实现，双进程单一事实源。
+        # 2026-11-17（用户拍板）：系统只做 OKX，台账同步旁车不再参与开仓熔断；
+        # 同步失败由 data_health 报 PARTIAL。这里只保留当日亏损限额这条独立风险闸门。
         try:
-            from astra_backend.execution.circuit_breaker import (
-                _ledger_sync_failed_venues, ledger_daily_closed_pnl)
-            from astra_backend.execution.circuit_breaker import (
-                _ledger_sync_sidecar_state as _sidecar_state)
-            _failed_venues, _sidecar_unknown = _sidecar_state()
-            if _sidecar_unknown:
-                # 与模块版同源（第一百四十四刀，用户拍板 fail-closed）：不可判定 ⇒ 禁开仓
-                return True, (f"台账同步状态不可判定（{_sidecar_unknown}）⇒ "
-                              "当日亏损求和不可判全，安全暂停开仓")
-            if _failed_venues:
-                return True, ("台账跨所同步不完整（失败所: " + ",".join(_failed_venues) +
-                              "），当日亏损求和不可判全，安全暂停开仓")
-        except Exception as e:
-            return True, f"台账同步旁车检查不可用，安全暂停开仓: {e}"
-        try:
+            from astra_backend.execution.circuit_breaker import ledger_daily_closed_pnl
+
             with open(ledger_json_file, "r", encoding="utf-8") as f:
                 ledger = json.load(f)
             tz_bj = datetime.timezone(datetime.timedelta(hours=8))
