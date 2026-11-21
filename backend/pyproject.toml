@@ -1,0 +1,23 @@
+# Ruff configuration for backend linting (CI gate: `ruff check backend`).
+# Deliberately lint-only: `ruff format` is not part of this baseline.
+
+[tool.ruff]
+target-version = "py311"
+src = ["."]
+extend-exclude = [".venv", "__pycache__", "data", "logs", "backups"]
+
+[tool.ruff.lint]
+# Ratchet phase 1: critical pyflakes/pycodestyle errors only.
+# The originally proposed `E4,E7,E9,F` set measured 1001 pre-existing findings
+# (see .trellis/tasks/11-21-ci-quality-gates/research/ruff-baseline.md).
+# Enabling it now would require a repo-wide formatting/re-export rewrite that is
+# explicitly out of scope for the CI task. The rule families listed there are
+# deferred with measured counts and a follow-up plan -- not silently ignored.
+select = ["E9", "F63", "F7", "F82"]
+
+[tool.ruff.lint.per-file-ignores]
+# `construct_full_market_prompt` resolves facade globals lazily through
+# `_resolve(..., lambda: NAME)` so the function body can be AST-extracted and
+# exec'd by the isolated prompt-rendering tests. The names are deliberately not
+# module globals; F821 would otherwise flag the fallback lambdas (10 sites).
+"scripts/brain/prompt.py" = ["F821"]

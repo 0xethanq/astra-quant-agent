@@ -1,0 +1,7 @@
+# Development & CI only. Runtime deps live in requirements.txt.
+# Pinned to keep CI reproducible; bump deliberately.
+pytest==9.2.0
+pytest-xdist==3.8.0
+pytest-subtests==0.15.0
+pytest-asyncio==1.5.0
+ruff==0.17.6

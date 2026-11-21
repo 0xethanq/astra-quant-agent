@@ -1,0 +1,140 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-tests:
+    name: Backend tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    env:
+      ASTRA_TESTING: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Extraction baseline tests run `git show <historical commit>`.
+          # A shallow checkout hides those ancestors and fails the suite.
+          fetch-depth: 0
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
+
+      # The full backend suite includes cross-stack checks that spawn `node`
+      # (`tests/ui/test_frontend_*`, `tests/extraction/test_frontend_*`).
+      # Pin Node 24 and install frontend deps so those checks run instead of
+      # silently skipping; the frontend job still owns the complete frontend suite.
+      - name: Set up Node.js 24 for frontend behaviour checks
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Install frontend dependencies for cross-stack checks
+        working-directory: frontend
+        run: npm ci
+
+      - name: Full backend test suite
+        working-directory: backend
+        run: pytest tests -n auto -q
+
+  frontend:
+    name: Frontend (Node 24)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: frontend
+        run: npm run typecheck
+
+      - name: Build
+        working-directory: frontend
+        run: npm run build
+
+      - name: Unit tests
+        working-directory: frontend
+        run: npm test
+
+  lint:
+    name: Ruff lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+
+      - name: Install lint dependencies
+        run: pip install -r backend/requirements-dev.txt
+
+      - name: Ruff
+        run: ruff check backend
+
+  docker-build:
+    name: Docker build
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: false
+          tags: astra-quant:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

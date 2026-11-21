@@ -59,7 +59,7 @@ class _SandboxBase(unittest.TestCase):
         # 路由走 `from scripts.ai_brain_trader import ...`（与顶层 ai_brain_trader 是
         # 两个模块实例）→ 两个实例都必须先导入，隔离才会同时改到它们的 data/ 路径。
         import scripts.ai_brain_trader  # noqa: F401
-        import astra_backend.app  # noqa: F401（连带 routers/dependencies：覆盖层路径也在其中）
+        import astra_backend.app  # noqa: F401  （连带 routers/dependencies：覆盖层路径也在其中）
         import astra_backend.settings_store  # noqa: F401
         from tests.config_sandbox import isolate_config
         self.root = isolate_config(self)

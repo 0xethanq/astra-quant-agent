@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 import re
-from typing import List
+from typing import Any, List
 
 
 def _detect_reasoning_type(model_id: str) -> str:
