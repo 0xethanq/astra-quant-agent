@@ -100,6 +100,28 @@ DELTA_REWRITES = (
 """,
      """                if accepted:
 """),
+    # ---- 观望明细四态（2026-11 上下文漏斗）----
+    # 预筛落选标的的 action 也是 WAIT，但来源不是模型/风控/漏答；若不单列，
+    # 巡检日志会把「没进深度分析」显示成「模型 0%」，正是本仓「日志不说谎」红线。
+    ("""            _record_entry_diagnostic(
+                f.get("name"),
+                # 四态优先级：预筛落选 > 漏答 > 物理层拦单 > 模型主动观望
+                ("screened_out" if str(ai_decision.get("decision_source", "model")) == "screened_out"
+                 else "omitted" if str(ai_decision.get("decision_source", "model")) == "omitted"
+                 else "gate" if ai_decision.get("gate_blocked")
+                 else "model"),
+                ai_conf,
+                (ai_decision.get("gate_reason") if ai_decision.get("gate_blocked") else ai_reason))
+""",
+     """            _record_entry_diagnostic(
+                f.get("name"),
+                # 三态优先级：漏答 > 物理层拦单 > 模型主动观望
+                ("omitted" if str(ai_decision.get("decision_source", "model")) == "omitted"
+                 else "gate" if ai_decision.get("gate_blocked")
+                 else "model"),
+                ai_conf,
+                (ai_decision.get("gate_reason") if ai_decision.get("gate_blocked") else ai_reason))
+"""),
 )
 
 

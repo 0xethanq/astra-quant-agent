@@ -45,6 +45,33 @@ class EntryDiagnosticsFormattingTests(unittest.TestCase):
             "ARB [模型 75%]: 震荡市未及箱体极值且CVD顶背离 | ETH [风控拦截]: 置信度 72% < 门禁 80% | SOL [未作答]: 无新鲜决策，兜底观望"
         )
 
+    def test_format_entry_diagnostics_four_states_mixed(self):
+        """模型自决 / 风控拦截 / 漏答兜底 / 预筛落选 必须四态可分辨。
+
+        落选标的的 action 同样是 WAIT，但如果没有单列，巡检日志会把它
+        显示成「未作答」—— 与「模型漏答」混为一谈。"""
+        diag = [
+            {"name": "ARB", "source": "model", "confidence": 75.0, "reason": "震荡市未及箱体极值且CVD顶背离观望"},
+            {"name": "ETH", "source": "gate", "confidence": 72.0, "reason": "置信度 72% < 门禁 80%"},
+            {"name": "SOL", "source": "omitted", "confidence": 0.0, "reason": ""},
+            {"name": "SUI", "source": "screened_out", "confidence": 0.0,
+             "reason": "预筛落选：评分 1.5，未进入本轮深度分析"},
+        ]
+        res = _format_entry_diagnostics(diag)
+        self.assertEqual(
+            res,
+            "ARB [模型 75%]: 震荡市未及箱体极值且CVD顶背离"
+            " | ETH [风控拦截]: 置信度 72% < 门禁 80%"
+            " | SOL [未作答]: 无新鲜决策，兜底观望"
+            " | SUI [预筛落选]: 评分 1.5，未进入本轮深度分析"
+        )
+
+    def test_format_entry_diagnostics_screened_out_without_reason(self):
+        """落选行即使没有理由也不得落到「未作答」分支。"""
+        res = _format_entry_diagnostics(
+            [{"name": "ARB", "source": "screened_out", "confidence": 0.0, "reason": ""}])
+        self.assertEqual(res, "ARB [预筛落选]: 未进入本轮深度分析")
+
     def test_format_entry_diagnostics_empty(self):
         """空列表应返回空字符串。"""
         self.assertEqual(_format_entry_diagnostics([]), "")

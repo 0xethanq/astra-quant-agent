@@ -113,6 +113,11 @@
    「工坊改了没生效」这类静默故障就会回来。门禁：`tests/llm/test_prompt_source_of_truth.py`。
 2. **只读契约不可改。** 内容/启停改动会被 `validate_profile` fail-closed 拒绝；删除则由渲染层回插。
 
+> **2026-11 上下文漏斗**：主脑在渲染 `{{market_matrix}}` 前先经
+> `scripts/brain/prescreen.py` 做确定性预筛——只有「在管持仓 + 在途挂单 + Top N 候选」
+> 进入完整七梯队矩阵；落选标的以紧凑观察池披露（不注入明细）。持仓/挂单读取失败、
+> 评分缺失或全池不可排序时全量回退，详见 `docs/FAILURE_SEMANTICS.md`。
+
 ---
 
 ## 4. 硬约束（改动前必读）

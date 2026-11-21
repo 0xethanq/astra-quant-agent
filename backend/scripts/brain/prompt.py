@@ -50,6 +50,9 @@ from typing import Any, Dict, List
 
 
 def construct_full_market_prompt(packages: List[Dict[str, Any]], pos_summary: str = "[MISSING_CONTEXT:account_positions]", active_positions_detail: List[Dict[str, Any]] = None, pending_orders_detail: List[Dict[str, Any]] = None, current_time_str: str = "", usdt_available: float = None, runtime_context_out: Dict[str, Any] = None, policy_snapshot: Dict[str, Any] = None, *,
+                             all_packages: List[Dict[str, Any]] = None,
+                             screened_out: List[Dict[str, Any]] = None,
+                             prescreen_meta: Dict[str, Any] = None,
                              safe_float=None, sl_atr_mult_for=None,
                              build_risk_budget_text=None, active_profile=None,
                              apply_module_layout=None, system_version=None,
@@ -263,6 +266,72 @@ def construct_full_market_prompt(packages: List[Dict[str, Any]], pos_summary: st
 
     all_market_str = "\n".join(market_lines)
 
+    # ── 2026-11 上下文漏斗：紧凑观察池 + 降级披露 ─────────────────────────────
+    # `packages` 只含本轮深度分析标的；`all_packages` 是全池（用于观察池的
+    # 24H/数据质量回查与 active_instruments）。旧调用不传新 kwargs ⇒ 本段整体不渲染。
+    # ⚠️ 本函数体会被测试按 AST 抽取后隔离 exec ⇒ 只允许函数内局部量/嵌套函数。
+    _all_pkg_list = all_packages if isinstance(all_packages, list) else packages
+    _screened_rows = ([row for row in screened_out if isinstance(row, dict)]
+                      if isinstance(screened_out, list) else [])
+    _prescreen_meta = prescreen_meta if isinstance(prescreen_meta, dict) else {}
+
+    _watch_lines = []
+    if _screened_rows:
+        _row_by_inst = {}
+        for _pkg in (_all_pkg_list or []):
+            if isinstance(_pkg, dict):
+                _row_by_inst[str(_pkg.get("instId") or "")] = _pkg
+        _limit = _prescreen_meta.get("candidate_limit")
+        if not isinstance(_limit, int):
+            _limit = len(_all_pkg_list or []) - len(_screened_rows)
+        if _limit < 0:
+            _limit = 0
+        _pool_size = _prescreen_meta.get("pool_size")
+        if not isinstance(_pool_size, int):
+            _pool_size = len(_all_pkg_list or [])
+        _watch_lines.append("---------------------------------------------------------")
+        _watch_lines.append("【预筛落选观察池 · 未进入本轮深度分析】")
+        _watch_lines.append(
+            f"宿主已对全部 {_pool_size} 个标的做确定性评分；"
+            f"以下标的未进入 Top {_limit}，本轮不注入七梯队明细：")
+
+        def _watch_rank(_row):
+            try:
+                return int(_row.get("rank") or 0)
+            except (TypeError, ValueError):
+                return 0
+
+        for _row in sorted(_screened_rows, key=_watch_rank):
+            _inst = str(_row.get("instId") or "")
+            _name = str(_row.get("name") or _inst or "--")
+            _src = _row_by_inst.get(_inst) or {}
+            _chg = _src.get("chg24h", "--")
+            _quality = _src.get("data_quality", "--")
+            _chg_text = f"{_chg}%" if _chg not in (None, "", "--") else "--"
+            _watch_lines.append(
+                f"- {_name} ({_inst}) | 评分={_row.get('score')} "
+                f"| 信号={_row.get('signal') or '--'} "
+                f"| 24H={_chg_text} | 数据质量={_quality}")
+        _watch_lines.append(
+            "说明：以上标的不得臆测其因子，也不得为它们输出 decisions；"
+            "如新闻出现重大事件，只可提示风险。")
+        all_market_str = (all_market_str + "\n" if all_market_str else "") + "\n".join(_watch_lines)
+
+    _prescreen_notes = []
+    if _prescreen_meta.get("prescreen_unavailable"):
+        _prescreen_notes.append(
+            f"⚠️ 本轮预筛降级（{_prescreen_meta.get('reason') or 'unknown'}）："
+            "已回退为全量标的深度分析，以下为全部标的，不构成落选。")
+    if _prescreen_meta.get("degraded"):
+        _missing = _prescreen_meta.get("missing_score_inst_ids") or []
+        if _missing:
+            _prescreen_notes.append(
+                f"⚠️ 缺分标的已全部并入深度分析：{', '.join(str(x) for x in _missing)}"
+                "（缺分不等于落选）。")
+    if _prescreen_notes:
+        all_market_str = ((all_market_str + "\n" if all_market_str else "")
+                          + "\n".join(_prescreen_notes))
+
     # Format Active Positions / Pending Limit Orders
     # （阶段 4·B3 第三十刀：两段文本装配迁至 scripts/brain/account_text.py。
     #   经同名回退解析 —— 见本函数开头的注入项解析约定：本函数体会被测试按
@@ -378,7 +447,8 @@ def construct_full_market_prompt(packages: List[Dict[str, Any]], pos_summary: st
     policy_hash = (policy_snapshot or {}).get("policy_hash") or ""
     runtime_vars.update({
         "timestamp": now_bj_str, "timezone": "Asia/Shanghai",
-        "active_instruments": ",".join(str(p.get("name") or p.get("instId") or "") for p in packages),
+        "active_instruments": ",".join(
+            str(p.get("name") or p.get("instId") or "") for p in (_all_pkg_list or [])),
         "strategy_version": policy_ver,
         "policy_version": policy_ver,
         "policy_hash": policy_hash,

@@ -521,6 +521,74 @@ class QuantFactorTierIntegrationTests(_Base, unittest.TestCase):
         self.assertNotIn("calculate_multi_timeframe", names)
 
 
+class FactorRankingTests(_Base, unittest.TestCase):
+    """确定性预筛的排序字段（2026-11 上下文漏斗）。
+
+    与 7 梯队读**同一份** `factor_library_snapshot.json`；失败一律 `{}` 且永不抛 ——
+    预筛侧据此把该标的并入深度分析（缺分不落选），而不是拿 0 分参与排序。
+    """
+
+    def _snapshot(self, tmp_path, inst_id="BTC-USDT-SWAP"):
+        payload = {"instruments": [
+            {"instId": inst_id, "composite_alpha_score": 7.5,
+             "signal_recommendation": "BUY_LONG",
+             "trend_momentum": {"macd_hist": 1.5}},
+            {"instId": "OTHER-USDT-SWAP", "composite_alpha_score": -2.0,
+             "signal_recommendation": "WAIT"},
+        ]}
+        p = Path(tmp_path) / "factor_library_snapshot.json"
+        p.write_text(json.dumps(payload), encoding="utf-8")
+        return p
+
+    def test_ranking_is_read_for_the_matching_instrument(self):
+        with tempfile.TemporaryDirectory() as td:
+            snap = self._snapshot(td)
+            got = bp.load_factor_ranking("BTC-USDT-SWAP", path=str(snap))
+        self.assertEqual(got, {"composite_alpha_score": 7.5,
+                               "signal_recommendation": "BUY_LONG"})
+
+    def test_an_absent_instrument_yields_an_empty_mapping(self):
+        with tempfile.TemporaryDirectory() as td:
+            snap = self._snapshot(td)
+            self.assertEqual(bp.load_factor_ranking("NOPE-USDT-SWAP", path=str(snap)), {})
+
+    def test_a_missing_or_broken_snapshot_never_raises(self):
+        self.assertEqual(bp.load_factor_ranking("BTC-USDT-SWAP",
+                                                path="/nonexistent/x.json"), {})
+        with tempfile.TemporaryDirectory() as td:
+            bad = Path(td) / "factor_library_snapshot.json"
+            bad.write_text("{not json", encoding="utf-8")
+            self.assertEqual(bp.load_factor_ranking("BTC-USDT-SWAP", path=str(bad)), {})
+            bad.write_text(json.dumps({"instruments": "垃圾"}), encoding="utf-8")
+            self.assertEqual(bp.load_factor_ranking("BTC-USDT-SWAP", path=str(bad)), {})
+            bad.write_text(json.dumps([1, 2, 3]), encoding="utf-8")
+            self.assertEqual(bp.load_factor_ranking("BTC-USDT-SWAP", path=str(bad)), {})
+
+    def test_a_present_instrument_without_the_fields_keeps_explicit_nones(self):
+        """标的在场但字段缺席 ⇒ 显式 `None`（缺失即缺失，不得伪造成 0 分）。"""
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td) / "factor_library_snapshot.json"
+            p.write_text(json.dumps({"instruments": [{"instId": "BTC-USDT-SWAP"}]}),
+                         encoding="utf-8")
+            got = bp.load_factor_ranking("BTC-USDT-SWAP", path=str(p))
+        self.assertEqual(got, {"composite_alpha_score": None,
+                               "signal_recommendation": None})
+
+    def test_package_attaches_factor_ranking(self):
+        with tempfile.TemporaryDirectory() as td:
+            snap = self._snapshot(td)
+            with patch.object(bp, "_factor_snapshot_path", lambda: str(snap)):
+                pkg = self._run()
+        self.assertEqual(pkg["factor_ranking"]["composite_alpha_score"], 7.5)
+        self.assertEqual(pkg["factor_ranking"]["signal_recommendation"], "BUY_LONG")
+        self.assertIn("quant_factors", pkg, "既有 7 梯队字段不得被替换")
+
+    def test_package_gets_an_empty_mapping_when_the_snapshot_is_missing(self):
+        with patch.object(bp, "_factor_snapshot_path", lambda: "/nonexistent/x.json"):
+            pkg = self._run()
+        self.assertEqual(pkg["factor_ranking"], {})
+
+
 class InjectionTests(_Base, unittest.TestCase):
     """两个行情函数是**注入**的，本模块不许自己 import 门面（模块 docstring 的硬约束）。"""
 

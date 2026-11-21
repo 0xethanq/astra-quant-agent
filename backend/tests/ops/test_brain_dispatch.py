@@ -613,5 +613,44 @@ class CouncilSuccessPathBugTests(_Harness, unittest.TestCase):
         self.assertLess(guard, use)
 
 
+class PrescreenForwardingTests(_Harness, unittest.TestCase):
+    """2026-11 上下文漏斗：预筛结果必须到达决策缓存与 Web 审计历史。"""
+
+    def test_screened_out_and_meta_reach_the_decision_cache(self):
+        captured = {}
+
+        def assemble(**kw):
+            captured.update(kw)
+            return {"ok": True}
+
+        rows = [{"instId": "ARB-USDT-SWAP", "name": "ARB", "score": 1.0,
+                 "signal": "WAIT", "rank": 6, "reason": "未进入 Top 5 候选"}]
+        meta = {"mode": "funnel", "screened_out_count": 1}
+        self._run(assemble_decision_cache=assemble,
+                  screened_out=rows, prescreen_meta=meta)
+        self.assertIs(captured["screened_out"], rows)
+        self.assertIs(captured["prescreen_meta"], meta)
+
+    def test_history_receives_prescreen_meta_and_prompt_chars(self):
+        seen = {}
+        self._run(_build_history_record=lambda **k: seen.update(k) or {"h": 1},
+                  prescreen_meta={"mode": "funnel"}, prompt_chars=1234)
+        self.assertEqual(seen["prescreen"], {"mode": "funnel"})
+        self.assertEqual(seen["prompt_chars"], 1234)
+
+    def test_legacy_call_forwards_none_without_crashing(self):
+        captured, seen = {}, {}
+
+        def assemble(**kw):
+            captured.update(kw)
+            return {"ok": True}
+        self._run(assemble_decision_cache=assemble,
+                  _build_history_record=lambda **k: seen.update(k) or {"h": 1})
+        self.assertIsNone(captured["screened_out"])
+        self.assertIsNone(captured["prescreen_meta"])
+        self.assertIsNone(seen["prescreen"])
+        self.assertIsNone(seen["prompt_chars"])
+
+
 if __name__ == "__main__":
     unittest.main()

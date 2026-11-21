@@ -73,6 +73,8 @@ DATA_DIR = os.path.join(WORKSPACE_DIR, "data")
 from market_data_service import fetch_single_indicator, fetch_ticker, fetch_candles
 # 结构优化阶段4·B3：单标的数据包装配已搬入 scripts/brain/packages.py（门面保留薄壳）
 from scripts.brain.packages import fetch_single_instrument_package as _fetch_single_instrument_package
+# 2026-11 上下文漏斗：确定性预筛（纯函数，不读文件/不发请求）
+from scripts.brain.prescreen import select_deep_analysis_packages
 from scripts.brain.prompt import (
     construct_full_market_prompt as _construct_full_market_prompt_impl,
 )
@@ -447,8 +449,9 @@ READONLY_OUTPUT_SCHEMA = """==== 【严格 JSON 规范契约与完整输出骨�
 - position_management.action 只允许: "HOLD" | "CLOSE_MARKET" | "UPDATE_SL" | "UPDATE_TP"；触发峰值回撤超 35% 或 1H 负功率衰竭时果断输出 CLOSE_MARKET 止盈；action 为 UPDATE_SL 时 suggested_sl_price 填目标价格、否则必须填 0.0；action 为 UPDATE_TP 时 suggested_tp1_price/suggested_tp2_price 填目标止盈价（分批已发生时只填 tp2）、否则两者必须填 0.0；
 - pending_orders_management.action 只允许: "KEEP" | "CANCEL"；挂单已大幅偏离盘口或入场逻辑失效时必须 CANCEL；
 - decisions[标的].action 只允许: "BUY_LONG" | "SELL_SHORT" | "WAIT"；action 为 WAIT 时 entry_price/take_profit_price/stop_loss_price 填 0.0；
-- decisions **必须覆盖标的池全部标的**；无结论也要显式输出 WAIT 并写明缺什么
+- decisions **必须覆盖行情矩阵中全部标的**；无结论也要显式输出 WAIT 并写明缺什么
   （漏答会被宿主按 fail-closed 兜底为 WAIT，并在看板上标为「未作答」，会污染你的复盘归因）；
+- 【预筛落选观察池】中的标的不要输出 decisions（它们本轮未经深度分析，宿主以确定性预筛为准，越界裁决会被忽略）；
 - 每个决策的 factor_evidence 必须明确引用具体因子数值（MACD 柱/加速度、RSI、CVD、Taker 买卖比、OBI、VWAP/POC、资金费率与 ΔOI），严禁只写空泛定性词句！"""
 
 # 兼容别名（既有引用/测试面按旧名解析；内容与上面**同一份**，不是第二份副本）。
@@ -570,6 +573,10 @@ def construct_full_market_prompt(
     usdt_available: float = None,
     runtime_context_out: Dict[str, Any] = None,
     policy_snapshot: Dict[str, Any] = None,
+    *,
+    all_packages: List[Dict[str, Any]] = None,
+    screened_out: List[Dict[str, Any]] = None,
+    prescreen_meta: Dict[str, Any] = None,
 ) -> str:
     """把本轮全市场数据渲染成用户提示词。实现见 scripts/brain/prompt.py。
 
@@ -577,12 +584,19 @@ def construct_full_market_prompt(
     （`risk_constants` 改参后由门面重载刷新），文件路径与 `safe_float` 则是
     既有测试缝。理由逐一列在 scripts/brain/prompt.py 的 docstring。
 
+    2026-11 上下文漏斗：`all_packages` 是全池（`active_instruments` 与观察池回查），
+    `screened_out` / `prescreen_meta` 由 `scripts/brain/prescreen.py` 产出；
+    三者默认 None ⇒ 旧调用（含 AST 隔离渲染测试）行为逐字不变。
+
     注：不要把默认值写成同名形参（`safe_float=None` 之类）—— 那会让函数体里的
     裸名解析到形参、静默关掉这些缝。
     """
     return _construct_full_market_prompt_impl(
         packages, pos_summary, active_positions_detail, pending_orders_detail,
         current_time_str, usdt_available, runtime_context_out, policy_snapshot,
+        all_packages=all_packages,
+        screened_out=screened_out,
+        prescreen_meta=prescreen_meta,
         safe_float=safe_float,
         sl_atr_mult_for=_sl_atr_mult_for,
         build_risk_budget_text=build_risk_budget_text,
@@ -623,6 +637,8 @@ def assemble_decision_cache(
     macro_summary: str,
     policy_snapshot: Optional[Dict[str, Any]] = None,
     council_status: Optional[Dict[str, Any]] = None,
+    screened_out: Optional[List[Dict[str, Any]]] = None,
+    prescreen_meta: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """把已验证决策装配成标准缓存契约。实现见 scripts/brain/decisions.py。
 
@@ -631,6 +647,8 @@ def assemble_decision_cache(
     - `patch.object(abt, "MAX_LEVERAGE"/"MIN_LEVERAGE", …)`（test_leverage_range_and_council
       断言"模型给 3 被下限抬到 5"，夹取必须读到补丁值）
     - `safe_float` / `_get_system_version_tag` 定义在本门面。
+
+    2026-11 上下文漏斗：`screened_out` / `prescreen_meta` 可选；不传时旧行为逐字不变。
 
     注：不要把默认值写成同名形参 —— 那会让函数体里的裸名解析到形参、
     静默关掉补丁缝。
@@ -646,6 +664,8 @@ def assemble_decision_cache(
         get_system_version_tag=_get_system_version_tag,
         validate=lambda p_, d_, ids_, sides_: _validate_and_filter_decision_impl(
             p_, d_, ids_, sides_, safe_float=safe_float),
+        screened_out=screened_out,
+        prescreen_meta=prescreen_meta,
     )
 
 
@@ -786,6 +806,9 @@ def execute_batch_ai_brain_cycle(
         print(f"[AI Brain Batch] 聪明钱数据注入降级: {exc}")
 
     positions_context = active_positions_detail
+    # ★ 2026-11 上下文漏斗：**必须在 `or []` 归一之前**判定「读不到」。
+    #   未知 ≠ 空：持仓读取失败时预筛必须全量回退，绝不能按"无持仓"缩小范围。
+    positions_known = active_positions_detail is not None
     active_positions_detail = active_positions_detail or []
 
     # 2026 前缀防抖归一化：将持仓浮盈 upl 等浮点数规范化为 2 位定点数，消除微末浮点抖动
@@ -820,25 +843,69 @@ def execute_batch_ai_brain_cycle(
     # 刷新本轮数据包中的 7 梯队因子快照，确保发给模型的 Prompt 拥有最新因子
     try:
         try:
-            from scripts.brain.packages import load_quant_factor_tiers
+            from scripts.brain.packages import load_factor_ranking, load_quant_factor_tiers
         except ImportError:
-            from brain.packages import load_quant_factor_tiers
+            from brain.packages import load_factor_ranking, load_quant_factor_tiers
         for _pkg in packages:
             _fresh_tiers = load_quant_factor_tiers(_pkg.get("instId", ""))
             if _fresh_tiers:
                 _pkg["quant_factors"] = _fresh_tiers
+            # 预筛排序字段与七梯队同源刷新：否则排名可能比矩阵老一个快照，
+            # 排序与展示用的不是同一轮因子（只影响排序，但不该留这种偏差）。
+            _fresh_ranking = load_factor_ranking(_pkg.get("instId", ""))
+            if _fresh_ranking:
+                _pkg["factor_ranking"] = _fresh_ranking
     except Exception as _qf_err:
         print(f"[AI Brain Batch] Quant factor refresh warning: {_qf_err}")
 
     # Fetch live pending limit orders from exchange（V5 直签 REST，行为契约见 fetch_pending_orders_list）
     pending_orders_list = fetch_pending_orders_list()
+    # ★ 挂单读取同样"未知 ≠ 空"：None = 查询失败 ⇒ 预筛全量回退（避免漏管在途挂单）
+    pending_orders_known = pending_orders_list is not None
+
+    # ── 2026-11 上下文漏斗：确定性预筛 ───────────────────────────────────────
+    # 必选集 = 在管持仓 ∪ 在途挂单（双方都用 canonical_position_inst_id 归一后精确匹配；
+    # 不做币种级模糊匹配，避免 BTC-USD-SWAP 误配 BTC-USDT-SWAP）。
+    mandatory_inst_ids = set(active_inst_ids)
+    for _order in (pending_orders_list or []):
+        if not isinstance(_order, dict):
+            continue
+        _order_inst_id = _canonical_inst_id(_order.get("instId"))
+        if _order_inst_id:
+            mandatory_inst_ids.add(_order_inst_id)
+
+    _prescreen = select_deep_analysis_packages(
+        packages,
+        mandatory_inst_ids=mandatory_inst_ids,
+        positions_known=positions_known,
+        pending_orders_known=pending_orders_known,
+    )
+    deep_packages = _prescreen["deep_packages"]
+    screened_out = _prescreen["screened_out"]
+    prescreen_meta = _prescreen["meta"]
+    print(f"[AI Brain Prescreen] mode={prescreen_meta.get('mode')} "
+          f"deep={prescreen_meta.get('deep_count')}/{prescreen_meta.get('pool_size')} "
+          f"screened_out={prescreen_meta.get('screened_out_count')} "
+          f"degraded={prescreen_meta.get('degraded')} "
+          f"reason={prescreen_meta.get('reason') or '-'}")
 
     runtime_context = {}
-    prompt = construct_full_market_prompt(packages, pos_summary, positions_context, pending_orders_detail=pending_orders_list, current_time_str=time_str, usdt_available=usdt_available, runtime_context_out=runtime_context, policy_snapshot=policy_snapshot)
+    # 只有 deep_packages 注入完整七梯队矩阵；落选标的以紧凑观察池披露，
+    # `all_packages` 保证 active_instruments 仍是全池（模型不会误以为池子缩小）。
+    prompt = construct_full_market_prompt(
+        deep_packages, pos_summary, positions_context,
+        pending_orders_detail=pending_orders_list, current_time_str=time_str,
+        usdt_available=usdt_available, runtime_context_out=runtime_context,
+        policy_snapshot=policy_snapshot,
+        all_packages=packages, screened_out=screened_out,
+        prescreen_meta=prescreen_meta)
 
     profile = active_profile()
     # 审计 P1-3：覆盖层由 get_effective_system_prompt 在布局**之后**追加（此前被布局丢弃）
     effective_system_prompt = get_effective_system_prompt(profile=profile, context=runtime_context)
+
+    # 实际发送体积（SYSTEM + USER），进历史记录便于对比漏斗改造前后的 token 成本
+    prompt_chars = len(effective_system_prompt) + len(prompt)
 
     # Save Realtime Prompt Snapshot for Web Transparent Inspection
     write_prompt_snapshot(
@@ -894,7 +961,10 @@ def execute_batch_ai_brain_cycle(
         thinking_timeout=thinking_timeout,
         time=time,
         time_str=time_str,
-        urllib=urllib    )
+        urllib=urllib,
+        screened_out=screened_out,
+        prescreen_meta=prescreen_meta,
+        prompt_chars=prompt_chars)
 
 def get_latest_ai_decision(inst_id: str, max_age_seconds: int = DECISION_MAX_AGE_SECONDS) -> Optional[Dict[str, Any]]:
     """Read a validated decision only while its cache timestamp is fresh."""

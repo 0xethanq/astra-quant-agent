@@ -43,6 +43,9 @@ _CONSTRUCT_NODE, _CONSTRUCT_PATH = source_scan.find_function_node(
     BRAIN_FACADE, "construct_full_market_prompt", **BRAIN_DOMAIN)
 _BUDGET_NODE, _BUDGET_PATH = source_scan.find_function_node(
     BRAIN_FACADE, "build_risk_budget_text", **BRAIN_DOMAIN)
+#: `_sl_atr_mult_for` 只按**名字**被解析；这里注入一个可调用的替身（真实节点负责
+#: 锚定"该函数仍存在于主脑域"，但 AST 节点本身不可调用 —— 一传非空 packages 就会
+#: `TypeError: 'FunctionDef' object is not callable`）。
 _EXTRA_NODES = {
     name: source_scan.find_function_node(BRAIN_FACADE, name, **BRAIN_DOMAIN)[0]
     for name in ("_sl_atr_mult_for",)
@@ -112,10 +115,10 @@ class Sandbox(unittest.TestCase):
                        NEWS_SENTIMENT_FILE=str(self.root / "news.json"),
                        # 下面两个是被 exec 的节点按**全局名**解析的主脑私有函数。
                        # 本测试刻意不 import trader 模块（隔离），故同样从领域 AST
-                       # 取节点注入 —— 它们只被"按名解析"，不参与本测试的实际调用
-                       # （用例传 packages=[]，函数体不会执行）。OKX-only 迁移后
+                       # 取节点证明其存在；执行期用**可调用替身**（AST 节点不可调用，
+                       # 传非空 packages 会 TypeError）。OKX-only 迁移后
                        # `_xvenue_prompt_line` 已从主脑域删除，故不再注入。
-                       _sl_atr_mult_for=_EXTRA_NODES["_sl_atr_mult_for"])
+                       _sl_atr_mult_for=lambda *_a, **_k: 1.5)
         self.ns.update({k: v for k, v in vars(risk_constants).items() if k.isupper()})
         exec(compile(ast.Module(body=[budget_node, node], type_ignores=[]), "scripts/ai_brain_trader.py", "exec"), self.ns)
         self.construct = self.ns["construct_full_market_prompt"]
@@ -224,6 +227,34 @@ class RenderingTests(Sandbox):
         self.assertIn("0.00 USDT", text)
         self.assertIn("100% 现金空仓", text)
         self.assertIn("挂单池为空", text)
+
+    def test_screened_out_watchlist_keeps_the_matrix_deep_only(self):
+        """2026-11 上下文漏斗（隔离渲染）：落选标的不得拿到完整七梯队矩阵。"""
+        import collections
+        pkg = collections.defaultdict(str)
+        pkg.update({"name": "BTC", "instId": "BTC-USDT-SWAP", "price": 100.0,
+                    "chg24h": 1.5, "bidPx": 99.5, "askPx": 100.5,
+                    "data_quality": "valid", "smart_money": {"available": False},
+                    "quant_factors": {"trend_momentum": {"macd_hist": 1.0}}})
+        context = {}
+        # 本 Sandbox 的 profile 是自造的（只含余额/持仓/挂单三个插槽），
+        # 故断言组装出的 runtime 上下文，而不是最终排版文本。
+        self.construct(
+            [pkg], runtime_context_out=context,
+            all_packages=[pkg, {"name": "ARB", "instId": "ARB-USDT-SWAP",
+                                "chg24h": -0.5, "data_quality": "valid"}],
+            screened_out=[{"instId": "ARB-USDT-SWAP", "name": "ARB", "score": 10.0,
+                           "signal": "WAIT", "rank": 6,
+                           "reason": "未进入 Top 5 候选（评分 10.0）"}],
+            prescreen_meta={"candidate_limit": 5, "pool_size": 2},
+        )
+        matrix = context["market_matrix"]
+        self.assertIn("【预筛落选观察池 · 未进入本轮深度分析】", matrix)
+        self.assertIn("评分=10.0", matrix)
+        self.assertIn("24H=-0.5%", matrix)
+        self.assertEqual(matrix.count("T0 衍生品博弈"), 1)
+        self.assertNotIn("【ARB (ARB-USDT-SWAP)】", matrix)
+        self.assertEqual(context["active_instruments"], "BTC,ARB")
 
     def test_append_layer_does_not_render_early(self):
         self.assertIn("{{account_balance}}", prompts.append_layer("BASE", "{{account_balance}}", "x"))

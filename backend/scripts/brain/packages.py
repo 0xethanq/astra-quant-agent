@@ -97,6 +97,37 @@ def load_quant_factor_tiers(inst_id: str, *, path: str = None) -> Dict[str, Any]
     return {}
 
 
+def load_factor_ranking(inst_id: str, *, path: str = None) -> Dict[str, Any]:
+    """按 `instId` 从因子引擎快照里取出确定性预筛字段（2026-11 上下文漏斗）。
+
+    返回 `{"composite_alpha_score": <raw|None>, "signal_recommendation": <str|None>}`；
+    标的缺席返回 `{}`。读取的是与 `load_quant_factor_tiers` **同一份**
+    `factor_library_snapshot.json`（单一事实源，不重算、不外呼）。
+
+    **失败语义**：文件缺失/损坏/结构不对 ⇒ `{}`，**永不抛** —— 它在每分钟一轮的
+    主脑循环里，抛一次就毁掉整轮决策；预筛侧据此把该标的并入深度分析（缺分不落选）。
+    """
+    target = path or _factor_snapshot_path()
+    try:
+        with open(target, "r", encoding="utf-8") as f:
+            snap = json.load(f)
+    except Exception:
+        return {}
+    instruments = snap.get("instruments") if isinstance(snap, dict) else None
+    if not isinstance(instruments, list):
+        return {}
+    for item in instruments:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("instId")) != str(inst_id):
+            continue
+        return {
+            "composite_alpha_score": item.get("composite_alpha_score"),
+            "signal_recommendation": item.get("signal_recommendation"),
+        }
+    return {}
+
+
 def fetch_single_instrument_package(item: Dict[str, Any], *,
                                    fetch_candles,
                                    fetch_single_indicator) -> Dict[str, Any]:
@@ -355,6 +386,9 @@ def fetch_single_instrument_package(item: Dict[str, Any], *,
     #    `pkg["calculus"]` 只保留**显式不可用**的默认占位 —— 键位不动，
     #    供 calculus_snapshot.json / 台账兜底读取链使用；**不再计算任何东西**。
     pkg["quant_factors"] = load_quant_factor_tiers(inst_id)
+    # ★ 2026-11 上下文漏斗：确定性预筛的排序字段与七梯队同源（同一份快照）。
+    #   失败返回 {} ⇒ 预筛把该标的并入深度分析（缺分不落选），绝不编造 0 分。
+    pkg["factor_ranking"] = load_factor_ranking(inst_id)
     pkg["data_quality"] = "valid" if required_market_data else "invalid"
 
     # 标的体制状态（综合 4H 宏观、1H 结构与 1H ADX 趋势强度）

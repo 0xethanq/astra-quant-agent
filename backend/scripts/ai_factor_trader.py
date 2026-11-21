@@ -1157,8 +1157,9 @@ def _clean_diagnostic_reason(reason: str) -> str:
 def _format_entry_diagnostics(diag) -> str:
     """把 `entry_execution.ENTRY_DIAGNOSTICS` 渲染成清晰优雅的日志文本。
 
-    三态：`模型` = 大模型自己输出 WAIT；`风控` = 物理层拦下了它的开仓意图；
-    `未作答` = 该标的未出现在模型响应里（契约允许省略，按 fail-closed 兜底）。
+    四态：`模型` = 大模型自己输出 WAIT；`风控` = 物理层拦下了它的开仓意图；
+    `未作答` = 该标的未出现在模型响应里（契约允许省略，按 fail-closed 兜底）；
+    `预筛落选` = 确定性预筛未让该标的进入本轮深度分析（不是模型裁决）。
     纯展示函数：任何异常都由调用方吞掉，**绝不影响交易**。
     """
     parts = []
@@ -1171,6 +1172,13 @@ def _format_entry_diagnostics(diag) -> str:
             parts.append(f"{name} [模型 {conf}]: {reason}")
         elif source == "gate":
             parts.append(f"{name} [风控拦截]: {reason}")
+        elif source == "screened_out":
+            # 落选理由本身就常以「预筛落选：」开头，去掉前缀避免日志里说两遍。
+            for prefix in ("预筛落选：", "预筛落选:"):
+                if reason.startswith(prefix):
+                    reason = reason[len(prefix):].strip()
+                    break
+            parts.append(f"{name} [预筛落选]: {reason or '未进入本轮深度分析'}")
         else:
             parts.append(f"{name} [未作答]: {reason or '无新鲜决策，兜底观望'}")
     return " | ".join(parts)

@@ -171,6 +171,22 @@ class BuildHistoryRecordTest(unittest.TestCase):
         with self.assertRaises(KeyError):
             self._build(standard_cache=bad)
 
+    def test_prescreen_observability_fields_are_optional_and_forwarded(self):
+        """2026-11 上下文漏斗：历史记录可查到候选/落选数与提示词体积。"""
+        rec = self._build(prescreen={"mode": "funnel", "candidate_count": 5,
+                                     "screened_out_count": 6},
+                          prompt_chars=12345)
+        self.assertEqual(rec["prescreen"]["mode"], "funnel")
+        self.assertEqual(rec["prescreen"]["screened_out_count"], 6)
+        self.assertEqual(rec["prompt_chars"], 12345)
+
+    def test_legacy_history_call_defaults_to_none(self):
+        rec = self._build()
+        self.assertIsNone(rec["prescreen"])
+        self.assertIsNone(rec["prompt_chars"])
+        self.assertEqual(len(rec["top_opportunities"]), 1,
+                         "不得因新增观测字段改变既有 top_opportunities 结构")
+
 
 class NormalizePositionManagementParityTest(unittest.TestCase):
     """与搬走前的门面内联实现做**随机差分**（不只是逐条边界）。"""

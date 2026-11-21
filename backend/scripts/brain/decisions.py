@@ -117,18 +117,33 @@ def assemble_decision_cache(
     safe_float,
     get_system_version_tag,
     validate,
+    screened_out: Optional[List[Dict[str, Any]]] = None,
+    prescreen_meta: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Pure assembly of validated decisions into the standard cache contract, bound to policy snapshot.
 
     每条 entry 的 `decision` 带**三态可观测性字段**：`decision_source`
-    （`model` = 模型给出裁决 / `omitted` = 该标的未出现在模型响应里）、
+    （`model` = 模型给出裁决 / `omitted` = 该标的未出现在模型响应里 /
+    `screened_out` = 宿主确定性预筛未让该标的进入本轮深度分析）、
     `gate_blocked` + `gate_reason`（物理层是否拦单及原文）、`model_reason`（模型原文）。
     `summary_reason` 仍按旧优先级（拦单原文 > 模型原文 > 占位）作**展示用摘要**。
+
+    2026-11 上下文漏斗：命中 `screened_out` 的标的**没有模型裁决可校验**，故跳过
+    `validate()`，产出显式 `WAIT` 行并带 `screen_score` / `screen_signal` /
+    `screen_reason`。若模型“越界”为落选标的输出决策，以预筛为准忽略并留痕 ——
+    绝不允许交易未经深度分析的标的。不传 `screened_out` 时行为逐字不变。
     """
     policy_snapshot = policy_snapshot or {}
     p_ver = policy_snapshot.get("policy_version", f"{get_system_version_tag()}@unknown")
     p_hash = policy_snapshot.get("policy_hash", "unknown")
     p_summary = policy_snapshot.get("summary", "")
+
+    # 预筛落选表：instId → 观察池行（缺分/畸形行一律忽略，绝不让装配抛异常）
+    screened_map: Dict[str, Dict[str, Any]] = {}
+    for row in (screened_out if isinstance(screened_out, list) else []):
+        if isinstance(row, dict) and str(row.get("instId") or ""):
+            screened_map[str(row["instId"])] = row
+    meta_limit = prescreen_meta.get("candidate_limit") if isinstance(prescreen_meta, dict) else None
 
     standard_cache = {}
     # 「模型漏答」的标的：按契约（JSON Schema「decisions 只包含有明确结论的标的」）
@@ -152,45 +167,101 @@ def assemble_decision_cache(
         d_item = decisions_dict.get(inst_id, {})
         if not isinstance(d_item, dict):
             d_item = {}
-        # Smooth field alias normalization (support both standard contract and council desk outputs)
-        entry = safe_float(d_item.get("entry_price") or d_item.get("limit_price"))
-        take_profit = safe_float(d_item.get("take_profit_price") or d_item.get("take_profit"))
-        stop_loss = safe_float(d_item.get("stop_loss_price") or d_item.get("stop_loss"))
-        confidence = max(0.0, min(100.0, safe_float(d_item.get("confidence"))))
-        # 杠杆钳制与后台风控页杠杆区间 [MIN, MAX] 联动（2026-09-10：
-        # 旧版下限钉死 2 且提示词示例 min(3,MAX) 锚定，导致上限配 7 仍单单一律 3x）
+        screened_row = screened_map.get(str(inst_id))
         lev_hi = max(1, int(round(max_leverage)))
         lev_lo = max(1, min(int(round(min_leverage)), lev_hi))
-        ai_leverage = int(max(lev_lo, min(lev_hi, round(safe_float(d_item.get("leverage", lev_lo))))))
-        raw_margin = safe_float(d_item.get("margin_usdt") or d_item.get("margin_usd", 0.0))
 
-        # Dynamically apply self-improvement asset multiplier (e.g. BTC 1.2x, DOGE 0.8x)
-        sym_key = inst_id.split("-")[0] if "-" in inst_id else inst_id
-        mult = float(asset_multipliers.get(sym_key, asset_multipliers.get(inst_id, 1.0)))
-        mult = max(0.5, min(1.5, mult))
-        ai_margin = round(raw_margin * mult, 2) if raw_margin > 0 else 0.0
+        if screened_row is not None:
+            # ── 预筛落选：没有模型裁决可校验，也**不得**伪装成「模型判 WAIT」──
+            # 价格/保证金全 0、动作 WAIT（与 omitted 一样不可交易，但来源可区分）。
+            final_action = "WAIT"
+            rejection_reason = ""
+            rr = 0.0
+            confidence = 0.0
+            final_entry = 0.0
+            final_take_profit = 0.0
+            final_stop_loss = 0.0
+            final_margin = 0.0
+            final_leverage = lev_lo
+            _screen_score = screened_row.get("score")
+            _screen_signal = screened_row.get("signal")
+            _screen_reason = str(screened_row.get("reason") or "").strip()
+            if not _screen_reason:
+                _screen_reason = (f"未进入 Top {meta_limit} 候选（评分 {_screen_score}）"
+                                  if isinstance(meta_limit, int)
+                                  else f"评分 {_screen_score}，未进入本轮深度分析")
+            if d_item:
+                # 模型越界：忽略其裁决，以确定性预筛为准并留痕（不可交易）。
+                _screen_reason += "；模型越界裁决已忽略"
+            _summary_reason = f"预筛落选：评分 {_screen_score}，未进入本轮深度分析"
+            _thought_process = {
+                # 显式写「未进入本轮深度分析」——不得沿用「中性」等会被读成结论的默认值
+                "market_structure": "预筛落选，未进入本轮深度分析",
+                "factor_evidence": "预筛落选：未进入本轮深度分析，不得作为因子证据",
+                "volume_and_oi": "预筛落选：未进入本轮深度分析",
+                "risk_reward_evaluation": "预筛落选：未进入本轮深度分析，不产生可交易裁决",
+            }
+            _decision_source = "screened_out"
+            _gate_blocked = False
+            _gate_reason = ""
+            _model_reason = ""
+        else:
+            # Smooth field alias normalization (support both standard contract and council desk outputs)
+            entry = safe_float(d_item.get("entry_price") or d_item.get("limit_price"))
+            take_profit = safe_float(d_item.get("take_profit_price") or d_item.get("take_profit"))
+            stop_loss = safe_float(d_item.get("stop_loss_price") or d_item.get("stop_loss"))
+            confidence = max(0.0, min(100.0, safe_float(d_item.get("confidence"))))
+            # 杠杆钳制与后台风控页杠杆区间 [MIN, MAX] 联动（2026-09-10：
+            # 旧版下限钉死 2 且提示词示例 min(3,MAX) 锚定，导致上限配 7 仍单单一律 3x）
+            ai_leverage = int(max(lev_lo, min(lev_hi, round(safe_float(d_item.get("leverage", lev_lo))))))
+            raw_margin = safe_float(d_item.get("margin_usdt") or d_item.get("margin_usd", 0.0))
 
-        # 归一化字段：物理校验与执行层都按这套键读价（别名兼容在上方已折叠）
-        normalized_d_item = dict(d_item)
-        normalized_d_item["entry_price"] = entry
-        normalized_d_item["take_profit_price"] = take_profit
-        normalized_d_item["stop_loss_price"] = stop_loss
-        normalized_d_item["margin_usdt"] = ai_margin
-        normalized_d_item["leverage"] = ai_leverage
+            # Dynamically apply self-improvement asset multiplier (e.g. BTC 1.2x, DOGE 0.8x)
+            sym_key = inst_id.split("-")[0] if "-" in inst_id else inst_id
+            mult = float(asset_multipliers.get(sym_key, asset_multipliers.get(inst_id, 1.0)))
+            mult = max(0.5, min(1.5, mult))
+            ai_margin = round(raw_margin * mult, 2) if raw_margin > 0 else 0.0
 
-        # `validate` 的契约固定为 4 个位置参数（与本模块的同名函数一致）——
-        # 调用方（门面）负责把 `safe_float` curry 进去。这样既保持了
-        # `validate_and_filter_decision` 的公开签名不变，也让本函数无需知道
-        # 校验内部怎么取数。
-        final_action, rejection_reason, rr = validate(
-            p, normalized_d_item, active_inst_ids, active_position_sides,
-        )
+            # 归一化字段：物理校验与执行层都按这套键读价（别名兼容在上方已折叠）
+            normalized_d_item = dict(d_item)
+            normalized_d_item["entry_price"] = entry
+            normalized_d_item["take_profit_price"] = take_profit
+            normalized_d_item["stop_loss_price"] = stop_loss
+            normalized_d_item["margin_usdt"] = ai_margin
+            normalized_d_item["leverage"] = ai_leverage
 
-        final_entry = normalized_d_item.get("entry_price", entry)
-        final_leverage = normalized_d_item.get("leverage", ai_leverage)
-        final_margin = normalized_d_item.get("margin_usdt", ai_margin)
-        final_tp = normalized_d_item.get("take_profit_price", take_profit)
-        final_sl = normalized_d_item.get("stop_loss_price", stop_loss)
+            # `validate` 的契约固定为 4 个位置参数（与本模块的同名函数一致）——
+            # 调用方（门面）负责把 `safe_float` curry 进去。这样既保持了
+            # `validate_and_filter_decision` 的公开签名不变，也让本函数无需知道
+            # 校验内部怎么取数。
+            final_action, rejection_reason, rr = validate(
+                p, normalized_d_item, active_inst_ids, active_position_sides,
+            )
+
+            final_entry = normalized_d_item.get("entry_price", entry)
+            final_leverage = normalized_d_item.get("leverage", ai_leverage)
+            final_margin = normalized_d_item.get("margin_usdt", ai_margin)
+            final_take_profit = normalized_d_item.get("take_profit_price", take_profit)
+            final_stop_loss = normalized_d_item.get("stop_loss_price", stop_loss)
+            _summary_reason = rejection_reason or str(d_item.get("summary_reason", "全市场矩阵综合评估中"))[:120]
+            _thought_process = {
+                "market_structure": d_item.get("market_structure", "多周期结构中性"),
+                # 2026-10：原「兼容旧契约 `calculus_dynamics`/`math_prob_rationale`」的
+                # 回退分支已删除 —— 那两个字段在模型输出契约里已不存在，留着只会让
+                # 退役词汇继续出现在决策载荷里。现在只认现行的 `factor_evidence`。
+                "factor_evidence": d_item.get(
+                    "factor_evidence",
+                    "模型未提供具体因子证据（MACD/RSI/CVD/OBI/VWAP）"),
+                "volume_and_oi": d_item.get("volume_and_oi", f"OI: {p.get('oiUsd', '--')}, Taker: {p.get('takerNetUsd', '--')}"),
+                "risk_reward_evaluation": "目标盈亏比与硬底线以【本周期风险预算】为准"
+            }
+            _decision_source = "omitted" if inst_id in omitted_inst_ids else "model"
+            _gate_blocked = bool(rejection_reason)
+            _gate_reason = rejection_reason
+            _model_reason = str(d_item.get("summary_reason", ""))[:120]
+            _screen_score = None
+            _screen_signal = None
+            _screen_reason = None
 
         standard_cache[inst_id] = {
             "instId": inst_id,
@@ -210,17 +281,7 @@ def assemble_decision_cache(
                 **(council_status or {"ran": False}),
                 "adopted_role": (d_item or {}).get("adopted_role"),
             },
-            "thought_process": {
-                "market_structure": d_item.get("market_structure", "多周期结构中性"),
-                # 2026-10：原「兼容旧契约 `calculus_dynamics`/`math_prob_rationale`」的
-                # 回退分支已删除 —— 那两个字段在模型输出契约里已不存在，留着只会让
-                # 退役词汇继续出现在决策载荷里。现在只认现行的 `factor_evidence`。
-                "factor_evidence": d_item.get(
-                    "factor_evidence",
-                    "模型未提供具体因子证据（MACD/RSI/CVD/OBI/VWAP）"),
-                "volume_and_oi": d_item.get("volume_and_oi", f"OI: {p.get('oiUsd', '--')}, Taker: {p.get('takerNetUsd', '--')}"),
-                "risk_reward_evaluation": "目标盈亏比与硬底线以【本周期风险预算】为准"
-            },
+            "thought_process": _thought_process,
             "smart_money": p.get("smart_money", {}),
             "adx_1h": p.get("adx_1h", "--"),
             "decision": {
@@ -229,19 +290,19 @@ def assemble_decision_cache(
                 "leverage": final_leverage,
                 "margin_usdt": final_margin,
                 "entry_price": final_entry,
-                "take_profit_price": final_tp,
-                "stop_loss_price": final_sl,
+                "take_profit_price": final_take_profit,
+                "stop_loss_price": final_stop_loss,
                 "risk_reward_ratio": f"{rr:.2f} : 1" if rr > 0 else "--",
-                "summary_reason": rejection_reason or str(d_item.get("summary_reason", "全市场矩阵综合评估中"))[:120],
+                "summary_reason": _summary_reason,
                 # ── 三态可观测性（2026-10）────────────────────────────────────
                 # 旧实现把「模型主动观望 / 物理层拦单 / 模型漏答」三种情况**全塞进
                 # `summary_reason`**（`rejection_reason or model_summary`），于是看板与
                 # 事后审计都分不清"是模型在等"还是"系统在拦"。此处拆成四个显式字段，
                 # `summary_reason` 保留为**展示用摘要**（三态优先级不变，兼容既有消费者）。
-                "decision_source": "omitted" if inst_id in omitted_inst_ids else "model",
-                "gate_blocked": bool(rejection_reason),
-                "gate_reason": rejection_reason,
-                "model_reason": str(d_item.get("summary_reason", ""))[:120],
+                "decision_source": _decision_source,
+                "gate_blocked": _gate_blocked,
+                "gate_reason": _gate_reason,
+                "model_reason": _model_reason,
             },
             "data_quality": p.get("data_quality", "invalid"),
             "raw_ticker": {
@@ -256,5 +317,12 @@ def assemble_decision_cache(
             "raw_taker_vol": p.get('takerNetUsd') or "--",
             "raw_ls_ratio": str(p.get('lsRatio')) if p.get('lsRatio') is not None else "--",
         }
+        if screened_row is not None:
+            # 仅落选行携带预筛字段；model / omitted 行保持旧载荷（前端按 model 兜底）。
+            standard_cache[inst_id]["decision"].update({
+                "screen_score": _screen_score,
+                "screen_signal": _screen_signal,
+                "screen_reason": _screen_reason,
+            })
 
     return standard_cache

@@ -491,5 +491,113 @@ class CacheContractTests(_CacheBase, unittest.TestCase):
         self.assertEqual(self._assemble(packages=[], decisions={}), {})
 
 
+class ScreenedOutDecisionTests(_CacheBase, unittest.TestCase):
+    """★ 2026-11 上下文漏斗：预筛落选 ≠ 模型漏答 ≠ 模型判 WAIT。"""
+
+    ROW = {"instId": "ARB-USDT-SWAP", "name": "ARB", "score": 10.0,
+           "signal": "WAIT", "rank": 6,
+           "reason": "未进入 Top 5 候选（评分 10.0）"}
+
+    def _two(self):
+        return [_pkg("BTC-USDT-SWAP"), _pkg("ARB-USDT-SWAP")]
+
+    def test_screened_out_row_is_an_explicit_wait_with_screen_metadata(self):
+        out = self._assemble(packages=self._two(), decisions={},
+                             screened_out=[dict(self.ROW)])
+        dec = out["ARB-USDT-SWAP"]["decision"]
+        self.assertEqual(dec["action"], "WAIT")
+        self.assertEqual(dec["confidence"], 0.0)
+        self.assertEqual(dec["entry_price"], 0.0)
+        self.assertEqual(dec["take_profit_price"], 0.0)
+        self.assertEqual(dec["stop_loss_price"], 0.0)
+        self.assertEqual(dec["margin_usdt"], 0.0)
+        self.assertEqual(dec["decision_source"], "screened_out")
+        self.assertFalse(dec["gate_blocked"], "落选不是风控拦单")
+        self.assertEqual(dec["gate_reason"], "")
+        self.assertEqual(dec["model_reason"], "")
+        self.assertIn("预筛落选", dec["summary_reason"])
+        self.assertIn("10.0", dec["summary_reason"])
+        self.assertEqual(dec["screen_score"], 10.0)
+        self.assertEqual(dec["screen_signal"], "WAIT")
+        self.assertIn("Top 5", dec["screen_reason"])
+
+    def test_validate_is_skipped_for_screened_out_rows(self):
+        self._assemble(packages=self._two(), decisions={},
+                       screened_out=[dict(self.ROW)])
+        self.assertEqual([args[0]["instId"] for args in self.validate_calls],
+                         ["BTC-USDT-SWAP"],
+                         "落选标的没有模型裁决可校验 —— 不得调用 validate()")
+
+    def test_screened_out_is_distinguishable_from_omitted(self):
+        out = self._assemble(packages=self._two(), decisions={},
+                             screened_out=[dict(self.ROW)])
+        self.assertEqual(out["BTC-USDT-SWAP"]["decision"]["decision_source"], "omitted")
+        self.assertEqual(out["ARB-USDT-SWAP"]["decision"]["decision_source"], "screened_out")
+
+    def test_model_overreach_for_a_screened_out_symbol_is_ignored(self):
+        out = self._assemble(
+            packages=[_pkg("ARB-USDT-SWAP")],
+            decisions={"ARB-USDT-SWAP": {
+                "action": "BUY_LONG", "confidence": 99.0, "leverage": 10,
+                "margin_usdt": 500.0, "entry_price": 1.0,
+                "take_profit_price": 1.2, "stop_loss_price": 0.9,
+                "summary_reason": "模型理由不该出现在落选行",
+            }},
+            screened_out=[dict(self.ROW)],
+        )
+        dec = out["ARB-USDT-SWAP"]["decision"]
+        self.assertEqual(dec["action"], "WAIT", "预筛为准：绝不允许交易未深度分析的标的")
+        self.assertEqual(dec["confidence"], 0.0)
+        self.assertEqual(dec["entry_price"], 0.0)
+        self.assertEqual(dec["margin_usdt"], 0.0)
+        self.assertEqual(dec["decision_source"], "screened_out")
+        self.assertIn("越界", dec["screen_reason"], "越界裁决必须留痕")
+        self.assertEqual(dec["model_reason"], "")
+        self.assertNotIn("模型理由", dec["summary_reason"])
+        self.assertEqual(self.validate_calls, [])
+
+    def test_thought_process_explicitly_says_not_deep_analyzed(self):
+        thought = self._assemble(packages=self._two(), decisions={},
+                                 screened_out=[dict(self.ROW)]
+                                 )["ARB-USDT-SWAP"]["thought_process"]
+        self.assertEqual(set(thought), {"market_structure", "factor_evidence",
+                                        "volume_and_oi", "risk_reward_evaluation"})
+        for key, value in thought.items():
+            self.assertIn("未进入本轮深度分析", value, key)
+        self.assertNotIn("中性", thought["market_structure"],
+                         "不得沿用会被读成结论的默认值")
+
+    def test_leverage_is_still_clamped_into_the_risk_band(self):
+        dec = self._assemble(packages=self._two(), decisions={},
+                             screened_out=[dict(self.ROW)],
+                             max_leverage=10.0, min_leverage=3.0
+                             )["ARB-USDT-SWAP"]["decision"]
+        self.assertEqual(dec["leverage"], 3)
+
+    def test_reason_falls_back_to_the_prescreen_limit(self):
+        row = {"instId": "ARB-USDT-SWAP", "score": 1.5, "signal": "WAIT", "rank": 7}
+        dec = self._assemble(packages=self._two(), decisions={},
+                             screened_out=[row],
+                             prescreen_meta={"candidate_limit": 5}
+                             )["ARB-USDT-SWAP"]["decision"]
+        self.assertIn("Top 5", dec["screen_reason"])
+        self.assertIn("1.5", dec["screen_reason"])
+
+    def test_legacy_call_carries_no_screen_fields(self):
+        """不传 `screened_out` ⇒ 旧载荷逐字不变（前端按 model/omitted 兜底）。"""
+        dec = self._assemble(packages=[_pkg("BTC-USDT-SWAP")], decisions={}
+                             )["BTC-USDT-SWAP"]["decision"]
+        for key in ("screen_score", "screen_signal", "screen_reason"):
+            self.assertNotIn(key, dec)
+        self.assertEqual(dec["decision_source"], "omitted")
+
+    def test_malformed_screened_rows_are_ignored_not_fatal(self):
+        out = self._assemble(packages=self._two(), decisions={},
+                             screened_out=[None, "junk", 42, {"instId": ""}])
+        self.assertEqual([e["decision"]["decision_source"] for e in out.values()],
+                         ["omitted", "omitted"])
+        self.assertNotIn("screen_score", out["BTC-USDT-SWAP"]["decision"])
+
+
 if __name__ == "__main__":
     unittest.main()

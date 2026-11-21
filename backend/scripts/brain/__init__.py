@@ -21,6 +21,7 @@
 | `snapshots.py` | `update_factor_library_snapshot`（因子库自更新）/ `write_prompt_snapshot`（实时提示词快照，Web 透明检视用；原 `write_calculus_snapshot` 随数理退役拆除）—— **皆纯副作用**（0 输出、0 return，失败仅告警）（B3 第九十九刀） | 门面 `execute_batch_ai_brain_cycle` 内联段 |
 | `dispatch.py` | `dispatch_llm_and_persist_decisions` —— `execute_batch_ai_brain_cycle` **末尾 173 行**：LLM 请求派发 → 决策解析/校验 → 决策缓存·历史·持仓指令三份落盘（flock 包裹）→ 周期健康记录；段内两处 `return` 即函数终返，调用点 `return helper(...)` **直接透传**（B3 第九十八刀） | 门面 `execute_batch_ai_brain_cycle` 尾块（36 项同名注入） |
 | `account_text.py` | `build_position_lines` 在途持仓文本 + `build_pending_order_lines` 在途挂单文本（**三态语义**：`None`=缺上下文 / `[]`=确定空仓 / 非空=逐条） | `prompt.py` 内联段 |
+| `prescreen.py` | `select_deep_analysis_packages` / `candidate_limit` —— 确定性预筛（必选 ∪ Top N；缺分不落选、未知即全量回退），**纯函数不读文件**（2026-11 上下文漏斗） | 新增 |
 
 ## 注入面速查（改这些前先看）
 

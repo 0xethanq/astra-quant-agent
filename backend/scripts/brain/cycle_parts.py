@@ -127,13 +127,18 @@ def _calculate_scale_out_tp(entry_price, action, atr, precision=2):
 
 def build_history_record(*, time_str, policy_version, policy_hash, policy_snapshot,
                          policy_summary, macro_summary, council_status, ai_last_prompt,
-                         pos_mgmt_list, council_transcript, packages, standard_cache):
+                         pos_mgmt_list, council_transcript, packages, standard_cache,
+                         prescreen=None, prompt_chars=None):
     """装配「Web 审计历史」记录（原门面内联 28 行字典）。
 
     `top_opportunities` 逐标的从 `standard_cache` 取字段；`leverage` 缺省 3、
     `margin_usdt` 缺省 0.0 —— 与原实现一致（原样保留 `.get(..., default)`
     与直接下标访问的区别：`action` / `confidence` / `risk_reward_ratio` /
     `summary_reason` 缺键应抛错，而不是静默填默认值，否则审计会失真）。
+
+    2026-11 上下文漏斗（可选，默认 None ⇒ 旧调用兼容）：`prescreen` 写入预筛
+    `meta`（mode/deep/screened_out/degraded/prescreen_unavailable），
+    `prompt_chars` 记录实际发送的 SYSTEM+USER 字符数，便于对比改造前后体积。
     """
     return {
         "time": time_str,
@@ -145,6 +150,9 @@ def build_history_record(*, time_str, policy_version, policy_hash, policy_snapsh
         # 投委会周期级状态（ran/降级原因/参谋有效率）；逐单采纳席位在各缓存条目 "council" 内
         "council_status": council_status,
         "ai_last_prompt": ai_last_prompt,
+        # ── 上下文漏斗可观测性（2026-11）─────────────────────────────────────
+        "prescreen": prescreen,
+        "prompt_chars": prompt_chars,
         "position_management": pos_mgmt_list,
         "council_transcript": council_transcript,
         "top_opportunities": [

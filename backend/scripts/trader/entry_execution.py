@@ -62,6 +62,7 @@ def submitted_bracket(venue_ctx: Any, px: float, tp_px: float,
 #: - `source="model"` 模型主动观望（它自己输出 WAIT）
 #: - `source="gate"`  执行层/物理层拦下了模型的开仓意图
 #: - `source="omitted"` 该标的未出现在模型响应里（契约允许省略，按 fail-closed 兜底）
+#: - `source="screened_out"` 确定性预筛未让该标的进入本轮深度分析（不是模型裁决）
 ENTRY_DIAGNOSTICS = []          # list[dict]，键见下方说明
 
 
@@ -181,8 +182,9 @@ def execute_entry_scan(*,
             strat_desc = f"AI大脑判定当前无高确定性机会({ai_reason})"
             _record_entry_diagnostic(
                 f.get("name"),
-                # 三态优先级：漏答 > 物理层拦单 > 模型主动观望
-                ("omitted" if str(ai_decision.get("decision_source", "model")) == "omitted"
+                # 四态优先级：预筛落选 > 漏答 > 物理层拦单 > 模型主动观望
+                ("screened_out" if str(ai_decision.get("decision_source", "model")) == "screened_out"
+                 else "omitted" if str(ai_decision.get("decision_source", "model")) == "omitted"
                  else "gate" if ai_decision.get("gate_blocked")
                  else "model"),
                 ai_conf,

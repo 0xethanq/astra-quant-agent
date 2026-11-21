@@ -7,8 +7,9 @@
 ## 安全属性（与 trader 域同一套纪律）
 
 - 段体 **AST 逐字**（对拍门 `tests/extraction/test_brain_dispatch_extraction.py`）；
-- 全部自由名（`38` 个：2026-09-30 增 `repair_json_object` 做容错 JSON 解析，
-  修不动仍抛原始错误 ⇒ 行为 fail-closed 不变）**同名 kw-only 入参** ⇒ 门面调用期解析，
+- 全部自由名（`40` 个：2026-09-30 增 `repair_json_object` 做容错 JSON 解析，
+  修不动仍抛原始错误 ⇒ 行为 fail-closed 不变；2026-11 增 `screened_out` /
+  `prescreen_meta` / `prompt_chars` 承载上下文漏斗）**同名 kw-only 入参** ⇒ 门面调用期解析，
   `patch.object(ai_brain_trader, "assemble_decision_cache", ...)` 这类测试缝照常生效；
 - 段内两处 `return` 即函数终返 ⇒ 调用点 `return helper(...)` 直接透传（无哨兵）。
 """
@@ -54,7 +55,10 @@ def dispatch_llm_and_persist_decisions(*,
         thinking_timeout,
         time,
         time_str,
-        urllib):
+        urllib,
+        screened_out=None,
+        prescreen_meta=None,
+        prompt_chars=None):
     """主脑批次：LLM 请求派发 → 决策解析归一 → 缓存/历史/持仓指令落盘 → 健康记录。
 
     原为 `ai_brain_trader.execute_batch_ai_brain_cycle` 末尾的 173 行 `try` 块
@@ -197,6 +201,8 @@ def dispatch_llm_and_persist_decisions(*,
             macro_summary=macro_summary,
             policy_snapshot=policy_snapshot,
             council_status=council_status,
+            screened_out=screened_out,
+            prescreen_meta=prescreen_meta,
         )
 
         # 审计③(2026-09-13)：整档覆盖与 trader 的 venue-decision 读-改-写互斥
@@ -224,6 +230,7 @@ def dispatch_llm_and_persist_decisions(*,
             council_transcript=(brain_output.get("council_transcript")
                                 if isinstance(brain_output, dict) else None),
             packages=packages, standard_cache=standard_cache,
+            prescreen=prescreen_meta, prompt_chars=prompt_chars,
         )
 
         history_list = []

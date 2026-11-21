@@ -308,8 +308,8 @@ class EffectiveSystemPromptTests(unittest.TestCase):
             self.assertEqual(abt.get_effective_system_prompt({"name": "自定义"}), "BASE")
 
 
-class ExecuteBatchCycleTests(unittest.TestCase):
-    """主编排：逐条钉住"哪一步用哪个依赖"，以及失败早退。"""
+class _CycleHarness(unittest.TestCase):
+    """主脑编排测试的共用装配（不含 `test_*` ⇒ 不会被子类重复执行）。"""
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -365,6 +365,10 @@ class ExecuteBatchCycleTests(unittest.TestCase):
                                   "high", lambda *a, **k: {"raw": True}, "model-x", 30))
         self._patch("ModelCallTelemetry", _telemetry)
         self._patch("dispatch_llm_and_persist_decisions", _dispatch)
+
+
+class ExecuteBatchCycleTests(_CycleHarness):
+    """主编排：逐条钉住"哪一步用哪个依赖"，以及失败早退。"""
 
     def test_missing_api_key_returns_none_and_records_failure(self):
         health = []
@@ -457,6 +461,99 @@ class ExecuteBatchCycleTests(unittest.TestCase):
             pos_summary="P",
         )
         self.assertEqual(self.calls["dispatch"]["active_inst_ids"], {"SOL-USDT-SWAP"})
+
+
+class PrescreenWiringTests(_CycleHarness):
+    """2026-11 上下文漏斗：编排层必须把「必选 + 候选」接进提示词与决策缓存。"""
+
+    @staticmethod
+    def _pkg(inst_id, score):
+        return {"instId": inst_id, "name": inst_id.split("-")[0],
+                "factor_ranking": {"composite_alpha_score": score,
+                                   "signal_recommendation": "WAIT"}}
+
+    def _wire_pool(self, packages, *, pending=(), positions=None):
+        self._wire_common(packages)
+        self._patch("TARGET_INSTRUMENTS", [{"instId": p["instId"]} for p in packages])
+        by_id = {p["instId"]: p for p in packages}
+        self._patch("fetch_single_instrument_package",
+                    lambda item: dict(by_id[item["instId"]]))
+        if pending is None:
+            self._patch("fetch_pending_orders_list", lambda: None)
+        else:
+            self._patch("fetch_pending_orders_list", lambda: list(pending))
+        # 6 个标的逐个外呼 Rubik 会拖到分钟级（每个 3 次 3.5s 超时）⇒ 断网。
+        import scripts.factors.smart_money as smart_money
+        patcher = patch.object(smart_money, "fetch_smart_money_for_symbol",
+                               lambda *a, **k: None)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        return by_id
+
+    def _pool(self):
+        return [self._pkg(f"S{i}-USDT-SWAP", float(i)) for i in range(6)]
+
+    def test_prompt_gets_only_deep_packages_and_decisions_get_the_whole_pool(self):
+        packages = self._pool()
+        self._wire_pool(packages)
+        abt.execute_batch_ai_brain_cycle(active_positions_detail=[])
+
+        args, kw = self.calls["prompt_args"]
+        prompt_ids = [p["instId"] for p in args[0]]
+        self.assertEqual(len(prompt_ids), 5, "默认候选上限 5")
+        self.assertNotIn("S0-USDT-SWAP", prompt_ids, "最低分标的应落选")
+        self.assertEqual(kw["all_packages"], packages)
+        self.assertEqual([r["instId"] for r in kw["screened_out"]], ["S0-USDT-SWAP"])
+        self.assertEqual(kw["prescreen_meta"]["mode"], "funnel")
+        self.assertEqual(kw["prescreen_meta"]["candidate_count"], 5)
+
+        dispatch = self.calls["dispatch"]
+        self.assertEqual(dispatch["packages"], packages,
+                         "决策缓存必须覆盖全池，不能只拿深度包")
+        self.assertEqual(dispatch["screened_out"], kw["screened_out"])
+        self.assertEqual(dispatch["prescreen_meta"], kw["prescreen_meta"])
+        self.assertEqual(dispatch["prompt_chars"], len("SYSTEM") + len("PROMPT"))
+
+    def test_unreadable_positions_fall_back_to_the_full_pool(self):
+        packages = self._pool()
+        self._wire_pool(packages)
+        abt.execute_batch_ai_brain_cycle(active_positions_detail=None)
+
+        args, kw = self.calls["prompt_args"]
+        self.assertEqual(len(args[0]), len(packages), "读不到持仓 ⇒ 不得缩小分析范围")
+        self.assertEqual(kw["prescreen_meta"]["mode"], "full_fallback")
+        self.assertTrue(kw["prescreen_meta"]["prescreen_unavailable"])
+        self.assertEqual(kw["prescreen_meta"]["reason"], "positions_unreadable")
+        self.assertEqual(kw["screened_out"], [])
+
+    def test_unreadable_pending_orders_fall_back_to_the_full_pool(self):
+        packages = self._pool()
+        self._wire_pool(packages, pending=None)
+        abt.execute_batch_ai_brain_cycle(active_positions_detail=[])
+
+        args, kw = self.calls["prompt_args"]
+        self.assertEqual(len(args[0]), len(packages))
+        self.assertEqual(kw["prescreen_meta"]["reason"], "pending_orders_unreadable")
+
+    def test_held_symbols_are_mandatory_even_with_the_lowest_score(self):
+        packages = self._pool()
+        self._wire_pool(packages)
+        abt.execute_batch_ai_brain_cycle(
+            active_positions_detail=[{"instId": "S0-USDT-SWAP", "side": "short"}])
+
+        args, _kw = self.calls["prompt_args"]
+        self.assertIn("S0-USDT-SWAP", [p["instId"] for p in args[0]],
+                      "在管持仓必须进入深度分析")
+
+    def test_pending_order_symbols_are_mandatory_and_canonicalized(self):
+        packages = self._pool()
+        self._wire_pool(packages, pending=[{"ordId": "7", "instId": "s0-usdt"}])
+        abt.execute_batch_ai_brain_cycle(active_positions_detail=[])
+
+        args, kw = self.calls["prompt_args"]
+        ids = [p["instId"] for p in args[0]]
+        self.assertIn("S0-USDT-SWAP", ids, "在途挂单标的必须进入深度分析")
+        self.assertNotIn("S0-USDT-SWAP", [r["instId"] for r in kw["screened_out"]])
 
 
 class LatestAiDecisionTests(unittest.TestCase):

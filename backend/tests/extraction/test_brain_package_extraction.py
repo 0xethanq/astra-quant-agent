@@ -168,6 +168,15 @@ class MoveIsLosslessTest(unittest.TestCase):
         self.assertNotIn("calculus_engine", src)
         self.assertIn('pkg["quant_factors"] = load_quant_factor_tiers(inst_id)', src)
 
+    def test_factor_ranking_is_attached_right_after_the_tiers(self):
+        """2026-11 上下文漏斗：排序字段与 7 梯队**同源快照**，且紧随其后挂包。"""
+        lines = [ln.strip() for ln in _submodule_function_lines()
+                 if ln.strip() and not ln.strip().startswith("#")]
+        tiers = lines.index('pkg["quant_factors"] = load_quant_factor_tiers(inst_id)')
+        ranking = lines.index('pkg["factor_ranking"] = load_factor_ranking(inst_id)')
+        self.assertEqual(ranking, tiers + 1,
+                         "factor_ranking 必须紧随 quant_factors（同一份快照、同一失败语义）")
+
     def test_failure_counters_are_actually_wired(self):
         """正向断言：6 处静默 except 必须各自接上失败计数（防止上一条的白名单被滥用）。"""
         src = "\n".join(_submodule_function_lines())

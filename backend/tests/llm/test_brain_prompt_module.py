@@ -31,6 +31,7 @@ for _p in (str(ROOT), str(ROOT / "scripts")):
 import scripts.evolution_shield as evolution_shield  # noqa: E402
 import scripts.risk_constants as risk_constants  # noqa: E402
 from scripts.brain import prompt as bp  # noqa: E402
+from scripts.brain.prescreen import select_deep_analysis_packages  # noqa: E402
 from tests import source_scan  # noqa: E402
 
 _SRC = Path(bp.__file__).read_text(encoding="utf-8")
@@ -372,6 +373,107 @@ class InjectionSurfaceTests(_PromptSandbox, unittest.TestCase):
         out = {}
         self._call(usdt_available=500.0, runtime_context_out=out)
         self.assertEqual(out["risk_budget"], "BUDGET(500.0)")
+
+
+class ScreenedOutRenderingTests(_PromptSandbox):
+    """2026-11 上下文漏斗：深度包只含候选；落选以紧凑观察池披露。"""
+
+    @staticmethod
+    def _pkg(**over):
+        pkg = {"name": "BTC", "instId": "BTC-USDT-SWAP", "price": 100.0,
+               "chg24h": 1.5, "bidPx": 99.5, "askPx": 100.5,
+               "data_quality": "valid", "smart_money": {"available": False},
+               "quant_factors": {"trend_momentum": {"macd_hist": 1.0}},
+               "adx_1h": 25.0}
+        pkg.update(over)
+        return pkg
+
+    ROW = {"instId": "ARB-USDT-SWAP", "name": "ARB", "score": 10.0,
+           "signal": "WAIT", "rank": 6,
+           "reason": "未进入 Top 5 候选（评分 10.0）"}
+
+    def _all_pool(self):
+        return [self._pkg(), self._pkg(name="ARB", instId="ARB-USDT-SWAP",
+                                       chg24h=-0.5, data_quality="valid")]
+
+    def test_only_deep_packages_get_the_full_tier_matrix(self):
+        out = {}
+        self._call(packages=[self._pkg()], all_packages=self._all_pool(),
+                   screened_out=[dict(self.ROW)],
+                   prescreen_meta={"candidate_limit": 5, "pool_size": 2},
+                   runtime_context_out=out)
+        matrix = out["market_matrix"]
+        self.assertIn("【预筛落选观察池 · 未进入本轮深度分析】", matrix)
+        self.assertIn("- ARB (ARB-USDT-SWAP) | 评分=10.0 | 信号=WAIT "
+                      "| 24H=-0.5% | 数据质量=valid", matrix)
+        self.assertIn("宿主已对全部 2 个标的做确定性评分", matrix)
+        self.assertIn("不得臆测", matrix)
+        self.assertEqual(matrix.count("T0 衍生品博弈"), 1,
+                         "落选标的不得注入完整七梯队矩阵")
+        self.assertNotIn("【ARB (ARB-USDT-SWAP)】", matrix)
+
+    def test_empty_screened_out_list_renders_no_watchlist(self):
+        out = {}
+        self._call(packages=[self._pkg()], screened_out=[],
+                   runtime_context_out=out)
+        self.assertNotIn("预筛落选观察池", out["market_matrix"])
+
+    def test_prescreen_unavailable_is_disclosed(self):
+        out = {}
+        self._call(packages=[self._pkg()], screened_out=[],
+                   prescreen_meta={"prescreen_unavailable": True,
+                                   "reason": "positions_unreadable"},
+                   runtime_context_out=out)
+        self.assertIn("本轮预筛降级（positions_unreadable）", out["market_matrix"])
+        self.assertIn("不构成落选", out["market_matrix"])
+
+    def test_missing_score_degradation_is_disclosed(self):
+        out = {}
+        self._call(packages=[self._pkg()], screened_out=[],
+                   prescreen_meta={"degraded": True,
+                                   "missing_score_inst_ids": ["SUI-USDT-SWAP"]},
+                   runtime_context_out=out)
+        self.assertIn("缺分标的已全部并入深度分析", out["market_matrix"])
+        self.assertIn("SUI-USDT-SWAP", out["market_matrix"])
+        self.assertIn("缺分不等于落选", out["market_matrix"])
+
+    def test_active_instruments_still_lists_the_whole_pool(self):
+        out = {}
+        self._call(packages=[self._pkg()], all_packages=self._all_pool(),
+                   screened_out=[dict(self.ROW)], runtime_context_out=out)
+        self.assertEqual(out["active_instruments"], "BTC,ARB")
+
+    def test_legacy_call_renders_no_funnel_dressing(self):
+        out = {}
+        self._call(packages=[self._pkg()], runtime_context_out=out)
+        self.assertNotIn("预筛落选观察池", out["market_matrix"])
+        self.assertNotIn("本轮预筛降级", out["market_matrix"])
+        self.assertEqual(out["active_instruments"], "BTC")
+
+    def test_funnel_matrix_is_at_least_forty_percent_smaller(self):
+        """R9：11 标的、Top 5 时，全标的矩阵字符数必须下降 ≥ 40%。"""
+        names = ["ARB", "BTC", "DOGE", "ETH", "SOL", "XRP",
+                 "SUI", "AVAX", "LINK", "OP", "BNB"]
+        pool = []
+        for index, name in enumerate(names):
+            pkg = self._pkg(name=name, instId=f"{name}-USDT-SWAP")
+            pkg["factor_ranking"] = {"composite_alpha_score": float(index),
+                                     "signal_recommendation": "WAIT"}
+            pool.append(pkg)
+        pre = select_deep_analysis_packages(pool, limit=5)
+        self.assertEqual(len(pre["deep_packages"]), 5)
+        self.assertEqual(len(pre["screened_out"]), 6)
+
+        full_ctx, funnel_ctx = {}, {}
+        self._call(packages=pool, runtime_context_out=full_ctx)
+        self._call(packages=pre["deep_packages"], all_packages=pool,
+                   screened_out=pre["screened_out"], prescreen_meta=pre["meta"],
+                   runtime_context_out=funnel_ctx)
+        full_len = len(full_ctx["market_matrix"])
+        funnel_len = len(funnel_ctx["market_matrix"])
+        self.assertGreater(full_len, 5000, "全量矩阵过短 ⇒ 本用例会空转")
+        self.assertLess(funnel_len, full_len * 0.6,
+                        f"矩阵压缩不足 40%：full={full_len} funnel={funnel_len}")
 
 
 if __name__ == "__main__":
