@@ -24,18 +24,22 @@
 |---|---|
 | `npm run dev` | 本地开发服务（热更新） |
 | `npm run build` | 生产构建，产物在 `dist/`（**已 gitignore，不入库**） |
-| `node --test tests/*.test.mjs` | 跑全部测试（**必须显式列文件**，见踩坑 1） |
-| `npx vue-tsc --noEmit` | 类型检查（含 `.vue` 模板类型） |
+| `npm run typecheck` | 类型检查（`vue-tsc --build --force`，覆盖 `src/` 与 `vite.config.ts`） |
+| `npm test` | 跑全部测试（`node --test tests/*.test.mjs`，**必须显式列文件**，见踩坑 1） |
 
-## 测试基线（2026-09-15）
+> 需要 **Node.js 24+**：测试直接导入 `.ts` 源码，依赖 Node 原生 TypeScript 类型剥离；
+> Node 22 会报 `ERR_NO_TYPESCRIPT`。
 
-- `node --test tests/*.test.mjs` ⇒ **全部通过**：8 个 `node:test` 用例文件 +
-  5 个自检文件（`chartCandles` / `councilLogic` / `http` / `llmLogic` / `useLlmConfig`，
-  共 **136 条断言**）。
-- `npx vue-tsc --noEmit` ⇒ 干净无输出。
-- `npx vite build` ⇒ 成功。
+## 测试基线（2026-11-21，Node 24.22.3）
 
-改动前端后请把这三条都过一遍；**只跑测试不跑类型检查**会漏掉模板里的类型错误。
+- `npm test` ⇒ **459 例全部通过**（`node:test` 用例 + 自检文件）。
+- `npm run typecheck` ⇒ 干净无输出。
+- `npm run build` ⇒ 成功。
+
+> ⚠️ 根 `tsconfig.json` 是 solution-style（`files: []` + `references`），
+> 直接跑 `vue-tsc --noEmit` **不会检查任何文件**。必须用
+> `vue-tsc --build --force` 才会覆盖 `tsconfig.app.json` 与 `tsconfig.node.json`。
+> `npm run typecheck` 已经封装了这个命令；新增类型错误时它必须非零退出。
 
 ## ⚠️ 两个踩坑（都花过时间）
 

@@ -145,7 +145,7 @@ Risk rules are enforced strictly by Python code (`scripts/risk_constants.py`). B
 | Mode | Host Prerequisites | Highlights & Target | Recommendation |
 |---|---|---|:---:|
 | **Docker Compose (Recommended)** | `Docker` & `Docker Compose` | Zero host dependency, auto multi-stage build, supervised watchdog | ⭐⭐⭐⭐⭐ |
-| **Bare Metal Linux / macOS** | `Python 3.11+` (`python3-venv`), `Node.js 18+`, `Git` | Local source development and memory-constrained environments | ⭐⭐⭐ |
+| **Bare Metal Linux / macOS** | `Python 3.11+` (`python3-venv`), `Node.js 24+`, `Git` | Local source development and memory-constrained environments | ⭐⭐⭐ |
 
 ### Docker (Recommended)
 
@@ -170,17 +170,39 @@ cd frontend && npm install && npm run build && cd ..
 
 ## Automated Testing
 
+**Prerequisites**: Python **3.11 or 3.12** (the CI test matrix) and Node.js **24** for the
+frontend (the frontend test suite imports TypeScript sources directly and relies on Node's
+native type stripping).
+
+CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs the **full** backend suite on
+both Python versions, frontend typecheck/build/tests on Node 24, `ruff check backend`, and a
+Docker image build. Use the Tier subsets below for fast local feedback; they are not a
+substitute for the full suite.
+
 ```bash
+# One-time: install development/test tools into the venv created by install.sh
+backend/.venv/bin/pip install -r backend/requirements-dev.txt
+
+# Full backend suite (same command as CI; run from the repository root)
+cd backend && .venv/bin/pytest tests -n auto -q && cd ..
+
 # Tier 0: Core Quant & Execution Gates (~20s)
-backend/.venv/bin/pytest backend/tests/trading tests/venues tests/risk tests/backtest -n auto -q
+backend/.venv/bin/pytest backend/tests/trading backend/tests/venues backend/tests/risk backend/tests/backtest -n auto -q
 
 # Tier 1: Multi-Model & Frontend Integration Gates (~60s)
-backend/.venv/bin/pytest backend/tests/llm tests/ui tests/core -n auto -q
-cd frontend && npm run build && npx vue-tsc --noEmit && node --test tests/*.test.mjs && cd ..
+backend/.venv/bin/pytest backend/tests/llm backend/tests/ui backend/tests/core -n auto -q
+cd frontend && npm run typecheck && npm run build && npm test && cd ..
 
 # Tier 2: Architectural Audit & Invariant Gates (~90s)
-backend/.venv/bin/pytest backend/tests/audit tests/extraction tests/ops -n auto -q
+backend/.venv/bin/pytest backend/tests/audit backend/tests/extraction backend/tests/ops -n auto -q
+
+# Python static checks (installed via backend/requirements-dev.txt)
+backend/.venv/bin/ruff check backend
 ```
+
+> `backend/deploy/install.sh` creates the virtualenv at `backend/.venv` and installs only the
+> runtime dependencies, so the one-time `requirements-dev.txt` install above is required before
+> `pytest` / `ruff` exist. The commands then work as written from the repository root.
 
 ---
 

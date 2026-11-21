@@ -145,7 +145,7 @@ AstraQuant 摒弃简单滞后指标，结合高频衍生品微观数据进行综
 | 部署方式 | 宿主机依赖 | 特点与适用场景 | 推荐度 |
 |---|---|---|:---:|
 | **Docker 容器（推荐）** | 仅需 `Docker` 与 `Docker Compose` | 零宿主机依赖、多阶段自动打包前端、进程自愈看门狗 | ⭐⭐⭐⭐⭐ |
-| **Linux 裸机部署** | `Python 3.11+` (`python3-venv`), `Node.js 18+`, `Git` | 本地源码调试、二次开发与极低内存实例 | ⭐⭐⭐ |
+| **Linux 裸机部署** | `Python 3.11+` (`python3-venv`), `Node.js 24+`, `Git` | 本地源码调试、二次开发与极低内存实例 | ⭐⭐⭐ |
 
 ### 选项 A：Docker 容器（推荐）
 
@@ -170,17 +170,37 @@ cd frontend && npm install && npm run build && cd ..
 
 ## 自动化测试
 
+**前置版本**：Python **3.11 / 3.12**（与 CI 矩阵一致），前端需要 Node.js **24**
+（前端测试直接导入 TypeScript 源码，依赖 Node 原生类型剥离）。
+
+CI（[`.github/workflows/ci.yml`](.github/workflows/ci.yml)）在 Python 3.11/3.12 上运行
+**全量**后端套件，并以 Node 24 执行前端类型检查/构建/测试、`ruff check backend` 与
+Docker 镜像构建。下面的 Tier 子集只用于本地快速反馈，不能替代全量套件。
+
 ```bash
+# 一次性安装开发/测试工具到 install.sh 创建的虚拟环境
+backend/.venv/bin/pip install -r backend/requirements-dev.txt
+
+# 后端全量（与 CI 相同；从仓库根目录执行）
+cd backend && .venv/bin/pytest tests -n auto -q && cd ..
+
 # Tier 0: 核心量化业务门 (~20秒)
-backend/.venv/bin/pytest backend/tests/trading tests/venues tests/risk tests/backtest -n auto -q
+backend/.venv/bin/pytest backend/tests/trading backend/tests/venues backend/tests/risk backend/tests/backtest -n auto -q
 
 # Tier 1: 模型与前端集成门 (~60秒)
-backend/.venv/bin/pytest backend/tests/llm tests/ui tests/core -n auto -q
-cd frontend && npm run build && npx vue-tsc --noEmit && node --test tests/*.test.mjs && cd ..
+backend/.venv/bin/pytest backend/tests/llm backend/tests/ui backend/tests/core -n auto -q
+cd frontend && npm run typecheck && npm run build && npm test && cd ..
 
-# Tier 2: 全量架构审计门 (~90秒)
-backend/.venv/bin/pytest backend/tests/audit tests/extraction tests/ops -n auto -q
+# Tier 2: 架构审计门 (~90秒)
+backend/.venv/bin/pytest backend/tests/audit backend/tests/extraction backend/tests/ops -n auto -q
+
+# Python 静态检查（依赖见 backend/requirements-dev.txt）
+backend/.venv/bin/ruff check backend
 ```
+
+> `backend/deploy/install.sh` 会把虚拟环境创建在 `backend/.venv`，但只安装运行时依赖；
+> 先执行上面的一次性 `requirements-dev.txt` 安装，`pytest` / `ruff` 才存在。之后上述命令
+> 即可从仓库根目录直接复制执行。
 
 ---
 
