@@ -26,6 +26,25 @@ from __future__ import annotations
 
 from pathlib import Path
 
+#: `backend/` 根（本仓运行时的工作目录）。调用方大量以**backend 相对**路径
+#: （如 `"scripts/ai_factor_trader.py"`）传参 —— 那种写法只有在 pytest 的工作目录
+#: 恰好是 `backend/` 时才成立。CI 从 `backend/` 跑，但 README/PR 模板的 Tier 命令
+#: 从**仓库根**跑；同一份判据不能因调用方式不同而 FileNotFoundError。
+BACKEND_ROOT = Path(__file__).resolve().parents[1]
+
+
+def _resolve_source_path(module_file: str | Path) -> Path:
+    """把 backend 相对路径锚定到 `BACKEND_ROOT`；绝对/已存在的路径原样返回。
+
+    ⚠️ 只做"相对 → 绝对"的归一，不改变语义：找不到时仍返回原路径，
+    让 `read_text` 响亮地 `FileNotFoundError`（而不是静默跳过）。
+    """
+    path = Path(module_file)
+    if path.is_absolute() or path.exists():
+        return path
+    candidate = BACKEND_ROOT / path
+    return candidate if candidate.exists() else path
+
 
 def source_area(module_file: str | Path, *, pkg_name: str | None = None) -> dict[Path, str]:
     """返回「该模块文件 + 同目录下的同名包目录」的全部 .py 源码。
@@ -173,11 +192,11 @@ def count_keyword_argument(module_file, function_name, keyword, *,
     返回该关键字在全部匹配调用中出现的次数。
     """
     import ast
-    from pathlib import Path
 
-    files = [Path(module_file)]
+    module = _resolve_source_path(module_file)
+    files = [module]
     if pkg_name:
-        pkg_dir = Path(module_file).parent / pkg_name
+        pkg_dir = module.parent / pkg_name
         if pkg_dir.is_dir():
             files.extend(sorted(pkg_dir.rglob("*.py")))
 
@@ -463,11 +482,11 @@ def missing_names_at_helper_calls(module_file, function_name, helper_names, *,
     给出不同结论。集中到一处后只需修一次。
     """
     import ast
-    from pathlib import Path
 
-    files = [Path(module_file)]
+    module = _resolve_source_path(module_file)
+    files = [module]
     if pkg_name:
-        pkg_dir = Path(module_file).parent / pkg_name
+        pkg_dir = module.parent / pkg_name
         if pkg_dir.is_dir():
             files.extend(sorted(pkg_dir.rglob("*.py")))
 

@@ -477,13 +477,25 @@ class JobCrudTests(_StoreBase):
         self.assertIn("最多", str(ctx.exception))
 
     def test_update_job_merges_changes_and_touches_updated_at(self):
-        self._seed()
-        before = BS.get_job("nightly-default")["updated_at"]
-        job = BS.update_job("nightly-default", {"name": "改名", "enabled": False})
+        # ⚠️ `updated_at` 是**秒级**时间戳（`_now()` 到 `%Y-%m-%d %H:%M:%S`）。
+        # 原写法断言 "seed 与 update 的 `updated_at` 相等"，等于假定两次调用
+        # 落在同一秒 —— xdist 高负载下跨秒即翻红（实测：CI 全量 `-n auto`
+        # 出现过一次 `Lists differ` 之外的偶发红）。冻结时钟后语义不变且确定：
+        # seed 盖 T0、update 盖 T1 ⇒ 仍要求 update **真的重新盖章**（比旧断言更强）。
+        with mock.patch.object(BS, "_now", return_value="2026-01-01 00:00:00"):
+            self._seed()
+            before = BS.get_job("nightly-default")["updated_at"]
+        self.assertEqual(before, "2026-01-01 00:00:00")
+        with mock.patch.object(BS, "_now", return_value="2026-01-02 03:04:05"):
+            job = BS.update_job("nightly-default", {"name": "改名", "enabled": False})
+            persisted = BS.get_job("nightly-default")
         self.assertEqual(job["name"], "改名")
         self.assertFalse(job["enabled"])
-        self.assertEqual(BS.get_job("nightly-default")["name"], "改名")
-        self.assertEqual(job["updated_at"], before, "秒级时间戳同秒内不变属预期，但不许变空")
+        self.assertEqual(persisted["name"], "改名")
+        self.assertEqual(job["updated_at"], "2026-01-02 03:04:05",
+                         "update_job 必须重新盖 updated_at")
+        self.assertEqual(persisted["updated_at"], "2026-01-02 03:04:05",
+                         "落盘后的 updated_at 必须与返回值一致")
         self.assertTrue(job["updated_at"])
 
     def test_update_job_missing_or_invalid_is_rejected(self):

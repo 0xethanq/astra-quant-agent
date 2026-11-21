@@ -30,6 +30,11 @@ from scripts.trader.tp1 import (compute_tp1, format_trigger_text, freeze_tp1,
 from scripts.trader.tp_sync import (allow_adverse, leg_direction_ok, min_step,
                                    sync_cloud_algo_tp)
 
+#: 仓库内的 `backend/` 根（`tests/trading/x.py` → parents[2]）。
+#: 源码断言必须锚定文件位置而不是 CWD：CI 从 `backend/` 跑、README 的 Tier
+#: 命令从仓库根跑，相对 CWD 的 `Path("scripts/...")` 会在其中一种下 FileNotFoundError。
+BACKEND = Path(__file__).resolve().parents[2]
+
 
 class Tp1SingleSourceTests(unittest.TestCase):
     def test_tp1_is_frozen_not_recomputed(self):
@@ -517,7 +522,7 @@ class ScaleOutEventLedgerTests(unittest.TestCase):
 
     def test_production_log_path_is_a_patchable_module_constant(self):
         """落点必须是**模块常量**：函数内联路径无法被用例重定向（事故根因）。"""
-        src = Path("scripts/trader/scale_out.py").read_text(encoding="utf-8")
+        src = (BACKEND / "scripts" / "trader" / "scale_out.py").read_text(encoding="utf-8")
         self.assertIn("SCALE_OUT_EVENTS_FILE = Path(__file__)", src)
         self.assertNotIn('path = _Path(__file__).resolve().parents[2] / "data" / "scale_out_events.jsonl"',
                          src, "写入器不得再用函数内联路径")
@@ -586,7 +591,7 @@ class ScaleOutEventLedgerTests(unittest.TestCase):
 
 class LedgerAttributionTests(unittest.TestCase):
     def test_source_labels_scale_out_and_ai_closes_distinctly(self):
-        src = Path("scripts/ledger/okx_history.py").read_text(encoding="utf-8")
+        src = (BACKEND / "scripts" / "ledger" / "okx_history.py").read_text(encoding="utf-8")
         self.assertIn('cl_ord_id.startswith("SO")', src)
         self.assertIn("首批分批止盈", src)
         self.assertIn("AI 主动止盈平仓", src)
@@ -594,7 +599,7 @@ class LedgerAttributionTests(unittest.TestCase):
                          src, "不得再用盈亏金额猜出场原因")
 
     def test_scale_out_orders_are_tagged_with_the_SO_prefix(self):
-        src = Path("scripts/trader/scale_out.py").read_text(encoding="utf-8")
+        src = (BACKEND / "scripts" / "trader" / "scale_out.py").read_text(encoding="utf-8")
         self.assertIn('f"SO{int(time.time())}"', src)
 
 

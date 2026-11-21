@@ -385,12 +385,17 @@ class SubmittedBracketTest(unittest.TestCase):
         """
         import re
         from pathlib import Path
-        src = Path("scripts/trader/order_submit.py").read_text(encoding="utf-8")
+        # ⚠️ 必须锚定**文件位置**：pytest 的工作目录随调用方式变化（CI 从 backend/ 跑，
+        # README/PR 模板的 Tier 命令从仓库根跑）。相对 CWD 的写法会在其中一种下
+        # FileNotFoundError，那种红是"命令写错"，不是回归。
+        backend = Path(__file__).resolve().parents[2]
+        src = (backend / "scripts" / "trader" / "order_submit.py").read_text(encoding="utf-8")
         written = set(re.findall(r"venue_ctx\[\"([a-z_]+)\"\]", src))
         self.assertEqual(written, {"submitted_px", "submitted_tp", "submitted_sl"},
                          "下单路径回写的字段名变了 ⇒ 通知会静默退回计划值")
         # 三价由 entry_execution 直接读
-        entry_src = Path("scripts/trader/entry_execution.py").read_text(encoding="utf-8")
+        entry_src = (backend / "scripts" / "trader" / "entry_execution.py").read_text(
+            encoding="utf-8")
         for field in written:
             self.assertIn(f'"{field}"', entry_src,
                           f"读取侧没有取 {field} ⇒ 通知仍是计划值")
@@ -402,8 +407,9 @@ class SubmittedBracketTest(unittest.TestCase):
         算法也不同。若哪天有人又把 `venue_exec_sz` 读进文案，本门必须红。
         """
         from pathlib import Path
+        backend = Path(__file__).resolve().parents[2]   # 锚定文件位置，不依赖 CWD
         for rel in ("scripts/trader/notifications.py",):
-            src = Path(rel).read_text(encoding="utf-8")
+            src = (backend / rel).read_text(encoding="utf-8")
             body = src.split('"""', 2)[-1]      # 跳过模块 docstring（其中会提到该字段）
             self.assertNotIn("venue_exec_sz", body,
                              f"{rel} 又读了原生张数 ⇒ 展示口径回退")
