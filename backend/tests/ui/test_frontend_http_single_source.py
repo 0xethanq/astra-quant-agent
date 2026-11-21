@@ -30,13 +30,19 @@
 
 ## ⚠️ 本刀暴露的一个基础设施缺口
 
-前端**没有任何自动化验证**：`frontend/package.json` 只有 `dev`/`build`/`preview`，
+前端**当时没有任何自动化验证**：`frontend/package.json` 只有 `dev`/`build`/`preview`，
 **没有 `typecheck` 脚本**，`frontend/tests/` 只有 2 个 `.mjs` 且无人执行；
 后端 `tests/` 对前端只是**源码字符串扫描**。
 
 本刀实测确认 `vue-tsc --noEmit` 与 `vite build` 都是干净通过的（退出码 0），
 故 `FrontendGateTest` 把它们**跑进后端测试套件**（各限时 300 秒，
 工具或 tsconfig 缺失时跳过而不是失败）。
+
+> 2026-11-21：CI 任务补齐了这里暴露的缺口 —— `frontend/package.json` 现在已有
+> `typecheck` / `test` 脚本，`.github/workflows/ci.yml` 与 README 都已接线。
+> 注意 `npm run typecheck` 使用 `vue-tsc --build --force`：根 `tsconfig.json`
+> 是 solution-style（`files: []` + references），裸 `vue-tsc --noEmit` 不会
+> 检查任何文件。
 """
 
 from __future__ import annotations
@@ -234,17 +240,19 @@ class FrontendGateTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0,
                          f"vite build 失败:\n{(r.stdout + r.stderr)[-2500:]}")
 
-    def test_package_json_has_no_typecheck_script(self):
-        """如实记录基础设施缺口：`package.json` 没有 `typecheck` 脚本。
+    def test_package_json_declares_typecheck_and_test_scripts(self):
+        """CI 任务补齐了脚本；这里把新契约钉成事实。
 
-        本条**不是**要求它存在，而是把现状钉成事实 ——
-        若将来补上脚本，此断言会翻红并提醒同步更新本文件的说明。
+        本条**不是**要求脚本缺席（旧版本曾把"没有 typecheck 脚本"钉成现状），
+        而是确保后续删除/改名脚本时必须同步更新本文件的说明与 CI 配置。
         """
         pkg = json.loads(_read(FRONTEND / "package.json"))
         scripts = pkg.get("scripts", {})
-        self.assertEqual(sorted(scripts), ["build", "dev", "preview"],
+        self.assertEqual(sorted(scripts), ["build", "dev", "preview", "test", "typecheck"],
                          f"package.json scripts 变化了: {sorted(scripts)} —— "
-                         f"请同步更新 FrontendGateTest 的说明")
+                         f"请同步更新 FrontendGateTest 的说明与 .github/workflows/ci.yml")
+        self.assertEqual(pkg.get("engines", {}).get("node"), ">=24",
+                         "前端测试直接导入 .ts 源码，engines.node 必须 >=24")
 
 
 class NodeBehaviourTest(unittest.TestCase):
@@ -254,19 +262,38 @@ class NodeBehaviourTest(unittest.TestCase):
     本类把它接进后端套件，避免又变成"没人跑的测试"。
     纯源码字符串扫描（上面的类）挡不住"委托后行为变了"，本类能。
 
-    需要 Node ≥ 22.6（`--experimental-strip-types`）；不满足则**跳过**。
+    需要 Node ≥ 24（原生 TypeScript 类型剥离）且 `frontend/node_modules` 已安装
+    （`http.test.mjs` 经 `useI18n` 依赖 `vue`）；任一缺失则**跳过** —— 前端行为
+    已由 CI 的 frontend job（`npm test`）完整覆盖。
     """
 
     TEST = FRONTEND / "tests" / "http.test.mjs"
 
     def test_behaviour_suite_passes(self):
+        # ⚠️ 必须先于**任何** spawn：`node --version` 也是一次 subprocess.Popen，
+        # 离线套件的 audit hook 会把它记成 `external child process: node` 并抛错
+        # （本仓基线要求该计数为 0）。`shutil.which` 不 spawn，可以放在守卫前。
         node = shutil.which("node")
         if node is None:
             self.skipTest("未找到 node")
+        _guard_offline()
+        node_version = ""
+        major = 0
+        try:
+            node_version = subprocess.run(
+                [node, "--version"], capture_output=True, text=True, timeout=10).stdout.strip()
+            major = int(node_version.lstrip("v").split(".")[0])
+        except (OSError, ValueError, subprocess.SubprocessError):
+            pass
+        if major < 24:
+            self.skipTest(
+                f"需要 Node >= 24（当前 {node_version or 'unknown'}）："
+                "前端测试依赖原生 TypeScript 类型剥离")
+        if not (FRONTEND / "node_modules" / "vue").exists():
+            self.skipTest("frontend/node_modules 未安装（该测试经 useI18n 依赖 vue）")
         if not self.TEST.exists():
             self.fail(f"行为测试文件缺失: {self.TEST}")
         try:
-            _guard_offline()
             r = subprocess.run(
                 [node, "--experimental-strip-types", str(self.TEST)],
                 cwd=str(FRONTEND), capture_output=True, text=True, timeout=300)

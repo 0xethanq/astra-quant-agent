@@ -5,7 +5,7 @@
 # ------------------------------------------------------------------------------
 # Stage 1: Build Vue 3 Production Frontend
 # ------------------------------------------------------------------------------
-FROM node:20-slim AS frontend-builder
+FROM node:24-slim AS frontend-builder
 
 WORKDIR /build
 
