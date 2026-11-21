@@ -112,12 +112,20 @@ export interface InstrumentFactor {
    * ★ 2026-10 三态可观测性：把「模型主动观望 / 物理层拦单 / 模型漏答」分开。
    * `decision_source === 'omitted'` = 该标的压根没出现在模型响应里（契约允许省略），
    * 后端按 fail-closed 兜底为 WAIT —— 它**不是**模型的裁决，展示上必须区分。
+   * ★ 2026-11 四态：`screened_out` = 确定性预筛未选入本轮深度分析，同样不是模型裁决；
+   * 其确定性评分 / 信号 / 原因见 `screen_*` 字段。
    * 缺字段（旧缓存）按 `model` / `false` 处理，向后兼容。
    */
-  decision_source?: 'model' | 'omitted'
+  decision_source?: 'model' | 'omitted' | 'screened_out'
   gate_blocked?: boolean
   gate_reason?: string
   model_reason?: string
+  /** ★ 2026-11 预筛落选：确定性评分（缺失为 null，不得填假 0） */
+  screen_score?: number | null
+  /** ★ 2026-11 预筛落选：确定性信号（如 WAIT，缺失为 null） */
+  screen_signal?: string | null
+  /** ★ 2026-11 预筛落选：宿主给出的原因文案（非模型裁决） */
+  screen_reason?: string
   fundingRate?: number
   oiUsd?: number
   lsRatio?: number
@@ -192,13 +200,20 @@ export interface InstrumentFactor {
     stop_loss_price: number
     risk_reward_ratio: string
     summary_reason: string
-    /** 2026-10 三态：`model` 模型给出裁决 / `omitted` 该标的未出现在模型响应里 */
-    decision_source?: 'model' | 'omitted'
+    /**
+     * 2026-10 三态：`model` 模型给出裁决 / `omitted` 该标的未出现在模型响应里；
+     * 2026-11 四态：`screened_out` 预筛落选，未进入本轮深度分析（不是模型裁决）。
+     */
+    decision_source?: 'model' | 'omitted' | 'screened_out'
     /** 物理层是否拦下了模型的开仓意图（拦单时 `gate_reason` 有原文） */
     gate_blocked?: boolean
     gate_reason?: string
     /** 模型自己的原话（与展示用 `summary_reason` 区分开） */
     model_reason?: string
+    /** ★ 2026-11 预筛落选：确定性评分 / 信号 / 原因（非模型裁决，缺失不伪造） */
+    screen_score?: number | null
+    screen_signal?: string | null
+    screen_reason?: string
   }
   thought_process?: {
     market_structure?: string

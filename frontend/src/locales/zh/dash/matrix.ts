@@ -217,6 +217,8 @@ export const zhMatrix = {
     sourceModelWait: '模型主动观望',
     sourceGateBlocked: '风控拦单',
     sourceOmitted: '模型未作答 · 兜底观望',
+    /** 2026-11 预筛漏斗第四态：确定性预筛落选，未进入本轮深度分析（不是模型裁决） */
+    sourceScreenedOut: '预筛落选 · 未深度分析',
     updated: '快照 {t}',
       },
 

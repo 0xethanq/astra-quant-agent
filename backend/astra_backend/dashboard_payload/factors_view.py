@@ -185,6 +185,11 @@ def build_factors_list(decisions_file, state_file, factor_file, positions, times
             "gate_blocked": bool(ai_dec.get("gate_blocked", False)),
             "gate_reason": ai_dec.get("gate_reason", ""),
             "model_reason": ai_dec.get("model_reason", reason),
+            # 预筛漏斗（2026-11）：落选标的只带宿主的确定性评分/信号/原因，
+            # 前端据此把「预筛落选」与「模型漏答 / 模型主动观望 / 风控拦单」分开显示。
+            "screen_score": ai_dec.get("screen_score"),
+            "screen_signal": ai_dec.get("screen_signal"),
+            "screen_reason": ai_dec.get("screen_reason", ""),
             "market_structure": m_struct,
             "volume_and_oi": v_oi,
             "rr_ratio": rr_ratio,

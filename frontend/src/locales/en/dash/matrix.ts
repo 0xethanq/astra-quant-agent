@@ -208,6 +208,8 @@ export const enMatrix = {
     sourceModelWait: 'Model chose to wait',
     sourceGateBlocked: 'Blocked by risk gate',
     sourceOmitted: 'No verdict from model · fail-closed wait',
+    /** 2026-11 fourth state: screened out of this cycle's deep analysis (not a model verdict) */
+    sourceScreenedOut: 'Screened out · not deep-analyzed',
     updated: 'Snapshot {t}',
       },
 

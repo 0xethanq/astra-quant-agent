@@ -68,6 +68,10 @@ const decisionStream = computed(() => {
       // 2026-10 三态：轨迹流里也要能区分「模型观望 / 风控拦单 / 模型漏答」
       decisionSource: d.decision_source ?? f.decision_source ?? 'model',
       gateBlocked: d.gate_blocked ?? f.gate_blocked ?? false,
+      // 2026-11 预筛漏斗：落选标的只带宿主的确定性评分/信号/原因（不是模型裁决）
+      screenScore: d.screen_score ?? f.screen_score,
+      screenSignal: d.screen_signal ?? f.screen_signal,
+      screenReason: d.screen_reason ?? f.screen_reason ?? '',
       // ★ 2026-10：原 calculus 的 v/a 换成 1H MACD 柱与其加速度
       // 归一化（占现价 %）：低价币的绝对 MACD 小到看不见（见 matrix 列提示）
       macdHist: f.momentum?.macd_hist_pct_1h ?? 0,
@@ -85,6 +89,27 @@ const decisionStream = computed(() => {
     };
   });
 });
+
+
+/**
+ * ★ 2026-11 预筛漏斗：落选徽章悬停展示确定性评分 / 信号 / 原因。
+ * 字段缺失（旧缓存）时只显示徽章本身，不伪造评分。
+ */
+function screenedOutTitle(item: {
+  screenScore?: unknown;
+  screenSignal?: unknown;
+  screenReason?: unknown;
+}): string {
+  return [
+    t('dash.matrix.matrix.sourceScreenedOut'),
+    item.screenScore,
+    item.screenSignal,
+    item.screenReason,
+  ]
+    .filter((v) => v !== null && v !== undefined && v !== '')
+    .map((v) => String(v))
+    .join(' · ');
+}
 
 
 // 日志流提取与过滤
@@ -287,10 +312,15 @@ function actionBadgeClass(action: string) {
                 </div>
               </div>
 
-              <!-- 行2：推演结论 -->
+              <!-- 行2：推演结论（2026-10 三态 + 2026-11 预筛落选） -->
               <p class="mt-2 text-xs leading-body" style="color: var(--ink-1)">
                 <span
-                  v-if="item.decisionSource === 'omitted'"
+                  v-if="item.decisionSource === 'screened_out'"
+                  class="badge badge-info mr-1.5 align-middle"
+                  :title="screenedOutTitle(item)"
+                >{{ t('dash.matrix.matrix.sourceScreenedOut') }}</span>
+                <span
+                  v-else-if="item.decisionSource === 'omitted'"
                   class="badge badge-warn mr-1.5 align-middle"
                 >{{ t('dash.matrix.matrix.sourceOmitted') }}</span>
                 <span

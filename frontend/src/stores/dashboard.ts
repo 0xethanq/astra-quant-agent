@@ -111,6 +111,11 @@ export const useDashboardStore = defineStore('dashboard', () => {
           gate_blocked: f.decision?.gate_blocked ?? f.gate_blocked ?? false,
           gate_reason: f.decision?.gate_reason ?? f.gate_reason ?? '',
           model_reason: f.decision?.model_reason ?? f.model_reason ?? '',
+          // 预筛漏斗（2026-11）：落选标的的确定性评分/信号/原因；旧缓存无此键 ⇒
+          // null/空串，前端据此安全回落，不伪造评分也不把它读成模型裁决。
+          screen_score: f.decision?.screen_score ?? f.screen_score ?? null,
+          screen_signal: f.decision?.screen_signal ?? f.screen_signal ?? null,
+          screen_reason: f.decision?.screen_reason ?? f.screen_reason ?? '',
         },
       }
     })

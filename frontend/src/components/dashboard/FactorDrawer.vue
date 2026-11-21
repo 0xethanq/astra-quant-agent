@@ -21,6 +21,23 @@ const f = computed(() => props.factor || {});
 const d = computed(() => f.value.decision || f.value);
 const tp = computed(() => f.value.thought_process || {});
 
+/**
+ * ★ 2026-11 预筛漏斗：落选标的不参与本轮深度分析，徽章悬停展示宿主的
+ * 确定性评分 / 信号 / 原因。字段缺失（旧缓存）时只显示徽章本身，不伪造任何数值。
+ */
+const screenedOutTitle = computed(() => {
+  const src = d.value;
+  return [
+    t('dash.matrix.matrix.sourceScreenedOut'),
+    src.screen_score ?? f.value.screen_score,
+    src.screen_signal ?? f.value.screen_signal,
+    src.screen_reason ?? f.value.screen_reason,
+  ]
+    .filter((v) => v !== null && v !== undefined && v !== '')
+    .map((v) => String(v))
+    .join(' · ');
+});
+
 /** 后端行情字段可能是已格式化的字符串（"0.0054%"、"21.76亿 U"）或 N/A，直接透传展示 */
 function asIs(v: unknown): string {
   if (v === null || v === undefined) return '--';
@@ -135,11 +152,16 @@ const smart = computed(() => [
           </div>
         </div>
         <p v-else class="t-muted mt-2 text-xs">{{ t('dash.matrix.matrix.noDecision') }}</p>
-        <p v-if="d.summary_reason || f.reason" class="mt-2.5 border-t pt-2.5 text-xs leading-body" style="color: var(--ink-2); border-color: var(--line-1)">
-          <!-- 2026-10 三态徽章：同样的「观望」文案背后可能是三种完全不同的原因，
-               不标出来就没法判断"系统在等"还是"系统在拦"还是"模型没答"。 -->
+        <p v-if="d.summary_reason || f.reason || d.decision_source === 'screened_out'" class="mt-2.5 border-t pt-2.5 text-xs leading-body" style="color: var(--ink-2); border-color: var(--line-1)">
+          <!-- 2026-10 三态 + 2026-11 预筛落选：同样的「观望」文案背后可能是
+               模型在等 / 系统在拦 / 模型没答 / 根本没进深度分析，不标出来就没法判断。 -->
           <span
-            v-if="d.decision_source === 'omitted'"
+            v-if="d.decision_source === 'screened_out'"
+            class="badge badge-info mr-1.5 align-middle"
+            :title="screenedOutTitle"
+          >{{ t('dash.matrix.matrix.sourceScreenedOut') }}</span>
+          <span
+            v-else-if="d.decision_source === 'omitted'"
             class="badge badge-warn mr-1.5 align-middle"
             :title="t('dash.matrix.matrix.sourceOmitted')"
           >{{ t('dash.matrix.matrix.sourceOmitted') }}</span>
