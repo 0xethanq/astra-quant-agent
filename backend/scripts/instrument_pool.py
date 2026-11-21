@@ -2,6 +2,7 @@
 from __future__ import annotations
 import json
 import os
+import sys
 import tempfile
 from pathlib import Path
 from typing import Any, Dict
@@ -248,27 +249,30 @@ def load_instruments() -> list[dict[str, Any]]:
     if not POOL_FILE.exists():
         # 首次启动没有池文件：用出厂默认并把状态标成 missing（交易侧不据此开新仓）
         _POOL_STATE.update({"status": "missing", "detail": f"{POOL_FILE} 不存在，已按出厂默认池返回", "dropped": []})
+        # 诊断信息走 stderr：stdout 是**数据通道**（子进程探针/脚本输出会被解析），
+        # 写进 stdout 会让 `print(DATA_DIR)` 之类的探针输出被这行告警污染
+        # （实测 tests/audit/test_production_data_isolation 的端到端探针因此失败）。
         print(f"[instrument_pool] warn 未找到 {POOL_FILE}，返回出厂默认 {len(DEFAULT_INSTRUMENTS)} 币；"
-              f"交易侧本轮不开新仓（请先在后台保存一次标的池）")
+              f"交易侧本轮不开新仓（请先在后台保存一次标的池）", file=sys.stderr)
         return [dict(item) for item in DEFAULT_INSTRUMENTS]
     try:
         payload = json.loads(POOL_FILE.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         _POOL_STATE.update({"status": "corrupt", "detail": f"{POOL_FILE} 解析失败: {exc}", "dropped": []})
         print(f"[instrument_pool] error 标的池文件损坏（{exc}）→ 已退回出厂默认清单仅供展示，"
-              f"交易侧本轮不开新仓。请修复或重新保存标的池。")
+              f"交易侧本轮不开新仓。请修复或重新保存标的池。", file=sys.stderr)
         return [dict(item) for item in DEFAULT_INSTRUMENTS]
     instruments = payload.get("instruments", payload) if isinstance(payload, dict) else payload
     if not isinstance(instruments, list) or not instruments:
         _POOL_STATE.update({"status": "empty", "detail": f"{POOL_FILE} 里没有 instruments", "dropped": []})
-        print(f"[instrument_pool] error 标的池为空（{POOL_FILE}）→ 交易侧本轮不开新仓")
+        print(f"[instrument_pool] error 标的池为空（{POOL_FILE}）→ 交易侧本轮不开新仓", file=sys.stderr)
         return [dict(item) for item in DEFAULT_INSTRUMENTS]
     kept, dropped = _validate_pool_items(instruments)
     if dropped:
-        print(f"[instrument_pool] error 标的池有 {len(dropped)} 项非法，已丢弃: {', '.join(dropped)}")
+        print(f"[instrument_pool] error 标的池有 {len(dropped)} 项非法，已丢弃: {', '.join(dropped)}", file=sys.stderr)
     if not kept:
         _POOL_STATE.update({"status": "invalid", "detail": f"{POOL_FILE} 全部条目非法", "dropped": dropped})
-        print(f"[instrument_pool] error 标的池无一条合法 → 交易侧本轮不开新仓")
+        print(f"[instrument_pool] error 标的池无一条合法 → 交易侧本轮不开新仓", file=sys.stderr)
         return [dict(item) for item in DEFAULT_INSTRUMENTS]
     try:
         from scripts.risk_constants import MIN_LEVERAGE as _RC_MIN, MAX_LEVERAGE as _RC_MAX

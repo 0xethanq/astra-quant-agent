@@ -15,9 +15,14 @@ from astra_backend.admin_auth import AdminAuthStore
 from astra_backend.okx_client import OKXClient
 
 ROOT = Path(__file__).resolve().parents[1]
+#: 仓库根（`frontend/`、`backend/` 的父目录）。2026-11 修复：目录收敛提交
+#: `276ab88b` 把 `frontend/` 移进仓库结构后，多处回退路径仍写成
+#: `ROOT / "frontend"`（= `backend/frontend/`，**永不存在**），干净检出/生产镜像里
+#: `/docs`、`/trading` 直接 500。凡"仓库根下"的路径一律用本常量，不得再用 ROOT 拼。
+REPO_ROOT = ROOT.parent
 DATA_DIR = ROOT / "data"
 SCRIPTS_DIR = ROOT / "scripts"
-VUE_DIST = ROOT.parent / "frontend" / "dist"
+VUE_DIST = REPO_ROOT / "frontend" / "dist"
 BACKUP_LOG_FILE = ROOT / "logs" / "astra_backup_manual.log"
 PROMPT_OVERRIDE_FILE = DATA_DIR / "system_prompt_override.txt"
 

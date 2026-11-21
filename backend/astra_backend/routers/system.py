@@ -14,7 +14,7 @@ from astra_backend.settings_store import update_env
 from astra_backend.account_baseline import load_account_baseline, update_initial_capital
 from astra_backend.audit import recent as recent_audit, record as audit_record
 from astra_backend.dependencies import (
-    ROOT, DATA_DIR, SCRIPTS_DIR, STARTED_AT,
+    ROOT, REPO_ROOT, DATA_DIR, SCRIPTS_DIR, STARTED_AT,
     app_attr, admin_auth, require_admin_header, require_superadmin, read_json, script_state,
 )
 from astra_backend.schemas import AdminConfigUpdate, UpdateRequest, SystemSetupRequest
@@ -721,7 +721,7 @@ def update_application(
     updated = status_before["local"] != status_after.get("local")
     if updated:
         try:
-            subprocess.run(["npm", "run", "build"], cwd=str(ROOT / "frontend"), timeout=60, check=False)
+            subprocess.run(["npm", "run", "build"], cwd=str(REPO_ROOT / "frontend"), timeout=60, check=False)
         except Exception:
             pass
     rec_audit = app_attr("audit_record", audit_record)

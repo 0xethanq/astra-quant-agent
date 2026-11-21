@@ -320,6 +320,10 @@ class StaticAssetTests(_Base):
         (self.root / "docs" / "images").mkdir(parents=True, exist_ok=True)
         self._patch("VUE_DIST", self.vue)
         self._patch("ROOT", self.root)
+        # 2026-11 修复：生产代码把"仓库根"从 `ROOT` 拆成 `REPO_ROOT` ——
+        # 此前的 `ROOT / "frontend"` 实际指向 `backend/frontend/`（永不存在），
+        # 只是本地夹具恰好把两者指到同一棵临时树才掩盖了它。
+        self._patch("REPO_ROOT", self.root)
         self.spa = mock.Mock(return_value=HTMLResponse("spa"))
         self._patch("serve_vue_spa", self.spa)
         self.templates = mock.Mock()

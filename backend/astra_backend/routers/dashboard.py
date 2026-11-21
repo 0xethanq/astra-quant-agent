@@ -12,7 +12,7 @@ from astra_backend.config import settings, refresh_settings
 from astra_backend.time_utils import beijing_day
 from astra_backend.version import APP_SITE
 from astra_backend.dependencies import (
-    ROOT, DATA_DIR, VUE_DIST, okx, read_json, require_admin_header,
+    ROOT, REPO_ROOT, DATA_DIR, VUE_DIST, okx, read_json, require_admin_header,
 )
 import astra_backend.dashboard_cache as dash_app
 from astra_backend.web_shell import serve_vue_spa, templates
@@ -301,7 +301,7 @@ async def robots_txt():
     f = VUE_DIST / "robots.txt"
     if f.is_file():
         return FileResponse(str(f), media_type="text/plain", headers={"Cache-Control": "public, max-age=86400, s-maxage=604800"})
-    pf = ROOT / "frontend" / "public" / "robots.txt"
+    pf = REPO_ROOT / "frontend" / "public" / "robots.txt"
     if pf.is_file():
         return FileResponse(str(pf), media_type="text/plain", headers={"Cache-Control": "public, max-age=86400, s-maxage=604800"})
     return PlainTextResponse(
@@ -316,7 +316,7 @@ async def sitemap_xml():
     f = VUE_DIST / "sitemap.xml"
     if f.is_file():
         return FileResponse(str(f), media_type="application/xml", headers={"Cache-Control": "public, max-age=86400, s-maxage=604800"})
-    pf = ROOT / "frontend" / "public" / "sitemap.xml"
+    pf = REPO_ROOT / "frontend" / "public" / "sitemap.xml"
     if pf.is_file():
         return FileResponse(str(pf), media_type="application/xml", headers={"Cache-Control": "public, max-age=86400, s-maxage=604800"})
     return Response(content=f"""<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>{APP_SITE}/</loc><priority>1.0</priority></url><url><loc>{APP_SITE}/docs</loc><priority>0.8</priority></url></urlset>""", media_type="application/xml")
@@ -343,7 +343,7 @@ def serve_vue_spa_subroutes(subpath: str = "") -> Response:
     vue_index = VUE_DIST / "index.html"
     if vue_index.is_file():
         return serve_vue_spa(str(vue_index), is_public=True)
-    fallback_index = ROOT / "frontend" / "index.html"
+    fallback_index = REPO_ROOT / "frontend" / "index.html"
     return serve_vue_spa(str(fallback_index), is_public=True)
 
 
@@ -365,7 +365,7 @@ def admin_page(subpath: str = "") -> Response:
     vue_index = VUE_DIST / "index.html"
     if vue_index.is_file():
         return serve_vue_spa(str(vue_index), is_public=False)
-    fallback_index = ROOT / "frontend" / "index.html"
+    fallback_index = REPO_ROOT / "frontend" / "index.html"
     return serve_vue_spa(str(fallback_index), is_public=False)
 
 
@@ -388,7 +388,7 @@ async def favicon_svg():
     f = os.path.join(str(VUE_DIST), "favicon.svg")
     if os.path.isfile(f):
         return FileResponse(f, media_type="image/svg+xml", headers={"Cache-Control": "public, max-age=86400, s-maxage=2592000, immutable"})
-    pf = os.path.join(str(ROOT), "frontend", "public", "favicon.svg")
+    pf = os.path.join(str(REPO_ROOT), "frontend", "public", "favicon.svg")
     if os.path.isfile(pf):
         return FileResponse(pf, media_type="image/svg+xml", headers={"Cache-Control": "public, max-age=86400, s-maxage=2592000, immutable"})
     return Response(status_code=404)
