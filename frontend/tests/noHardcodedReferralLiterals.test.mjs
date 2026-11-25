@@ -26,8 +26,8 @@ import path from 'node:path';
 
 const SRC = path.resolve(import.meta.dirname, '..', 'src');
 
-/** 已出现在生产配置里的三个邀请域名 —— 任何一个都不许出现在前端源码里。 */
-const BANNED_DOMAINS = ['mitxcqvwnhj', 'gatesites', 'bsmkweb'];
+/** 已出现在生产配置里的邀请域名 —— 任何一个都不许出现在前端源码里。 */
+const BANNED_DOMAINS = ['mitxcqvwnhj', 'gatesites', 'bsmkweb', 'gatewebsite', 'bitget.ninja'];
 
 /**
  * OKX Broker code 的形状：12 位小写十六进制 + 4 位大写字母。

@@ -11,8 +11,8 @@ __version__ = "8.6.1"
 APP_VERSION = f"v{__version__}"
 APP_NAME = "AstraQuant"
 APP_NAME_EN = "AstraQuant"
-#: 官方站点（**带 www**，与 DNS 实际解析一致；页面内的 canonical / og:url 同源）。
-APP_SITE = "https://www.astraquant.tech"
+#: 官方站点（页面内的 canonical / og:url 同源）。
+APP_SITE = "https://astraquant.top"
 #: 官方仓库。
 APP_REPO = "https://github.com/0xethanq/astra-quant-agent"
 

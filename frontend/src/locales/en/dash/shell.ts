@@ -42,7 +42,8 @@ export const enShell = {
   gateStaleDesc: 'Showing the last successful snapshot from {t}; values may be out of date.',
   gateNoSnapshot: 'No market snapshot received yet',
 
-trajectoryBtn: 'Decision trail',
+  trajectoryBtn: 'Decision trail',
+  rebateBtn: '20% Rebates',
   updateAvailable: 'New Update',
   updateTooltip: 'New version available ({n} commits behind), click to update',
   nav: {
@@ -51,6 +52,7 @@ trajectoryBtn: 'Decision trail',
     groupRef: 'Reference',
     docs: 'System Docs',
     docsTitle: 'System Docs',
+    skills: 'AI Skills Hub',
     collapse: 'Collapse sidebar',
     expand: 'Expand sidebar',
     closeMobile: 'Close navigation',

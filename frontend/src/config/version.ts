@@ -11,6 +11,9 @@ export const APP_NAME_EN = 'AstraQuant'
 // —— 官方出处与发版标记：每次发版请同步更新 BRAND_REVISION（发版仪式清单之一）——
 export const BRAND_REVISION = '2026.10.03-v861'
 export const OFFICIAL_REPO = 'https://github.com/0xethanq/astra-quant-agent'
-/** 官网（自有域名，**带 www**：与 DNS 实际解析一致，canonical/og:url 同源） */
-export const OFFICIAL_SITE = 'https://www.astraquant.tech'
+/** 官网（自有域名，canonical/og:url 同源） */
+export const OFFICIAL_SITE = 'https://astraquant.top'
+export const SKILLHUB_SITE = 'https://astraquant.tech'
+export const SKILLHUB_REBATES_URL = 'https://astraquant.tech/rebates.html'
+export const SKILLHUB_REPO = 'https://github.com/0xethanq/crypto-trading-skills'
 export const OFFICIAL_NOTICE = `AstraQuant 官方仓库：${OFFICIAL_REPO}`

@@ -26,14 +26,18 @@ import {
   Lock,
   Cpu,
   TrendingUp,
+  Gift,
 } from 'lucide-vue-next';
 import { useI18n } from '../../composables/useI18n';
-import { OFFICIAL_REPO } from '../../config/version';
-import { useReferralChannels } from '../../composables/useReferralChannels';
+import { OFFICIAL_REPO, SKILLHUB_REBATES_URL, SKILLHUB_REPO, SKILLHUB_SITE } from '../../config/version';
+import { resolveChannelUrl, useReferralChannels, type MirrorRegion } from '../../composables/useReferralChannels';
+import { trackEvent } from '../../utils/analytics';
 
 const router = useRouter();
 const { t, currentLocale, toggleLocale } = useI18n();
 const { channels, partnerChannels, load: loadChannels } = useReferralChannels();
+
+const mirrorRegion = ref<MirrorRegion>(currentLocale.value === 'zh-CN' ? 'cn' : 'global');
 
 interface PromoChannel {
   key: string;
@@ -42,6 +46,7 @@ interface PromoChannel {
   isApiSupported: boolean;
   invite_url: string;
   code: string;
+  rebate: string;
   rateTier: string;
   note: string;
 }
@@ -50,46 +55,79 @@ const promoChannels = computed<PromoChannel[]>(() => {
   const dynamicOkx = channels.value.find((c) => c.key === 'okx');
   const binance = partnerChannels.value.find((c) => c.key === 'binance');
   const gate = partnerChannels.value.find((c) => c.key === 'gate');
+  const bitget = partnerChannels.value.find((c) => c.key === 'bitget');
 
   const list: PromoChannel[] = [];
-  if (dynamicOkx?.invite_url) {
+  if (dynamicOkx && resolveChannelUrl(dynamicOkx, mirrorRegion.value)) {
     list.push({
       key: 'okx',
       name: 'OKX',
       badge: t('landing.referral.okxBadge'),
       isApiSupported: true,
-      invite_url: dynamicOkx.invite_url,
+      invite_url: resolveChannelUrl(dynamicOkx, mirrorRegion.value),
       code: dynamicOkx.code,
-      rateTier: t('landing.referral.rateTier'),
+      rebate: dynamicOkx.rebate || '20%',
+      rateTier: `${dynamicOkx.rebate || '20%'} ${t('landing.referral.rebateRateSuffix')}`,
       note: t('landing.referral.okxOldUserNote'),
     });
   }
-  if (binance?.invite_url) {
+  for (const ch of [binance, gate, bitget]) {
+    if (!ch) continue;
+    const href = resolveChannelUrl(ch, mirrorRegion.value);
+    if (!href) continue;
     list.push({
-      key: 'binance',
-      name: 'Binance',
+      key: ch.key,
+      name: ch.name,
       badge: t('landing.referral.partnerBadge'),
       isApiSupported: false,
-      invite_url: binance.invite_url,
-      code: binance.code,
-      rateTier: t('landing.referral.rateTier'),
-      note: t('landing.referral.partnerNote'),
-    });
-  }
-  if (gate?.invite_url) {
-    list.push({
-      key: 'gate',
-      name: 'Gate.io',
-      badge: t('landing.referral.partnerBadge'),
-      isApiSupported: false,
-      invite_url: gate.invite_url,
-      code: gate.code,
-      rateTier: t('landing.referral.rateTier'),
+      invite_url: href,
+      code: ch.code,
+      rebate: ch.rebate || '20%',
+      rateTier: `${ch.rebate || '20%'} ${t('landing.referral.rebateRateSuffix')}`,
       note: t('landing.referral.partnerNote'),
     });
   }
   return list;
 });
+
+const VOLUME_PRESETS = [100000, 500000, 2000000, 10000000] as const;
+const calcVolumeUsd = ref<number>(500000);
+const calcVenueKey = ref<string>('okx');
+
+const REBATE_RATES: Record<string, number> = {
+  okx: 0.2,
+  binance: 0.2,
+  gate: 0.2,
+  bitget: 0.15,
+};
+
+const activeCalcVenue = computed(
+  () => promoChannels.value.find((c) => c.key === calcVenueKey.value) || promoChannels.value[0] || null,
+);
+const calcMonthlyFee = computed(() => Math.round(calcVolumeUsd.value * 0.0005));
+const calcMonthlyRebate = computed(() =>
+  Math.round(calcMonthlyFee.value * (REBATE_RATES[calcVenueKey.value] ?? 0.2)),
+);
+const calcAnnualRebate = computed(() => calcMonthlyRebate.value * 12);
+
+function formatUsd(amount: number): string {
+  return `$${amount.toLocaleString('en-US')}`;
+}
+
+function formatPreset(amount: number): string {
+  return amount >= 1000000 ? `$${amount / 1000000}M` : `$${amount / 1000}K`;
+}
+
+function scrollToReferral() {
+  if (typeof document === 'undefined') return;
+  const el = document.getElementById('referral');
+  if (!el) return;
+  const reduced =
+    typeof window !== 'undefined' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  el.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth' });
+  trackEvent('hero_rebate_scroll');
+}
 
 // 移动端菜单控制
 const mobileMenuOpen = ref(false);
@@ -122,8 +160,9 @@ async function copyCommand() {
   }, 2000);
 }
 
-// 返佣通道链接复制
+// 返佣通道链接与邀请码复制
 const copiedChannelKey = ref<string | null>(null);
+const copiedCodeKey = ref<string | null>(null);
 
 async function copyChannelUrl(url: string, key: string) {
   try {
@@ -133,10 +172,28 @@ async function copyChannelUrl(url: string, key: string) {
   } catch {
     // 降级兜底静默处理
   }
+  trackEvent('rebate_copy_link', { exchange: key, mirror: mirrorRegion.value });
   copiedChannelKey.value = key;
   setTimeout(() => {
     if (copiedChannelKey.value === key) {
       copiedChannelKey.value = null;
+    }
+  }, 2000);
+}
+
+async function copyChannelCode(code: string, key: string) {
+  try {
+    if (navigator?.clipboard?.writeText) {
+      await navigator.clipboard.writeText(code);
+    }
+  } catch {
+    // 降级兜底静默处理
+  }
+  trackEvent('rebate_copy_code', { exchange: key });
+  copiedCodeKey.value = key;
+  setTimeout(() => {
+    if (copiedCodeKey.value === key) {
+      copiedCodeKey.value = null;
     }
   }, 2000);
 }
@@ -172,6 +229,17 @@ onMounted(() => {
             </RouterLink>
             <a href="#referral" class="hover:text-[var(--ds-color-text-primary)] transition-colors no-underline">
               {{ t('landing.nav.referral') }}
+            </a>
+            <a
+              :href="SKILLHUB_SITE"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="hover:text-[var(--ds-color-text-primary)] transition-colors no-underline inline-flex items-center gap-1"
+              @click="trackEvent('crosslink_click', { target: 'skillhub', placement: 'landing_nav' })"
+            >
+              <span>{{ t('landing.nav.skills') }}</span>
+              <span class="sr-only">{{ t('common.opensInNewTab') }}</span>
+              <ExternalLink class="h-3.5 w-3.5 opacity-70" aria-hidden="true" />
             </a>
             <RouterLink to="/admin/login" class="hover:text-[var(--ds-color-text-primary)] transition-colors no-underline">
               {{ t('landing.nav.console') }}
@@ -225,6 +293,17 @@ onMounted(() => {
       </RouterLink>
       <a href="#referral" class="py-1.5 hover:text-[var(--ds-color-text-primary)] no-underline text-[var(--ds-color-text-secondary)]" @click="mobileMenuOpen = false">
         {{ t('landing.nav.referral') }}
+      </a>
+      <a
+        :href="SKILLHUB_SITE"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="py-1.5 hover:text-[var(--ds-color-text-primary)] no-underline text-[var(--ds-color-text-secondary)] inline-flex items-center gap-1.5"
+        @click="mobileMenuOpen = false; trackEvent('crosslink_click', { target: 'skillhub', placement: 'landing_mobile_nav' })"
+      >
+        <span>{{ t('landing.nav.skills') }}</span>
+        <span class="sr-only">{{ t('common.opensInNewTab') }}</span>
+        <ExternalLink class="h-3.5 w-3.5 opacity-70" aria-hidden="true" />
       </a>
       <RouterLink to="/admin/login" class="py-1.5 hover:text-[var(--ds-color-text-primary)] no-underline text-[var(--ds-color-text-secondary)]" @click="mobileMenuOpen = false">
         {{ t('landing.nav.console') }}
@@ -284,6 +363,15 @@ onMounted(() => {
           >
             <span>{{ t('landing.hero.ctaPrimary') }}</span>
             <ArrowRight class="h-4.5 w-4.5" />
+          </button>
+
+          <button
+            type="button"
+            class="btn btn-ghost h-12 sm:h-13 px-6 sm:px-7 rounded-xl text-sm sm:text-base font-semibold inline-flex items-center gap-2 cursor-pointer border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10"
+            @click="scrollToReferral"
+          >
+            <Gift class="h-4.5 w-4.5" aria-hidden="true" />
+            <span>{{ t('landing.hero.ctaRebates') }}</span>
           </button>
 
           <button
@@ -526,7 +614,7 @@ onMounted(() => {
 
       <!-- 5. 交易所直连与手续费返现通道 -->
       <section id="referral" class="w-full max-w-6xl xl:max-w-7xl px-4 sm:px-8 py-20 sm:py-28 border-t border-[var(--ds-color-border-default)]">
-        <div class="text-center max-w-3xl mx-auto mb-14">
+        <div class="text-center max-w-3xl mx-auto mb-10">
           <span class="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3.5 py-1 text-xs font-mono text-emerald-400 uppercase tracking-wider font-semibold">
             {{ t('landing.referral.tag') }}
           </span>
@@ -536,19 +624,139 @@ onMounted(() => {
           <p class="mt-3.5 text-sm sm:text-base md:text-lg text-[var(--ds-color-text-description)] leading-relaxed">
             {{ t('landing.referral.subtitle') }}
           </p>
+
+          <!-- 访问线路切换（国内镜像 / 海外官网） -->
+          <div class="mt-6 inline-flex items-center gap-2 rounded-xl border border-[var(--ds-color-border-default)] bg-[var(--ds-color-bg-surface-2)] p-1 text-xs font-mono">
+            <span class="px-2.5 text-[var(--ds-color-text-description)]">{{ t('landing.referral.mirrorLabel') }}</span>
+            <button
+              type="button"
+              class="h-8 px-3 rounded-lg cursor-pointer transition-colors"
+              :class="mirrorRegion === 'cn' ? 'bg-[var(--ds-color-bg-surface-card)] text-emerald-400 font-semibold border border-emerald-500/30' : 'text-[var(--ds-color-text-description)] hover:text-[var(--ds-color-text-primary)]'"
+              @click="mirrorRegion = 'cn'"
+            >
+              {{ t('landing.referral.mirrorCn') }}
+            </button>
+            <button
+              type="button"
+              class="h-8 px-3 rounded-lg cursor-pointer transition-colors"
+              :class="mirrorRegion === 'global' ? 'bg-[var(--ds-color-bg-surface-card)] text-emerald-400 font-semibold border border-emerald-500/30' : 'text-[var(--ds-color-text-description)] hover:text-[var(--ds-color-text-primary)]'"
+              @click="mirrorRegion = 'global'"
+            >
+              {{ t('landing.referral.mirrorGlobal') }}
+            </button>
+          </div>
         </div>
 
-        <!-- 专属通道卡片网格 -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 text-left">
+        <!-- 量化返佣试算器 -->
+        <div class="card rounded-2xl border border-[var(--ds-color-border-default)] bg-[var(--ds-color-bg-surface-card)] p-6 sm:p-7 mb-10 text-left">
+          <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+            <div class="space-y-4 flex-1">
+              <div>
+                <h3 class="text-lg font-bold text-[var(--ds-color-text-primary)]">
+                  {{ t('landing.referral.calcTitle') }}
+                </h3>
+                <p class="mt-1 text-xs text-[var(--ds-color-text-description)]">
+                  {{ t('landing.referral.calcSubtitle') }}
+                </p>
+              </div>
+
+              <div class="flex flex-col sm:flex-row sm:items-center gap-4">
+                <div class="space-y-1.5">
+                  <div class="text-xs font-mono text-[var(--ds-color-text-placeholder)]">
+                    {{ t('landing.referral.calcVolumeLabel') }}
+                  </div>
+                  <div class="flex flex-wrap gap-1.5">
+                    <button
+                      v-for="preset in VOLUME_PRESETS"
+                      :key="preset"
+                      type="button"
+                      class="h-8 px-3 rounded-lg border text-xs font-mono cursor-pointer transition-colors"
+                      :class="calcVolumeUsd === preset
+                        ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400 font-semibold'
+                        : 'border-[var(--ds-color-border-default)] bg-[var(--ds-color-bg-surface-2)] text-[var(--ds-color-text-secondary)] hover:text-[var(--ds-color-text-primary)]'"
+                      @click="calcVolumeUsd = preset"
+                    >
+                      {{ formatPreset(preset) }}
+                    </button>
+                  </div>
+                </div>
+
+                <div class="space-y-1.5">
+                  <div class="text-xs font-mono text-[var(--ds-color-text-placeholder)]">
+                    {{ t('landing.referral.calcVenueLabel') }}
+                  </div>
+                  <div class="flex flex-wrap gap-1.5">
+                    <button
+                      v-for="ch in promoChannels"
+                      :key="ch.key"
+                      type="button"
+                      class="h-8 px-3 rounded-lg border text-xs font-mono cursor-pointer transition-colors"
+                      :class="calcVenueKey === ch.key
+                        ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400 font-semibold'
+                        : 'border-[var(--ds-color-border-default)] bg-[var(--ds-color-bg-surface-2)] text-[var(--ds-color-text-secondary)] hover:text-[var(--ds-color-text-primary)]'"
+                      @click="calcVenueKey = ch.key"
+                    >
+                      {{ ch.name }} ({{ ch.rebate }})
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-3 gap-3 sm:gap-4 shrink-0 lg:min-w-[420px]">
+              <div class="rounded-xl border border-[var(--ds-color-border-default)] bg-[var(--ds-color-bg-surface-inset)] p-3.5">
+                <div class="text-3xs font-mono text-[var(--ds-color-text-placeholder)]">
+                  {{ t('landing.referral.calcMonthlyFee') }}
+                </div>
+                <div class="mt-1 text-lg sm:text-xl font-bold font-mono text-[var(--ds-color-text-primary)]">
+                  {{ formatUsd(calcMonthlyFee) }}
+                </div>
+              </div>
+              <div class="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3.5">
+                <div class="text-3xs font-mono text-emerald-400">
+                  {{ t('landing.referral.calcMonthlyRebate') }}
+                </div>
+                <div class="mt-1 text-lg sm:text-xl font-bold font-mono text-emerald-400">
+                  +{{ formatUsd(calcMonthlyRebate) }}
+                </div>
+              </div>
+              <div class="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3.5">
+                <div class="text-3xs font-mono text-emerald-400">
+                  {{ t('landing.referral.calcAnnualRebate') }}
+                </div>
+                <div class="mt-1 text-lg sm:text-xl font-bold font-mono text-emerald-400">
+                  +{{ formatUsd(calcAnnualRebate) }}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="activeCalcVenue" class="mt-4 pt-4 border-t border-[var(--ds-color-border-default)] flex justify-end">
+            <a
+              :href="activeCalcVenue.invite_url"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="btn btn-primary h-10 px-5 rounded-xl text-sm font-semibold inline-flex items-center gap-2"
+              @click="trackEvent('rebate_click', { exchange: activeCalcVenue.key, placement: 'landing_calculator', mirror: mirrorRegion })"
+            >
+              <span>{{ t('landing.referral.calcCta', undefined, { venue: activeCalcVenue.name }) }}</span>
+              <span class="sr-only">{{ t('common.opensInNewTab') }}</span>
+              <ExternalLink class="h-4 w-4" aria-hidden="true" />
+            </a>
+          </div>
+        </div>
+
+        <!-- 专属通道卡片网格 (4 交易所) -->
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5 text-left">
           <div
             v-for="ch in promoChannels"
             :key="ch.key"
-            class="card rounded-2xl p-7 sm:p-8 flex flex-col justify-between transition-all"
+            class="card rounded-2xl p-6 flex flex-col justify-between transition-all"
             :class="ch.isApiSupported ? 'border-emerald-500/30' : ''"
           >
             <div>
-              <div class="flex items-center justify-between mb-4">
-                <div class="flex items-center gap-2">
+              <div class="flex items-center justify-between mb-4 gap-2">
+                <div class="flex items-center gap-2 flex-wrap">
                   <span class="font-bold text-lg font-mono text-[var(--ds-color-text-primary)]">{{ ch.name }}</span>
                   <span
                     class="rounded text-3xs font-mono px-2 py-0.5 border"
@@ -560,7 +768,7 @@ onMounted(() => {
                   </span>
                 </div>
                 <span
-                  class="rounded-md text-xs font-mono font-semibold px-2.5 py-1 border"
+                  class="rounded-md text-xs font-mono font-semibold px-2.5 py-1 border shrink-0"
                   :class="ch.isApiSupported
                     ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
                     : 'bg-[var(--ds-color-bg-surface-2)] border-[var(--ds-color-border-default)] text-[var(--ds-color-text-secondary)]'"
@@ -574,40 +782,52 @@ onMounted(() => {
                 {{ ch.note }}
               </p>
 
-              <!-- 邀请码展示（若存在） -->
-              <div v-if="ch.code" class="text-sm font-mono text-[var(--ds-color-text-secondary)] mb-6 bg-[var(--ds-color-bg-surface-inset)] p-3 rounded-xl border border-[var(--ds-color-border-default)] flex items-center justify-between">
+              <!-- 邀请码展示与快捷复制 -->
+              <div v-if="ch.code" class="text-sm font-mono text-[var(--ds-color-text-secondary)] mb-5 bg-[var(--ds-color-bg-surface-inset)] p-3 rounded-xl border border-[var(--ds-color-border-default)] flex items-center justify-between gap-2">
                 <span class="text-[var(--ds-color-text-placeholder)] text-xs">{{ t('landing.referral.codeLabel') }}</span>
-                <span
-                  class="font-bold tracking-wider select-all"
-                  :class="ch.isApiSupported ? 'text-emerald-400' : 'text-[var(--ds-color-text-primary)]'"
-                >
-                  {{ ch.code }}
-                </span>
+                <div class="flex items-center gap-2 min-w-0">
+                  <span
+                    class="font-bold tracking-wider select-all truncate"
+                    :class="ch.isApiSupported ? 'text-emerald-400' : 'text-[var(--ds-color-text-primary)]'"
+                  >
+                    {{ ch.code }}
+                  </span>
+                  <button
+                    type="button"
+                    class="h-7 px-2 rounded-md border border-[var(--ds-color-border-default)] hover:bg-[var(--ds-color-bg-hover)] text-3xs font-mono cursor-pointer inline-flex items-center gap-1"
+                    :aria-label="copiedCodeKey === ch.key ? t('landing.referral.copiedCode') : t('landing.referral.copyCode')"
+                    @click="copyChannelCode(ch.code, ch.key)"
+                  >
+                    <Check v-if="copiedCodeKey === ch.key" class="h-3.5 w-3.5 text-emerald-400" aria-hidden="true" />
+                    <Copy v-else class="h-3.5 w-3.5" aria-hidden="true" />
+                  </button>
+                </div>
               </div>
             </div>
 
             <!-- 操作动作：前往开户 + 复制链接 -->
-            <div class="pt-5 border-t border-[var(--ds-color-border-default)] flex items-center gap-3">
-              <button
-                type="button"
-                class="flex-1 h-11 rounded-xl text-sm font-semibold inline-flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95 shadow-md"
-                :class="ch.isApiSupported
-                  ? 'btn btn-primary'
-                  : 'btn btn-ghost'"
-                @click="openExternal(ch.invite_url)"
+            <div class="pt-4 border-t border-[var(--ds-color-border-default)] flex items-center gap-2.5">
+              <a
+                :href="ch.invite_url"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="flex-1 h-11 rounded-xl text-sm font-semibold inline-flex items-center justify-center gap-2 transition-all shadow-md"
+                :class="ch.isApiSupported ? 'btn btn-primary' : 'btn btn-ghost'"
+                @click="trackEvent('rebate_click', { exchange: ch.key, placement: 'landing_card', mirror: mirrorRegion })"
               >
                 <span>{{ t('landing.referral.openAccount') }}</span>
+                <span class="sr-only">{{ t('common.opensInNewTab') }}</span>
                 <ExternalLink class="h-4 w-4" aria-hidden="true" />
-              </button>
+              </a>
 
               <button
                 type="button"
-                class="h-11 px-4 rounded-xl border border-[var(--ds-color-border-default)] bg-[var(--ds-color-bg-surface-2)] hover:bg-[var(--ds-color-bg-hover)] text-[var(--ds-color-text-secondary)] hover:text-[var(--ds-color-text-primary)] text-sm font-mono cursor-pointer inline-flex items-center gap-2 transition-colors"
+                class="h-11 px-3.5 rounded-xl border border-[var(--ds-color-border-default)] bg-[var(--ds-color-bg-surface-2)] hover:bg-[var(--ds-color-bg-hover)] text-[var(--ds-color-text-secondary)] hover:text-[var(--ds-color-text-primary)] text-sm font-mono cursor-pointer inline-flex items-center gap-2 transition-colors"
                 :aria-label="copiedChannelKey === ch.key ? t('landing.referral.copied') : t('landing.referral.copyLink')"
                 @click="copyChannelUrl(ch.invite_url, ch.key)"
               >
-                <Check v-if="copiedChannelKey === ch.key" class="h-4 w-4 text-emerald-400" />
-                <Copy v-else class="h-4 w-4" />
+                <Check v-if="copiedChannelKey === ch.key" class="h-4 w-4 text-emerald-400" aria-hidden="true" />
+                <Copy v-else class="h-4 w-4" aria-hidden="true" />
               </button>
             </div>
           </div>
@@ -621,6 +841,76 @@ onMounted(() => {
         <!-- 官方结算提示 -->
         <div class="mt-4 text-center text-xs font-mono text-[var(--ds-color-text-placeholder)]">
           {{ t('landing.referral.note') }}
+        </div>
+      </section>
+
+      <!-- 5.5 姊妹项目联动：TradeSkill (astraquant.tech) -->
+      <section id="ecosystem" class="w-full max-w-6xl xl:max-w-7xl px-4 sm:px-8 pb-20">
+        <div class="card rounded-2xl border border-emerald-500/25 bg-[var(--ds-color-bg-surface-card)] p-7 sm:p-10 text-left flex flex-col lg:flex-row lg:items-center justify-between gap-8">
+          <div class="space-y-4 max-w-2xl">
+            <span class="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-mono text-emerald-400 uppercase tracking-wider font-semibold inline-block">
+              {{ t('landing.ecosystem.tag') }}
+            </span>
+            <h2 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-[var(--ds-color-text-primary)] leading-snug">
+              {{ t('landing.ecosystem.title') }}
+            </h2>
+            <p class="text-sm sm:text-base text-[var(--ds-color-text-description)] leading-relaxed">
+              {{ t('landing.ecosystem.subtitle') }}
+            </p>
+            <div class="pt-2 flex flex-wrap items-center gap-3">
+              <a
+                :href="SKILLHUB_SITE"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="btn btn-primary h-11 px-5 rounded-xl text-sm font-semibold inline-flex items-center gap-2"
+                @click="trackEvent('crosslink_click', { target: 'skillhub', placement: 'landing_ecosystem' })"
+              >
+                <Cpu class="h-4 w-4" aria-hidden="true" />
+                <span>{{ t('landing.ecosystem.ctaPrimary') }}</span>
+                <span class="sr-only">{{ t('common.opensInNewTab') }}</span>
+                <ExternalLink class="h-4 w-4" aria-hidden="true" />
+              </a>
+              <a
+                :href="SKILLHUB_REPO"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="btn btn-ghost h-11 px-5 rounded-xl text-sm font-semibold inline-flex items-center gap-2"
+                @click="trackEvent('crosslink_click', { target: 'crypto_trading_skills_repo', placement: 'landing_ecosystem' })"
+              >
+                <Github class="h-4 w-4" aria-hidden="true" />
+                <span>{{ t('landing.ecosystem.ctaGithub') }}</span>
+                <span class="sr-only">{{ t('common.opensInNewTab') }}</span>
+                <ExternalLink class="h-4 w-4" aria-hidden="true" />
+              </a>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-3 gap-3 sm:gap-4 shrink-0">
+            <div class="rounded-xl border border-[var(--ds-color-border-default)] bg-[var(--ds-color-bg-surface-inset)] p-4 text-center">
+              <div class="text-2xl sm:text-3xl font-extrabold font-mono text-emerald-400">
+                {{ t('landing.ecosystem.stat1Val') }}
+              </div>
+              <div class="mt-1 text-xs font-mono text-[var(--ds-color-text-description)]">
+                {{ t('landing.ecosystem.stat1Label') }}
+              </div>
+            </div>
+            <div class="rounded-xl border border-[var(--ds-color-border-default)] bg-[var(--ds-color-bg-surface-inset)] p-4 text-center">
+              <div class="text-2xl sm:text-3xl font-extrabold font-mono text-[var(--ds-color-text-primary)]">
+                {{ t('landing.ecosystem.stat2Val') }}
+              </div>
+              <div class="mt-1 text-xs font-mono text-[var(--ds-color-text-description)]">
+                {{ t('landing.ecosystem.stat2Label') }}
+              </div>
+            </div>
+            <div class="rounded-xl border border-[var(--ds-color-border-default)] bg-[var(--ds-color-bg-surface-inset)] p-4 text-center">
+              <div class="text-2xl sm:text-3xl font-extrabold font-mono text-emerald-400">
+                {{ t('landing.ecosystem.stat3Val') }}
+              </div>
+              <div class="mt-1 text-xs font-mono text-[var(--ds-color-text-description)]">
+                {{ t('landing.ecosystem.stat3Label') }}
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -713,6 +1003,53 @@ onMounted(() => {
                 >
                   GitHub
                 </button>
+              </li>
+            </ul>
+          </div>
+
+          <div>
+            <div class="font-bold text-[var(--ds-color-text-primary)] uppercase tracking-wider mb-3">
+              {{ t('landing.footer.ecosystemTitle') }}
+            </div>
+            <ul class="space-y-2 list-none p-0 m-0">
+              <li>
+                <a
+                  :href="SKILLHUB_SITE"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="hover:text-[var(--ds-color-text-primary)] no-underline text-[var(--ds-color-text-description)] inline-flex items-center gap-1"
+                  @click="trackEvent('crosslink_click', { target: 'skillhub', placement: 'landing_footer' })"
+                >
+                  <span>{{ t('landing.footer.tradeSkill') }}</span>
+                  <span class="sr-only">{{ t('common.opensInNewTab') }}</span>
+                  <ExternalLink class="h-3.5 w-3.5 opacity-60" aria-hidden="true" />
+                </a>
+              </li>
+              <li>
+                <a
+                  :href="SKILLHUB_REBATES_URL"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="hover:text-[var(--ds-color-text-primary)] no-underline text-[var(--ds-color-text-description)] inline-flex items-center gap-1"
+                  @click="trackEvent('crosslink_click', { target: 'skillhub_rebates', placement: 'landing_footer' })"
+                >
+                  <span>{{ t('landing.footer.rebatesGuide') }}</span>
+                  <span class="sr-only">{{ t('common.opensInNewTab') }}</span>
+                  <ExternalLink class="h-3.5 w-3.5 opacity-60" aria-hidden="true" />
+                </a>
+              </li>
+              <li>
+                <a
+                  :href="SKILLHUB_REPO"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="hover:text-[var(--ds-color-text-primary)] no-underline text-[var(--ds-color-text-description)] inline-flex items-center gap-1"
+                  @click="trackEvent('crosslink_click', { target: 'crypto_trading_skills_repo', placement: 'landing_footer' })"
+                >
+                  <span>{{ t('landing.footer.skillsRepo') }}</span>
+                  <span class="sr-only">{{ t('common.opensInNewTab') }}</span>
+                  <ExternalLink class="h-3.5 w-3.5 opacity-60" aria-hidden="true" />
+                </a>
               </li>
             </ul>
           </div>

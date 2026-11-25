@@ -26,9 +26,17 @@ import {
   Github,
   Scale,
   Zap,
+  ExternalLink,
 } from 'lucide-vue-next';
-import { APP_VERSION, APP_NAME, OFFICIAL_REPO } from '../../config/version';
+import {
+  APP_VERSION,
+  APP_NAME,
+  OFFICIAL_REPO,
+  SKILLHUB_SITE,
+  SKILLHUB_REPO,
+} from '../../config/version';
 import { useI18n } from '../../composables/useI18n';
+import { trackEvent } from '../../utils/analytics';
 
 const router = useRouter();
 const { t } = useI18n();
@@ -692,6 +700,38 @@ onUnmounted(() => {
               <p class="text-[var(--ink-2)] leading-body">
                 A: 单一交易所使得 API 签约路径单一、订单状态机极简高内聚，完全消除了跨交易所抽象层带来的执行延迟与对账分歧。
               </p>
+            </div>
+            <div class="dsh-card-sub p-3 space-y-2">
+              <h3 class="font-bold text-[var(--ink-strong)]">Q: 如何在 Claude Code / Codex / Cursor 等 AI 助手中使用加密货币交易技能？</h3>
+              <p class="text-[var(--ink-2)] leading-body">
+                A: 欢迎访问我们的姊妹项目 <strong>TradeSkill (astraquant.tech)</strong>，获取支持 15 个 AI 客户端的 156+ 开源加密货币交易技能与 4 大交易所同步手续费返佣通道。
+              </p>
+              <div class="flex flex-wrap items-center gap-2 pt-1">
+                <a
+                  :href="SKILLHUB_SITE"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="btn btn-primary btn-sm inline-flex items-center gap-1.5"
+                  @click="trackEvent('crosslink_click', { target: 'skillhub', placement: 'docs_faq' })"
+                >
+                  <Cpu class="w-3.5 h-3.5" aria-hidden="true" />
+                  <span>TradeSkill 技能中心</span>
+                  <span class="sr-only">{{ t('common.opensInNewTab') }}</span>
+                  <ExternalLink class="w-3.5 h-3.5" aria-hidden="true" />
+                </a>
+                <a
+                  :href="SKILLHUB_REPO"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="btn btn-quiet btn-sm inline-flex items-center gap-1.5"
+                  @click="trackEvent('crosslink_click', { target: 'crypto_trading_skills_repo', placement: 'docs_faq' })"
+                >
+                  <Github class="w-3.5 h-3.5" aria-hidden="true" />
+                  <span>crypto-trading-skills</span>
+                  <span class="sr-only">{{ t('common.opensInNewTab') }}</span>
+                  <ExternalLink class="w-3.5 h-3.5" aria-hidden="true" />
+                </a>
+              </div>
             </div>
           </div>
         </section>

@@ -59,13 +59,14 @@ git clone https://github.com/0xethanq/astra-quant-agent.git && cd astra-quant-ag
 
 ## 交易所开户与手续费返现
 
-> **交易接口兼容性声明**：AstraQuant 量化执行引擎**目前仅支持直连 OKX 原生 API**。币安 (Binance) 与芝麻开门 (Gate.io) 仅作为社区合作推荐开户通道提供最高手续费返现优惠，本系统暂不支持非 OKX 平台的 API 直连下单。
+> **交易接口兼容性声明**：AstraQuant 量化执行引擎**目前仅支持直连 OKX 原生 API**。币安 (Binance)、芝麻开门 (Gate.io) 与 Bitget 仅作为社区合作推荐开户通道提供手续费返现优惠，本系统暂不支持非 OKX 平台的 API 直连下单。
 
-| 交易所 | 平台角色与兼容性 | 专属开户通道 | 邀请码 | 特别说明 |
+| 交易所 | 平台角色与兼容性 | 海外官网 / 国内镜像通道 | 邀请码 | 返佣比例与特别说明 |
 |---|---|---|---|---|
-| **OKX 欧易** | **系统实盘直连** (核心执行支持) | [前往 OKX 注册开户](https://www.mitxcqvwnhj.com/join/48039151) | `48039151` | 支持新用户及 **180 天未登录老用户重新绑定** 享受费率返还 |
-| **Binance 币安** | 仅生态合作推广 (不支持 API 交易) | [前往币安注册开户](https://www.bsmkweb.cc/activity/referral-entry/CPA?ref=CPA_00N8UVQ2OG) | `CPA_00N8UVQ2OG` | 专属手续费减免链接；量化系统暂不支持直连下单 |
-| **Gate.io 芝麻开门** | 仅生态合作推广 (不支持 API 交易) | [前往 Gate 注册开户](https://www.gatesites.net/share/MCHDBKYF) | `MCHDBKYF` | 专属手续费减免链接；量化系统暂不支持直连下单 |
+| **OKX 欧易** | **系统实盘直连** (核心执行支持) | [海外官网](https://www.okx.com/join/48039151) / [国内直连](https://www.mitxcqvwnhj.com/join/48039151) | `48039151` | **20% 返佣** · 支持新用户及 **180 天未登录老用户重新绑定** |
+| **Binance 币安** | 仅生态合作推广 (不支持 API 交易) | [海外官网](https://accounts.binance.com/register?ref=1142479220) / [国内直连](https://www.bsmkweb.net/register?ref=1142479220) | `1142479220` | **20% 返佣** · 现货与合约手续费返还 |
+| **Gate.io 芝麻开门** | 仅生态合作推广 (不支持 API 交易) | [海外官网](https://www.gate.com/share/MCHDBKYF) / [国内直连](https://www.gatewebsite.com/share/MCHDBKYF) | `MCHDBKYF` | **20% 返佣** · 专属手续费减免通道 |
+| **Bitget** | 仅生态合作推广 (不支持 API 交易) | [海外官网](https://www.bitget.com/referral/register?clacCode=DY6CJDUY&source=events&utmSource=PremierInviter) / [国内直连](https://www.bitget.ninja/zh-CN/referral/register?clacCode=DY6CJDUY&from=%2Fzh-CN%2Factivity%2Freferral-all-program&source=events&utmSource=PremierInviter) | `DY6CJDUY` | **15% 返佣** · 专属手续费减免通道 |
 
 ---
 
@@ -234,7 +235,8 @@ backend/.venv/bin/ruff check backend
 
 ## 品牌与内部代号
 
-- **公开品牌**：**AstraQuant** — <https://www.astraquant.tech>
+- **公开品牌**：**AstraQuant** — <https://astraquant.top>
+- **姊妹项目**：**TradeSkill（AI 加密货币交易技能中心）** — <https://astraquant.tech> · [`0xethanq/crypto-trading-skills`](https://github.com/0xethanq/crypto-trading-skills)
 - **内部命名空间**：**`astra`**（包名 `astra_backend`, `astra_gateway`；配置前缀 `ASTRA_*`）
 
 ### 历史兼容标记（保留项）

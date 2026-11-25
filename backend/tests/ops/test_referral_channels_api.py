@@ -39,18 +39,22 @@ class InviteCodeTest(unittest.TestCase):
     """短码抽取是纯函数，逐形状钉住。"""
 
     def test_query_param_wins_over_path_tail(self):
-        """码放在 `?ref=` 时：路径末段是 `CPA`（无意义），必须以查询参数为准。"""
+        """码放在 `?ref=` / `?clacCode=` 时：必须以查询参数为准。"""
         self.assertEqual(
             system_router._invite_code(
-                "https://www.bsmkweb.cc/activity/referral-entry/CPA?ref=CPA_00N8UVQ2OG"),
-            "CPA_00N8UVQ2OG")
+                "https://www.bsmkweb.net/register?ref=1142479220"),
+            "1142479220")
+        self.assertEqual(
+            system_router._invite_code(
+                "https://www.bitget.com/referral/register?clacCode=DY6CJDUY&source=events"),
+            "DY6CJDUY")
 
     def test_path_tail_is_used_when_no_query(self):
         self.assertEqual(
             system_router._invite_code("https://www.mitxcqvwnhj.com/join/48039151"),
             "48039151")
         self.assertEqual(
-            system_router._invite_code("https://www.gatesites.net/share/MCHDBKYF"),
+            system_router._invite_code("https://www.gatewebsite.com/share/MCHDBKYF"),
             "MCHDBKYF")
 
     def test_degenerate_inputs_yield_empty_not_garbage(self):
@@ -79,6 +83,15 @@ class ReferralChannelsApiTest(unittest.TestCase):
             if ch["invite_url"]:
                 self.assertTrue(ch["code"], f"{ch['key']} 配了链接却没抽出短码")
                 self.assertTrue(ch["invite_url"].startswith("http"), ch["invite_url"])
+                self.assertTrue(ch["global_url"].startswith("https://"), ch["global_url"])
+                self.assertTrue(ch["rebate"], f"{ch['key']} 缺少返佣比例展示字段")
+
+        partner_keys = [c["key"] for c in body["partner_channels"]]
+        self.assertEqual(partner_keys, ["binance", "gate", "bitget"])
+        for ch in body["partner_channels"]:
+            self.assertTrue(ch["code"], f"{ch['key']} 配了链接却没抽出短码")
+            self.assertTrue(ch["global_url"].startswith("https://"), ch["global_url"])
+            self.assertTrue(ch["rebate"], f"{ch['key']} 缺少返佣比例展示字段")
 
     def test_env_override_is_actually_honoured(self):
         """这条正是上一版失效的能力：覆盖必须**真的**反映到用户可见的那份数据。"""

@@ -749,13 +749,31 @@ def update_application(
 # 公开是安全的：这本就是给人点的邀请链接，不含任何凭证。
 
 CHANNEL_SPECS = (
-    ("okx", "OKX", "okx_invite_url"),
+    ("okx", "OKX", "okx_invite_url", "okx_invite_url_global", "20%"),
 )
 
 PARTNER_CHANNEL_SPECS = (
-    ("binance", "Binance", "binance_invite_url"),
-    ("gate", "Gate.io", "gate_invite_url"),
+    ("binance", "Binance", "binance_invite_url", "binance_invite_url_global", "20%"),
+    ("gate", "Gate.io", "gate_invite_url", "gate_invite_url_global", "20%"),
+    ("bitget", "Bitget", "bitget_invite_url", "bitget_invite_url_global", "15%"),
 )
+
+
+def _build_channels(specs: tuple[tuple[str, str, str, str, str], ...]) -> list[dict[str, str]]:
+    refresh_settings()
+    channels = []
+    for key, name, attr, global_attr, rebate in specs:
+        url = str(getattr(settings, attr, "") or "").strip()
+        global_url = str(getattr(settings, global_attr, "") or "").strip()
+        channels.append({
+            "key": key,
+            "name": name,
+            "invite_url": url,
+            "global_url": global_url,
+            "code": _invite_code(url) if url else "",
+            "rebate": rebate,
+        })
+    return channels
 
 
 def _invite_code(url: str) -> str:
@@ -771,7 +789,7 @@ def _invite_code(url: str) -> str:
     if parts.scheme not in ("http", "https") or not parts.netloc:
         return ""
     query = parse_qs(parts.query)
-    for key in ("ref", "code", "invite", "affiliate"):
+    for key in ("ref", "clacCode", "code", "invite", "affiliate"):
         values = [str(v).strip() for v in (query.get(key) or []) if str(v).strip()]
         if values:
             return values[0]
@@ -787,23 +805,13 @@ def _channel_payload() -> list[dict[str, Any]]:
     订单带不带 tag 与它显示与否**无关**：`okx_rest._with_broker_tag` 是唯一出口，
     无条件挂载（不看账户、不看 demo/live）。此前那个"管理员版"接口即因此删除。
     """
-    refresh_settings()
-    channels = []
-    for key, name, attr in CHANNEL_SPECS:
-        url = str(getattr(settings, attr, "") or "").strip()
-        channels.append({"key": key, "name": name, "invite_url": url,
-                         "code": _invite_code(url) if url else ""})
+    channels = _build_channels(CHANNEL_SPECS)
     return channels
 
 
 def _partner_channel_payload() -> list[dict[str, Any]]:
     """社区生态推广通道载荷（币安 / Gate 等；仅供开户返佣，不作为系统 API 执行渠道）。"""
-    refresh_settings()
-    channels = []
-    for key, name, attr in PARTNER_CHANNEL_SPECS:
-        url = str(getattr(settings, attr, "") or "").strip()
-        channels.append({"key": key, "name": name, "invite_url": url,
-                         "code": _invite_code(url) if url else ""})
+    channels = _build_channels(PARTNER_CHANNEL_SPECS)
     return channels
 
 

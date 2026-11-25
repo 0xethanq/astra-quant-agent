@@ -1,13 +1,20 @@
 <script setup lang="ts">
 /** 关于与社区弹窗：架构 / 仓库 / QQ / LINUX DO / 许可与风险提示 */
 import { onMounted } from 'vue';
-import { Github, ShieldCheck, ExternalLink, Globe } from 'lucide-vue-next';
+import { Github, ShieldCheck, ExternalLink, Globe, Cpu } from 'lucide-vue-next';
 import BaseDialog from '../base/BaseDialog.vue';
 import CopyButton from '../base/CopyButton.vue';
 import { useUi } from '../../composables/useUi';
 import { useI18n } from '../../composables/useI18n';
 import { useReferralChannels } from '../../composables/useReferralChannels';
-import { APP_VERSION, BRAND_REVISION, OFFICIAL_REPO, OFFICIAL_SITE } from '../../config/version';
+import {
+  APP_VERSION,
+  BRAND_REVISION,
+  OFFICIAL_REPO,
+  OFFICIAL_SITE,
+  SKILLHUB_SITE,
+} from '../../config/version';
+import { trackEvent } from '../../utils/analytics';
 
 const { aboutOpen } = useUi();
 const { t, tm } = useI18n();
@@ -78,7 +85,21 @@ onMounted(loadChannels);
       class="btn btn-quiet mt-2 w-full"
     >
       <Globe aria-hidden="true" />
-      www.astraquant.tech
+      astraquant.top
+      <span class="sr-only">{{ t('common.opensInNewTab') }}</span>
+      <ExternalLink class="h-3.5 w-3.5 opacity-70" aria-hidden="true" />
+    </a>
+
+    <!-- 姊妹项目：TradeSkill AI 加密交易技能中心 -->
+    <a
+      :href="SKILLHUB_SITE"
+      target="_blank"
+      rel="noopener noreferrer"
+      class="btn btn-quiet mt-2 w-full"
+      @click="trackEvent('crosslink_click', { target: 'skillhub', placement: 'about_modal' })"
+    >
+      <Cpu aria-hidden="true" />
+      {{ t('dash.about.skillhubVisit') }}
       <span class="sr-only">{{ t('common.opensInNewTab') }}</span>
       <ExternalLink class="h-3.5 w-3.5 opacity-70" aria-hidden="true" />
     </a>

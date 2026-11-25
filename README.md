@@ -59,13 +59,14 @@ git clone https://github.com/0xethanq/astra-quant-agent.git && cd astra-quant-ag
 
 ## Exchange Referral & Fee Rebates
 
-> **Trading API Compatibility Notice**: AstraQuant's autonomous execution engine **only supports OKX native API**. Binance and Gate.io are community partner links provided solely for registration discounts and fee rebates; our automated trading system does not support direct API execution on other exchanges.
+> **Trading API Compatibility Notice**: AstraQuant's autonomous execution engine **only supports OKX native API**. Binance, Gate.io, and Bitget are community partner links provided solely for registration discounts and fee rebates; our automated trading system does not support direct API execution on other exchanges.
 
-| Exchange | Role & Compatibility | Referral Link | Code | Special Note |
+| Exchange | Role & Compatibility | Global / CN Mirrors | Code | Rebate & Note |
 |---|---|---|---|---|
-| **OKX** | **Native Trading Supported** (Official Engine Target) | [Register on OKX](https://www.mitxcqvwnhj.com/join/48039151) | `48039151` | Supports new accounts & **dormant accounts (inactive > 180 days)** |
-| **Binance** | Partner Promotion Only (No API Trading) | [Register on Binance](https://www.bsmkweb.cc/activity/referral-entry/CPA?ref=CPA_00N8UVQ2OG) | `CPA_00N8UVQ2OG` | Exclusive fee rebate link; not supported by trading engine |
-| **Gate.io** | Partner Promotion Only (No API Trading) | [Register on Gate](https://www.gatesites.net/share/MCHDBKYF) | `MCHDBKYF` | Exclusive fee rebate link; not supported by trading engine |
+| **OKX** | **Native Trading Supported** (Official Engine Target) | [Global](https://www.okx.com/join/48039151) / [CN Mirror](https://www.mitxcqvwnhj.com/join/48039151) | `48039151` | **20% Fee Rebate** · New accounts & **dormant accounts (> 180 days)** |
+| **Binance** | Partner Promotion Only (No API Trading) | [Global](https://accounts.binance.com/register?ref=1142479220) / [CN Mirror](https://www.bsmkweb.net/register?ref=1142479220) | `1142479220` | **20% Fee Rebate** · Spot & Futures fee discount |
+| **Gate.io** | Partner Promotion Only (No API Trading) | [Global](https://www.gate.com/share/MCHDBKYF) / [CN Mirror](https://www.gatewebsite.com/share/MCHDBKYF) | `MCHDBKYF` | **20% Fee Rebate** · Exclusive partner link |
+| **Bitget** | Partner Promotion Only (No API Trading) | [Global](https://www.bitget.com/referral/register?clacCode=DY6CJDUY&source=events&utmSource=PremierInviter) / [CN Mirror](https://www.bitget.ninja/zh-CN/referral/register?clacCode=DY6CJDUY&from=%2Fzh-CN%2Factivity%2Freferral-all-program&source=events&utmSource=PremierInviter) | `DY6CJDUY` | **15% Fee Rebate** · Exclusive partner link |
 
 ---
 
@@ -236,7 +237,8 @@ backend/.venv/bin/ruff check backend
 
 ## Brand & Namespace Governance
 
-- **Public Brand**: **AstraQuant** — <https://www.astraquant.tech>
+- **Public Brand**: **AstraQuant** — <https://astraquant.top>
+- **Sister Project**: **TradeSkill (AI Crypto Trading Skills Hub)** — <https://astraquant.tech> · [`0xethanq/crypto-trading-skills`](https://github.com/0xethanq/crypto-trading-skills)
 - **Internal Namespace**: **`astra`** (packages `astra_backend`, `astra_gateway`; configuration prefix `ASTRA_*`)
 
 ### Intentional Legacy Markers — Do Not Rename

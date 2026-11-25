@@ -31,6 +31,7 @@ const NewsView = defineAsyncComponent(() => import('../views/dashboard/NewsView.
 const EvolutionView = defineAsyncComponent(() => import('../views/dashboard/EvolutionView.vue'));
 const LedgerView = defineAsyncComponent(() => import('../views/dashboard/LedgerView.vue'));
 import AboutModal from '../components/dashboard/AboutModal.vue';
+import RebateModal from '../components/dashboard/RebateModal.vue';
 import SkipLink from '../components/base/SkipLink.vue';
 import TrajectoryPanel from '../components/dashboard/TrajectoryPanel.vue';
 
@@ -273,5 +274,6 @@ function go(path: string) {
     <!-- 全局浮层组件 -->
     <TrajectoryPanel :open="trajectoryOpen" @close="trajectoryOpen = false" />
     <AboutModal />
+    <RebateModal />
   </div>
 </template>

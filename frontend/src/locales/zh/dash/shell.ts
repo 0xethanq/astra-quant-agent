@@ -46,7 +46,8 @@ export const zhShell = {
   // ── 批 29：壳层此前有 11 处中文写死在模板里（导航分组名、
   //    折叠按钮 title/aria、关于系统按钮、实时流指示灯 title）。
   //    英文模式下这些位置仍然是中文，逐条收进语言包。 ──
-trajectoryBtn: '决策轨迹',
+  trajectoryBtn: '决策轨迹',
+  rebateBtn: '返佣通道 · 20%',
   updateAvailable: '发现新版本',
   updateTooltip: '发现远端新版本 (落后 {n} 个提交)，点击前往更新',
   nav: {
@@ -55,6 +56,7 @@ trajectoryBtn: '决策轨迹',
     groupRef: '参考文档',
     docs: '系统文档',
     docsTitle: '系统文档',
+    skills: 'AI 技能中心',
     collapse: '折叠侧边栏',
     expand: '展开侧边栏',
     closeMobile: '收起导航',

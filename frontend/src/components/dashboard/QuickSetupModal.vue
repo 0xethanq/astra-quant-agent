@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useI18n } from '../../composables/useI18n';
 import { useApi } from '../../composables/useApi';
+import { resolveChannelUrl, useReferralChannels } from '../../composables/useReferralChannels';
+import { trackEvent } from '../../utils/analytics';
 import BaseDialog from '../base/BaseDialog.vue';
 import {
   KeyRound,
@@ -11,6 +13,8 @@ import {
   AlertTriangle,
   Loader2,
   Sparkles,
+  ExternalLink,
+  Gift,
 } from 'lucide-vue-next';
 
 defineProps<{
@@ -22,8 +26,18 @@ const emit = defineEmits<{
   (e: 'saved'): void;
 }>();
 
-const { t } = useI18n();
+const { t, currentLocale } = useI18n();
 const { api } = useApi();
+const { channels, load: loadChannels } = useReferralChannels();
+
+onMounted(loadChannels);
+
+const okxChannel = computed(() => channels.value.find((c) => c.key === 'okx') || null);
+const okxInviteHref = computed(() =>
+  okxChannel.value
+    ? resolveChannelUrl(okxChannel.value, currentLocale.value === 'zh-CN' ? 'cn' : 'global')
+    : '',
+);
 
 const currentStep = ref(1);
 
@@ -279,6 +293,35 @@ async function handleApply() {
               spellcheck="false"
             />
           </div>
+        </div>
+
+        <div
+          v-if="okxChannel && okxInviteHref"
+          class="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
+        >
+          <div class="min-w-0 space-y-0.5">
+            <div class="flex items-center gap-1.5 text-xs font-semibold text-emerald-400">
+              <Gift class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <span>{{ t('dash.firstRun.okxPromoTitle') }}</span>
+            </div>
+            <p class="text-xs leading-relaxed text-[var(--ink-2)]">
+              {{ t('dash.firstRun.okxPromoDesc') }}
+              <span v-if="okxChannel.code" class="ml-1 font-mono font-semibold text-emerald-400">
+                ({{ t('dash.firstRun.okxPromoCode') }}: {{ okxChannel.code }})
+              </span>
+            </p>
+          </div>
+          <a
+            :href="okxInviteHref"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="btn btn-primary btn-sm shrink-0 inline-flex items-center gap-1.5"
+            @click="trackEvent('rebate_click', { exchange: 'okx', placement: 'quick_setup_step1' })"
+          >
+            <span>{{ t('dash.firstRun.okxPromoCta') }}</span>
+            <span class="sr-only">{{ t('common.opensInNewTab') }}</span>
+            <ExternalLink class="h-3.5 w-3.5" aria-hidden="true" />
+          </a>
         </div>
 
         <div class="flex items-center justify-between pt-1">

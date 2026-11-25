@@ -14,6 +14,15 @@ export const zhAbout = {
     ],
   },
   repo: { title: '开源代码仓库', visit: '访问 GitHub 仓库', starHint: '欢迎 Star 与 Issue' },
+  skillhubVisit: '访问 TradeSkill 技能中心 (astraquant.tech)',
+  rebateModal: {
+    title: '交易所官方返佣与开户通道',
+    desc: '通过专属邀请码开户或满足 180 天老用户召回条件绑定，享最高阶梯手续费返现，不影响你的交易费率。',
+    mirrorCn: '国内直连线路',
+    mirrorGlobal: '海外官网线路',
+    copyCode: '复制邀请码',
+    footerLink: '前往 TradeSkill 查看完整 4 家交易所返佣指南与费率计算器',
+  },
   community: {
     title: '生态与交流',
     qqGroup: '官方技术交流群',

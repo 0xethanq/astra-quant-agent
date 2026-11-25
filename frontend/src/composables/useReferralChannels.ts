@@ -29,8 +29,25 @@ export interface ReferralChannel {
   key: string;
   name: string;
   invite_url: string;
-  /** 展示用短码（后端从链接里抽；抽不到为空串） */
+  /** Global official domain fallback URL returned by backend */
+  global_url?: string;
+  /** Rebate percentage badge returned by backend (e.g. '20%', '15%') */
+  rebate?: string;
+  /** Display referral code extracted by backend (empty if unavailable) */
   code: string;
+}
+
+export type MirrorRegion = 'cn' | 'global';
+
+export function resolveChannelUrl(
+  ch: ReferralChannel | null | undefined,
+  mirror: MirrorRegion = 'cn',
+): string {
+  if (!ch) return '';
+  if (mirror === 'global') {
+    return (ch.global_url || ch.invite_url || '').trim();
+  }
+  return (ch.invite_url || ch.global_url || '').trim();
 }
 
 const channels: Ref<ReferralChannel[]> = ref([]);
@@ -55,10 +72,10 @@ export function useReferralChannels() {
       .then((res) => {
         // 只保留「真的有地址」的 OKX 通道：其余条目既不渲染也不报错
         channels.value = (res?.channels || []).filter(
-          (c) => !!c?.invite_url && isOkxChannel(c),
+          (c) => !!(c?.invite_url || c?.global_url) && isOkxChannel(c),
         );
         partnerChannels.value = (res?.partner_channels || []).filter(
-          (c) => !!c?.invite_url,
+          (c) => !!(c?.invite_url || c?.global_url),
         );
         loaded.value = true;
         return channels.value;

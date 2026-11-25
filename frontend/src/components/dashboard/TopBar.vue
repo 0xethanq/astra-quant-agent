@@ -14,11 +14,16 @@ import {
   Activity,
   BookOpen,
   ArrowUpCircle,
+  Cpu,
+  ExternalLink,
+  Gift,
 } from 'lucide-vue-next';
 import { publicTabs } from '../../config/nav';
+import { SKILLHUB_SITE } from '../../config/version';
 import { useI18n } from '../../composables/useI18n';
 import { useUi } from '../../composables/useUi';
 import { useUpdateNotice } from '../../composables/useUpdateNotice';
+import { trackEvent } from '../../utils/analytics';
 import DataStatus from './DataStatus.vue';
 import SettingsPopover from './SettingsPopover.vue';
 
@@ -34,7 +39,7 @@ const emit = defineEmits<{
 const route = useRoute();
 const router = useRouter();
 const { t } = useI18n();
-const { trajectoryOpen } = useUi();
+const { trajectoryOpen, rebateOpen } = useUi();
 const { updateAvailable, behindCount } = useUpdateNotice();
 
 const activeTabKey = computed(() => {
@@ -98,11 +103,33 @@ function go(path: string) {
           <BookOpen class="h-3.5 w-3.5" :class="route.path === '/docs' ? 'text-emerald-400' : 'opacity-70'" />
           <span>{{ t('dash.shell.nav.docs') }}</span>
         </button>
+
+        <a
+          :href="SKILLHUB_SITE"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors border border-transparent whitespace-nowrap text-[var(--ink-2)] hover:bg-[var(--surface-2)] hover:text-[var(--ink-1)]"
+          @click="trackEvent('crosslink_click', { target: 'skillhub', placement: 'dashboard_topbar' })"
+        >
+          <Cpu class="h-3.5 w-3.5 opacity-70" aria-hidden="true" />
+          <span>{{ t('dash.shell.nav.skills') }}</span>
+          <span class="sr-only">{{ t('common.opensInNewTab') }}</span>
+          <ExternalLink class="h-3.5 w-3.5 opacity-60" aria-hidden="true" />
+        </a>
       </nav>
     </div>
 
-    <!-- 右侧：更新提醒 + 数据状态 + 决策轨迹 + 偏好设置 -->
+    <!-- 右侧：返佣入口 + 更新提醒 + 数据状态 + 决策轨迹 + 偏好设置 -->
     <div class="flex items-center gap-1.5 shrink-0">
+      <button
+        type="button"
+        class="inline-flex h-7 items-center gap-1.5 rounded-lg border px-2 text-xs font-semibold cursor-pointer transition-colors bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20"
+        :title="t('dash.about.rebateModal.title')"
+        @click="rebateOpen = true; trackEvent('rebate_modal_open', { placement: 'dashboard_topbar' })"
+      >
+        <Gift class="h-3.5 w-3.5 text-emerald-400" aria-hidden="true" />
+        <span class="hidden sm:inline">{{ t('dash.shell.rebateBtn') }}</span>
+      </button>
       <!-- 远端新版本更新提醒 -->
       <button
         v-if="updateAvailable"

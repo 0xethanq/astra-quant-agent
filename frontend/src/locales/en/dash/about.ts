@@ -13,6 +13,15 @@ export const enAbout = {
     ],
   },
   repo: { title: 'Open-Source Repository', visit: 'Visit GitHub Repo', starHint: 'Stars & architectural discussions welcome' },
+  skillhubVisit: 'Explore TradeSkill Hub (astraquant.tech)',
+  rebateModal: {
+    title: 'Official Exchange Rebate Channels',
+    desc: 'Register or re-bind a 180-day dormant account to unlock maximum tiered fee rebates at zero extra spread or fee markup.',
+    mirrorCn: 'CN Access Mirror',
+    mirrorGlobal: 'Global Direct',
+    copyCode: 'Copy Code',
+    footerLink: 'View full 4-exchange rebate guide & fee calculator on TradeSkill',
+  },
   community: {
     title: 'Ecosystem & Community',
     qqGroup: 'Official Quant Group',
