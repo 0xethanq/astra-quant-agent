@@ -13,7 +13,7 @@ export const BRAND_REVISION = '2026.10.03-v861'
 export const OFFICIAL_REPO = 'https://github.com/0xethanq/astra-quant-agent'
 /** 官网（自有域名，canonical/og:url 同源） */
 export const OFFICIAL_SITE = 'https://astraquant.top'
-export const SKILLHUB_SITE = 'https://astraquant.tech'
-export const SKILLHUB_REBATES_URL = 'https://astraquant.tech/rebates.html'
+export const SKILLHUB_SITE = 'https://tradeskill.si'
+export const SKILLHUB_REBATES_URL = 'https://tradeskill.si/rebates.html'
 export const SKILLHUB_REPO = 'https://github.com/0xethanq/crypto-trading-skills'
 export const OFFICIAL_NOTICE = `AstraQuant 官方仓库：${OFFICIAL_REPO}`

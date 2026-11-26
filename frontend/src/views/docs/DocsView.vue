@@ -704,7 +704,7 @@ onUnmounted(() => {
             <div class="dsh-card-sub p-3 space-y-2">
               <h3 class="font-bold text-[var(--ink-strong)]">Q: 如何在 Claude Code / Codex / Cursor 等 AI 助手中使用加密货币交易技能？</h3>
               <p class="text-[var(--ink-2)] leading-body">
-                A: 欢迎访问我们的姊妹项目 <strong>TradeSkill (astraquant.tech)</strong>，获取支持 15 个 AI 客户端的 156+ 开源加密货币交易技能与 4 大交易所同步手续费返佣通道。
+                A: 欢迎访问我们的姊妹项目 <strong>TradeSkill (tradeskill.si)</strong>，获取支持 15 个 AI 客户端的 156+ 开源加密货币交易技能与 4 大交易所同步手续费返佣通道。
               </p>
               <div class="flex flex-wrap items-center gap-2 pt-1">
                 <a

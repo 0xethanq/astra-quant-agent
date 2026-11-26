@@ -14,7 +14,7 @@ export const zhAbout = {
     ],
   },
   repo: { title: '开源代码仓库', visit: '访问 GitHub 仓库', starHint: '欢迎 Star 与 Issue' },
-  skillhubVisit: '访问 TradeSkill 技能中心 (astraquant.tech)',
+  skillhubVisit: '访问 TradeSkill 技能中心 (tradeskill.si)',
   rebateModal: {
     title: '交易所官方返佣与开户通道',
     desc: '通过专属邀请码开户或满足 180 天老用户召回条件绑定，享最高阶梯手续费返现，不影响你的交易费率。',

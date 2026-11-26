@@ -156,14 +156,14 @@ export const enLanding = {
   ecosystem: {
     tag: 'SISTER PROJECT · TRADESKILL HUB',
     title: 'Paired with TradeSkill: Equip Your AI Coding Agent for Crypto',
-    subtitle: 'Alongside the 24/7 autonomous AstraQuant terminal, we maintain TradeSkill (astraquant.tech) and crypto-trading-skills — giving Claude Code, OpenAI Codex, Cursor, and Gemini CLI modular OKX execution, arbitrage, and research skills.',
+    subtitle: 'Alongside the 24/7 autonomous AstraQuant terminal, we maintain TradeSkill (tradeskill.si) and crypto-trading-skills — giving Claude Code, OpenAI Codex, Cursor, and Gemini CLI modular OKX execution, arbitrage, and research skills.',
     stat1Val: '156+',
     stat1Label: 'Curated Trading Skills',
     stat2Val: '15',
     stat2Label: 'Supported AI Platforms',
     stat3Val: '20%',
     stat3Label: 'Synced Rebate Channels',
-    ctaPrimary: 'Visit TradeSkill (astraquant.tech)',
+    ctaPrimary: 'Visit TradeSkill (tradeskill.si)',
     ctaGithub: 'Explore Skills Repo',
   },
   specs: {

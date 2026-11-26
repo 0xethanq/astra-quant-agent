@@ -13,7 +13,7 @@ export const enAbout = {
     ],
   },
   repo: { title: 'Open-Source Repository', visit: 'Visit GitHub Repo', starHint: 'Stars & architectural discussions welcome' },
-  skillhubVisit: 'Explore TradeSkill Hub (astraquant.tech)',
+  skillhubVisit: 'Explore TradeSkill Hub (tradeskill.si)',
   rebateModal: {
     title: 'Official Exchange Rebate Channels',
     desc: 'Register or re-bind a 180-day dormant account to unlock maximum tiered fee rebates at zero extra spread or fee markup.',

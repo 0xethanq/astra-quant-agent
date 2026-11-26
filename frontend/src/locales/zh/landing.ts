@@ -156,14 +156,14 @@ export const zhLanding = {
   ecosystem: {
     tag: 'SISTER PROJECT · TRADESKILL HUB',
     title: '与 TradeSkill 联动：给你的 AI 编程助手装上加密货币交易技能',
-    subtitle: '除了 24/7 自动运行节点 AstraQuant，我们还构建了 TradeSkill (astraquant.tech) 与开源技能库 crypto-trading-skills —— 让 Claude Code、OpenAI Codex、Cursor 与 Gemini CLI 一键接入 OKX 下单、套利监控与深度研报流程。',
+    subtitle: '除了 24/7 自动运行节点 AstraQuant，我们还构建了 TradeSkill (tradeskill.si) 与开源技能库 crypto-trading-skills —— 让 Claude Code、OpenAI Codex、Cursor 与 Gemini CLI 一键接入 OKX 下单、套利监控与深度研报流程。',
     stat1Val: '156+',
     stat1Label: '开源交易技能模块',
     stat2Val: '15',
     stat2Label: '主流 AI Agent 平台',
     stat3Val: '20%',
     stat3Label: '4 大交易所同步返佣',
-    ctaPrimary: '访问 TradeSkill (astraquant.tech)',
+    ctaPrimary: '访问 TradeSkill (tradeskill.si)',
     ctaGithub: 'GitHub 技能开源库',
   },
   specs: {

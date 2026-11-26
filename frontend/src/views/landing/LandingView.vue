@@ -844,7 +844,7 @@ onMounted(() => {
         </div>
       </section>
 
-      <!-- 5.5 姊妹项目联动：TradeSkill (astraquant.tech) -->
+      <!-- 5.5 姊妹项目联动：TradeSkill (tradeskill.si) -->
       <section id="ecosystem" class="w-full max-w-6xl xl:max-w-7xl px-4 sm:px-8 pb-20">
         <div class="card rounded-2xl border border-emerald-500/25 bg-[var(--ds-color-bg-surface-card)] p-7 sm:p-10 text-left flex flex-col lg:flex-row lg:items-center justify-between gap-8">
           <div class="space-y-4 max-w-2xl">

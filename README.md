@@ -238,7 +238,7 @@ backend/.venv/bin/ruff check backend
 ## Brand & Namespace Governance
 
 - **Public Brand**: **AstraQuant** — <https://astraquant.top>
-- **Sister Project**: **TradeSkill (AI Crypto Trading Skills Hub)** — <https://astraquant.tech> · [`0xethanq/crypto-trading-skills`](https://github.com/0xethanq/crypto-trading-skills)
+- **Sister Project**: **TradeSkill (AI Crypto Trading Skills Hub)** — <https://tradeskill.si> · [`0xethanq/crypto-trading-skills`](https://github.com/0xethanq/crypto-trading-skills)
 - **Internal Namespace**: **`astra`** (packages `astra_backend`, `astra_gateway`; configuration prefix `ASTRA_*`)
 
 ### Intentional Legacy Markers — Do Not Rename

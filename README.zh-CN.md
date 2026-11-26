@@ -236,7 +236,7 @@ backend/.venv/bin/ruff check backend
 ## 品牌与内部代号
 
 - **公开品牌**：**AstraQuant** — <https://astraquant.top>
-- **姊妹项目**：**TradeSkill（AI 加密货币交易技能中心）** — <https://astraquant.tech> · [`0xethanq/crypto-trading-skills`](https://github.com/0xethanq/crypto-trading-skills)
+- **姊妹项目**：**TradeSkill（AI 加密货币交易技能中心）** — <https://tradeskill.si> · [`0xethanq/crypto-trading-skills`](https://github.com/0xethanq/crypto-trading-skills)
 - **内部命名空间**：**`astra`**（包名 `astra_backend`, `astra_gateway`；配置前缀 `ASTRA_*`）
 
 ### 历史兼容标记（保留项）
