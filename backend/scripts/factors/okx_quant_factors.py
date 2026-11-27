@@ -163,17 +163,17 @@ def _disk_cache_enabled() -> bool:
 
     生产子进程（`factor_library.py` / `ai_brain_trader.py` 每 60s 新起进程）默认开启，
     让跨分钟、跨进程共享慢变量 TTL，避免每次重启进程空缓存重打全套 Rubik 接口；
-    单元测试环境默认关闭（`_reset_cache_for_tests` / `PYTEST_CURRENT_TEST` /
-    `ASTRA_DATA_DIR` / `unittest`），除非显式设置 `ASTRA_OKX_DISK_CACHE=1`。
+    单元测试环境默认关闭（`_reset_cache_for_tests` / `ASTRA_DATA_DIR` / `pytest` /
+    `unittest`），除非显式设置 `ASTRA_OKX_DISK_CACHE=1`。
     """
     env_val = os.environ.get("ASTRA_OKX_DISK_CACHE")
     if env_val is not None:
         return env_val.strip().lower() not in ("0", "false", "no", "off", "")
     if _DISK_CACHE_DISABLED:
         return False
-    if os.environ.get("PYTEST_CURRENT_TEST") or os.environ.get("ASTRA_DATA_DIR"):
+    if os.environ.get("ASTRA_DATA_DIR"):
         return False
-    if "unittest" in sys.modules:
+    if "pytest" in sys.modules or "unittest" in sys.modules:
         return False
     return True
 
