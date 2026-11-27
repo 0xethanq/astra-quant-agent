@@ -7,13 +7,15 @@
 ### 基于多大模型分析与确定性代码风控的加密货币自主量化交易系统
 
 [![Release](https://img.shields.io/badge/Release-v8.6.1-00E599.svg?style=flat-square)](https://github.com/0xethanq/astra-quant-agent/releases)
+[![Website](https://img.shields.io/badge/官方网站-astraquant.top-f59e0b.svg?style=flat-square)](https://astraquant.top/)
+[![TradeSkill](https://img.shields.io/badge/技能中心-TradeSkill_95%2B-10b981.svg?style=flat-square)](https://github.com/0xethanq/crypto-trading-skills)
 [![License](https://img.shields.io/badge/License-AGPLv3%20%2B%20Commons%20Clause-blue.svg?style=flat-square)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.11-3776AB.svg?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![Vue 3](https://img.shields.io/badge/Vue-3.5%2B-4FC08D.svg?style=flat-square&logo=vuedotjs&logoColor=white)](https://vuejs.org/)
 
 AstraQuant 将大语言模型多维度研判（宏观趋势、技术形态、盘口微结构）与 Python 确定性物理风控相结合，并通过 OKX 原生 API 实现限价入场与双腿云端止损止盈。
 
-[界面预览](#界面预览) · [快速开始](#快速开始) · [开户返佣](#交易所开户与手续费返现) · [系统架构](#系统架构) · [量化因子](#行情与微观结构因子) · [风控模型](#资金管理与风控参数) · [部署指南](#部署指南) · [代码地图](#代码结构入口)
+[官方网站](https://astraquant.top/) · [界面预览](#界面预览) · [快速开始](#快速开始) · [开户返佣](#交易所开户与手续费返现) · [系统架构](#系统架构) · [量化因子](#行情与微观结构因子) · [风控模型](#资金管理与风控参数) · [部署指南](#部署指南) · [代码地图](#代码结构入口) · [TradeSkill 技能中心](https://tradeskill.si/)
 
 </div>
 
@@ -230,6 +232,12 @@ backend/.venv/bin/ruff check backend
 | [`tests/audit/test_directory_docs_current.py`](tests/audit/test_directory_docs_current.py) | 确保新增模块均已登记进子包 `__init__.py` 与对应清单 |
 | [`tests/core/test_readme_baseline_numbers.py`](tests/core/test_readme_baseline_numbers.py) | 保证文档中的基线数字与实际测试用例保持同步 |
 | [`tests/audit/test_doc_paths_are_committed.py`](tests/audit/test_doc_paths_are_committed.py) | 确保文档引用的所有源码路径真实存在并已入库跟踪 |
+
+---
+
+## 生态联动：TradeSkill（AI Agent 交易所技能中心）
+
+除了部署 AstraQuant 作为 7×24 无人值守量化执行节点，如果你希望在 **Claude Code**、**Cursor**、**Codex CLI** 或 **Windsurf** 中按需调用各大交易所官方 CLI 与行情工具，可搭配姊妹开源项目 **[TradeSkill (`tradeskill.si`)](https://tradeskill.si/)**（[`0xethanq/crypto-trading-skills`](https://github.com/0xethanq/crypto-trading-skills)）—— 收录 15 家主流交易所与 DEX 的 95 个可直装 MIT/Apache-2.0 技能包与 156 个官方技能索引。
 
 ---
 
