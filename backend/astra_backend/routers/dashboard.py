@@ -322,6 +322,18 @@ async def sitemap_xml():
     return Response(content=f"""<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>{APP_SITE}/</loc><priority>1.0</priority></url><url><loc>{APP_SITE}/docs</loc><priority>0.8</priority></url></urlset>""", media_type="application/xml")
 
 
+@router.get("/10cbcaba18b30619ae4325b76fd85fb2.txt", include_in_schema=False)
+async def indexnow_key_txt():
+    name = "10cbcaba18b30619ae4325b76fd85fb2.txt"
+    f = VUE_DIST / name
+    if f.is_file():
+        return FileResponse(str(f), media_type="text/plain", headers={"Cache-Control": "public, max-age=86400, s-maxage=604800"})
+    pf = REPO_ROOT / "frontend" / "public" / name
+    if pf.is_file():
+        return FileResponse(str(pf), media_type="text/plain", headers={"Cache-Control": "public, max-age=86400, s-maxage=604800"})
+    return Response(status_code=404)
+
+
 @router.get("/docs/images/{img_name}", include_in_schema=False)
 def docs_images(img_name: str):
     clean_name = Path(img_name).name

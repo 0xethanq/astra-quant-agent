@@ -361,6 +361,24 @@ class StaticAssetTests(_Base):
         self.assertIsInstance(out, FileResponse)
         self.assertEqual(out.path, str(public))
 
+    def test_indexnow_key_prefers_dist_then_public_then_404(self):
+        name = "10cbcaba18b30619ae4325b76fd85fb2.txt"
+        (self.vue / name).write_text("from-dist", encoding="utf-8")
+        out = _run(A.indexnow_key_txt())
+        self.assertIsInstance(out, FileResponse)
+        self.assertEqual(out.path, str(self.vue / name))
+        self.assertEqual(out.media_type, "text/plain")
+
+        (self.vue / name).unlink()
+        (self.root / "frontend" / "public" / name).write_text("from-public", encoding="utf-8")
+        out = _run(A.indexnow_key_txt())
+        self.assertIsInstance(out, FileResponse)
+        self.assertEqual(out.path, str(self.root / "frontend" / "public" / name))
+
+        (self.root / "frontend" / "public" / name).unlink()
+        out = _run(A.indexnow_key_txt())
+        self.assertEqual(out.status_code, 404)
+
     # ── docs images ──────────────────────────────────────
     def test_docs_images_serves_known_extensions_with_the_right_media_type(self):
         (self.root / "docs" / "images" / "a.png").write_bytes(b"\x89PNG")

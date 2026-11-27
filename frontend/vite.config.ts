@@ -37,7 +37,7 @@ export default defineConfig({
     // ② 部署体积随每次更新单调增长。
     //
     // `dist` 里的一切都来自 `public/` 拷贝或构建产物（已逐个核对：admin/、coins/、
-    // images/、icons.svg、sitemap.xml、favicon.svg、robots.txt 均在 `public/` 有源），
+    // images/、icons.svg、sitemap.xml、favicon.svg、robots.txt、10cbcaba18b30619ae4325b76fd85fb2.txt 均在 `public/` 有源），
     // 故清空重生成不会丢任何手工放置的文件。
     emptyOutDir: true,
     rollupOptions: {
