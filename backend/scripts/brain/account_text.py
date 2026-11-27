@@ -141,7 +141,8 @@ def build_position_lines(active_positions_detail: Optional[List[Dict[str, Any]]]
             _entry_ts = safe_float(p.get("entryTs"))
             if _entry_ts > 0:
                 import time as _time
-                _entry_sec = _entry_ts / 1000.0 if _entry_ts > 1e11 else _entry_ts
+                from astra_backend.time_utils import to_seconds as _to_seconds
+                _entry_sec = _to_seconds(_entry_ts)
                 _hold_h = max(0.0, (_time.time() - _entry_sec) / 3600.0)
                 hold_desc = f" | 持仓时长: {_hold_h:.1f}h"
 

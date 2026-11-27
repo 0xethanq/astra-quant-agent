@@ -31,8 +31,8 @@ class Harness:
         self.submitted = []
         self.printed = io.StringIO()
         self.factor = {
-            "name": "BTC", "instId": INST, "type": "crypto", "precision": 2, "ctVal": 1.0,
-            "atr": 500.0, "price": 100000.0, "sz": 3.0, "minSz": 1.0, "position": None,
+            "name": "BTC", "instId": INST, "type": "crypto", "precision": 2, "ctVal": 0.01,
+            "atr": 500.0, "price": 100000.0, "sz": 3.0, "minSz": 0.01, "position": None,
             "risk_per_trade_usd": 50.0, "size_below_exchange_min": False, "max_leverage": 0,
         }
         self.brain = {}
@@ -74,7 +74,7 @@ class Harness:
             is_tradfi_market_liquid=lambda t: self.tradfi_ok,
             load_adaptive_config=lambda: {},
             max_size_within_margin=lambda **k: 10.0,
-            normalize_bracket_prices=lambda **k: (k.get("tp_px"), k.get("sl_px")),
+            normalize_bracket_prices=lambda **k: (k.get("sl_px"), k.get("tp_px")),
             notify_trade_open=lambda **k: self.notified.append(k),
             order_margin_gate=lambda *a, **k: (self.margin_gate_calls.append((a, k)), 100.0)[1],
             pyramiding_gate=lambda **k: self.pyramiding,
