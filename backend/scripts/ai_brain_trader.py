@@ -741,6 +741,7 @@ def execute_batch_ai_brain_cycle(
     active_positions_detail: List[Dict[str, Any]] = None,
     usdt_available: float = None,
     policy_snapshot: Optional[Dict[str, Any]] = None,
+    prefetched_factors: Optional[List[Dict[str, Any]]] = None,
 ) -> Optional[Dict[str, Any]]:
     """Fetch all symbols in the instrument pool, call the LLM once, then persist an auditable result."""
     base_url, api_key = get_cpa_client_config()
@@ -759,17 +760,66 @@ def execute_batch_ai_brain_cycle(
         policy_snapshot=policy_snapshot    )
     print(f"[AI Brain Batch] 📌 当前决策策略快照: {policy_version} ({policy_hash})")
 
-    print(f"[AI Brain Batch] 并行获取 {len(TARGET_INSTRUMENTS)} 币种原生行情、技术指标与顶级聪明钱数据...")
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        packages = list(executor.map(fetch_single_instrument_package, TARGET_INSTRUMENTS))
+    # 优先确保因子库快照处于新鲜窗口内（若 1 分钟后台因子任务刚写入，快照函数自动毫秒级复用）
+    update_factor_library_snapshot(
+        WORKSPACE_DIR=WORKSPACE_DIR,
+        os=os,
+        sys=sys    )
 
-    # 顶级聪明钱与大户持仓数据接入（OKX Rubik 公开统计，单一来源）
+    try:
+        from scripts.brain.packages import (
+            QUANT_FACTOR_TIERS,
+            build_package_from_cached_sources,
+            load_factor_snapshot_index,
+        )
+    except ImportError:
+        from brain.packages import (
+            QUANT_FACTOR_TIERS,
+            build_package_from_cached_sources,
+            load_factor_snapshot_index,
+        )
+
+    snapshot_index = load_factor_snapshot_index(max_age_seconds=300.0)
+    prefetched_by_id = {
+        str(f.get("instId")): f
+        for f in (prefetched_factors or [])
+        if isinstance(f, dict) and f.get("instId")
+    }
+
+    cached_slots: List[Optional[Dict[str, Any]]] = [None] * len(TARGET_INSTRUMENTS)
+    missing_items: List[Tuple[int, Dict[str, Any]]] = []
+    for idx, item in enumerate(TARGET_INSTRUMENTS):
+        iid = item.get("instId") if isinstance(item, dict) else None
+        cached_pkg = build_package_from_cached_sources(
+            item,
+            prefetched_factor=prefetched_by_id.get(str(iid)) if iid else None,
+            snapshot_entry=snapshot_index.get(str(iid)) if iid else None,
+        )
+        if cached_pkg is not None:
+            cached_slots[idx] = cached_pkg
+        else:
+            missing_items.append((idx, item))
+
+    reused_count = len(TARGET_INSTRUMENTS) - len(missing_items)
+    if missing_items:
+        print(f"[AI Brain Batch] 复用本周期预取与因子快照 {reused_count}/{len(TARGET_INSTRUMENTS)} 标的，并发补采 {len(missing_items)} 标的...")
+        with ThreadPoolExecutor(max_workers=min(4, len(missing_items))) as executor:
+            fetched_list = list(executor.map(fetch_single_instrument_package, [it for _, it in missing_items]))
+        for (idx, _), pkg in zip(missing_items, fetched_list):
+            cached_slots[idx] = pkg
+    else:
+        print(f"[AI Brain Batch] 零冗余复用本周期预取行情与新鲜因子快照 ({reused_count}/{len(TARGET_INSTRUMENTS)} 标的)")
+    packages = [p for p in cached_slots if p is not None]
+
+    # 顶级聪明钱与大户持仓数据接入（若快照已携带可用 smart_money 则直接复用）
     try:
         try:
             from scripts.factors.smart_money import fetch_smart_money_for_symbol
         except ImportError:
             from factors.smart_money import fetch_smart_money_for_symbol
         for pkg in packages:
+            if isinstance(pkg.get("smart_money"), dict) and pkg["smart_money"].get("available"):
+                continue
             ccy = pkg.get("ccy") or pkg.get("name") or ""
             if not ccy and "-" in pkg.get("instId", ""):
                 ccy = pkg["instId"].split("-")[0]
@@ -816,26 +866,24 @@ def execute_batch_ai_brain_cycle(
     active_position_sides.pop("", None)
     # 审计D(2026-09-13)：package_by_id 死构造清除（全函数无消费）
 
-    # Automatically Update & Persist Comprehensive Factor Library Snapshot
-    update_factor_library_snapshot(
-        WORKSPACE_DIR=WORKSPACE_DIR,
-        os=os,
-        sys=sys    )
-
-    # 刷新本轮数据包中的 7 梯队因子快照，确保发给模型的 Prompt 拥有最新因子
+    # 为回退补采的包一次性填充 7 梯队因子（免循环重复读盘）
     try:
-        try:
-            from scripts.brain.packages import load_quant_factor_tiers, load_quant_factor_meta
-        except ImportError:
-            from brain.packages import load_quant_factor_tiers, load_quant_factor_meta
+        _refresh_idx = snapshot_index or load_factor_snapshot_index()
         for _pkg in packages:
-            _inst_key = _pkg.get("instId", "")
-            _fresh_tiers = load_quant_factor_tiers(_inst_key)
-            if _fresh_tiers:
-                _pkg["quant_factors"] = _fresh_tiers
-            _fresh_meta = load_quant_factor_meta(_inst_key)
-            if _fresh_meta:
-                _pkg.update(_fresh_meta)
+            _inst_key = str(_pkg.get("instId", ""))
+            _entry = _refresh_idx.get(_inst_key)
+            if isinstance(_entry, dict):
+                if not _pkg.get("quant_factors"):
+                    _fresh_tiers = {
+                        _t_name: _entry[_t_name]
+                        for _t_name in QUANT_FACTOR_TIERS
+                        if isinstance(_entry.get(_t_name), dict)
+                    }
+                    if _fresh_tiers:
+                        _pkg["quant_factors"] = _fresh_tiers
+                for _mk in ("composite_alpha_score", "signal_recommendation"):
+                    if _pkg.get(_mk) is None and _entry.get(_mk) is not None:
+                        _pkg[_mk] = _entry[_mk]
     except Exception as _qf_err:
         print(f"[AI Brain Batch] Quant factor refresh warning: {_qf_err}")
 

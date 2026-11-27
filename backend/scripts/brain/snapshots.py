@@ -24,6 +24,21 @@ def update_factor_library_snapshot(*,
         os,
         sys):
     try:
+        import time as _time
+        snap_file = os.path.join(WORKSPACE_DIR, "data", "factor_library_snapshot.json")
+        try:
+            fresh_ttl = float(os.getenv("ASTRA_FACTOR_SNAPSHOT_FRESH_SECONDS", "180") or 180)
+        except (TypeError, ValueError):
+            fresh_ttl = 180.0
+        if fresh_ttl > 0 and os.path.exists(snap_file):
+            try:
+                if os.path.getsize(snap_file) > 50:
+                    age_s = _time.time() - os.path.getmtime(snap_file)
+                    if 0 <= age_s < fresh_ttl:
+                        print(f"[AI Brain Batch] 复用新鲜因子库快照（age={age_s:.0f}s < {fresh_ttl:.0f}s），跳过重复同步刷新")
+                        return
+            except OSError:
+                pass
         sys.path.append(os.path.join(WORKSPACE_DIR, "scripts"))
         import factor_library
         factor_library.update_factor_library()

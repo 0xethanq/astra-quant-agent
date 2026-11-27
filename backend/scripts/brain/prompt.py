@@ -233,12 +233,10 @@ def construct_full_market_prompt(packages: List[Dict[str, Any]], pos_summary: st
         tier_line_t15 = (
             f"- 🎯 T1.5 期权结构: 可用={_t(op, 'available', False)} | 平值IV={_t(op, 'atm_iv_pct')}% "
             f"| 25d风险反转偏度={_t(op, 'risk_reversal_25d_pct')} | Put/Call OI比={_t(op, 'put_call_oi_ratio')} "
-            f"| 最近到期={_t(op, 'expiry')}"
-            # Max Pain 只在期权链可用时才有意义：山寨没有期权市场，硬写"持仓量未取回"
-            # 会把"标的不存在该市场"说成"取数失败"（两种缺失的处置完全不同）。
-            + (f" | 最大痛点(MaxPain)={_t(op, 'max_pain_price')}"
-               + ("" if not op.get("max_pain_reason") else f"（{op.get('max_pain_reason')}）")
-               if str(_t(op, 'available', False)) in ("True", "true") else " | 最大痛点(MaxPain)=--（该标的无期权市场）")
+            f"| 最近到期={_t(op, 'expiry')} | 最大痛点(MaxPain)={_t(op, 'max_pain_price')}"
+            + ("" if not op.get("max_pain_reason") else f"（{op.get('max_pain_reason')}）")
+            if str(_t(op, 'available', False)) in ("True", "true")
+            else "- 🎯 T1.5 期权结构: 无期权市场"
         )
         if qf_tiers:
             _tier_lines = [tier_line_t0, tier_line_t05, tier_line_t1,
@@ -281,12 +279,36 @@ def construct_full_market_prompt(packages: List[Dict[str, Any]], pos_summary: st
         _alpha_tag = ""
         if _comp_alpha is not None or _sig_rec:
             _alpha_tag = f" | 综合Alpha分={_comp_alpha if _comp_alpha is not None else '--'} ({_sig_rec or '--'})"
+        _t2_basis = _t(smd, 'basis_annualized_pct')
+        _t2_loan = _t(smd, 'loan_rate_usdt')
+        _t2_line = (
+            f"\n- 💰 T2 期限与资金成本: 季度基差年化={_t2_basis}% | 杠杆借贷利率={_t2_loan}%"
+            if (_t2_basis != "--" or _t2_loan != "--") else ""
+        )
+        if sm.get('available'):
+            _sm_parts = [
+                f"加权做多占比={sm.get('weighted_long_pct')}%",
+                f"5M主动吃单净流={sm.get('net_flow_usdt', '--')}",
+            ]
+            for _sm_lbl, _sm_key in (("多头均价", "avg_long_entry"), ("空头均价", "avg_short_entry")):
+                _sm_val = sm.get(_sm_key)
+                if _sm_val not in (None, "", "--"):
+                    _sm_parts.append(f"{_sm_lbl}={_sm_val}")
+            _sm_win = sm.get('top_win_rate')
+            if _sm_win not in (None, "", "--"):
+                _sm_parts.append(str(_sm_win))
+            _sm_line_body = " | ".join(_sm_parts)
+        else:
+            _sm_line_body = (
+                "该项（Top100 加权多空比/净流）无公开 V5 等价接口 ⇒ 本行不构成证据；"
+                "**持仓方向的替代证据见 T0 的「精英账户比 / 精英持仓比 / 精英背离」**"
+                "（OKX 官方 top-trader 端点，真实可得）。禁止臆测填充"
+            )
         info = f"""---------------------------------------------------------
 【{p['name']} ({p['instId']})】| 数据质量: {quality} | 现价: {p['price']} | 24H涨跌: {p['chg24h']}% | 盘口买/卖: {p['bidPx']}/{p['askPx']}
 - 🏛️ 三重滤网宏观结构: 4H宏观大势={(p.get('macro_4h') or '--')} | 1H波段结构={(p.get('structure_1h') or '--')} | 标的体制={regime_desc}{_alpha_tag}
-{tier_block}
-- 💰 T2 期限与资金成本: 季度基差年化={_t(smd, 'basis_annualized_pct')}% | 杠杆借贷利率={_t(smd, 'loan_rate_usdt')}%
-- 👑 顶级聪明钱 (SmartMoney Top100 加权流): {("加权做多占比=" + str(sm.get('weighted_long_pct')) + "% | 5M主动吃单净流=" + str(sm.get('net_flow_usdt', '--')) + " | 多头均价=" + str(sm.get('avg_long_entry', '--')) + " | 空头均价=" + str(sm.get('avg_short_entry', '--')) + " | " + str(sm.get('top_win_rate', ''))) if sm.get('available') else "该项（Top100 加权多空比/净流）无公开 V5 等价接口 ⇒ 本行不构成证据；**持仓方向的替代证据见 T0 的「精英账户比 / 精英持仓比 / 精英背离」**（OKX 官方 top-trader 端点，真实可得）。禁止臆测填充"}"""
+{tier_block}{_t2_line}
+- 👑 顶级聪明钱 (SmartMoney Top100 加权流): {_sm_line_body}"""
         _ri_list = _recent_intents_by_inst.get(p.get("instId", ""))
         if _ri_list:
             info += "\n- 📝 近期挂单/开仓意图(4H内): " + " ; ".join(_ri_list[-3:])

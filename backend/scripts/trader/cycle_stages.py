@@ -193,7 +193,24 @@ def preflight_reconcile_and_housekeeping(*,
     try:
         harvester_script = os.path.join(WORKSPACE_DIR, "scripts", "news_sentiment_harvester.py")
         if os.path.exists(harvester_script):
-            _run_captured(harvester_script, label="news_harvester", timeout=25)
+            import time as _time
+            news_cache = os.path.join(WORKSPACE_DIR, "data", "news_sentiment.json")
+            try:
+                news_fresh_ttl = float(os.getenv("ASTRA_NEWS_FRESH_TTL_SECONDS", "900") or 900)
+            except (TypeError, ValueError):
+                news_fresh_ttl = 900.0
+            _skip_harvester = False
+            if news_fresh_ttl > 0 and os.path.exists(news_cache):
+                try:
+                    if os.path.getsize(news_cache) > 20:
+                        _news_age = _time.time() - os.path.getmtime(news_cache)
+                        if 0 <= _news_age < news_fresh_ttl:
+                            _skip_harvester = True
+                            print(f"[News Harvester] 复用新鲜新闻快照（age={_news_age:.0f}s < {news_fresh_ttl:.0f}s），跳过重复抓取")
+                except OSError:
+                    pass
+            if not _skip_harvester:
+                _run_captured(harvester_script, label="news_harvester", timeout=25)
     except Exception as e:
         print(f"News Harvester sync warning: {e}")
     return (entries_blocked, timestamp_full)
@@ -384,7 +401,21 @@ def scan_risk_gates_and_ai_brain(*,
                 max_positions=MAX_CONCURRENT_POSITIONS)
             # 持仓全景装配（阶段 4·B3 第三十一刀：迁至 scripts/trader/position_universe.py）
             active_pos_list = _collect_okx_position_payloads(all_factors, trackers)
-            brain_cache = execute_batch_ai_brain_cycle(pos_desc, active_pos_list, usdt_available=usdt_available) or {}
+            import inspect as _inspect
+            _brain_kwargs = {"usdt_available": usdt_available}
+            try:
+                _sig = _inspect.signature(execute_batch_ai_brain_cycle)
+                _accepts_prefetched = "prefetched_factors" in _sig.parameters
+                if not _accepts_prefetched:
+                    for _param in _sig.parameters.values():
+                        if _param.kind == _inspect.Parameter.VAR_KEYWORD:
+                            _accepts_prefetched = True
+                            break
+                if _accepts_prefetched:
+                    _brain_kwargs["prefetched_factors"] = all_factors
+            except (TypeError, ValueError):
+                pass
+            brain_cache = execute_batch_ai_brain_cycle(pos_desc, active_pos_list, **_brain_kwargs) or {}
             if brain_cache:
                 refreshed_ok, refreshed_positions, refreshed_error = query_positions()
                 if not refreshed_ok:

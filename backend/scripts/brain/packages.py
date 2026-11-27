@@ -395,3 +395,211 @@ def fetch_single_instrument_package(item: Dict[str, Any], *,
     else:
         pkg["market_regime"] = None
     return pkg
+
+
+def load_factor_snapshot_index(
+    *,
+    path: Optional[str] = None,
+    max_age_seconds: Optional[float] = None,
+) -> Dict[str, Dict[str, Any]]:
+    """一次性读取因子库快照并按 `instId` 建索引；缺失/损坏/过期返回空字典。"""
+    target = path or _factor_snapshot_path()
+    try:
+        with open(target, "r", encoding="utf-8") as f:
+            snap = json.load(f)
+    except Exception:
+        return {}
+    if not isinstance(snap, dict):
+        return {}
+    if max_age_seconds is not None:
+        now = time.time()
+        ts_val: Optional[float] = None
+        raw_ts = snap.get("timestamp")
+        if raw_ts is not None:
+            try:
+                ts_val = float(raw_ts)
+            except (TypeError, ValueError):
+                ts_val = None
+        if ts_val is None or ts_val <= 0:
+            try:
+                ts_val = os.path.getmtime(target)
+            except OSError:
+                return {}
+        age = now - ts_val
+        if age < -60.0 or age > float(max_age_seconds):
+            return {}
+    instruments = snap.get("instruments")
+    if not isinstance(instruments, list):
+        return {}
+    index: Dict[str, Dict[str, Any]] = {}
+    for entry in instruments:
+        if isinstance(entry, dict) and entry.get("instId"):
+            index[str(entry["instId"])] = entry
+    return index
+
+
+def build_package_from_cached_sources(
+    item: Dict[str, Any],
+    *,
+    prefetched_factor: Optional[Dict[str, Any]] = None,
+    snapshot_entry: Optional[Dict[str, Any]] = None,
+) -> Optional[Dict[str, Any]]:
+    """复用本周期预取行情(`all_factors`)与新鲜因子库快照装配单标的数据包。
+
+    零外网 HTTP 请求；任一关键输入缺失或无效时返回 `None` 触发单标回退补采。
+    """
+    if not isinstance(item, dict) or not item.get("instId"):
+        return None
+    if not isinstance(prefetched_factor, dict) or not prefetched_factor.get("market_data_valid"):
+        return None
+    if not isinstance(snapshot_entry, dict):
+        return None
+
+    tm = snapshot_entry.get("trend_momentum")
+    ms = snapshot_entry.get("microstructure")
+    smd = snapshot_entry.get("smart_money_derivatives")
+    if not (isinstance(tm, dict) and isinstance(ms, dict) and isinstance(smd, dict)):
+        return None
+
+    vc = snapshot_entry.get("volatility_channel") if isinstance(snapshot_entry.get("volatility_channel"), dict) else {}
+    mf = snapshot_entry.get("volume_money_flow") if isinstance(snapshot_entry.get("volume_money_flow"), dict) else {}
+
+    try:
+        price = float(prefetched_factor.get("price") or 0.0)
+    except (TypeError, ValueError):
+        return None
+    if price <= 0:
+        return None
+
+    try:
+        bid_px = float(prefetched_factor.get("bidPx") or ms.get("bid_px") or price)
+        ask_px = float(prefetched_factor.get("askPx") or ms.get("ask_px") or price)
+    except (TypeError, ValueError):
+        return None
+    if bid_px <= 0 or ask_px < bid_px:
+        return None
+
+    t1_bull = prefetched_factor.get("trend_1h_bullish")
+    t1_bear = prefetched_factor.get("trend_1h_bearish")
+    if t1_bull is None and t1_bear is None:
+        return None
+    if t1_bull and not t1_bear:
+        structure_1h = "1H_SWING_BULL"
+    elif t1_bear and not t1_bull:
+        structure_1h = "1H_SWING_BEAR"
+    else:
+        structure_1h = "1H_SWING_CHOP"
+
+    t4_bull = prefetched_factor.get("trend_4h_bullish")
+    t4_bear = prefetched_factor.get("trend_4h_bearish")
+    if t4_bull is None and t4_bear is None:
+        return None
+    if t4_bull and not t4_bear:
+        macro_4h = "4H_MACRO_BULL (大级别多头通道)"
+    elif t4_bear and not t4_bull:
+        macro_4h = "4H_MACRO_BEAR (大级别空头承压)"
+    else:
+        macro_4h = "4H_MACRO_RANGE (大级别区间震荡)"
+
+    adx_val = tm.get("adx_1h")
+    try:
+        adx_v = float(adx_val or 0.0)
+    except (TypeError, ValueError):
+        adx_v = 0.0
+
+    if "BULL" in macro_4h and "BULL" in structure_1h and adx_v >= 20.0:
+        market_regime: Optional[str] = "STRONG_TREND_BULL"
+    elif "BEAR" in macro_4h and "BEAR" in structure_1h and adx_v >= 20.0:
+        market_regime = "STRONG_TREND_BEAR"
+    elif "RANGE" in macro_4h or "CHOP" in structure_1h or (0.0 < adx_v < 20.0):
+        market_regime = "CHOP_RANGE"
+    else:
+        market_regime = "TRANSITION"
+
+    atr_1h = round(float(prefetched_factor.get("atr_1h") or vc.get("atr_1h") or 0.0), 4)
+    atr_15m = round(float(prefetched_factor.get("atr_15m") or 0.0), 4)
+    atr = atr_1h if atr_1h > 0 else round(float(prefetched_factor.get("atr") or 0.0), 4)
+
+    rsi_15m = tm.get("rsi_15m") if tm.get("rsi_15m") is not None else prefetched_factor.get("rsi")
+    rsi_1h = tm.get("rsi_1h")
+    vwap_bias = tm.get("vwap_bias_pct") if tm.get("vwap_bias_pct") is not None else prefetched_factor.get("vwap_bias")
+    macd_hist = tm.get("macd_hist") if tm.get("macd_hist") is not None else prefetched_factor.get("macd_hist")
+    macd_accel = tm.get("macd_accel") if tm.get("macd_accel") is not None else prefetched_factor.get("macd_accel")
+    vol_ratio = prefetched_factor.get("vol_ratio") if prefetched_factor.get("vol_ratio") is not None else mf.get("vol_ratio")
+    obv_flow = prefetched_factor.get("obv_flow") or mf.get("obv_flow") or "NEUTRAL"
+
+    chg24h = snapshot_entry.get("chg24h")
+    if chg24h is None:
+        chg24h = prefetched_factor.get("change24h", 0.0)
+
+    if smd.get("available"):
+        smart_money = {
+            "available": True,
+            "weighted_long_pct": smd.get("weighted_long_pct", "--"),
+            "net_flow_usdt": smd.get("smart_money_flow_usd", mf.get("taker_net_usd", "--")),
+            "avg_long_entry": smd.get("avg_long_entry", "--"),
+            "avg_short_entry": smd.get("avg_short_entry", "--"),
+            "top_win_rate": smd.get("top_win_rate", "--"),
+        }
+    else:
+        smart_money = {
+            "available": False,
+            "reason": "Top100 加权多空比/净流无公开 V5 等价接口；持仓方向证据改用 OKX 官方 top-trader 的精英账户比/精英持仓比（见 T0 衍生品梯队）",
+            "weighted_long_pct": "--",
+            "net_flow_usdt": "--",
+            "avg_long_entry": "--",
+            "avg_short_entry": "--",
+            "top_win_rate": "--",
+        }
+
+    quant_factors = {
+        tier: snapshot_entry[tier]
+        for tier in QUANT_FACTOR_TIERS
+        if isinstance(snapshot_entry.get(tier), dict)
+    }
+
+    pkg: Dict[str, Any] = {
+        "instId": str(item["instId"]),
+        "name": str(item.get("name") or prefetched_factor.get("name") or ""),
+        "ccy": str(item.get("ccy") or ""),
+        "type": item.get("type", prefetched_factor.get("type", "crypto")),
+        "precision": item.get("precision", prefetched_factor.get("precision", 4)),
+        "tier": prefetched_factor.get("tier") or item.get("tier", "tier_2_momentum"),
+        "sl_atr_mult": prefetched_factor.get("sl_atr_mult") if prefetched_factor.get("sl_atr_mult") is not None else item.get("sl_atr_mult"),
+        "price": price,
+        "chg24h": chg24h,
+        "bidPx": bid_px,
+        "askPx": ask_px,
+        "fundingRate": smd.get("funding_rate_pct") if smd.get("funding_rate_pct") is not None else "--",
+        "oiUsd": smd.get("oi_usd") or "--",
+        "vol24h": prefetched_factor.get("vol24h", 0.0),
+        "lsRatio": smd.get("long_short_ratio") if smd.get("long_short_ratio") is not None else "--",
+        "takerNetUsd": mf.get("taker_net_usd") or "--",
+        "spread_bps": ms.get("spread_bps") if ms.get("spread_bps") is not None else "--",
+        "atr": atr,
+        "atr_1h": atr_1h,
+        "atr_15m": atr_15m,
+        "rsi": rsi_15m if rsi_15m is not None else 50.0,
+        "rsi_15m": rsi_15m,
+        "rsi_1h": rsi_1h,
+        "vwap_bias": vwap_bias if vwap_bias is not None else 0.0,
+        "macd_hist": macd_hist if macd_hist is not None else 0.0,
+        "macd_accel": macd_accel if macd_accel is not None else 0.0,
+        "vol_ratio": vol_ratio,
+        "obv_flow": obv_flow,
+        "adx_1h": adx_val if adx_val is not None else 0.0,
+        "structure_1h": structure_1h,
+        "macro_4h": macro_4h,
+        "market_regime": market_regime,
+        "smart_money": smart_money,
+        "quant_factors": quant_factors,
+        "recent_15m": [],
+        "recent_1h": [],
+        "recent_4h": [],
+        "data_quality": "valid",
+        "source": "cached_prefetched_and_snapshot",
+    }
+    for meta_key in ("composite_alpha_score", "signal_recommendation"):
+        if snapshot_entry.get(meta_key) is not None:
+            pkg[meta_key] = snapshot_entry[meta_key]
+    return pkg

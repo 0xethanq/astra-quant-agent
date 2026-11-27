@@ -79,6 +79,9 @@ OKX 官方文档原文：*"The data returned will be arranged in an array like t
 from __future__ import annotations
 
 import json
+import os
+import sys
+import tempfile
 import threading
 import time
 import urllib.error
@@ -150,26 +153,127 @@ _NA = "--"
 
 _CACHE: Dict[str, Tuple[float, Any]] = {}
 _CACHE_LOCK = threading.Lock()
+_DISK_CACHE_DISABLED = False
+_DISK_CACHE_SIG: Tuple[int, int] = (0, 0)
+_DISK_CACHE_MAX_TTL = 3600.0
+
+
+def _disk_cache_enabled() -> bool:
+    """跨进程磁盘 TTL 缓存开关。
+
+    生产子进程（`factor_library.py` / `ai_brain_trader.py` 每 60s 新起进程）默认开启，
+    让跨分钟、跨进程共享慢变量 TTL，避免每次重启进程空缓存重打全套 Rubik 接口；
+    单元测试环境默认关闭（`_reset_cache_for_tests` / `PYTEST_CURRENT_TEST` /
+    `ASTRA_DATA_DIR` / `unittest`），除非显式设置 `ASTRA_OKX_DISK_CACHE=1`。
+    """
+    env_val = os.environ.get("ASTRA_OKX_DISK_CACHE")
+    if env_val is not None:
+        return env_val.strip().lower() not in ("0", "false", "no", "off", "")
+    if _DISK_CACHE_DISABLED:
+        return False
+    if os.environ.get("PYTEST_CURRENT_TEST") or os.environ.get("ASTRA_DATA_DIR"):
+        return False
+    if "unittest" in sys.modules:
+        return False
+    return True
+
+
+def _disk_cache_path() -> str:
+    return (
+        os.environ.get("ASTRA_OKX_DISK_CACHE_FILE")
+        or os.path.join(tempfile.gettempdir(), "astra_okx_public_ttl_cache.json")
+    )
+
+
+def _load_disk_cache_locked() -> None:
+    """必须在 `_CACHE_LOCK` 内调用：仅当磁盘文件更新时合并未过期条目。"""
+    global _DISK_CACHE_SIG
+    if not _disk_cache_enabled():
+        return
+    path = _disk_cache_path()
+    try:
+        st = os.stat(path)
+    except OSError:
+        return
+    sig = (int(getattr(st, "st_mtime_ns", int(st.st_mtime * 1e9))), int(st.st_size))
+    if sig == _DISK_CACHE_SIG:
+        return
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            raw = json.load(f)
+    except Exception:
+        return
+    if not isinstance(raw, dict):
+        return
+    now = time.time()
+    for key, entry in raw.items():
+        if not isinstance(entry, (list, tuple)) or len(entry) != 2:
+            continue
+        try:
+            ts = float(entry[0])
+        except (TypeError, ValueError):
+            continue
+        if now - ts > _DISK_CACHE_MAX_TTL or ts > now + 60.0:
+            continue
+        k_str = str(key)
+        cur = _CACHE.get(k_str)
+        if cur is None or ts > float(cur[0]):
+            _CACHE[k_str] = (ts, entry[1])
+    _DISK_CACHE_SIG = sig
+
+
+def _save_disk_cache_locked() -> None:
+    """必须在 `_CACHE_LOCK` 内调用：原子写回持久 TTL 缓存，不触碰 `backend/data/`。"""
+    global _DISK_CACHE_SIG
+    if not _disk_cache_enabled():
+        return
+    path = _disk_cache_path()
+    now = time.time()
+    payload: Dict[str, List[Any]] = {}
+    for k, (ts, val) in list(_CACHE.items()):
+        if now - ts <= _DISK_CACHE_MAX_TTL:
+            payload[k] = [ts, val]
+    tmp = f"{path}.{os.getpid()}.{threading.get_ident()}.tmp"
+    try:
+        parent = os.path.dirname(path)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False)
+        os.replace(tmp, path)
+        st = os.stat(path)
+        _DISK_CACHE_SIG = (int(getattr(st, "st_mtime_ns", int(st.st_mtime * 1e9))), int(st.st_size))
+    except Exception:
+        try:
+            if os.path.exists(tmp):
+                os.remove(tmp)
+        except OSError:
+            pass
 
 
 def _cache_get(key: str, ttl: float) -> Any:
+    now = time.time()
     with _CACHE_LOCK:
         hit = _CACHE.get(key)
-    if not hit:
-        return None
-    ts, value = hit
-    if time.time() - ts > ttl:
-        return None
-    return value
+        if hit and now - float(hit[0]) <= ttl:
+            return hit[1]
+        if _disk_cache_enabled():
+            _load_disk_cache_locked()
+            hit = _CACHE.get(key)
+            if hit and now - float(hit[0]) <= ttl:
+                return hit[1]
+    return None
 
 
 def _cache_put(key: str, value: Any) -> None:
     with _CACHE_LOCK:
         _CACHE[key] = (time.time(), value)
+        if _disk_cache_enabled():
+            _save_disk_cache_locked()
 
 
 def _reset_cache_for_tests() -> None:
-    """测试专用（生产不调用）：清空 TTL 缓存 **并关闭 Rubik 限频等待**。
+    """测试专用（生产不调用）：清空 TTL 缓存 **并关闭 Rubik 限频等待与磁盘缓存**。
 
     为什么连限频一起关：打桩的测试里每个 Rubik 路由都会"成功返回"，
     于是记账生效、后续调用真的各睡 0.42s —— 实测把
@@ -177,11 +281,14 @@ def _reset_cache_for_tests() -> None:
     生产间隔由 `_RUBIK_MIN_INTERVAL` 常量决定，测试要验节流行为时
     自己 `mock.patch.object(qf, "_RUBIK_MIN_INTERVAL", 真实值)` 即可。
     """
-    global _RUBIK_MIN_INTERVAL
+    global _RUBIK_MIN_INTERVAL, _DISK_CACHE_DISABLED, _DISK_CACHE_SIG
     with _CACHE_LOCK:
         _CACHE.clear()
+        _DISK_CACHE_DISABLED = True
+        _DISK_CACHE_SIG = (0, 0)
     with _RUBIK_LOCK:
         _RUBIK_LAST_AT[0] = 0.0
+        _RUBIK_NEXT_SLOT[0] = 0.0
         _RUBIK_MIN_INTERVAL = 0.0
 
 
@@ -189,11 +296,13 @@ def _reset_cache_for_tests() -> None:
 #: 接口（全网多空比 + 精英账户比 + 精英持仓比 + Taker 5m + Taker 1H），
 #: 6 标的池 = 30 次/轮 —— 实测突发会把其中一两次打成 429 并**静默退化成 0**
 #: （实盘快照里 `cvd_1h_usd` 长期为 0、`taker_buy_sell_ratio` 恒为 1.0 就是这个原因）。
-#: 故进程内串行节流到 0.42s 一次（≈ 4.8 次/2s，留出余量）。
+#: 按请求**发起时刻**以 0.42s 节流（≈ 4.76 次/2s），且网络 RTT 在锁外并发执行，
+#: 避免 `0.42s + 0.35s HTTP RTT` 串行叠加导致 11 标的超 55s 超时。
 _RUBIK_MIN_INTERVAL = 0.42
 _RUBIK_LOCK = threading.Lock()
 _RUBIK_CALL_LOCK = threading.Lock()
 _RUBIK_LAST_AT = [0.0]
+_RUBIK_NEXT_SLOT = [0.0]
 
 
 class _NoopLock:
@@ -210,22 +319,27 @@ _NOOP_LOCK = _NoopLock()
 def _throttle_rubik(path: str) -> None:
     """Rubik 路径的进程内节流（非 Rubik 路径零开销）。
 
-    ⚠️ 这里**只等待、不记账**：记账在 `_mark_rubik_called()`，且只在
-    "请求真的到达了服务器"（拿到响应或拿到 HTTP 状态码）时才记。
-    理由有两层：
-
-    1. 正确的限频口径是"**交易所收到的请求数**" —— DNS 解析失败 / 连接被拒的
-       本地失败根本没占用配额，不该让后续请求为它排队；
-    2. 测试里所有外呼都是打桩的（`urlopen` 直接抛 OSError），若在等待处记账，
-       同一进程内每测一次都要真睡 0.42s —— 实测把 `tests/ops/test_factor_library.py`
-       从 3 秒拖到 **5 分钟**（user CPU 只有 1.8s，全在 `time.sleep`）。
+    ⚠️ 只按请求发起槽位排队等待，不在锁内阻塞 HTTP 网络 IO：
+    1. 正确的限频口径是"**发往交易所的请求速率**"（≤ 5 req / 2s），HTTP 响应耗时
+       不应占用下一个请求槽位的等待时间；
+    2. 真实到站记账仍在 `_mark_rubik_called()`，本地失败（DNS/被拒）不记进
+       `_RUBIK_LAST_AT`。
     """
     if "/rubik/" not in path:
         return
+    interval = _RUBIK_MIN_INTERVAL
+    if interval <= 0:
+        return
     with _RUBIK_LOCK:
-        wait = _RUBIK_MIN_INTERVAL - (time.time() - _RUBIK_LAST_AT[0])
-        if wait > 0:
-            time.sleep(wait)
+        now = time.time()
+        if _RUBIK_NEXT_SLOT[0] == 0.0 and _RUBIK_LAST_AT[0] > 0.0:
+            earliest = max(now, _RUBIK_LAST_AT[0] + interval)
+        else:
+            earliest = max(now, _RUBIK_NEXT_SLOT[0])
+        wait = earliest - now
+        _RUBIK_NEXT_SLOT[0] = earliest + interval
+    if wait > 0:
+        time.sleep(wait)
 
 
 def _mark_rubik_called(path: str) -> None:
@@ -256,30 +370,35 @@ def _public_get(path: str, params: Optional[Dict[str, Any]] = None,
         url = f"{host}{path}{query}"
         # 429（按 IP 限频）**指数退避重试**：直接吞掉会静默退化成"因子为 0/中性"
         # （实盘已观测到 1H taker 长期取空）。三次尝试后仍失败才走下一个主机。
-        _call_lock = _RUBIK_CALL_LOCK if "/rubik/" in path else _NOOP_LOCK
+        # `_call_lock` 仅序列化发车槽位分配，HTTP RTT 在锁外执行以避免叠加超时。
+        _is_rubik = "/rubik/" in path
+        _call_lock = _RUBIK_CALL_LOCK if _is_rubik else _NOOP_LOCK
         for attempt, backoff in enumerate((0.0, 0.6, 1.5, 3.0)):
             if backoff:
                 time.sleep(backoff)
             with _call_lock:
                 _throttle_rubik(path)
-                try:
-                    req = urllib.request.Request(url, headers=_HEADERS)
-                    with urllib.request.urlopen(req, timeout=timeout) as resp:
-                        payload = json.loads(resp.read().decode("utf-8"))
-                    _mark_rubik_called(path)      # 服务器确实收到了这次请求
-                    if str(payload.get("code")) == "0":
-                        data = payload.get("data")
-                        if isinstance(data, list) and cache_key:
-                            _cache_put(cache_key, data)
-                        return data if isinstance(data, list) else None
-                    break
-                except urllib.error.HTTPError as exc:
-                    _mark_rubik_called(path)      # 有状态码 ⇒ 也到了服务器（如 429）
-                    if exc.code == 429 and attempt < 3:
-                        continue
-                    break
-                except Exception:
-                    break                       # 本地失败 ⇒ 不记账、不占用限频额度
+            try:
+                req = urllib.request.Request(url, headers=_HEADERS)
+                with urllib.request.urlopen(req, timeout=timeout) as resp:
+                    payload = json.loads(resp.read().decode("utf-8"))
+                _mark_rubik_called(path)      # 服务器确实收到了这次请求
+                if str(payload.get("code")) == "0":
+                    data = payload.get("data")
+                    if isinstance(data, list) and cache_key:
+                        _cache_put(cache_key, data)
+                    return data if isinstance(data, list) else None
+                break
+            except urllib.error.HTTPError as exc:
+                _mark_rubik_called(path)      # 有状态码 ⇒ 也到了服务器（如 429）
+                if exc.code == 429 and attempt < 3:
+                    if _is_rubik:
+                        with _RUBIK_LOCK:
+                            _RUBIK_NEXT_SLOT[0] = max(_RUBIK_NEXT_SLOT[0], time.time() + 0.6)
+                    continue
+                break
+            except Exception:
+                break                       # 本地失败 ⇒ 不记账、不占用限频额度
     return None
 
 
@@ -1170,7 +1289,8 @@ def fetch_derivatives_snapshot(ccy: str, inst_id: str, ul_y: str, *,
 
     # ΔOI：用官方 `open-interest-history` 的 oiUsd 列（索引 3），不是自己攒快照
     rows = _public_get("/api/v5/rubik/stat/contracts/open-interest-history",
-                       {"instId": inst_id, "period": "1H"}, timeout)
+                       {"instId": inst_id, "period": "1H"}, timeout,
+                       cache_key=f"oi-hist-1h:{inst_id}", ttl=300.0)
     if rows:
         snap["oi_series_usd"] = [_sf(r[3]) for r in rows[:6]
                                  if isinstance(r, (list, tuple)) and len(r) > 3]
@@ -1212,16 +1332,18 @@ def fetch_derivatives_snapshot(ccy: str, inst_id: str, ul_y: str, *,
 
 def fetch_taker_volume(ccy: str, period: str, *, timeout: float = 4.0
                        ) -> Optional[List[Any]]:
-    """T0.5 主动成交量序列（Rubik taker-volume，newest-first，TTL 30s）。
+    """T0.5 主动成交量序列（Rubik taker-volume，newest-first）。
 
-    ⚠️ 必须带 TTL：本函数每轮对**每个标的**都要 5m + 1H 两次外呼，
-    6 标的池 = 每分钟 12 次；实测不加缓存会偶发 429 并把 CVD 静默打成 0。
+    ⚠️ 必须带 TTL：本函数每轮对**每个标的**都要 5m + 1H 两次外呼；
+    1H 周期作为慢变量采用 180s TTL，5m 采用 45s TTL，既保证每分钟增量刷新
+    又与 smart_money 共享缓存结果，彻底消除同分钟重复请求与 429。
     """
     base = str(ccy or "").upper().strip()
     if not base:
         return None
     cache_key = f"taker:{base}:{period}"
-    cached = _cache_get(cache_key, 30.0)
+    ttl = 180.0 if str(period).upper() == "1H" else 45.0
+    cached = _cache_get(cache_key, ttl)
     if cached is not None:
         return cached
     rows = _public_get("/api/v5/rubik/stat/taker-volume",
