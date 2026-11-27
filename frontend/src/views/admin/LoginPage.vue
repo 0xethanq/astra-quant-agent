@@ -177,19 +177,6 @@ async function handleLogin() {
   background-color: var(--ds-color-bg-page);
   overflow: hidden;
 }
-.auth-page::before {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 640px;
-  height: 640px;
-  background: radial-gradient(circle, rgba(16, 185, 129, 0.07) 0%, rgba(6, 78, 59, 0.02) 45%, transparent 70%);
-  pointer-events: none;
-  border-radius: 50%;
-  filter: blur(40px);
-}
 
 /* 顶部操作条 */
 .auth-topbar {
@@ -262,13 +249,8 @@ async function handleLogin() {
 /* 卡片本体 */
 .auth-card {
   padding: var(--ds-space-6) var(--ds-space-5);
-  /* 批 94：原为 `14px` —— **整个半径刻度（4/8/10/12/16/胶囊）里没有这个值**，
-     是全站唯一的 14px 圆角。登录卡也是「卡片」，收敛到 `--r-card`(10px)，
-     与其余 9 处卡片一致。⚠️ 这是本批唯一的**可见变化**（卡片圆角 14px→10px）。 */
   border-radius: var(--r-card);
   background: var(--ds-color-bg-surface-card);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
   border: 1px solid var(--ds-color-border-default);
   box-shadow: var(--shadow-card);
 }
@@ -284,15 +266,13 @@ async function handleLogin() {
 .auth-logo-box {
   width: 44px;
   height: 44px;
-  /* 批 94：10px 就是 `--r-card` 的值，改用令牌（渲染完全相同）。 */
   border-radius: var(--r-card);
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--ds-color-bg-surface-2);
+  border: 1px solid var(--ds-color-border-default);
   margin-bottom: 12px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 .auth-logo {
   width: 22px;
@@ -372,7 +352,7 @@ async function handleLogin() {
 .auth-input:focus {
   background: var(--ds-color-bg-input);
   border-color: var(--ds-color-border-input-focus);
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.18);
+  box-shadow: 0 0 0 3px var(--astra-brand-bg);
 }
 .auth-input::placeholder {
   color: var(--ds-color-text-placeholder);
@@ -425,14 +405,13 @@ async function handleLogin() {
   font-size: var(--text-xs);
   font-weight: 600;
   cursor: pointer;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2), 0 4px 14px rgba(16, 185, 129, 0.2);
-  transition: all var(--dur-fast) var(--ease-out);
+  box-shadow: none;
+  transition: background-color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
 }
 .auth-submit-btn:hover:not(:disabled) {
   background: var(--ds-btn-primary-hover-bg);
   border-color: var(--ds-btn-primary-hover-bg);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 6px 20px rgba(16, 185, 129, 0.3);
-  transform: translateY(-1px);
+  box-shadow: none;
 }
 .auth-submit-btn:disabled {
   opacity: 0.45;

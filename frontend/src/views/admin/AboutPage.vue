@@ -242,8 +242,8 @@ const bandFacts = computed(() => {
             </div>
 
             <!-- 核心一句话定调 -->
-            <div class="mx-4 mt-3 p-3 rounded-lg border border-emerald-500/30 bg-emerald-500/5 text-xs text-[var(--ink-1)] leading-relaxed">
-              <p class="font-medium text-emerald-400 mb-1 flex items-center gap-1.5">
+            <div class="mx-4 mt-3 p-3 rounded-lg border border-[var(--astra-brand-line)] bg-[var(--astra-brand-bg)] text-xs text-[var(--ink-1)] leading-relaxed">
+              <p class="font-medium text-[var(--ds-color-brand)] mb-1 flex items-center gap-1.5">
                 <Sparkles :size="13" />
                 <span>{{ t('admin.about.pitchTitle') }}</span>
               </p>
@@ -373,15 +373,15 @@ const bandFacts = computed(() => {
           <!-- 待更新提交清单（有差额且有 commit 摘要时展示） -->
           <div
             v-if="(about.update?.behind || 0) > 0 && about.update?.commits?.length"
-            class="mx-4 mb-3 p-3 rounded-lg border border-emerald-500/20 bg-emerald-500/5 text-xs"
+            class="mx-4 mb-3 p-3 rounded-lg border border-[var(--astra-brand-line)] bg-[var(--astra-brand-bg)] text-xs"
           >
-            <p class="font-medium text-emerald-300 mb-1.5 flex items-center gap-1.5">
-              <ArrowUpRight :size="14" class="text-emerald-400" />
+            <p class="font-medium text-[var(--ds-color-brand)] mb-1.5 flex items-center gap-1.5">
+              <ArrowUpRight :size="14" class="text-[var(--ds-color-brand)]" />
               <span>{{ t('admin.about.commitsTitle') }}</span>
             </p>
             <ul class="space-y-1 font-mono text-3xs text-[var(--ink-2)]">
               <li v-for="(c, i) in about.update.commits" :key="i" class="truncate flex items-center gap-1.5">
-                <span class="text-emerald-400/80">•</span>
+                <span class="text-[var(--ds-color-brand)]">•</span>
                 <span>{{ c }}</span>
               </li>
             </ul>

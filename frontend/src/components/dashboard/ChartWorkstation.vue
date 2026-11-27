@@ -1170,49 +1170,11 @@ onUnmounted(() => {
       :class="isFullscreen ? 'flex-1 min-h-0' : (props.chartHeight === '100%' || props.fill) ? 'flex-1 min-h-[340px] xl:min-h-0' : 'min-h-0'"
       :style="{ height: isFullscreen ? undefined : ((props.chartHeight === '100%' || props.fill) ? undefined : (props.chartHeight || 'clamp(340px, 60vw, 560px)')) }"
     >
-      <!-- K线背景品牌水印（纯净星芒几何发丝，不带卡座底框，明暗自适应） -->
+      <!-- K线背景品牌水印（几何 A-Frame 与突破斜线，明暗自适应） -->
       <div class="chart-watermark" aria-hidden="true">
-        <svg class="chart-watermark-logo" viewBox="0 0 48 48" width="156" height="156">
-          <defs>
-            <radialGradient id="wm-emerald-glow" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stop-color="#34d399" stop-opacity="0.85"/>
-              <stop offset="40%" stop-color="#10b981" stop-opacity="0.45"/>
-              <stop offset="100%" stop-color="#059669" stop-opacity="0"/>
-            </radialGradient>
-            <linearGradient id="wm-facet-bright" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stop-color="var(--wm-facet-bright-color, #ffffff)"/>
-              <stop offset="100%" stop-color="var(--wm-facet-mid-color, #cbd5e1)"/>
-            </linearGradient>
-            <linearGradient id="wm-facet-dim" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stop-color="var(--wm-facet-dim-color, #94a3b8)"/>
-              <stop offset="100%" stop-color="var(--wm-facet-dark-color, #475569)"/>
-            </linearGradient>
-          </defs>
-
-          <!-- 1. 坐标轴与相空间标尺发丝线 -->
-          <g>
-            <line x1="24" y1="4" x2="24" y2="44" stroke="currentColor" stroke-width="0.75" stroke-dasharray="1 1.5"/>
-            <line x1="4" y1="24" x2="44" y2="24" stroke="currentColor" stroke-width="0.75" stroke-dasharray="1 1.5"/>
-            <circle cx="24" cy="24" r="14.5" fill="none" stroke="currentColor" stroke-width="0.5" stroke-dasharray="2 2" opacity="0.6"/>
-          </g>
-
-          <!-- 2. 翡翠能量光晕底衬 -->
-          <circle cx="24" cy="24" r="9" fill="url(#wm-emerald-glow)"/>
-
-          <!-- 3. 主星体分面几何（The Astral Spark） -->
-          <g>
-            <polygon points="24,6 24,24 20,20" fill="url(#wm-facet-bright)"/>
-            <polygon points="24,6 28,20 24,24" fill="url(#wm-facet-dim)"/>
-            <polygon points="41,24 24,24 28,20" fill="url(#wm-facet-bright)"/>
-            <polygon points="41,24 28,28 24,24" fill="url(#wm-facet-dim)"/>
-            <polygon points="24,42 24,24 28,28" fill="url(#wm-facet-bright)"/>
-            <polygon points="24,42 20,28 24,24" fill="url(#wm-facet-dim)"/>
-            <polygon points="7,24 24,24 20,28" fill="url(#wm-facet-bright)"/>
-            <polygon points="7,24 20,20 24,24" fill="url(#wm-facet-dim)"/>
-          </g>
-
-          <!-- 4. 核心星芒激发点 -->
-          <circle cx="24" cy="24" r="1.6" fill="#10b981"/>
+        <svg class="chart-watermark-logo" viewBox="0 0 64 64" width="156" height="156" fill="none">
+          <path d="M29 12H35L51 52H42.5L32 25.5L21.5 52H13L29 12Z" fill="currentColor" />
+          <path d="M14.5 41.5L47.5 27.5L49.5 32.5L16.5 46.5L14.5 41.5Z" class="chart-watermark-accent" />
         </svg>
         <span class="chart-watermark-name">
           {{ APP_NAME }}
@@ -1305,17 +1267,15 @@ onUnmounted(() => {
   pointer-events: none;
   user-select: none;
   z-index: 0;
-  --wm-facet-bright-color: #ffffff;
-  --wm-facet-mid-color: #cbd5e1;
-  --wm-facet-dim-color: #94a3b8;
-  --wm-facet-dark-color: #475569;
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.35);
 }
 .chart-watermark-logo {
   width: 156px;
   height: 156px;
-  opacity: 0.10;
-  filter: drop-shadow(0 8px 32px rgba(0, 0, 0, 0.6));
+  opacity: 0.1;
+}
+.chart-watermark-accent {
+  fill: var(--ds-color-brand);
 }
 .chart-watermark-name {
   margin-top: var(--sp-5);
@@ -1328,21 +1288,16 @@ onUnmounted(() => {
   opacity: 0.09;
 }
 
-/* 亮色模式精修：彻底消灭方块黑框底衬，适配高质感温润冷灰暗刻水准 */
+/* 亮色模式精修：温润暖纸暗刻质感 */
 :root[data-theme='light'] .chart-watermark {
-  --wm-facet-bright-color: #1e293b;
-  --wm-facet-mid-color: #475569;
-  --wm-facet-dim-color: #64748b;
-  --wm-facet-dark-color: #94a3b8;
-  color: rgba(15, 23, 42, 0.28);
+  color: rgba(20, 20, 22, 0.25);
 }
 :root[data-theme='light'] .chart-watermark-logo {
-  opacity: 0.06;
-  filter: drop-shadow(0 4px 16px rgba(16, 185, 129, 0.12));
+  opacity: 0.08;
 }
 :root[data-theme='light'] .chart-watermark-name {
   opacity: 0.07;
-  color: #0f172a;
+  color: #141416;
 }
 
 @media (max-width: 640px) {

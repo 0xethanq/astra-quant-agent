@@ -94,7 +94,7 @@ watch(() => route.path, () => (drawerOpen.value = false));
       <div class="wb-brand">
         <img src="/favicon.svg" class="wb-logo" alt="" />
         <div v-if="!collapsed" class="wb-brand-text">
-          <span class="wb-brand-name">{{ t('brand.name') }}</span>
+          <span class="wb-brand-name">Astra<span class="text-[var(--ds-color-brand)]">Quant</span></span>
           <span class="wb-version">{{ APP_VERSION }}</span>
         </div>
         <button type="button"
@@ -216,7 +216,7 @@ watch(() => route.path, () => (drawerOpen.value = false));
       <div class="wb-scrim" @click="drawerOpen = false" />
       <aside id="admin-mobile-drawer" class="wb-drawer" :aria-label="t('admin.shell.brand')">
         <div class="wb-drawer-head">
-          <span class="wb-brand-name">{{ t('brand.name') }} {{ t('admin.shell.brand') }}</span>
+          <span class="wb-brand-name">Astra<span class="text-[var(--ds-color-brand)]">Quant</span> {{ t('admin.shell.brand') }}</span>
           <button type="button"
             class="wb-icon-btn"
             :title="t('common.close')"
@@ -272,8 +272,6 @@ watch(() => route.path, () => (drawerOpen.value = false));
   width: var(--w-sidebar);
   border-right: 1px solid var(--ds-color-border-default);
   background-color: var(--surface-sidebar);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
   transition: width var(--dur-base) var(--ease-out);
 }
 .wb-rail.is-collapsed {
@@ -379,11 +377,11 @@ watch(() => route.path, () => (drawerOpen.value = false));
   color: var(--ds-color-text-primary);
 }
 .wb-item.is-active {
-  background: linear-gradient(90deg, rgba(16, 185, 129, 0.12) 0%, rgba(16, 185, 129, 0.02) 100%);
+  background-color: var(--astra-brand-bg);
   color: var(--ds-color-text-primary);
   font-weight: 600;
-  border: 1px solid var(--accent-line);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  border: 1px solid var(--astra-brand-line);
+  box-shadow: none;
 }
 .wb-item-icon {
   flex-shrink: 0;
@@ -458,8 +456,8 @@ watch(() => route.path, () => (drawerOpen.value = false));
   padding: 0 var(--ds-space-3);
   border-bottom: 1px solid var(--ds-color-border-default);
   background-color: var(--surface-header);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   flex-shrink: 0;
 }
 @media (min-width: 768px) {

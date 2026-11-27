@@ -125,10 +125,10 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="min-h-screen font-sans selection:bg-emerald-500 selection:text-black" style="background-color: var(--surface-0); color: var(--ink-1);">
+  <div class="min-h-screen font-sans selection:bg-[var(--ds-color-brand)] selection:text-white" style="background-color: var(--surface-0); color: var(--ink-1);">
     <!-- Top Header Navigation -->
     <header
-      class="sticky top-0 z-[var(--z-header)] border-b px-3 sm:px-6 h-12 flex items-center justify-between backdrop-blur-xl"
+      class="sticky top-0 z-[var(--z-header)] border-b px-3 sm:px-6 h-12 flex items-center justify-between backdrop-blur-md"
       style="background-color: var(--surface-header); border-color: var(--line-1);"
     >
       <div class="flex items-center space-x-2 sm:space-x-3 min-w-0">
@@ -142,12 +142,12 @@ onUnmounted(() => {
         </button>
         <div class="h-4 w-px hidden sm:block shrink-0" style="background-color: var(--line-1);" />
         <div class="flex items-center space-x-2 min-w-0">
-          <BookOpen class="h-4 w-4 text-emerald-400 shrink-0" />
-          <h1 class="font-bold text-xs sm:text-sm tracking-wide shrink-0 whitespace-nowrap text-[var(--ink-strong)] font-mono">
+          <BookOpen class="h-4 w-4 text-[var(--ds-color-brand)] shrink-0" />
+          <h1 class="font-bold text-xs sm:text-sm tracking-[-0.02em] shrink-0 whitespace-nowrap text-[var(--ink-strong)]">
             {{ APP_NAME }}
           </h1>
           <span
-            class="dsh-pill font-mono text-3xs border border-white/10 bg-zinc-900/60 text-zinc-400"
+            class="dsh-pill font-mono text-3xs border border-[var(--line-1)] bg-[var(--surface-2)] text-[var(--ink-3)]"
           >
             {{ APP_VERSION }} 官方技术文档
           </span>
@@ -169,9 +169,9 @@ onUnmounted(() => {
 
         <button type="button"
           @click="router.push('/admin')"
-          class="hidden sm:inline-flex btn btn-ghost h-7 px-3 text-xs font-medium cursor-pointer items-center gap-1.5 rounded-lg border-white/10 hover:border-emerald-500/30"
+          class="hidden sm:inline-flex btn btn-ghost h-7 px-3 text-xs font-medium cursor-pointer items-center gap-1.5 rounded-lg border-[var(--line-1)] hover:border-[var(--astra-brand-line)]"
         >
-          <Lock class="w-3.5 h-3.5 text-emerald-400" />
+          <Lock class="w-3.5 h-3.5 text-[var(--ds-color-brand)]" />
           <span>控制台</span>
         </button>
 
@@ -225,14 +225,14 @@ onUnmounted(() => {
             :aria-current="activeSection === s.id ? 'location' : undefined"
             class="w-full text-left px-3 py-2 rounded-lg text-xs font-medium transition-all flex items-center justify-between group cursor-pointer border"
             :style="activeSection === s.id
-              ? { backgroundColor: 'var(--surface-3)', color: 'var(--ink-strong)', borderColor: 'rgba(16, 185, 129, 0.3)', fontWeight: 'bold' }
+              ? { backgroundColor: 'var(--surface-3)', color: 'var(--ink-strong)', borderColor: 'var(--astra-brand-line)', fontWeight: 'bold' }
               : { backgroundColor: 'transparent', borderColor: 'transparent', color: 'var(--ink-2)' }"
           >
             <div class="flex items-center space-x-2.5 truncate" :title="s.title">
-              <component :is="s.icon" class="w-3.5 h-3.5 shrink-0 transition-colors" :class="activeSection === s.id ? 'text-emerald-400' : 'opacity-70 group-hover:opacity-100'" />
+              <component :is="s.icon" class="w-3.5 h-3.5 shrink-0 transition-colors" :class="activeSection === s.id ? 'text-[var(--ds-color-brand)]' : 'opacity-70 group-hover:opacity-100'" />
               <span class="truncate">{{ s.title }}</span>
             </div>
-            <ChevronRight class="w-3 h-3 transition-opacity" :class="activeSection === s.id ? 'opacity-100 text-emerald-400' : 'opacity-0 group-hover:opacity-100'" />
+            <ChevronRight class="w-3 h-3 transition-opacity" :class="activeSection === s.id ? 'opacity-100 text-[var(--ds-color-brand)]' : 'opacity-0 group-hover:opacity-100'" />
           </button>
         </nav>
 
@@ -240,7 +240,7 @@ onUnmounted(() => {
           <div class="text-3xs uppercase font-bold text-[var(--ink-3)]">开源技术社区与极客讨论</div>
           <div class="font-bold flex items-center justify-between text-[var(--ink-1)]">
             <span>LINUX DO 社区</span>
-            <span class="dsh-pill font-mono font-bold text-3xs text-emerald-400">linux.do</span>
+            <span class="dsh-pill font-mono font-bold text-3xs text-[var(--ds-color-brand)]">linux.do</span>
           </div>
           <p class="text-3xs text-[var(--ink-3)] leading-body">
             遵循 GNU AGPL-3.0 + Commons Clause v1.0 + Anti-Scam 特约附则，打造透明可信的量化基础设施。

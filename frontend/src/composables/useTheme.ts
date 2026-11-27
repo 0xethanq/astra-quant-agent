@@ -33,6 +33,10 @@ export function useTheme() {
         el.classList.add('dark')
         el.classList.remove('light')
       }
+      el.style.colorScheme = theme
+      document
+        .querySelector('meta[name="theme-color"]')
+        ?.setAttribute('content', theme === 'light' ? '#f6f5f2' : '#0a0a0b')
       try {
         localStorage.setItem('astra_theme', theme)
         localStorage.setItem('astra_theme_v2', theme)

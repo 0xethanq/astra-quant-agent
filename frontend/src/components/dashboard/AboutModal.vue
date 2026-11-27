@@ -48,7 +48,7 @@ onMounted(loadChannels);
     </template>
 
     <!-- 核心定位金句 -->
-    <div class="card-flat p-3 mb-3 border-l-2 border-emerald-400 bg-emerald-500/5">
+    <div class="card-flat p-3 mb-3 border-l-2 border-[var(--ds-color-brand)] bg-[var(--astra-brand-bg)]">
       <p class="text-xs italic leading-relaxed text-[var(--ink-1)]">
         {{ t('dash.about.pitch') }}
       </p>

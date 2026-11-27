@@ -16,12 +16,9 @@
 .dsh-card,
 .section {
   background-color: var(--ds-color-bg-surface-card);
-  background-image: var(--grad-surface);
   border: 1px solid var(--ds-color-border-default);
   border-radius: var(--r-card);
   box-shadow: var(--shadow-card);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
   transition: border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
 }
 .card:hover {
@@ -36,12 +33,8 @@
 }
 .card-flat {
   background-color: var(--ds-color-bg-surface-card);
-  background-image: var(--grad-surface);
   border: 1px solid var(--ds-color-border-default);
   border-radius: var(--r-card);
-  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
 }
 
 /* 卡片头：统一 44px 基线高度 */
@@ -55,7 +48,7 @@
   min-height: 44px;
   padding: var(--sp-5) var(--sp-7);
   border-bottom: 1px solid var(--ds-color-border-default);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.02) 0%, transparent 100%), var(--ds-color-bg-surface-inset);
+  background-color: var(--ds-color-bg-surface-inset);
 }
 .card-title,
 .section-title {
@@ -141,34 +134,30 @@
 }
 
 .btn-primary {
-  background: linear-gradient(180deg, var(--ds-btn-primary-bg) 0%, var(--ds-color-brand-deep) 100%);
-  border-color: rgba(255, 255, 255, 0.16);
+  background-color: var(--ds-btn-primary-bg);
+  border-color: var(--ds-btn-primary-bg);
   color: var(--ds-btn-primary-text);
   font-weight: 600;
-  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.28), 0 2px 8px -1px rgba(16, 185, 129, 0.35);
+  box-shadow: none;
 }
 .btn-primary:hover:not(:disabled) {
-  background: linear-gradient(180deg, var(--ds-btn-primary-hover-bg) 0%, var(--ds-btn-primary-bg) 100%);
-  border-color: rgba(255, 255, 255, 0.25);
+  background-color: var(--ds-btn-primary-hover-bg);
+  border-color: var(--ds-btn-primary-hover-bg);
   color: var(--ds-btn-primary-text);
-  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.38), 0 4px 16px -2px rgba(16, 185, 129, 0.5);
-  transform: translateY(-0.5px);
+  box-shadow: none;
 }
 
 .btn-ghost {
   background-color: var(--ds-btn-secondary-bg);
   border-color: var(--ds-btn-secondary-border);
   color: var(--ds-btn-secondary-text);
-  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  box-shadow: none;
 }
 .btn-ghost:hover:not(:disabled) {
   background-color: var(--ds-btn-secondary-hover-bg);
   border-color: var(--ds-btn-secondary-hover-border);
   color: var(--ds-color-text-primary);
-  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.12), 0 4px 12px -2px rgba(0, 0, 0, 0.3);
-  transform: translateY(-0.5px);
+  box-shadow: none;
 }
 
 .btn-quiet {
@@ -273,7 +262,7 @@ textarea.input {
 .input:focus {
   background-color: var(--ds-color-bg-input);
   border-color: var(--ds-color-border-input-focus);
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.16);
+  box-shadow: 0 0 0 3px var(--astra-brand-bg);
 }
 /* —— 复合输入框（无边框 input 嵌在有边框包裹层里）——
    批 22：全站有 6 个这类输入框（审计/网关/风控/模型连接的搜索与数字输入、
@@ -282,7 +271,7 @@ textarea.input {
    鼠标点进去也没有反馈。给包裹层加 .focus-ring，复用 .input:focus 的同一套视觉。 */
 .focus-ring:focus-within {
   border-color: var(--ds-color-border-input-focus);
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.16);
+  box-shadow: 0 0 0 3px var(--astra-brand-bg);
 }
 .field:disabled,
 .input:disabled {
@@ -311,9 +300,6 @@ textarea.input {
   font-weight: 500;
   letter-spacing: 0.02em;
   white-space: nowrap;
-  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
   transition: border-color var(--dur-fast), background-color var(--dur-fast);
 }
 .badge-up,

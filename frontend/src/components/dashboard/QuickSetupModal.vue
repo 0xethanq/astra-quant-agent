@@ -227,7 +227,7 @@ async function handleApply() {
           :class="currentStep === 3 ? 'bg-[var(--surface-card)] text-[var(--ink-strong)] font-semibold shadow-sm' : 'text-[var(--ink-3)] hover:text-[var(--ink-1)]'"
           @click="currentStep = 3"
         >
-          <ShieldCheck class="h-3.5 w-3.5" :class="currentStep === 3 ? 'text-emerald-400' : ''" />
+          <ShieldCheck class="h-3.5 w-3.5" :class="currentStep === 3 ? 'text-[var(--ds-color-brand)]' : ''" />
           <span>{{ t('dash.firstRun.wizardStep3') }}</span>
         </button>
       </nav>
@@ -461,7 +461,7 @@ async function handleApply() {
               :key="r.id"
               type="button"
               class="w-full flex items-center justify-between rounded-lg border p-2.5 text-left transition-colors cursor-pointer"
-              :class="riskProfile === r.id ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400 font-semibold' : 'border-[var(--line-2)] hover:bg-[var(--surface-2)] text-[var(--ink-2)]'"
+              :class="riskProfile === r.id ? 'border-[var(--astra-brand-line)] bg-[var(--astra-brand-bg)] text-[var(--ds-color-brand)] font-semibold' : 'border-[var(--line-2)] hover:bg-[var(--surface-2)] text-[var(--ink-2)]'"
               @click="riskProfile = r.id as any"
             >
               <span class="text-xs">{{ t(r.labelKey) }}</span>

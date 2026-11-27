@@ -172,7 +172,7 @@ function go(path: string) {
           class="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-medium cursor-pointer transition-all relative overflow-hidden group"
           :class="
             activeTab === tab.key
-              ? 'bg-[var(--surface-2)] text-[var(--ink-strong)] font-semibold border border-white/10 shadow-xs'
+              ? 'bg-[var(--surface-2)] text-[var(--ink-strong)] font-semibold border border-[var(--line-1)]'
               : 'text-[var(--ink-2)] hover:bg-[var(--surface-2)] hover:text-[var(--ink-1)] border border-transparent'
           "
           :title="navCompact ? t(tab.labelKey) : undefined"
@@ -182,7 +182,7 @@ function go(path: string) {
           <component
             :is="tab.icon"
             class="h-4 w-4 shrink-0 transition-colors"
-            :class="activeTab === tab.key ? 'text-emerald-400' : 'opacity-70 group-hover:opacity-100'"
+            :class="activeTab === tab.key ? 'text-[var(--ds-color-brand)]' : 'opacity-70 group-hover:opacity-100'"
           />
           <span v-if="!navCompact" class="truncate">{{ t(tab.labelKey) }}</span>
         </button>

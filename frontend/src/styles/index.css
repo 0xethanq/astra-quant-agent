@@ -21,11 +21,11 @@
 @theme {
   --radius-xs: 6px;   /* 微件：徽章 / 芯片 / logo 方块 / 滚动条 */
   --radius-sm: 6px;
-  --radius-md: 10px;  /* 控件：按钮 / 输入框 */
-  --radius-lg: 14px;  /* 卡片 */
-  --radius-xl: 16px;  /* 浮层 */
-  --radius-2xl: 18px; /* 面板 */
-  --radius-3xl: 22px;
+  --radius-md: 8px;   /* 控件：按钮 / 输入框 */
+  --radius-lg: 12px;  /* 卡片 */
+  --radius-xl: 14px;  /* 浮层 */
+  --radius-2xl: 12px; /* 面板 */
+  --radius-3xl: 16px;
   --radius-full: 100px;
 }
 

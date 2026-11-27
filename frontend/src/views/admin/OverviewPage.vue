@@ -681,9 +681,9 @@ function parseAuditContext(action: string, detail: any): { label: string; tag: s
   border: 1px solid var(--up-line);
 }
 .ov-hud-badge.is-shield {
-  background: rgba(16, 185, 129, 0.1);
-  color: #34d399;
-  border: 1px solid rgba(16, 185, 129, 0.25);
+  background: var(--up-bg);
+  color: var(--up);
+  border: 1px solid var(--up-line);
   font-size: var(--text-4xs);
   letter-spacing: 0.04em;
   white-space: nowrap;

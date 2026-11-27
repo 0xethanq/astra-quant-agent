@@ -4,7 +4,6 @@ import { enNav } from './nav';
 import { enDash } from './dash';
 import { enAdmin } from './admin';
 import { enDocs } from './docs';
-import { enLanding } from './landing';
 
 export const enUS = {
   ...enCommon,
@@ -13,5 +12,4 @@ export const enUS = {
   dash: enDash,
   admin: enAdmin,
   docs: enDocs,
-  landing: enLanding,
 };

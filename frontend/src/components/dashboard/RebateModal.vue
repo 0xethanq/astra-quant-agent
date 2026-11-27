@@ -42,7 +42,7 @@ const allChannels = computed(() => {
     <template #title>
       <div class="flex items-center gap-2.5">
         <div
-          class="flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+          class="flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--astra-brand-line)] bg-[var(--astra-brand-bg)] text-[var(--ds-color-brand)]"
         >
           <Gift class="h-4 w-4" aria-hidden="true" />
         </div>
@@ -55,14 +55,14 @@ const allChannels = computed(() => {
 
     <div class="flex items-center justify-between gap-2 pb-3 border-b" style="border-color: var(--line-1)">
       <div class="flex items-center gap-1.5 text-xs" style="color: var(--ink-2)">
-        <Globe class="h-3.5 w-3.5 text-emerald-400" aria-hidden="true" />
-        <span>{{ t('landing.referral.mirrorLabel') }}</span>
+        <Globe class="h-3.5 w-3.5 text-[var(--ds-color-brand)]" aria-hidden="true" />
+        <span>{{ t('dash.about.rebateModal.mirrorLabel') }}</span>
       </div>
       <div class="inline-flex rounded-lg border p-0.5" style="border-color: var(--line-2); background: var(--surface-2)">
         <button
           type="button"
           class="h-7 px-2.5 rounded-md text-xs font-medium cursor-pointer transition-colors"
-          :class="mirror === 'cn' ? 'bg-[var(--surface-1)] text-emerald-400 font-semibold' : 'text-[var(--ink-2)] hover:text-[var(--ink-1)]'"
+          :class="mirror === 'cn' ? 'bg-[var(--surface-1)] text-[var(--ds-color-brand)] font-semibold' : 'text-[var(--ink-2)] hover:text-[var(--ink-1)]'"
           @click="mirror = 'cn'"
         >
           {{ t('dash.about.rebateModal.mirrorCn') }}
@@ -70,7 +70,7 @@ const allChannels = computed(() => {
         <button
           type="button"
           class="h-7 px-2.5 rounded-md text-xs font-medium cursor-pointer transition-colors"
-          :class="mirror === 'global' ? 'bg-[var(--surface-1)] text-emerald-400 font-semibold' : 'text-[var(--ink-2)] hover:text-[var(--ink-1)]'"
+          :class="mirror === 'global' ? 'bg-[var(--surface-1)] text-[var(--ds-color-brand)] font-semibold' : 'text-[var(--ink-2)] hover:text-[var(--ink-1)]'"
           @click="mirror = 'global'"
         >
           {{ t('dash.about.rebateModal.mirrorGlobal') }}
@@ -83,7 +83,7 @@ const allChannels = computed(() => {
         v-for="ch in allChannels"
         :key="ch.key"
         class="card-flat p-3 flex flex-col gap-2.5 border"
-        :class="ch.isApiSupported ? 'border-emerald-500/35' : 'border-[var(--line-1)]'"
+        :class="ch.isApiSupported ? 'border-[var(--astra-brand-line)]' : 'border-[var(--line-1)]'"
       >
         <div class="flex items-center justify-between gap-2">
           <div class="flex items-center gap-2 flex-wrap">
@@ -94,19 +94,19 @@ const allChannels = computed(() => {
                 ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
                 : 'bg-[var(--surface-2)] border-[var(--line-2)] text-[var(--ink-3)]'"
             >
-              {{ ch.isApiSupported ? t('landing.referral.okxBadge') : t('landing.referral.partnerBadge') }}
+              {{ ch.isApiSupported ? t('dash.about.rebateModal.okxBadge') : t('dash.about.rebateModal.partnerBadge') }}
             </span>
           </div>
           <span
             v-if="ch.rebate"
             class="rounded-md px-2 py-0.5 text-xs font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
           >
-            {{ ch.rebate }} {{ t('landing.referral.rebateRateSuffix') }}
+            {{ ch.rebate }} {{ t('dash.about.rebateModal.rebateRateSuffix') }}
           </span>
         </div>
 
         <p class="text-xs leading-relaxed" style="color: var(--ink-3)">
-          {{ ch.isApiSupported ? t('landing.referral.okxOldUserNote') : t('landing.referral.partnerNote') }}
+          {{ ch.isApiSupported ? t('dash.about.rebateModal.okxOldUserNote') : t('dash.about.rebateModal.partnerNote') }}
         </p>
 
         <div class="flex items-center justify-between gap-2 pt-1">
@@ -115,7 +115,7 @@ const allChannels = computed(() => {
             class="flex items-center gap-2 rounded-lg border px-2.5 py-1.5 bg-[var(--surface-1)]"
             style="border-color: var(--line-2)"
           >
-            <span class="text-3xs" style="color: var(--ink-3)">{{ t('landing.referral.codeLabel') }}</span>
+            <span class="text-3xs" style="color: var(--ink-3)">{{ t('dash.about.rebateModal.codeLabel') }}</span>
             <span class="num text-xs font-bold font-mono" style="color: var(--ink-1)">{{ ch.code }}</span>
             <CopyButton :text="ch.code" />
           </div>
@@ -129,7 +129,7 @@ const allChannels = computed(() => {
               :class="ch.isApiSupported ? 'btn-primary' : 'btn-quiet'"
               @click="trackEvent('rebate_click', { exchange: ch.key, placement: 'rebate_modal', mirror })"
             >
-              <span>{{ t('landing.referral.openAccount') }}</span>
+              <span>{{ t('dash.about.rebateModal.openAccount') }}</span>
               <span class="sr-only">{{ t('common.opensInNewTab') }}</span>
               <ExternalLink class="h-3.5 w-3.5" aria-hidden="true" />
             </a>
@@ -140,7 +140,7 @@ const allChannels = computed(() => {
 
     <div class="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 flex items-start gap-2 text-xs text-amber-400 leading-relaxed">
       <ShieldCheck class="h-4 w-4 shrink-0 mt-0.5" aria-hidden="true" />
-      <span>{{ t('landing.referral.compatibilityNotice') }}</span>
+      <span>{{ t('dash.about.rebateModal.compatibilityNotice') }}</span>
     </div>
 
     <div class="mt-3 pt-2.5 border-t flex items-center justify-between" style="border-color: var(--line-1)">

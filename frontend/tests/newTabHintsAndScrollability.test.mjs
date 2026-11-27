@@ -72,7 +72,8 @@ test('所有 target="_blank" 外链必须提供「新标签页打开」提示', 
   //          里 1 个注册通道外链 + 1 个官方仓库外链 —— 全部带 `common.opensInNewTab`。
   //   9 → 10：品牌改名 AstraQuant 后，「关于」浮层新增自有官网入口；
   //   10 → 26：全站集成四交易所返佣通道、TopBar/QuickSetup/AboutModal/RebateModal/DocsView/LandingView 与 TradeSkill (tradeskill.si) 生态联动外链。
-  assert.equal(total, 26, `target="_blank" 外链数量变化（期望 26，实得 ${total}），请复核本闸覆盖范围`);
+  //   26 → 18：移除 LandingView.vue（-9 处），TopBar.vue 新增开源仓库外链（+1 处）。
+  assert.equal(total, 18, `target="_blank" 外链数量变化（期望 18，实得 ${total}），请复核本闸覆盖范围`);
   assert.deepEqual(bad, [], `以下外链静默开新标签，读屏用户事前无从得知：\n  ${bad.join('\n  ')}`);
 });
 

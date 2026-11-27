@@ -16,14 +16,12 @@
 
 html {
   scrollbar-gutter: stable;
-  background-color: var(--ds-color-bg-page, #07080c);
+  background-color: var(--ds-color-bg-page, #0a0a0b);
 }
 
 body {
   margin: 0;
-  background-color: var(--ds-color-bg-page, #07080c);
-  background-image: var(--ds-bg-gradient);
-  background-attachment: fixed;
+  background-color: var(--ds-color-bg-page, #0a0a0b);
   color: var(--ds-color-text-secondary);
   font-family: var(--ds-font-body);
   font-size: var(--text-base);
@@ -112,7 +110,7 @@ pre,
 
 ::selection {
   background: var(--ds-color-brand);
-  color: #07080c;
+  color: #ffffff;
 }
 
 /* —— 滚动条：--ds-color-scrollbar —— */

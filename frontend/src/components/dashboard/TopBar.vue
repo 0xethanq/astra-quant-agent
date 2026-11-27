@@ -17,9 +17,10 @@ import {
   Cpu,
   ExternalLink,
   Gift,
+  Github,
 } from 'lucide-vue-next';
 import { publicTabs } from '../../config/nav';
-import { SKILLHUB_SITE } from '../../config/version';
+import { SKILLHUB_SITE, OFFICIAL_REPO } from '../../config/version';
 import { useI18n } from '../../composables/useI18n';
 import { useUi } from '../../composables/useUi';
 import { useUpdateNotice } from '../../composables/useUpdateNotice';
@@ -54,7 +55,7 @@ function go(path: string) {
 
 <template>
   <header
-    class="relative z-[60] flex h-12 w-full shrink-0 items-center justify-between border-b px-3 sm:px-4 backdrop-blur-xl transition-colors shadow-xs"
+    class="relative z-[60] flex h-12 w-full shrink-0 items-center justify-between border-b px-3 sm:px-4 backdrop-blur-md transition-colors"
     style="background-color: var(--surface-header); border-color: var(--line-2); color: var(--ink-1)"
   >
     <!-- 左侧：品牌 Logo 与字标 + 桌面端一体化横向导航条 -->
@@ -67,8 +68,8 @@ function go(path: string) {
         :aria-label="t('brand.name')"
       >
         <img src="/favicon.svg" alt="" class="h-6 w-6 rounded shrink-0" />
-        <span class="font-bold tracking-tight text-sm text-[var(--ink-strong)] font-mono">
-          {{ t('brand.name') }}
+        <span class="font-bold tracking-[-0.03em] text-base text-[var(--ink-strong)]">
+          Astra<span class="text-[var(--ds-color-brand)]">Quant</span>
         </span>
       </RouterLink>
 
@@ -87,7 +88,7 @@ function go(path: string) {
           :aria-current="activeTabKey === tab.key ? 'page' : undefined"
           @click="go(tab.path)"
         >
-          <component :is="tab.icon" class="h-3.5 w-3.5" :class="activeTabKey === tab.key ? 'text-emerald-400' : 'opacity-70'" />
+          <component :is="tab.icon" class="h-3.5 w-3.5" :class="activeTabKey === tab.key ? 'text-[var(--ds-color-brand)]' : 'opacity-70'" />
           <span>{{ t(tab.labelKey) }}</span>
         </button>
 
@@ -100,7 +101,7 @@ function go(path: string) {
           :aria-current="route.path === '/docs' ? 'page' : undefined"
           @click="go('/docs')"
         >
-          <BookOpen class="h-3.5 w-3.5" :class="route.path === '/docs' ? 'text-emerald-400' : 'opacity-70'" />
+          <BookOpen class="h-3.5 w-3.5" :class="route.path === '/docs' ? 'text-[var(--ds-color-brand)]' : 'opacity-70'" />
           <span>{{ t('dash.shell.nav.docs') }}</span>
         </button>
 
@@ -148,14 +149,28 @@ function go(path: string) {
 
       <!-- 决策轨迹流入口 -->
       <button type="button"
-        class="inline-flex h-7 items-center gap-1.5 rounded-lg border border-[var(--line-2)] px-2.5 text-xs font-medium cursor-pointer transition-colors hover:bg-[var(--surface-2)] text-[var(--ink-2)] hover:text-[var(--ink-strong)] hover:border-emerald-500/30"
+        class="inline-flex h-7 items-center gap-1.5 rounded-lg border border-[var(--line-2)] px-2.5 text-xs font-medium cursor-pointer transition-colors hover:bg-[var(--surface-2)] text-[var(--ink-2)] hover:text-[var(--ink-strong)] hover:border-[var(--astra-brand-line)]"
         :title="`${t('dash.shell.trajectoryBtn')} (⌘J)`"
         @click="trajectoryOpen = true"
       >
-        <Activity class="h-3.5 w-3.5 text-emerald-400" />
+        <Activity class="h-3.5 w-3.5 text-[var(--ds-color-brand)]" />
         <span class="hidden sm:inline">{{ t('dash.shell.trajectoryBtn') }}</span>
         <kbd class="hidden sm:inline-flex ml-0.5 text-4xs font-mono text-[var(--ink-3)] px-1 py-0.5 rounded border border-[var(--line-2)] bg-[var(--surface-1)]">⌘J</kbd>
       </button>
+
+      <!-- 开源代码仓库 -->
+      <a
+        :href="OFFICIAL_REPO"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-[var(--line-2)] text-[var(--ink-2)] hover:bg-[var(--surface-2)] hover:text-[var(--ink-strong)] hover:border-[var(--astra-brand-line)] transition-colors"
+        :title="t('dash.about.repo.visit')"
+        :aria-label="t('dash.about.repo.visit')"
+        @click="trackEvent('external_click', { target: 'github', placement: 'dashboard_topbar' })"
+      >
+        <Github class="h-3.5 w-3.5" aria-hidden="true" />
+        <span class="sr-only">{{ t('common.opensInNewTab') }}</span>
+      </a>
 
       <!-- 偏好设置 -->
       <SettingsPopover />

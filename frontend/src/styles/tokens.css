@@ -90,11 +90,11 @@
         不再手写第二个字面值 —— 手写就会出现「外 10 内 6、间距 2」这种
         肉眼可见的偏心。 */
   --r-xs: 6px;
-  --ds-radius-sm: 10px;
-  --ds-radius-input: 10px;
+  --ds-radius-sm: 8px;
+  --ds-radius-input: 8px;
   --ds-radius-media: 12px;
-  --ds-radius-panel: 18px;
-  --ds-radius-card: 16px;
+  --ds-radius-panel: 12px;
+  --ds-radius-card: 12px;
   --ds-radius-pill: 100px;
 
   /* —— 玻璃磨砂令牌 —— */
@@ -157,7 +157,7 @@
   /* —— 控件尺寸 —— */
   --r-ctl: var(--ds-radius-sm);
   --r-card: var(--ds-radius-card);
-  --r-float: 20px;
+  --r-float: 14px;
   --r-pill: var(--ds-radius-pill);
   --h-sm: 24px;
   --h-md: 30px;
@@ -188,118 +188,117 @@
    ========================================================================= */
 :root,
 :root[data-theme='dark'] {
-  --ds-color-brand: #10b981;
-  --ds-color-brand-deep: #059669;
+  --ds-color-brand: #ff5e2b;
+  --ds-color-brand-deep: #e04819;
 
-  --ds-color-text-primary: #f8fafc;
-  --ds-color-text-secondary: #cbd5e1;
-  --ds-color-text-description: #94a3b8;
+  --ds-color-text-primary: #f4f4f5;
+  --ds-color-text-secondary: #d4d4d8;
+  --ds-color-text-description: #a1a1aa;
   /* placeholder：实测在卡片与 surface 底色上均满足 AA(≥4.5:1) 易读标准 */
-  --ds-color-text-placeholder: #8894a7;
+  --ds-color-text-placeholder: #8a8a93;
   --ds-color-text-inverse: #09090b;
 
-  --ds-color-bg-page: #090a0f;
-  --ds-color-bg-surface-1: #0e1118;
-  --ds-color-bg-surface-2: #131722;
-  --ds-color-bg-surface-3: #191e2c;
-  --ds-color-bg-surface-4: #22293b;
-  --ds-color-bg-surface-5: #2e374f;
-  --ds-color-bg-overlay: rgba(9, 10, 15, 0.82);
-  --ds-color-bg-surface-raised: rgba(18, 22, 31, 0.88);
+  --ds-color-bg-page: #0a0a0b;
+  --ds-color-bg-surface-1: #111113;
+  --ds-color-bg-surface-2: #18181b;
+  --ds-color-bg-surface-3: #222226;
+  --ds-color-bg-surface-4: #27272a;
+  --ds-color-bg-surface-5: #3f3f46;
+  --ds-color-bg-overlay: rgba(10, 10, 11, 0.88);
+  --ds-color-bg-surface-raised: #18181b;
   --ds-color-bg-hover: rgba(255, 255, 255, 0.04);
-  --ds-color-bg-input: #0a0d13;
-  --ds-color-bg-input-hover: #0f131c;
+  --ds-color-bg-input: #0d0d10;
+  --ds-color-bg-input-hover: #141418;
   --ds-color-bg-code: rgba(0, 0, 0, 0.5);
 
-  --ds-color-border-subtle: rgba(255, 255, 255, 0.04);
-  --ds-color-border-default: rgba(255, 255, 255, 0.06);
-  --ds-color-border-divider: rgba(255, 255, 255, 0.04);
-  --ds-color-border-hover: rgba(16, 185, 129, 0.32);
+  --ds-color-border-subtle: #1f1f23;
+  --ds-color-border-default: rgba(255, 255, 255, 0.09);
+  --ds-color-border-divider: #1f1f23;
+  --ds-color-border-hover: rgba(255, 94, 43, 0.4);
   --ds-color-border-strong: rgba(255, 255, 255, 0.18);
-  --ds-color-border-secondary: rgba(255, 255, 255, 0.045);
-  --ds-color-border-input: rgba(255, 255, 255, 0.07);
-  --ds-color-border-input-focus: #10b981;
+  --ds-color-border-secondary: rgba(255, 255, 255, 0.06);
+  --ds-color-border-input: rgba(255, 255, 255, 0.1);
+  --ds-color-border-input-focus: #ff5e2b;
 
   --ds-color-scrollbar: rgba(255, 255, 255, 0.15);
 
-  /* 主按钮 = 翡翠绿高反差单色主按钮 */
-  --ds-btn-primary-bg: #10b981;
-  --ds-btn-primary-text: #07080c;
-  --ds-btn-primary-hover-bg: #34d399;
+  /* 主按钮 = Signal Orange 高反差单色主按钮 */
+  --ds-btn-primary-bg: #ff5e2b;
+  --ds-btn-primary-text: #ffffff;
+  --ds-btn-primary-hover-bg: #ff7347;
   --ds-btn-secondary-bg: rgba(255, 255, 255, 0.04);
-  --ds-btn-secondary-text: #f8fafc;
-  --ds-btn-secondary-border: rgba(255, 255, 255, 0.08);
+  --ds-btn-secondary-text: #f4f4f5;
+  --ds-btn-secondary-border: rgba(255, 255, 255, 0.09);
   --ds-btn-secondary-hover-bg: rgba(255, 255, 255, 0.08);
-  --ds-btn-secondary-hover-border: rgba(255, 255, 255, 0.16);
+  --ds-btn-secondary-hover-border: rgba(255, 255, 255, 0.18);
   --ds-btn-ghost-hover-bg: rgba(255, 255, 255, 0.05);
-  --ds-btn-ghost-hover-border: rgba(255, 255, 255, 0.12);
+  --ds-btn-ghost-hover-border: rgba(255, 255, 255, 0.14);
 
-  --ds-shadow-card: inset 0 1px 0 0 rgba(255, 255, 255, 0.09), inset 0 0 0 1px rgba(255, 255, 255, 0.02), 0 8px 32px -4px rgba(0, 0, 0, 0.55);
-  --ds-shadow-card-hover: inset 0 1px 0 0 rgba(255, 255, 255, 0.15), inset 0 0 0 1px rgba(255, 255, 255, 0.03), 0 16px 36px -4px rgba(0, 0, 0, 0.65);
-  --ds-bg-gradient: radial-gradient(circle at 50% -120px, rgba(16, 185, 129, 0.045) 0%, rgba(99, 102, 241, 0.02) 50%, transparent 80%),
-    radial-gradient(circle at 0% 40%, rgba(16, 185, 129, 0.018) 0%, transparent 40%);
-  --ds-color-bg-sidebar: #090a0f;
-  /* 浮层阴影：多阶柔化与微发丝倒角，弹窗与下拉脱离层叠感 */
-  --astra-shadow-float: inset 0 1px 0 0 rgba(255, 255, 255, 0.12), 0 20px 48px -8px rgba(0, 0, 0, 0.75);
-  --astra-shadow-dialog: inset 0 1px 0 0 rgba(255, 255, 255, 0.15), inset 0 0 0 1px rgba(255, 255, 255, 0.04), 0 24px 64px -12px rgba(0, 0, 0, 0.85);
-  --astra-overlay-scrim: rgba(0, 0, 0, 0.8);
+  --ds-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --ds-shadow-card-hover: 0 2px 8px rgba(0, 0, 0, 0.45);
+  --ds-bg-gradient: none;
+  --ds-color-bg-sidebar: #0a0a0b;
+  /* 浮层阴影：克制单阶边框与轻投影 */
+  --astra-shadow-float: 0 12px 32px -8px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  --astra-shadow-dialog: 0 20px 48px -12px rgba(0, 0, 0, 0.78), 0 0 0 1px rgba(255, 255, 255, 0.1);
+  --astra-overlay-scrim: rgba(0, 0, 0, 0.76);
 }
 
 /* =========================================================================
    3 · 核心规范令牌 · 浅色
    ========================================================================= */
 :root[data-theme='light'] {
-  --ds-color-brand: #10b981;
-  --ds-color-brand-deep: #059669;
+  --ds-color-brand: #e04819;
+  --ds-color-brand-deep: #c93d12;
 
-  --ds-color-text-primary: #0f172a;
-  --ds-color-text-secondary: #334155;
-  --ds-color-text-description: #64748b;
-  --ds-color-text-placeholder: #94a3b8;
+  --ds-color-text-primary: #141416;
+  --ds-color-text-secondary: #3f3f46;
+  --ds-color-text-description: #52525b;
+  --ds-color-text-placeholder: #6e6e77;
   --ds-color-text-inverse: #ffffff;
 
-  --ds-color-bg-page: #f8fafc;
+  --ds-color-bg-page: #f6f5f2;
   --ds-color-bg-surface-1: #ffffff;
-  --ds-color-bg-surface-2: #f1f5f9;
-  --ds-color-bg-surface-3: #e2e8f0;
-  --ds-color-bg-surface-4: #cbd5e1;
-  --ds-color-bg-surface-5: #94a3b8;
-  --ds-color-bg-overlay: rgba(255, 255, 255, 0.95);
+  --ds-color-bg-surface-2: #eceae4;
+  --ds-color-bg-surface-3: #e3e0d8;
+  --ds-color-bg-surface-4: #d4d0c7;
+  --ds-color-bg-surface-5: #b8b3a8;
+  --ds-color-bg-overlay: rgba(246, 245, 242, 0.9);
   --ds-color-bg-surface-raised: #ffffff;
-  --ds-color-bg-hover: rgba(15, 23, 42, 0.04);
+  --ds-color-bg-hover: rgba(17, 17, 19, 0.04);
   --ds-color-bg-input: #ffffff;
-  --ds-color-bg-input-hover: #f8fafc;
-  --ds-color-bg-code: rgba(15, 23, 42, 0.04);
-  --ds-color-bg-sidebar: #ffffff;
+  --ds-color-bg-input-hover: #f9f8f5;
+  --ds-color-bg-code: rgba(17, 17, 19, 0.05);
+  --ds-color-bg-sidebar: #f6f5f2;
 
-  --ds-color-border-subtle: rgba(15, 23, 42, 0.05);
-  --ds-color-border-default: rgba(15, 23, 42, 0.08);
-  --ds-color-border-divider: rgba(15, 23, 42, 0.06);
-  --ds-color-border-hover: rgba(16, 185, 129, 0.36);
-  --ds-color-border-strong: rgba(15, 23, 42, 0.22);
-  --ds-color-border-secondary: rgba(15, 23, 42, 0.07);
-  --ds-color-border-input: rgba(15, 23, 42, 0.12);
-  --ds-color-border-input-focus: #10b981;
+  --ds-color-border-subtle: #e4e2db;
+  --ds-color-border-default: rgba(17, 17, 19, 0.09);
+  --ds-color-border-divider: #e4e2db;
+  --ds-color-border-hover: rgba(224, 72, 25, 0.38);
+  --ds-color-border-strong: rgba(17, 17, 19, 0.18);
+  --ds-color-border-secondary: rgba(17, 17, 19, 0.06);
+  --ds-color-border-input: rgba(17, 17, 19, 0.12);
+  --ds-color-border-input-focus: #e04819;
 
-  --ds-color-scrollbar: rgba(15, 23, 42, 0.15);
+  --ds-color-scrollbar: rgba(17, 17, 19, 0.18);
 
-  --ds-btn-primary-bg: #10b981;
+  --ds-btn-primary-bg: #e04819;
   --ds-btn-primary-text: #ffffff;
-  --ds-btn-primary-hover-bg: #059669;
+  --ds-btn-primary-hover-bg: #c93d12;
   --ds-btn-secondary-bg: #ffffff;
-  --ds-btn-secondary-text: #0f172a;
-  --ds-btn-secondary-border: rgba(15, 23, 42, 0.12);
-  --ds-btn-secondary-hover-bg: #f1f5f9;
-  --ds-btn-secondary-hover-border: rgba(15, 23, 42, 0.2);
-  --ds-btn-ghost-hover-bg: rgba(15, 23, 42, 0.05);
-  --ds-btn-ghost-hover-border: rgba(15, 23, 42, 0.12);
+  --ds-btn-secondary-text: #141416;
+  --ds-btn-secondary-border: rgba(17, 17, 19, 0.12);
+  --ds-btn-secondary-hover-bg: #eceae4;
+  --ds-btn-secondary-hover-border: rgba(17, 17, 19, 0.22);
+  --ds-btn-ghost-hover-bg: rgba(17, 17, 19, 0.05);
+  --ds-btn-ghost-hover-border: rgba(17, 17, 19, 0.12);
 
-  --ds-shadow-card: 0 1px 3px rgba(15, 23, 42, 0.03), 0 4px 12px -2px rgba(15, 23, 42, 0.04);
-  --ds-shadow-card-hover: 0 2px 6px rgba(15, 23, 42, 0.04), 0 10px 24px -4px rgba(15, 23, 42, 0.08);
+  --ds-shadow-card: 0 1px 2px rgba(17, 17, 19, 0.04);
+  --ds-shadow-card-hover: 0 2px 6px rgba(17, 17, 19, 0.06);
   --ds-bg-gradient: none;
-  --astra-shadow-float: 0 12px 32px -6px rgba(15, 23, 42, 0.10), 0 0 0 1px rgba(15, 23, 42, 0.06);
-  --astra-shadow-dialog: 0 20px 48px -10px rgba(15, 23, 42, 0.16), 0 0 0 1px rgba(15, 23, 42, 0.08);
-  --astra-overlay-scrim: rgba(15, 23, 42, 0.35);
+  --astra-shadow-float: 0 12px 32px -6px rgba(17, 17, 19, 0.1), 0 0 0 1px rgba(17, 17, 19, 0.08);
+  --astra-shadow-dialog: 0 20px 48px -10px rgba(17, 17, 19, 0.16), 0 0 0 1px rgba(17, 17, 19, 0.09);
+  --astra-overlay-scrim: rgba(17, 17, 19, 0.35);
 }
 
 /* =========================================================================
@@ -317,8 +316,8 @@
   --astra-warn: #e0b155;
   --astra-warn-bg: rgba(224, 177, 85, 0.12);
   --astra-warn-line: rgba(224, 177, 85, 0.3);
-  --astra-brand-bg: rgba(16, 185, 129, 0.12);
-  --astra-brand-line: rgba(16, 185, 129, 0.28);
+  --astra-brand-bg: rgba(255, 94, 43, 0.14);
+  --astra-brand-line: rgba(255, 94, 43, 0.34);
 }
 :root[data-theme='light'] {
   --astra-up: #1a7f5a;
@@ -330,8 +329,8 @@
   --astra-warn: #946a16;
   --astra-warn-bg: rgba(148, 106, 22, 0.11);
   --astra-warn-line: rgba(148, 106, 22, 0.28);
-  --astra-brand-bg: rgba(16, 185, 129, 0.10);
-  --astra-brand-line: rgba(16, 185, 129, 0.28);
+  --astra-brand-bg: rgba(224, 72, 25, 0.1);
+  --astra-brand-line: rgba(224, 72, 25, 0.3);
 }
 
 /* =========================================================================
@@ -439,16 +438,16 @@
    ========================================================================= */
 :root,
 :root[data-theme='dark'] {
-  --ds-color-bg-surface-card: rgba(14, 17, 24, 0.78);
-  --ds-color-bg-surface-inset: rgba(10, 12, 18, 0.65);
-  --grad-surface: linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.006) 100%);
-  --ds-shadow-card: inset 0 1px 0 0 rgba(255, 255, 255, 0.09), inset 0 0 0 1px rgba(255, 255, 255, 0.02), 0 8px 32px -4px rgba(0, 0, 0, 0.55);
+  --ds-color-bg-surface-card: #111113;
+  --ds-color-bg-surface-inset: #0e0e11;
+  --grad-surface: none;
+  --ds-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.35);
 }
 :root[data-theme='light'] {
   --ds-color-bg-surface-card: #ffffff;
-  --ds-color-bg-surface-inset: #f8fafc;
-  --grad-surface: linear-gradient(180deg, rgba(255, 255, 255, 0.9) 0%, rgba(250, 250, 250, 0.4) 100%);
-  --ds-shadow-card: 0 1px 3px rgba(15, 23, 42, 0.03), 0 4px 12px -2px rgba(15, 23, 42, 0.04);
+  --ds-color-bg-surface-inset: #f6f5f2;
+  --grad-surface: none;
+  --ds-shadow-card: 0 1px 2px rgba(17, 17, 19, 0.04);
 }
 
 /* =========================================================================
