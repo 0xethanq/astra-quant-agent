@@ -5,7 +5,6 @@
  */
 import { computed, ref } from 'vue';
 import {
-  Brain,
   ChevronRight,
 } from 'lucide-vue-next';
 import { useDashboardStore } from '../../stores/dashboard';
@@ -92,71 +91,60 @@ function actionsOf(c: any): { inst: string; dir: string; conf: number; label?: s
 </script>
 
 <template>
-  <div class="space-y-3">
-    <!-- 页头 -->
-    <div class="flex items-center justify-between gap-2 pt-0.5">
-      <div class="flex items-center gap-2">
-        <h1 class="text-sm font-semibold tracking-tight text-[var(--ink-strong)] flex items-center gap-2">
-          <Brain class="h-4 w-4 text-[var(--accent)]" />
+  <div class="w-full">
+    <!-- 无边框舒展页头 + 留白间距遥测 -->
+    <div class="mb-6 flex flex-col sm:flex-row sm:items-end justify-between gap-3">
+      <div class="flex items-baseline gap-3">
+        <h1 class="text-2xl font-semibold tracking-tight text-[var(--ink-strong)]">
           {{ t('dash.radar.title') }}
         </h1>
-        <span
-          class="rounded-full px-2 py-0.5 border text-3xs font-mono font-medium"
-          style="background-color: var(--surface-2); border-color: var(--line-1); color: var(--ink-2)"
-        >
+        <span class="text-3xs font-mono text-[var(--ink-3)]">
           {{ t('dash.radar.cycles', undefined, { n: history.length }) }}
         </span>
       </div>
 
-      <!-- AI 决策健康指示状态 -->
-      <div v-if="aiHealth" class="flex flex-wrap items-center gap-1.5">
-        <span class="dsh-pill">
-          <span class="text-[var(--ink-3)]">{{ t('dash.radar.health.decisionAge') }}:</span>
-          <b class="num font-mono" :class="decisionAgeWarn ? 'text-[var(--down)]' : 'text-[var(--up)]'">{{ decisionAgeText }}</b>
+      <!-- AI 决策健康行内遥测带（纯间距留白，去掉竖线分隔） -->
+      <div v-if="aiHealth" class="flex flex-wrap items-center gap-5 text-3xs font-mono text-[var(--ink-3)]">
+        <span class="inline-flex items-center gap-1.5">
+          <span>{{ t('dash.radar.health.decisionAge') }}:</span>
+          <b class="num" :class="decisionAgeWarn ? 'text-[var(--down)]' : 'text-[var(--up)]'">{{ decisionAgeText }}</b>
         </span>
-        <span class="dsh-pill">
-          <span class="text-[var(--ink-3)]">{{ t('dash.radar.council.title') }}:</span>
+        <span class="inline-flex items-center gap-1.5">
+          <span>{{ t('dash.radar.council.title') }}:</span>
           <b :class="aiHealth.council_enabled ? 'text-[var(--up)]' : 'text-[var(--warn)]'">
             {{ aiHealth.council_enabled ? t('dash.radar.council.on') : t('dash.radar.council.off') }}
           </b>
         </span>
-        <span
-          v-if="aiHealth.council_enabled && aiHealth.last_council_status?.ran"
-          class="dsh-pill text-[var(--up)]"
-        >
+        <span v-if="aiHealth.council_enabled && aiHealth.last_council_status?.ran" class="text-[var(--ink-2)]">
           {{ t('dash.radar.council.done') }} {{ (((aiHealth.last_council_status.duration_ms || 0) / 1000)).toFixed(0) }}s
         </span>
       </div>
     </div>
 
     <DataGate>
-      <!-- 决策周期时序卡片流 -->
-      <div class="dsh-card overflow-clip">
+      <!-- 色调分层卡片承载决策时序流 -->
+      <div class="dsh-card overflow-hidden">
         <BaseEmpty v-if="!history.length" :text="t('dash.radar.empty')" />
         <div v-else>
           <template v-for="grp in grouped" :key="grp.day">
-            <div
-              class="border-b px-4 py-1.5 text-3xs font-bold uppercase tracking-wider text-[var(--ink-3)]"
-              style="background-color: var(--surface-header); border-color: var(--line-1)"
-            >
+            <div class="px-6 pt-5 pb-2 text-4xs font-mono font-semibold uppercase tracking-wider text-[var(--ink-3)]">
               {{ grp.day }}
             </div>
             <button type="button"
               v-for="c in grp.items"
               :key="c.time"
-              class="group flex w-full cursor-pointer items-start gap-4 border-b px-4 py-3.5 text-left transition-colors last:border-b-0 hover:bg-[var(--surface-2)]"
-              style="border-color: var(--line-1)"
+              class="group flex w-full cursor-pointer items-start gap-5 border-b border-[var(--line-3)] px-6 py-4 text-left transition-colors last:border-b-0 hover:bg-[var(--surface-2)]/50"
               @click="selected = c"
             >
               <!-- 决策时钟 -->
               <div class="shrink-0 w-16 pt-0.5">
-                <span class="num font-mono text-xs font-bold text-[var(--ink-strong)] block">{{ hm(c) }}</span>
+                <span class="num font-mono text-sm font-bold text-[var(--ink-strong)] block">{{ hm(c) }}</span>
                 <span class="text-4xs text-[var(--ink-3)] block font-mono">BJT</span>
               </div>
 
               <!-- 研判正文与指令 -->
-              <div class="min-w-0 flex-1">
-                <p class="text-xs text-[var(--ink-1)] leading-relaxed font-medium line-clamp-2">
+              <div class="min-w-0 flex-1 max-w-4xl">
+                <p class="text-xs sm:text-sm text-[var(--ink-1)] leading-body line-clamp-2">
                   {{ c.macro_assessment || t('dash.radar.empty') }}
                 </p>
 
@@ -167,21 +155,21 @@ function actionsOf(c: any): { inst: string; dir: string; conf: number; label?: s
                     :key="a.inst + a.dir + (a.label || '')"
                     class="dsh-pill !py-0.5"
                   >
-                    <CryptoLogo :symbol="a.inst" :size="15" />
+                    <CryptoLogo :symbol="a.inst" :size="14" />
                     <span class="num font-mono text-3xs font-bold text-[var(--ink-strong)]">{{ a.inst }}</span>
-                    <span v-if="a.label" class="rounded px-1.5 py-0.5 border text-4xs font-mono font-medium text-[var(--accent)] border-[var(--accent-line)] bg-[var(--accent-bg)]">{{ a.label }}</span>
+                    <span v-if="a.label" class="rounded-xs px-1.5 py-0.5 border text-4xs font-mono font-medium text-[var(--accent)] border-[var(--accent-line)] bg-[var(--accent-bg)]">{{ a.label }}</span>
                     <DirTag v-else :dir="a.dir" />
                     <ConfBadge :value="a.conf" />
                   </span>
 
-                  <span v-if="!actionsOf(c).length" class="inline-flex items-center rounded-full px-2.5 py-0.5 text-3xs text-[var(--ink-3)] font-mono border border-[var(--line-1)] bg-[var(--surface-2)]">
+                  <span v-if="!actionsOf(c).length" class="inline-flex items-center rounded-xs px-2 py-0.5 text-4xs text-[var(--ink-3)] font-mono border border-[var(--line-1)] bg-[var(--surface-1)]">
                     {{ t('dash.radar.detail.waitNote') }}
                   </span>
                 </div>
               </div>
 
               <!-- 右侧箭头 -->
-              <div class="shrink-0 self-center text-[var(--ink-3)] transition-transform group-hover:translate-x-0.5">
+              <div class="shrink-0 self-center text-[var(--ink-3)] transition-transform group-hover:translate-x-0.5 group-hover:text-[var(--ink-strong)]">
                 <ChevronRight class="h-4 w-4" />
               </div>
             </button>

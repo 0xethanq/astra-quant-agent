@@ -64,12 +64,12 @@ test('核心令牌严格对齐 TradeSkill Signal Orange 与 Swiss Carbon / Warm 
   }
 
   // 收敛圆角刻度（tokens.css + @theme index.css）
-  assert.ok(tokens.includes('--ds-radius-sm: 8px;'));
-  assert.ok(tokens.includes('--ds-radius-card: 12px;'));
-  assert.ok(tokens.includes('--r-float: 14px;'));
-  assert.ok(indexCss.includes('--radius-md: 8px;'));
-  assert.ok(indexCss.includes('--radius-lg: 12px;'));
-  assert.ok(indexCss.includes('--radius-xl: 14px;'));
+  assert.ok(tokens.includes('--ds-radius-sm: 6px;'));
+  assert.ok(tokens.includes('--ds-radius-card: 8px;'));
+  assert.ok(tokens.includes('--r-float: 10px;'));
+  assert.ok(indexCss.includes('--radius-md: 6px;'));
+  assert.ok(indexCss.includes('--radius-lg: 8px;'));
+  assert.ok(indexCss.includes('--radius-xl: 10px;'));
 
   // 金融涨跌与 CVD 模式保持独立语义，不被品牌改色误伤
   assert.ok(tokens.includes('--astra-up: #48c78e;'));

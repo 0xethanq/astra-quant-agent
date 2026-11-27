@@ -21,7 +21,9 @@ import {
 import KpiRibbon from '../../components/dashboard/KpiRibbon.vue';
 import ChartWorkstation from '../../components/dashboard/ChartWorkstation.vue';
 import PositionsOrdersPanel from '../../components/dashboard/PositionsOrdersPanel.vue';
+import CouncilVerdictRail from '../../components/dashboard/CouncilVerdictRail.vue';
 import FactorMatrix from '../../components/dashboard/FactorMatrix.vue';
+import RadarDrawer from '../../components/dashboard/RadarDrawer.vue';
 
 const store = useDashboardStore();
 const { t } = useI18n();
@@ -30,6 +32,7 @@ const { t } = useI18n();
 const isFocusMode = useLocalStorage('astra_matrix_focus_mode', false);
 
 const chart = ref<InstanceType<typeof ChartWorkstation> | null>(null);
+const selectedCycle = ref<any>(null);
 
 /** 初始选中：优先当前持仓，其次 BTC */
 const initialSymbol = computed(() => {
@@ -44,63 +47,55 @@ function pick(instId: string) {
 </script>
 
 <template>
-  <div class="space-y-3">
-    <!-- 工位导航与控制顶栏 -->
-    <div class="flex items-center justify-between gap-2 pt-0.5">
-      <div class="flex items-center gap-2">
-        <h1 class="text-base sm:text-lg font-semibold tracking-tight text-[var(--ink-strong)] flex items-center gap-2">
-          <span class="dsh-status-dot active" aria-hidden="true" />
+  <div class="w-full">
+    <!-- 轻量无边框顶部标题行（去掉全宽横条线，保留 Focus Mode 入口） -->
+    <div class="flex items-center justify-between gap-2 mb-3">
+      <div class="flex items-center gap-2.5">
+        <span class="dsh-status-dot active" aria-hidden="true" />
+        <h1 class="text-xs font-mono font-semibold uppercase tracking-wider text-[var(--ink-strong)]">
           {{ t('dash.matrix.title') }}
         </h1>
-        <span
-          class="rounded-full px-2.5 py-0.5 border text-3xs font-mono font-medium"
-          style="background-color: var(--surface-2); border-color: var(--line-1); color: var(--ink-2)"
-        >
-          {{ t('dash.matrix.hudProdDynamics') }}
+        <span class="text-4xs font-mono text-[var(--ink-3)] uppercase">
+          · {{ t('dash.matrix.hudProdDynamics') }}
         </span>
       </div>
 
-      <!-- 模式切换控制器 -->
       <button type="button"
-        class="btn btn-ghost h-8 px-3.5 text-xs font-medium cursor-pointer inline-flex items-center gap-1.5 rounded-full transition-all"
-        :class="isFocusMode ? 'btn-primary' : ''"
+        class="btn btn-sm h-7 px-2.5 text-3xs font-mono cursor-pointer inline-flex items-center gap-1.5 rounded-md transition-colors"
+        :class="isFocusMode ? 'btn-primary' : 'btn-quiet'"
         :title="isFocusMode ? t('dash.matrix.focusRestoreTip') : t('dash.matrix.focusTip')"
         @click="isFocusMode = !isFocusMode"
       >
-        <Minimize2 v-if="isFocusMode" class="h-4 w-4" />
-        <Maximize2 v-else class="h-4 w-4" />
+        <Minimize2 v-if="isFocusMode" class="h-3 w-3" />
+        <Maximize2 v-else class="h-3 w-3" />
         <span>{{ isFocusMode ? t('dash.matrix.focusExit') : t('dash.matrix.focusEnter') }}</span>
       </button>
     </div>
 
     <DataGate>
-      <!-- 常规模式下展示核心指标 HUD -->
+      <!-- 无边框开放式 Portfolio Hero Strip -->
       <KpiRibbon v-if="!isFocusMode" />
 
-      <!-- 工位沉浸模式布局：铺满大屏。
-           批 84：固定高度**只在 xl 生效**。原先无条件 `h-[calc(100vh-140px)]`，
-           是按 xl 的 12 栏并排布局算的；在 <1280px（单栏堆叠）下容器高被钉死，
-           两个 `h-full` 子项一个溢出 140px、另一个塌成 **0 高度并被推到 y=900**
-           —— 即「持仓面板整个消失」。改为 xl 限定后，窄屏回归自然文档流。 -->
+      <!-- 工位沉浸模式布局（xl 限定 12 栏铺满大屏，保持 viewportMathConstants 契约） -->
       <div v-if="isFocusMode" class="grid grid-cols-1 gap-3 xl:grid-cols-12 xl:h-[calc(100vh-140px)]">
         <div class="xl:col-span-8 h-full min-h-0">
           <ChartWorkstation
             ref="chart"
             :initial-symbol="initialSymbol"
             :fill="true"
+            :wheel-zoom="true"
             chart-height="100%"
           />
         </div>
         <div class="xl:col-span-4 h-full min-h-0 overflow-hidden">
-          <PositionsOrdersPanel @pick-symbol="pick" />
+          <PositionsOrdersPanel :scroll-inside="true" @pick-symbol="pick" />
         </div>
       </div>
 
-      <!-- 标准工作台布局：首屏直达主图与持仓，分层卡片排布 -->
-      <template v-else>
-        <!-- 主工位区：图表(8) + 持仓挂单(4) -->
-        <div class="grid grid-cols-1 gap-3 xl:grid-cols-12 xl:h-[600px] items-stretch">
-          <div class="xl:col-span-8 flex flex-col h-full min-h-0">
+      <!-- 舒展留白双区工作台：色调分层区块 + 大间距留白取代硬切线 -->
+      <div v-else class="space-y-6 mt-5">
+        <div class="grid grid-cols-1 gap-5 xl:grid-cols-12 items-stretch">
+          <div class="xl:col-span-8 flex flex-col min-h-[440px] xl:min-h-[640px]">
             <ChartWorkstation
               ref="chart"
               :initial-symbol="initialSymbol"
@@ -108,14 +103,18 @@ function pick(instId: string) {
               chart-height="100%"
             />
           </div>
-          <div class="xl:col-span-4 flex flex-col gap-3 h-full min-h-0">
-            <PositionsOrdersPanel class="flex-1 min-h-0" @pick-symbol="pick" />
+          <div class="xl:col-span-4 flex flex-col gap-5">
+            <PositionsOrdersPanel class="flex-1" @pick-symbol="pick" />
+            <CouncilVerdictRail class="shrink-0" @open-cycle="selectedCycle = $event" />
           </div>
         </div>
 
-        <!-- 7 梯队微观结构因子矩阵 -->
+        <!-- 7 梯队微观结构因子矩阵（独立色调面板） -->
         <FactorMatrix @pick-symbol="pick" />
-      </template>
+      </div>
     </DataGate>
+
+    <!-- 决策白盒审计抽屉（支持从主屏 AI 裁决直达完整多席位辩论） -->
+    <RadarDrawer :cycle="selectedCycle" @close="selectedCycle = null" />
   </div>
 </template>

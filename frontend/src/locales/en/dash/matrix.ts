@@ -225,4 +225,13 @@ export const enMatrix = {
   focusExit: 'Exit Focus',
   // ── batch 41: localize strings previously hardcoded in FactorDrawer / FactorMatrix ──
   searchPlaceholder: 'Search symbol (BTC/ETH)...',
+  councilRail: {
+    title: 'AI Council Verdict',
+    empty: 'Awaiting latest council deliberation cycle',
+    inspect: 'Inspect',
+    allCycles: 'Full stream',
+    waitMode: 'Model wait · Defensive posture',
+    councilOn: 'Council On',
+    councilOff: 'Single Brain',
+  },
 };

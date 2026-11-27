@@ -5,11 +5,6 @@
  */
 import { computed } from 'vue';
 import {
-  Dna,
-  Sparkles,
-  ShieldCheck,
-  Brain,
-  ListChecks,
   FileText,
 } from 'lucide-vue-next';
 import { useDashboardStore } from '../../stores/dashboard';
@@ -126,18 +121,14 @@ const md = computed(() => (store.data as any)?.ai_trading_memory_md || '');
 </script>
 
 <template>
-  <div class="space-y-3">
-    <!-- 页头 -->
-    <div class="flex items-center justify-between gap-2 pt-0.5">
-      <div class="flex items-center gap-2">
-        <h1 class="text-sm font-semibold tracking-tight text-[var(--ink-strong)] flex items-center gap-2">
-          <Dna class="h-4 w-4 text-[var(--accent)]" />
+  <div class="w-full">
+    <!-- 无边框舒展页头 -->
+    <div class="mb-6 flex items-center justify-between gap-3">
+      <div class="flex items-baseline gap-3 flex-wrap">
+        <h1 class="text-2xl font-semibold tracking-tight text-[var(--ink-strong)]">
           {{ t('dash.evolution.title') }}
         </h1>
-        <span
-          class="rounded-full px-2 py-0.5 border text-3xs font-mono font-medium"
-          style="background-color: var(--surface-2); border-color: var(--line-1); color: var(--ink-2)"
-        >
+        <span class="text-3xs font-mono text-[var(--ink-3)]">
           {{ t('dash.evolution.autoIterateBadge') }}
         </span>
       </div>
@@ -145,7 +136,7 @@ const md = computed(() => (store.data as any)?.ai_trading_memory_md || '');
       <div class="flex items-center gap-2">
         <span
           v-if="statusKey"
-          class="rounded-full px-2.5 py-0.5 border text-3xs font-mono font-bold uppercase"
+          class="rounded-xs px-2.5 py-0.5 border text-3xs font-mono font-bold uppercase"
           :class="statusMeta.cls"
         >
           {{ statusMeta.label }}
@@ -154,176 +145,167 @@ const md = computed(() => (store.data as any)?.ai_trading_memory_md || '');
     </div>
 
     <DataGate>
-      <!-- 复盘 HUD 5 指标卡片 -->
-      <div class="dsh-card">
-        <div class="grid grid-cols-2 gap-2 p-2 sm:grid-cols-3 xl:grid-cols-5 bg-[var(--surface-1)]">
-          <div class="rounded-lg bg-[var(--surface-2)]/30 hover:bg-[var(--surface-2)]/70 transition-colors">
-            <BaseStat
-              :label="t('dash.evolution.hud.at')"
-              :value="review.timestamp ? fmtDateTime(review.timestamp).slice(5, 16) : '--'"
-            />
-          </div>
-          <div class="rounded-lg bg-[var(--surface-2)]/30 hover:bg-[var(--surface-2)]/70 transition-colors">
-            <BaseStat
-              :label="t('dash.evolution.hud.sample')"
-              :value="review.total_trades != null ? `${fmtNum(review.total_trades, 0)} ${t('common.unitCount')}` : '--'"
-            />
-          </div>
-          <div class="rounded-lg bg-[var(--surface-2)]/30 hover:bg-[var(--surface-2)]/70 transition-colors">
-            <BaseStat
-              :label="t('dash.evolution.hud.winRate')"
-              :value="review.win_rate != null ? fmtNum(review.win_rate, 1) + '%' : '--'"
-            />
-          </div>
-          <div class="rounded-lg bg-[var(--surface-2)]/30 hover:bg-[var(--surface-2)]/70 transition-colors">
-            <BaseStat
-              :label="t('dash.evolution.hud.pf')"
-              :value="review.profit_factor != null ? fmtNum(review.profit_factor, 2) : '--'"
-              :delta="(review.profit_factor ?? 0) >= 1 ? t('common.ge') + ' 1' : undefined"
-              :delta-tone="(review.profit_factor ?? 0) >= 1 ? 'up' : 'down'"
-              :hint="t('dash.ledger.summary.tipPf')"
-            />
-          </div>
-          <div class="rounded-lg bg-[var(--surface-2)]/30 hover:bg-[var(--surface-2)]/70 transition-colors px-3.5 py-2.5 flex flex-col justify-center">
-            <span class="text-3xs text-[var(--ink-3)] font-semibold uppercase tracking-wider">{{ t('dash.evolution.hud.status') }}</span>
-            <span class="text-xs font-bold mt-1" :class="statusMeta.textCls">
-              {{ statusMeta.label }}
-            </span>
-          </div>
+      <!-- 开放式无边框 6 指标 HUD（保留 BaseStat delta-tone 契约） -->
+      <div class="mb-8 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-x-8 gap-y-4">
+        <BaseStat
+          :bare="true"
+          :label="t('dash.evolution.hud.at')"
+          :value="review.timestamp ? fmtDateTime(review.timestamp).slice(5, 16) : '--'"
+        />
+        <BaseStat
+          :bare="true"
+          :label="t('dash.evolution.hud.sample')"
+          :value="review.total_trades != null ? `${fmtNum(review.total_trades, 0)} ${t('common.unitCount')}` : '--'"
+        />
+        <BaseStat
+          :bare="true"
+          :label="t('dash.evolution.hud.winRate')"
+          :value="review.win_rate != null ? fmtNum(review.win_rate, 1) + '%' : '--'"
+        />
+        <BaseStat
+          :bare="true"
+          :label="t('dash.evolution.hud.pf')"
+          :value="review.profit_factor != null ? fmtNum(review.profit_factor, 2) : '--'"
+          :delta="(review.profit_factor ?? 0) >= 1 ? t('common.ge') + ' 1' : undefined"
+          :delta-tone="(review.profit_factor ?? 0) >= 1 ? 'up' : 'down'"
+          :hint="t('dash.ledger.summary.tipPf')"
+        />
+        <div class="py-1 flex flex-col justify-center">
+          <span class="text-4xs font-mono text-[var(--ink-3)] font-semibold uppercase tracking-wider">{{ t('dash.evolution.hud.status') }}</span>
+          <span class="text-lg font-mono font-semibold mt-1" :class="statusMeta.textCls">
+            {{ statusMeta.label }}
+          </span>
         </div>
       </div>
 
-      <!-- 双列工位排布：左侧诊断与行动决策 / 右侧黄金心法与长期记忆 -->
-      <div class="grid grid-cols-1 gap-3 xl:grid-cols-12 items-start">
-        <!-- 左列：诊断归因、行动项与物理快照 (7) -->
-        <div class="xl:col-span-7 space-y-3">
-          <!-- 诊断归因切片 -->
-          <div class="dsh-card p-4 space-y-3">
-            <h2 class="text-xs font-bold uppercase tracking-wider text-[var(--ink-strong)] flex items-center gap-1.5">
-              <Brain class="h-4 w-4 text-[var(--accent)]" />
+      <!-- 双列色调卡片排布：左 7 诊断与证据 / 右 5 黄金心法与记忆 -->
+      <div class="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+        <!-- 左列 (7) -->
+        <div class="xl:col-span-7 space-y-6">
+          <!-- 诊断归因流 -->
+          <section class="dsh-card p-6 space-y-3">
+            <h2 class="text-xs font-mono font-semibold uppercase tracking-wider text-[var(--ink-strong)]">
               {{ t('dash.evolution.insights.title') }}
             </h2>
 
             <BaseEmpty v-if="!insights.length" :text="t('dash.evolution.insights.empty')" />
 
-            <div v-else class="space-y-2.5">
+            <div v-else class="divide-y divide-[var(--line-3)]">
               <div
                 v-for="(it, idx) in insights"
                 :key="idx"
-                class="dsh-card-sub p-3 space-y-1"
+                class="py-3.5 first:pt-1 last:pb-0 space-y-1 max-w-3xl"
               >
                 <span v-if="insTitle(it)" class="text-3xs font-bold font-mono text-[var(--accent)] block uppercase">
                   {{ insTitle(it) }}
                 </span>
-                <p class="text-xs text-[var(--ink-1)] leading-body font-sans">{{ insBody(it) }}</p>
+                <p class="text-xs sm:text-sm text-[var(--ink-1)] leading-body font-sans">{{ insBody(it) }}</p>
               </div>
             </div>
-          </div>
+          </section>
 
           <!-- 自进化行动项 -->
-          <div v-if="actions.length" class="dsh-card p-4 space-y-3">
-            <h2 class="text-xs font-bold uppercase tracking-wider text-[var(--ink-strong)] flex items-center gap-1.5">
-              <ListChecks class="h-4 w-4 text-[var(--accent)]" />
+          <section v-if="actions.length" class="dsh-card p-6 space-y-3">
+            <h2 class="text-xs font-mono font-semibold uppercase tracking-wider text-[var(--ink-strong)]">
               {{ t('dash.evolution.actions.title') }}
             </h2>
 
-            <div class="space-y-2">
+            <div class="divide-y divide-[var(--line-3)]">
               <div
                 v-for="(a, idx) in actions"
                 :key="idx"
-                class="dsh-card-sub p-3 flex items-start gap-2.5"
+                class="py-3.5 first:pt-1 last:pb-0 flex items-start gap-3 max-w-3xl"
               >
-                <span class="num font-mono font-bold text-3xs text-[var(--accent)] shrink-0 mt-0.5">0{{ idx + 1 }}</span>
-                <p class="text-xs text-[var(--ink-1)] leading-body flex-1">{{ actText(a) }}</p>
+                <span class="num font-mono font-bold text-xs text-[var(--accent)] shrink-0 mt-0.5">0{{ idx + 1 }}</span>
+                <p class="text-xs sm:text-sm text-[var(--ink-1)] leading-body flex-1">{{ actText(a) }}</p>
               </div>
             </div>
-          </div>
+          </section>
 
-          <!-- 证据链健康度（2026-10 方向 1）：开仓现场覆盖 + 离场机制确认率 + 缺口清单 -->
-          <div v-if="hasEvidenceChain" class="dsh-card p-4 space-y-2">
-            <h2 class="text-xs font-bold uppercase tracking-wider text-[var(--ink-strong)] flex items-center gap-1.5">
-              <ShieldCheck class="h-4 w-4 text-[var(--accent)]" />
+          <!-- 证据链健康度 -->
+          <section v-if="hasEvidenceChain" class="dsh-card p-6 space-y-4">
+            <h2 class="text-xs font-mono font-semibold uppercase tracking-wider text-[var(--ink-strong)]">
               {{ t('dash.evolution.evidenceChainTitle') }}
             </h2>
-            <div class="grid grid-cols-2 gap-2">
-              <div v-if="evidenceEntryCoverage !== null" class="dsh-card-sub p-3">
-                <div class="text-3xs text-[var(--ink-3)]">{{ t('dash.evolution.evidenceEntryCoverage') }}</div>
-                <div class="text-lg font-bold font-mono text-[var(--ink-1)]">{{ evidenceEntryCoverage }}%</div>
+            <div class="grid grid-cols-2 gap-4">
+              <div v-if="evidenceEntryCoverage !== null" class="rounded-md p-3.5 bg-[var(--surface-2)]/50">
+                <div class="text-3xs font-mono text-[var(--ink-3)]">{{ t('dash.evolution.evidenceEntryCoverage') }}</div>
+                <div class="text-xl font-bold font-mono text-[var(--ink-strong)] mt-1">{{ evidenceEntryCoverage }}%</div>
               </div>
-              <div v-if="evidenceExitCoverage !== null" class="dsh-card-sub p-3">
-                <div class="text-3xs text-[var(--ink-3)]">{{ t('dash.evolution.evidenceExitCoverage') }}</div>
-                <div class="text-lg font-bold font-mono text-[var(--ink-1)]">{{ evidenceExitCoverage }}%</div>
+              <div v-if="evidenceExitCoverage !== null" class="rounded-md p-3.5 bg-[var(--surface-2)]/50">
+                <div class="text-3xs font-mono text-[var(--ink-3)]">{{ t('dash.evolution.evidenceExitCoverage') }}</div>
+                <div class="text-xl font-bold font-mono text-[var(--ink-strong)] mt-1">{{ evidenceExitCoverage }}%</div>
               </div>
             </div>
-            <div class="dsh-card-sub p-3 text-3xs text-[var(--ink-2)] space-y-1">
-              <div class="font-bold text-[var(--ink-3)]">{{ t('dash.evolution.evidenceGapsTitle') }}</div>
+            <div class="text-xs text-[var(--ink-2)] space-y-1 max-w-3xl">
+              <div class="font-mono text-3xs font-semibold text-[var(--ink-3)] uppercase">{{ t('dash.evolution.evidenceGapsTitle') }}</div>
               <div v-if="!evidenceGaps.length" class="text-[var(--ink-2)]">
                 {{ t('dash.evolution.evidenceNoGaps') }}
               </div>
-              <div v-for="(gap, i) in evidenceGaps" :key="i" class="flex gap-1.5">
-                <span class="text-[var(--accent)]">•</span>
+              <div v-for="(gap, i) in evidenceGaps" :key="i" class="flex gap-2">
+                <span class="text-[var(--accent)]">-</span>
                 <span>{{ gap }}</span>
               </div>
             </div>
-          </div>
+          </section>
 
           <!-- 确定性数理快照审计 -->
-          <div v-if="snapAudit" class="dsh-card p-4 space-y-2">
-            <h2 class="text-xs font-bold uppercase tracking-wider text-[var(--ink-strong)] flex items-center gap-1.5">
-              <ShieldCheck class="h-4 w-4 text-[var(--accent)]" />
+          <section v-if="snapAudit" class="dsh-card p-6 space-y-3">
+            <h2 class="text-xs font-mono font-semibold uppercase tracking-wider text-[var(--ink-strong)]">
               {{ t('dash.evolution.snapshotAuditTitle') }}
             </h2>
-            <div class="dsh-card-sub p-3 text-3xs font-mono text-[var(--ink-2)] space-y-1">
-              <div v-for="(v, k) in snapAudit" :key="k" class="flex justify-between">
-                <span class="text-[var(--ink-3)]">{{ k }}:</span>
-                <span class="font-bold text-[var(--ink-1)]">{{ v }}</span>
+            <div class="divide-y divide-[var(--line-3)] text-3xs font-mono text-[var(--ink-2)] max-w-2xl">
+              <div v-for="(v, k) in snapAudit" :key="k" class="flex justify-between py-2.5 first:pt-1 last:pb-0">
+                <span class="text-[var(--ink-3)]">{{ k }}</span>
+                <span class="font-semibold text-[var(--ink-1)]">{{ v }}</span>
               </div>
             </div>
-          </div>
+          </section>
         </div>
 
-        <!-- 右列：核心黄金心法库 & 长期记忆 Markdown (5) -->
-        <div class="xl:col-span-5 space-y-3">
+        <!-- 右列 (5) -->
+        <div class="xl:col-span-5 space-y-6">
           <!-- 黄金心法库 -->
-          <div class="dsh-card p-4 space-y-3">
-            <h2 class="text-xs font-bold uppercase tracking-wider text-[var(--ink-strong)] flex items-center gap-1.5">
-              <Sparkles class="h-4 w-4 text-[var(--accent)]" />
+          <section class="dsh-card p-6 space-y-3">
+            <h2 class="text-xs font-mono font-semibold uppercase tracking-wider text-[var(--ink-strong)]">
               {{ t('dash.evolution.memory.title') }}
             </h2>
 
             <BaseEmpty v-if="!rules.length" :text="t('dash.evolution.memory.empty')" :desc="t('dash.evolution.memory.desc')" />
 
-            <div v-else class="space-y-2.5">
+            <div v-else class="divide-y divide-[var(--line-3)]">
               <div
                 v-for="(r, idx) in rules"
                 :key="idx"
-                class="dsh-card-sub p-3 space-y-1"
+                class="py-3.5 first:pt-1 last:pb-0 space-y-1 max-w-2xl"
               >
-                <h3 v-if="r.title" class="text-xs font-bold text-[var(--ink-strong)] flex items-center gap-1.5">
-                  <span class="h-1.5 w-1.5 rounded-full bg-[var(--accent)]" />
-                  {{ r.title }}
+                <h3 v-if="r.title" class="text-xs font-mono font-bold text-[var(--ink-strong)] flex items-center gap-2">
+                  <span class="h-1.5 w-1.5 rounded-full bg-[var(--accent)] shrink-0" />
+                  <span>{{ r.title }}</span>
                 </h3>
                 <p class="text-xs text-[var(--ink-2)] leading-body font-sans">{{ r.body }}</p>
               </div>
             </div>
-          </div>
+          </section>
 
           <!-- 全量自进化认知记忆 Markdown -->
-          <BaseCollapse v-if="md">
-            <template #head>
-              <span class="flex items-center gap-2 text-xs font-bold text-[var(--ink-strong)]">
-                <FileText class="h-3.5 w-3.5 text-[var(--accent)]" />
-                {{ t('dash.evolution.memory.dev') }}
-              </span>
-            </template>
-            <div class="p-3">
-              <pre
-                class="rounded p-3 font-mono text-3xs leading-body whitespace-pre-wrap select-text max-h-96 overflow-y-auto"
-                tabindex="0"
-                style="background-color: var(--surface-input); border: 1px solid var(--line-1); color: var(--ink-2)"
-              >{{ md }}</pre>
-            </div>
-          </BaseCollapse>
+          <div class="dsh-card p-4" v-if="md">
+            <BaseCollapse>
+              <template #head>
+                <span class="flex items-center gap-2 text-xs font-mono font-semibold text-[var(--ink-strong)]">
+                  <FileText class="h-3.5 w-3.5 text-[var(--accent)]" />
+                  {{ t('dash.evolution.memory.dev') }}
+                </span>
+              </template>
+              <div class="p-3">
+                <pre
+                  class="rounded-md p-3 font-mono text-3xs leading-body whitespace-pre-wrap select-text max-h-96 overflow-y-auto"
+                  tabindex="0"
+                  style="background-color: var(--surface-input); color: var(--ink-2)"
+                >{{ md }}</pre>
+              </div>
+            </BaseCollapse>
+          </div>
         </div>
       </div>
     </DataGate>

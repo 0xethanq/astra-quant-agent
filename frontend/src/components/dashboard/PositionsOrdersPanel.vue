@@ -14,6 +14,8 @@ import DirTag from '../base/DirTag.vue';
 import TimeAgo from '../base/TimeAgo.vue';
 import CryptoLogo from './CryptoLogo.vue';
 
+const props = defineProps<{ scrollInside?: boolean }>();
+
 const emit = defineEmits<{ (e: 'pick-symbol', instId: string): void }>();
 
 const store = useDashboardStore();
@@ -134,7 +136,10 @@ function orderTooltipText(o: any): string {
 </script>
 
 <template>
-  <div class="dsh-card pop-panel flex h-full max-h-[58dvh] flex-col overflow-hidden xl:max-h-none">
+  <div
+    class="pop-panel dsh-card flex flex-col overflow-hidden"
+    :class="props.scrollInside ? 'h-full' : ''"
+  >
     <!-- 面板头部：持仓 / 挂单选项卡 -->
     <header class="dsh-card-header flex flex-col sm:flex-row sm:items-center justify-between gap-2">
       <div class="flex items-center gap-2">
@@ -154,15 +159,15 @@ function orderTooltipText(o: any): string {
     </header>
 
     <!-- 持仓列表 -->
-    <div v-if="tab === 'positions'" class="scroll-y flex-1 min-h-0 overflow-x-auto">
+    <div v-if="tab === 'positions'" class="flex-1 min-h-0 overflow-x-auto" :class="props.scrollInside ? 'overflow-y-auto' : ''">
       <BaseEmpty v-if="!positions.length" :text="t('dash.matrix.positions.empty')" />
       <div v-else>
-        <!-- 窄容器流式卡片（容器 <660px 时启用；永不横向切边，信息层级分明） -->
-        <div class="pop-narrow space-y-2 p-2">
+        <!-- 窄容器无边框舒展列表行 -->
+        <div class="pop-narrow space-y-1 px-2 pb-3">
           <div
             v-for="p in positions"
             :key="'m-' + p.instId + p.side"
-            class="clickable rounded-xl border border-[var(--line-2)] bg-[var(--surface-1)] p-3.5 transition-all hover:bg-[var(--surface-2)]/60 hover:border-[var(--line-1)] flex flex-col gap-2.5 shadow-xs"
+            class="clickable rounded-md px-3 py-2.5 transition-colors hover:bg-[var(--surface-2)]/70 flex flex-col gap-1.5"
             :title="t('dash.matrix.chart.pickHint')"
             tabindex="0"
             @click="emit('pick-symbol', p.instId)"
@@ -199,15 +204,16 @@ function orderTooltipText(o: any): string {
               </div>
             </div>
 
-            <!-- 底栏：止损与止盈阶梯、保护状态 -->
-            <div class="flex items-center justify-between text-3xs font-mono text-[var(--ink-2)]">
-              <div class="flex items-center gap-1">
-                <span class="text-[var(--down)] font-medium">SL {{ fmtPrice(p.exchangeSl ?? p.displayStop) }}</span>
-                <span v-if="slTriggerType(p)" :title="slTriggerTypeHint(p)" class="text-4xs text-[var(--ink-3)]">({{ slTriggerType(p) }})</span>
+            <!-- 底栏：止损与止盈阶梯、保护状态（防超宽换行） -->
+            <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-3xs font-mono text-[var(--ink-2)]">
+              <div class="flex items-center gap-1 whitespace-nowrap">
+                <span class="text-[var(--down)] font-medium whitespace-nowrap" :title="slTriggerTypeHint(p)">
+                  SL {{ fmtPrice(p.exchangeSl ?? p.displayStop) }}
+                </span>
               </div>
-              <div class="flex items-center gap-2">
-                <span v-if="getTp1(p)" class="text-[var(--up)] font-medium">TP1 {{ fmtPrice(getTp1(p)) }}</span>
-                <span class="text-[var(--up)] font-medium">
+              <div class="flex items-center gap-2 whitespace-nowrap">
+                <span v-if="getTp1(p)" class="text-[var(--up)] font-medium whitespace-nowrap">TP1 {{ fmtPrice(getTp1(p)) }}</span>
+                <span class="text-[var(--up)] font-medium whitespace-nowrap">
                   {{ getTp1(p) ? 'TP2' : 'TP' }} {{ fmtPrice(p.exchangeTp ?? p.displayTakeProfit) }}
                 </span>
                 <span
@@ -267,10 +273,10 @@ function orderTooltipText(o: any): string {
                 <DirTag :dir="p.side" />
                 <span
                   v-if="(p.scaleOutPhase ?? 0) >= 1"
-                  class="rounded-full px-1.5 py-0.5 text-3xs font-mono font-semibold border text-[var(--up)] border-[var(--up-line)] bg-[var(--up-bg)]"
+                  class="rounded px-1.5 py-0.5 text-3xs font-mono font-semibold border text-[var(--up)] border-[var(--up-line)] bg-[var(--up-bg)]"
                   :title="t('dash.matrix.positions.scaleOutTitle')"
                 >
-                  🎯 {{ t('dash.matrix.positions.scaleOutPill') }}
+                  {{ t('dash.matrix.positions.scaleOutPill') }}
                 </span>
               </div>
               <p
@@ -356,15 +362,15 @@ function orderTooltipText(o: any): string {
     </div>
 
     <!-- 挂单列表 -->
-    <div v-else class="scroll-y flex-1 min-h-0 overflow-x-auto">
+    <div v-else class="flex-1 min-h-0 overflow-x-auto" :class="props.scrollInside ? 'overflow-y-auto' : ''">
       <BaseEmpty v-if="!orders.length" :text="t('dash.matrix.orders.empty')" />
       <div v-else>
-        <!-- 窄容器流式挂单卡片（容器 <660px 时启用） -->
-        <div class="pop-narrow space-y-2 p-2">
+        <!-- 窄容器无边框挂单行 -->
+        <div class="pop-narrow space-y-1 px-2 pb-3">
           <div
             v-for="o in orders"
             :key="'mo-' + o.ordId"
-            class="clickable rounded-lg border border-[var(--line-2)] bg-[var(--surface-1)] p-3 transition-colors hover:bg-[var(--surface-2)] hover:border-[var(--line-1)] flex flex-col gap-2"
+            class="clickable rounded-md px-3 py-3 transition-colors hover:bg-[var(--surface-2)]/70 flex flex-col gap-1.5"
             :title="t('dash.matrix.chart.pickHint')"
             tabindex="0"
             @click="emit('pick-symbol', o.instId)"
@@ -378,12 +384,12 @@ function orderTooltipText(o: any): string {
                 <DirTag :dir="orderDir(o)" />
                 <span class="font-mono text-xs font-bold text-[var(--ink-strong)]">{{ o.lever || '3x' }}</span>
               </div>
-              <span class="inline-block whitespace-nowrap rounded px-1.5 py-0.5 text-3xs border border-[var(--line-1)] bg-[var(--surface-2)] text-[var(--ink-2)]">
+              <span class="inline-block whitespace-nowrap rounded px-1.5 py-0.5 text-3xs bg-[var(--surface-2)] text-[var(--ink-2)]">
                 {{ o.state === 'live' ? t('status.waiting') : o.state }}
               </span>
             </div>
 
-            <div class="grid grid-cols-2 gap-2 pt-1 border-t border-[var(--line-2)]">
+            <div class="grid grid-cols-2 gap-2 pt-1">
               <div>
                 <span class="text-4xs text-[var(--ink-3)] block">{{ t('dash.matrix.orders.col.price') }}</span>
                 <span class="text-sm font-bold font-mono text-[var(--ink-strong)]">{{ fmtPrice(o.px) }}</span>
@@ -394,7 +400,7 @@ function orderTooltipText(o: any): string {
               </div>
             </div>
 
-            <div class="flex items-center justify-between text-3xs font-mono pt-1 border-t border-[var(--line-2)] text-[var(--ink-2)]">
+            <div class="flex items-center justify-between text-3xs font-mono pt-1 text-[var(--ink-2)]">
               <div class="flex items-center gap-2">
                 <span class="text-[var(--down)] font-medium">SL {{ o.slTriggerPx ? fmtPrice(o.slTriggerPx) : (o.sl_px && String(o.sl_px) !== '--' ? fmtPrice(o.sl_px) : '--') }}</span>
                 <span class="text-[var(--up)] font-medium">TP {{ o.tpTriggerPx ? fmtPrice(o.tpTriggerPx) : (o.tp_px && String(o.tp_px) !== '--' ? fmtPrice(o.tp_px) : '--') }}</span>

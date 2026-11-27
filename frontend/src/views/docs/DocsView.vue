@@ -128,13 +128,13 @@ onUnmounted(() => {
   <div class="min-h-screen font-sans selection:bg-[var(--ds-color-brand)] selection:text-white" style="background-color: var(--surface-0); color: var(--ink-1);">
     <!-- Top Header Navigation -->
     <header
-      class="sticky top-0 z-[var(--z-header)] border-b px-3 sm:px-6 h-12 flex items-center justify-between backdrop-blur-md"
+      class="sticky top-0 z-[var(--z-header)] border-b px-3 sm:px-6 h-12 flex items-center justify-between"
       style="background-color: var(--surface-header); border-color: var(--line-1);"
     >
       <div class="flex items-center space-x-2 sm:space-x-3 min-w-0">
         <button type="button"
           @click="router.push('/')"
-          class="btn btn-quiet h-7 px-2.5 text-xs font-medium cursor-pointer inline-flex items-center gap-1.5 rounded-lg"
+          class="btn btn-quiet h-7 px-2.5 text-xs font-medium cursor-pointer inline-flex items-center gap-1.5 rounded-md"
           :title="t('docs.backTerminal')"
         >
           <ArrowLeft class="w-3.5 h-3.5" />
@@ -142,13 +142,11 @@ onUnmounted(() => {
         </button>
         <div class="h-4 w-px hidden sm:block shrink-0" style="background-color: var(--line-1);" />
         <div class="flex items-center space-x-2 min-w-0">
-          <BookOpen class="h-4 w-4 text-[var(--ds-color-brand)] shrink-0" />
+          <BookOpen class="h-4 w-4 text-[var(--ink-strong)] shrink-0" />
           <h1 class="font-bold text-xs sm:text-sm tracking-[-0.02em] shrink-0 whitespace-nowrap text-[var(--ink-strong)]">
             {{ APP_NAME }}
           </h1>
-          <span
-            class="dsh-pill font-mono text-3xs border border-[var(--line-1)] bg-[var(--surface-2)] text-[var(--ink-3)]"
-          >
+          <span class="font-mono text-3xs text-[var(--ink-3)]">
             {{ APP_VERSION }} 官方技术文档
           </span>
         </div>
@@ -157,7 +155,7 @@ onUnmounted(() => {
       <div class="flex items-center space-x-2 shrink-0">
         <button type="button"
           @click="mobileMenuOpen = !mobileMenuOpen"
-          class="sm:hidden btn btn-quiet btn-icon h-7 w-7 cursor-pointer rounded-lg"
+          class="sm:hidden btn btn-quiet btn-icon h-7 w-7 cursor-pointer rounded-md"
           :title="t('docs.tocBtn')"
           :aria-label="t('docs.tocBtn')"
           :aria-expanded="mobileMenuOpen"
@@ -169,9 +167,9 @@ onUnmounted(() => {
 
         <button type="button"
           @click="router.push('/admin')"
-          class="hidden sm:inline-flex btn btn-ghost h-7 px-3 text-xs font-medium cursor-pointer items-center gap-1.5 rounded-lg border-[var(--line-1)] hover:border-[var(--astra-brand-line)]"
+          class="hidden sm:inline-flex btn btn-ghost h-7 px-3 text-xs font-medium cursor-pointer items-center gap-1.5 rounded-md border-[var(--line-1)] hover:border-[var(--line-2)]"
         >
-          <Lock class="w-3.5 h-3.5 text-[var(--ds-color-brand)]" />
+          <Lock class="w-3.5 h-3.5 text-[var(--ink-2)]" />
           <span>控制台</span>
         </button>
 
@@ -179,7 +177,7 @@ onUnmounted(() => {
           :href="OFFICIAL_REPO"
           target="_blank"
           rel="noopener noreferrer"
-          class="btn btn-primary h-7 px-3 text-xs font-medium inline-flex items-center gap-1.5 rounded-lg"
+          class="btn btn-primary h-7 px-3 text-xs font-medium inline-flex items-center gap-1.5 rounded-md"
         >
           <Github class="w-3.5 h-3.5" aria-hidden="true" />
           <span class="hidden sm:inline">GitHub</span>
@@ -191,7 +189,7 @@ onUnmounted(() => {
     <!-- Mobile TOC Backdrop Overlay -->
     <div
       v-if="mobileMenuOpen"
-      class="fixed inset-0 bg-black/60 backdrop-blur-xs z-40 sm:hidden"
+      class="fixed inset-0 bg-black/60 z-40 sm:hidden"
       @click="mobileMenuOpen = false"
     />
 
@@ -201,7 +199,7 @@ onUnmounted(() => {
       <aside
         id="docs-mobile-drawer"
         class="w-64 shrink-0 fixed inset-y-12 left-0 z-50 sm:z-30 sm:bg-transparent p-4 sm:p-0 border-r sm:border-r-0 transition-transform duration-200 sm:translate-x-0 sm:sticky sm:top-16 sm:h-[calc(100vh-5rem)] overflow-y-auto"
-        :class="mobileMenuOpen ? 'translate-x-0 bg-[var(--surface-1)] shadow-2xl' : '-translate-x-full sm:translate-x-0 invisible sm:visible'"
+        :class="mobileMenuOpen ? 'translate-x-0 bg-[var(--surface-1)]' : '-translate-x-full sm:translate-x-0 invisible sm:visible'"
         style="border-color: var(--line-1);"
       >
         <div class="flex items-center justify-between mb-3 px-2">
@@ -223,16 +221,16 @@ onUnmounted(() => {
             :key="s.id"
             @click="scrollToSection(s.id)"
             :aria-current="activeSection === s.id ? 'location' : undefined"
-            class="w-full text-left px-3 py-2 rounded-lg text-xs font-medium transition-all flex items-center justify-between group cursor-pointer border"
+            class="w-full text-left px-3 py-2 rounded-md text-xs font-medium transition-all flex items-center justify-between group cursor-pointer border"
             :style="activeSection === s.id
-              ? { backgroundColor: 'var(--surface-3)', color: 'var(--ink-strong)', borderColor: 'var(--astra-brand-line)', fontWeight: 'bold' }
+              ? { backgroundColor: 'var(--surface-2)', color: 'var(--ink-strong)', borderColor: 'var(--line-2)', fontWeight: 'bold' }
               : { backgroundColor: 'transparent', borderColor: 'transparent', color: 'var(--ink-2)' }"
           >
             <div class="flex items-center space-x-2.5 truncate" :title="s.title">
-              <component :is="s.icon" class="w-3.5 h-3.5 shrink-0 transition-colors" :class="activeSection === s.id ? 'text-[var(--ds-color-brand)]' : 'opacity-70 group-hover:opacity-100'" />
+              <component :is="s.icon" class="w-3.5 h-3.5 shrink-0 transition-colors" :class="activeSection === s.id ? 'text-[var(--ink-strong)]' : 'opacity-70 group-hover:opacity-100'" />
               <span class="truncate">{{ s.title }}</span>
             </div>
-            <ChevronRight class="w-3 h-3 transition-opacity" :class="activeSection === s.id ? 'opacity-100 text-[var(--ds-color-brand)]' : 'opacity-0 group-hover:opacity-100'" />
+            <ChevronRight class="w-3 h-3 transition-opacity" :class="activeSection === s.id ? 'opacity-100 text-[var(--ink-strong)]' : 'opacity-0 group-hover:opacity-100'" />
           </button>
         </nav>
 
@@ -240,7 +238,7 @@ onUnmounted(() => {
           <div class="text-3xs uppercase font-bold text-[var(--ink-3)]">开源技术社区与极客讨论</div>
           <div class="font-bold flex items-center justify-between text-[var(--ink-1)]">
             <span>LINUX DO 社区</span>
-            <span class="dsh-pill font-mono font-bold text-3xs text-[var(--ds-color-brand)]">linux.do</span>
+            <span class="font-mono font-bold text-3xs text-[var(--ink-2)]">linux.do</span>
           </div>
           <p class="text-3xs text-[var(--ink-3)] leading-body">
             遵循 GNU AGPL-3.0 + Commons Clause v1.0 + Anti-Scam 特约附则，打造透明可信的量化基础设施。

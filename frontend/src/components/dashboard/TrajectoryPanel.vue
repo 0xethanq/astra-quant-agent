@@ -236,16 +236,13 @@ function actionBadgeClass(action: string) {
         </div>
 
         <!-- 面板内容区 -->
-        <div class="flex-1 overflow-y-auto p-4">
+        <div class="flex-1 overflow-y-auto">
           <!-- TAB 1: 决策流 -->
-          <div v-if="activeTab === 'decisions'" class="space-y-3">
-            <!-- ★ 2026-10 已移除「宏观市场体制自适应徽章」：数据源是已退役数理引擎
-                 （calculus_engine→regime.py），且缺数据时会凭空编结论；后端已停止签发
-                 `market_regime`，故此处不再有该卡片（与提示词侧的移除同步）。 -->
+          <div v-if="activeTab === 'decisions'" class="divide-y" style="border-color: var(--line-1)">
             <div
               v-for="item in decisionStream"
               :key="item.instId"
-              class="dsh-card-sub p-3 transition-colors hover:border-[var(--line-2)]"
+              class="px-4 py-3.5 transition-colors hover:bg-[var(--surface-2)]"
             >
               <!-- 行1：标的、方向、置信度 -->
               <div class="flex items-center justify-between gap-2">
@@ -348,7 +345,7 @@ function actionBadgeClass(action: string) {
           </div>
 
           <!-- TAB 2: 系统日志流 -->
-          <div v-else class="h-full flex flex-col">
+          <div v-else class="h-full flex flex-col p-4">
             <!-- 批 68：纯文本滚动区，内部没有任何可聚焦元素 —— 不加 tabindex
                  键盘用户根本无法滚动这段日志（WCAG 2.1.1）。role="log" 声明其语义。 -->
             <div

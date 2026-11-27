@@ -91,15 +91,15 @@ const allChannels = computed(() => {
             <span
               class="rounded px-2 py-0.5 text-3xs font-mono border"
               :class="ch.isApiSupported
-                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-                : 'bg-[var(--surface-2)] border-[var(--line-2)] text-[var(--ink-3)]'"
+                ? 'bg-[var(--astra-brand-bg)] border-[var(--astra-brand-line)] text-[var(--ds-color-brand)] font-semibold'
+                : 'bg-[var(--surface-2)] border-[var(--line-1)] text-[var(--ink-3)]'"
             >
               {{ ch.isApiSupported ? t('dash.about.rebateModal.okxBadge') : t('dash.about.rebateModal.partnerBadge') }}
             </span>
           </div>
           <span
             v-if="ch.rebate"
-            class="rounded-md px-2 py-0.5 text-xs font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+            class="px-1.5 py-0.5 text-xs font-mono font-bold text-[var(--ink-strong)]"
           >
             {{ ch.rebate }} {{ t('dash.about.rebateModal.rebateRateSuffix') }}
           </span>
@@ -138,8 +138,8 @@ const allChannels = computed(() => {
       </div>
     </div>
 
-    <div class="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 flex items-start gap-2 text-xs text-amber-400 leading-relaxed">
-      <ShieldCheck class="h-4 w-4 shrink-0 mt-0.5" aria-hidden="true" />
+    <div class="mt-3 rounded-md border border-[var(--line-1)] bg-[var(--surface-2)] px-3 py-2 flex items-start gap-2 text-xs text-[var(--ink-2)] leading-relaxed">
+      <ShieldCheck class="h-4 w-4 shrink-0 mt-0.5 text-[var(--ink-3)]" aria-hidden="true" />
       <span>{{ t('dash.about.rebateModal.compatibilityNotice') }}</span>
     </div>
 

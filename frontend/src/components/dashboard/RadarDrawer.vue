@@ -78,16 +78,16 @@ function dirOf(a: string): 'long' | 'short' | 'flat' {
 function posActionBadge(action: string): { label: string; class: string } {
   const a = String(action || '').toUpperCase();
   if (a === 'UPDATE_SL') {
-    return { label: '🔒 保本移损', class: 'text-[var(--accent)] border-[var(--accent-line)] bg-[var(--accent-bg)]' };
+    return { label: '保本移损', class: 'text-[var(--accent)] border-[var(--accent-line)] bg-[var(--accent-bg)]' };
   }
   if (a === 'CLOSE_MARKET') {
-    return { label: '💰 市价平仓', class: 'text-[var(--warn)] border-[var(--warn-line)] bg-[var(--warn-bg)]' };
+    return { label: '市价平仓', class: 'text-[var(--warn)] border-[var(--warn-line)] bg-[var(--warn-bg)]' };
   }
   if (a === 'HOLD') {
-    return { label: '🛡️ 顺势持有', class: 'text-[var(--ink-2)] border-[var(--line-1)] bg-[var(--surface-2)]' };
+    return { label: '顺势持有', class: 'text-[var(--ink-2)] border-[var(--line-1)] bg-[var(--surface-2)]' };
   }
   if (a === 'SCALE_OUT' || a === 'PARTIAL_TP') {
-    return { label: '🎯 分批锁利', class: 'text-[var(--up)] border-[var(--up-line)] bg-[var(--up-bg)]' };
+    return { label: '分批锁利', class: 'text-[var(--up)] border-[var(--up-line)] bg-[var(--up-bg)]' };
   }
   return { label: a || '—', class: 'text-[var(--ink-3)] border-[var(--line-1)] bg-[var(--surface-2)]' };
 }

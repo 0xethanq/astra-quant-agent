@@ -17,8 +17,10 @@ withDefaults(
     delta?: string;
     deltaTone?: 'up' | 'down' | 'muted' | 'warn';
     hint?: string;
+    hero?: boolean;
+    bare?: boolean;
   }>(),
-  { deltaTone: 'muted' },
+  { deltaTone: 'muted', hero: false, bare: false },
 );
 
 const showHint = ref(false);
@@ -33,9 +35,13 @@ const toneVar = {
 </script>
 
 <template>
-  <div class="group flex min-w-0 flex-col justify-center gap-1 overflow-hidden px-4 py-2.5 select-none" :title="hint">
+  <div
+    class="group flex min-w-0 flex-col justify-center overflow-hidden select-none"
+    :class="bare ? 'px-0 py-1 gap-1.5' : 'px-4 py-3 gap-1'"
+    :title="hint"
+  >
     <div class="flex min-w-0 items-center justify-between gap-1">
-      <span class="truncate text-3xs font-semibold uppercase tracking-wider text-[var(--ink-3)]">{{ label }}</span>
+      <span class="truncate text-4xs font-mono font-semibold uppercase tracking-wider text-[var(--ink-3)]">{{ label }}</span>
       <!-- 批 85：`aria-controls` 的目标 `<p :id="hintId">` 是 `v-if="hint && showHint"`
            —— 收起时它不在 DOM 里，此时仍输出 aria-controls 就是**悬空引用**
            （ARIA 要求被引用元素存在）。与 BaseTabs 既有约定一致：
@@ -53,8 +59,11 @@ const toneVar = {
       </button>
     </div>
 
-    <div class="flex min-w-0 flex-wrap items-baseline justify-between gap-1">
-      <span class="num font-mono truncate text-xl sm:text-2xl font-bold leading-tight text-[var(--ink-strong)]">{{ value }}</span>
+    <div class="flex min-w-0 flex-wrap items-baseline gap-2" :class="bare ? '' : 'justify-between'">
+      <span
+        class="num font-mono truncate leading-none tracking-tight text-[var(--ink-strong)]"
+        :class="hero ? 'text-3xl sm:text-4xl font-bold' : 'text-lg sm:text-xl font-semibold'"
+      >{{ value }}</span>
       <div class="flex items-center gap-1.5 shrink-0">
         <span v-if="delta" class="num font-mono text-3xs font-semibold" :style="{ color: toneVar[deltaTone] }">{{ delta }}</span>
         <slot name="extra" />

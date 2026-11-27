@@ -74,7 +74,7 @@ registerOverlay({
       strokeColor = isLight ? '#0369a1' : '#0284C7'
       strokeStyle = 'solid'
       badgeBg = isLight ? '#0369a1' : '#0284C7'
-      displayBadge = `⚡ ${label.replace(/^[▲▼⚡🛑🔒\s]+/, '')}`
+      displayBadge = label.replace(/^[▲▼⚡🛑🔒🎯\s]+/, '')
       textBaseline = 'bottom'
       textYOffset = -3
     } else if (isTp) {
@@ -82,7 +82,7 @@ registerOverlay({
       strokeStyle = 'dashed'
       strokeDashed = [6, 4]
       badgeBg = isLight ? '#047857' : '#059669'
-      displayBadge = `🎯 ${label.replace(/^[▲▼🎯\s]+/, '')}`
+      displayBadge = label.replace(/^[▲▼🎯\s]+/, '')
       textBaseline = 'bottom'
       textYOffset = -3
     } else if (isSl) {
@@ -92,7 +92,7 @@ registerOverlay({
       strokeStyle = 'dashed'
       strokeDashed = isLock ? [6, 4] : [5, 3]
       badgeBg = isLock ? (isLight ? '#047857' : '#059669') : (isLight ? '#9f1239' : '#BE123C')
-      displayBadge = isLock ? `🔒 ${label.replace(/^[▲▼🛑🔒\s]+/, '')}` : `🛑 ${label.replace(/^[▲▼🛑\s]+/, '')}`
+      displayBadge = label.replace(/^[▲▼🛑🔒\s]+/, '')
       textBaseline = 'top'
       textYOffset = 3
     }
@@ -219,6 +219,7 @@ const props = defineProps<{
   initialSymbol?: string
   fill?: boolean
   chartHeight?: string
+  wheelZoom?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -882,6 +883,45 @@ defineExpose({
 let timer: any = null
 let countdownTimer: any = null
 let resizeObserver: ResizeObserver | null = null
+let gestureBoundEl: HTMLElement | null = null
+let touchStartX = 0
+let touchStartY = 0
+let touchAxis: 'x' | 'y' | null = null
+
+/* 标准页面模式下，纵向滚轮/竖滑优先交给浏览器滚动页面，避免被 70% 宽画布劫持为缩放；
+   按住 Ctrl / Cmd（或触控板双指捏合）、全屏与聚焦模式下保留原生滚轮缩放。 */
+function handleChartWheel(e: WheelEvent) {
+  if (isFullscreen.value || props.wheelZoom || e.ctrlKey || e.metaKey) return
+  if (Math.abs(e.deltaY) >= Math.abs(e.deltaX)) {
+    e.stopImmediatePropagation()
+  }
+}
+
+function handleChartTouchStart(e: TouchEvent) {
+  if (e.touches.length !== 1) {
+    touchAxis = null
+    return
+  }
+  touchStartX = e.touches[0].clientX
+  touchStartY = e.touches[0].clientY
+  touchAxis = null
+}
+
+function handleChartTouchMove(e: TouchEvent) {
+  if (isFullscreen.value || props.wheelZoom || e.touches.length !== 1) return
+  const dx = Math.abs(e.touches[0].clientX - touchStartX)
+  const dy = Math.abs(e.touches[0].clientY - touchStartY)
+  if (!touchAxis && (dx > 6 || dy > 6)) {
+    touchAxis = dy >= dx ? 'y' : 'x'
+  }
+  if (touchAxis === 'y') {
+    e.stopImmediatePropagation()
+  }
+}
+
+function handleChartTouchEnd() {
+  touchAxis = null
+}
 
 function handleClickOutside(e: MouseEvent) {
   const target = e.target as HTMLElement
@@ -918,6 +958,14 @@ onMounted(() => {
   if (initSym) currentSymbol.value = initSym.toUpperCase()
   document.addEventListener('click', handleClickOutside)
   document.addEventListener('keydown', handleKeydown)
+  if (chartContainer.value) {
+    gestureBoundEl = chartContainer.value
+    gestureBoundEl.addEventListener('wheel', handleChartWheel, { capture: true, passive: true })
+    gestureBoundEl.addEventListener('touchstart', handleChartTouchStart, { capture: true, passive: true })
+    gestureBoundEl.addEventListener('touchmove', handleChartTouchMove, { capture: true, passive: true })
+    gestureBoundEl.addEventListener('touchend', handleChartTouchEnd, { capture: true, passive: true })
+    gestureBoundEl.addEventListener('touchcancel', handleChartTouchEnd, { capture: true, passive: true })
+  }
   nextTick(() => {
     initChart()
     // 性能优化：切后台时暂停图表轮询与 Canvas 重绘，回前台立即补一次
@@ -940,6 +988,14 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  if (gestureBoundEl) {
+    gestureBoundEl.removeEventListener('wheel', handleChartWheel, true)
+    gestureBoundEl.removeEventListener('touchstart', handleChartTouchStart, true)
+    gestureBoundEl.removeEventListener('touchmove', handleChartTouchMove, true)
+    gestureBoundEl.removeEventListener('touchend', handleChartTouchEnd, true)
+    gestureBoundEl.removeEventListener('touchcancel', handleChartTouchEnd, true)
+    gestureBoundEl = null
+  }
   if (resizeObserver) {
     resizeObserver.disconnect()
     resizeObserver = null
@@ -959,22 +1015,22 @@ onUnmounted(() => {
 
 <template>
   <div
-    class="dsh-card select-none"
+    class="select-none"
     :class="[
-      isFullscreen ? 'fixed inset-0 z-[100] !bg-[var(--surface-0,#090d16)] !bg-none rounded-none flex flex-col' : '',
-      fill ? 'h-full flex flex-col min-h-0' : '',
+      isFullscreen ? 'fixed inset-0 z-[100] !bg-[var(--surface-0,#0a0a0b)] !bg-none rounded-none flex flex-col' : 'dsh-card',
+      fill ? 'flex-1 h-full flex flex-col min-h-0' : '',
     ]"
   >
-    <!-- 工具条：行情信息 + 工作站工具 -->
+    <!-- 工具条：单行舒展排布，去除多余边框与折行拥挤 -->
     <header
       class="dsh-card-header flex flex-wrap items-center justify-between gap-x-3 gap-y-2"
     >
-      <div class="flex items-center gap-2 flex-wrap">
+      <div class="flex items-center gap-2.5 flex-wrap">
         <!-- 选币下拉 -->
         <div class="indicator-dropdown-container relative">
           <button type="button"
             ref="symbolTrigger"
-            class="flex h-7 cursor-pointer items-center gap-1.5 rounded border border-[var(--line-1)] bg-[var(--surface-2)] px-2.5 transition-colors hover:bg-[var(--surface-3)]"
+            class="flex h-7 cursor-pointer items-center gap-1.5 rounded border-0 bg-[var(--surface-2)] px-2.5 transition-colors hover:bg-[var(--surface-3)]"
             :aria-expanded="symbolMenu"
             aria-haspopup="listbox"
             :aria-controls="symbolMenu ? symbolMenuId : undefined"
@@ -1021,20 +1077,20 @@ onUnmounted(() => {
           <template v-if="liveChangePct === null">--</template>
           <template v-else>{{ liveChangePct >= 0 ? '+' : '' }}{{ liveChangePct.toFixed(2) }}%</template>
         </span>
-        <span class="dsh-pill hidden md:inline-flex">
+        <span class="hidden md:inline-flex items-center gap-1.5 text-3xs font-mono text-[var(--ink-3)]">
           <span class="dsh-status-dot active" aria-hidden="true" />{{ t('dash.matrix.chart.live') }}
         </span>
-        <span class="t-faint num font-mono hidden text-3xs lg:inline">1H ATR {{ currentAtr >= 100 ? '$' + currentAtr.toFixed(1) : (currentAtr * 100).toFixed(2) + '%' }}</span>
+        <span class="t-faint num font-mono hidden text-3xs 2xl:inline">1H ATR {{ currentAtr >= 100 ? '$' + currentAtr.toFixed(1) : (currentAtr * 100).toFixed(2) + '%' }}</span>
       </div>
 
       <!-- 右侧动作按钮（全屏与刷新）：在窄屏保持在第 1 行右侧，在宽屏并入末端 -->
-      <div class="flex items-center gap-1.5 md:hidden ms-auto">
-        <button type="button" class="btn btn-ghost btn-icon btn-sm" :title="t('common.refresh')" @click="loadCandles(false, true)">
+      <div class="flex items-center gap-1 md:hidden ms-auto">
+        <button type="button" class="btn btn-quiet btn-icon btn-sm" :title="t('common.refresh')" @click="loadCandles(false, true)">
           <RefreshCw :class="isLoading && 'animate-spin shrink-0'" />
         </button>
         <button type="button"
           class="btn btn-sm cursor-pointer"
-          :class="isFullscreen ? 'btn-primary px-2.5 font-semibold text-xs gap-1 shadow-sm' : 'btn-ghost btn-icon'"
+          :class="isFullscreen ? 'btn-primary px-2.5 font-semibold text-xs gap-1 shadow-sm' : 'btn-quiet btn-icon'"
           :title="isFullscreen ? t('dash.matrix.chart.exitFullscreen') : t('dash.matrix.chart.fullscreen')"
           :aria-label="isFullscreen ? t('dash.matrix.chart.exitFullscreen') : t('dash.matrix.chart.fullscreen')"
           @click="isFullscreen = !isFullscreen"
@@ -1045,11 +1101,11 @@ onUnmounted(() => {
         </button>
       </div>
 
-      <!-- 周期、指标与试算组：宽屏居右，窄屏整齐铺于第 2 行 -->
+      <!-- 周期、指标与试算组：宽屏单行居右，窄屏整齐铺于第 2 行 -->
       <div class="flex flex-wrap items-center gap-1.5 max-md:w-full max-md:justify-between">
-        <span class="dsh-pill mr-1 hidden sm:inline-flex">
-          <span class="text-[var(--ink-3)]">{{ t('dash.matrix.chart.barCloseIn') }}</span>
-          <b class="num font-mono" style="color: var(--warn)">{{ candleCountdown }}</b>
+        <span class="mr-1.5 hidden 2xl:inline-flex items-center gap-1 text-3xs font-mono text-[var(--ink-3)]">
+          <span>{{ t('dash.matrix.chart.barCloseIn') }}</span>
+          <b class="num font-mono text-[var(--ink-2)]">{{ candleCountdown }}</b>
         </span>
 
         <BaseSegmented
@@ -1059,13 +1115,13 @@ onUnmounted(() => {
           @update:model-value="(id: any) => selectPeriod(periods.find((p) => p.id === id))"
         />
 
-        <div class="flex items-center gap-1.5">
+        <div class="flex items-center gap-1">
           <!-- 指标菜单 -->
           <div class="indicator-dropdown-container relative">
             <button type="button"
               ref="indicatorTrigger"
               class="btn btn-sm"
-              :class="showIndicatorMenu || activeIndicatorCount > 0 ? 'bg-[var(--accent-bg)] text-[var(--accent)] border border-[var(--accent-line)]' : 'btn-ghost'"
+              :class="showIndicatorMenu || activeIndicatorCount > 0 ? 'bg-[var(--accent-bg)] text-[var(--accent)] border-0' : 'btn-quiet'"
               :aria-expanded="showIndicatorMenu"
               aria-haspopup="dialog"
               :aria-controls="showIndicatorMenu ? indicatorMenuId : undefined"
@@ -1126,7 +1182,7 @@ onUnmounted(() => {
           <!-- 试算开关 -->
           <button type="button"
             class="btn btn-sm"
-            :class="simMode ? 'btn-primary' : 'btn-ghost'"
+            :class="simMode ? 'btn-primary' : 'btn-quiet'"
             :title="simMode ? t('dash.matrix.chart.sim.exit') : t('dash.matrix.chart.sim.enter')"
             @click="simMode = !simMode; if (simMode) initSimulation(); updatePriceLines()"
           >
@@ -1136,13 +1192,13 @@ onUnmounted(() => {
         </div>
 
         <!-- 桌面端刷新与全屏按钮 -->
-        <div class="hidden md:flex items-center gap-1.5">
-          <button type="button" class="btn btn-ghost btn-icon btn-sm" :title="t('common.refresh')" @click="loadCandles(false, true)">
+        <div class="hidden md:flex items-center gap-1">
+          <button type="button" class="btn btn-quiet btn-icon btn-sm" :title="t('common.refresh')" @click="loadCandles(false, true)">
             <RefreshCw :class="isLoading && 'animate-spin shrink-0'" />
           </button>
           <button type="button"
             class="btn btn-sm cursor-pointer"
-            :class="isFullscreen ? 'btn-primary px-2.5 font-semibold text-xs gap-1 shadow-sm' : 'btn-ghost btn-icon'"
+            :class="isFullscreen ? 'btn-primary px-2.5 font-semibold text-xs gap-1 shadow-sm' : 'btn-quiet btn-icon'"
             :title="isFullscreen ? t('dash.matrix.chart.exitFullscreen') : t('dash.matrix.chart.fullscreen')"
             :aria-label="isFullscreen ? t('dash.matrix.chart.exitFullscreen') : t('dash.matrix.chart.fullscreen')"
             @click="isFullscreen = !isFullscreen"
@@ -1168,7 +1224,10 @@ onUnmounted(() => {
       ref="chartContainer"
       class="relative w-full overflow-hidden"
       :class="isFullscreen ? 'flex-1 min-h-0' : (props.chartHeight === '100%' || props.fill) ? 'flex-1 min-h-[340px] xl:min-h-0' : 'min-h-0'"
-      :style="{ height: isFullscreen ? undefined : ((props.chartHeight === '100%' || props.fill) ? undefined : (props.chartHeight || 'clamp(340px, 60vw, 560px)')) }"
+      :style="{
+        height: isFullscreen ? undefined : ((props.chartHeight === '100%' || props.fill) ? undefined : (props.chartHeight || 'clamp(340px, 60vw, 560px)')),
+        touchAction: (isFullscreen || props.wheelZoom) ? 'none' : 'pan-y',
+      }"
     >
       <!-- K线背景品牌水印（几何 A-Frame 与突破斜线，明暗自适应） -->
       <div class="chart-watermark" aria-hidden="true">

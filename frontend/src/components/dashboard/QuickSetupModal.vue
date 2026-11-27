@@ -239,16 +239,16 @@ async function handleApply() {
           <div class="grid grid-cols-2 gap-2">
             <button
               type="button"
-              class="flex flex-col items-start gap-1 rounded-lg border p-2.5 text-left transition-all cursor-pointer"
-              :class="okxEnv === 'demo' ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400' : 'border-[var(--line-2)] hover:bg-[var(--surface-2)] text-[var(--ink-2)]'"
+              class="flex flex-col items-start gap-1 rounded-md border p-2.5 text-left transition-all cursor-pointer"
+              :class="okxEnv === 'demo' ? 'border-[var(--line-2)] bg-[var(--surface-2)] text-[var(--ink-strong)]' : 'border-[var(--line-1)] hover:bg-[var(--surface-2)] text-[var(--ink-2)]'"
               @click="okxEnv = 'demo'"
             >
               <span class="text-xs font-semibold">{{ t('dash.firstRun.demoMode') }}</span>
             </button>
             <button
               type="button"
-              class="flex flex-col items-start gap-1 rounded-lg border p-2.5 text-left transition-all cursor-pointer"
-              :class="okxEnv === 'live' ? 'border-rose-500/40 bg-rose-500/10 text-rose-400' : 'border-[var(--line-2)] hover:bg-[var(--surface-2)] text-[var(--ink-2)]'"
+              class="flex flex-col items-start gap-1 rounded-md border p-2.5 text-left transition-all cursor-pointer"
+              :class="okxEnv === 'live' ? 'border-[var(--astra-brand-line)] bg-[var(--astra-brand-bg)] text-[var(--ds-color-brand)]' : 'border-[var(--line-1)] hover:bg-[var(--surface-2)] text-[var(--ink-2)]'"
               @click="okxEnv = 'live'"
             >
               <span class="text-xs font-semibold">{{ t('dash.firstRun.liveMode') }}</span>
@@ -297,16 +297,16 @@ async function handleApply() {
 
         <div
           v-if="okxChannel && okxInviteHref"
-          class="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
+          class="rounded-md border border-[var(--line-2)] bg-[var(--surface-2)] p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
         >
           <div class="min-w-0 space-y-0.5">
-            <div class="flex items-center gap-1.5 text-xs font-semibold text-emerald-400">
-              <Gift class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            <div class="flex items-center gap-1.5 text-xs font-semibold text-[var(--ink-strong)]">
+              <Gift class="h-3.5 w-3.5 shrink-0 text-[var(--ds-color-brand)]" aria-hidden="true" />
               <span>{{ t('dash.firstRun.okxPromoTitle') }}</span>
             </div>
             <p class="text-xs leading-relaxed text-[var(--ink-2)]">
               {{ t('dash.firstRun.okxPromoDesc') }}
-              <span v-if="okxChannel.code" class="ml-1 font-mono font-semibold text-emerald-400">
+              <span v-if="okxChannel.code" class="ml-1 font-mono font-semibold text-[var(--ink-strong)]">
                 ({{ t('dash.firstRun.okxPromoCode') }}: {{ okxChannel.code }})
               </span>
             </p>

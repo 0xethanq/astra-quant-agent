@@ -103,7 +103,7 @@ function go(path: string) {
 
 <template>
   <div
-    class="flex h-screen w-screen overflow-hidden text-xs"
+    class="flex flex-col min-h-screen w-full text-xs"
     style="color: var(--ink-1)"
   >
     <!-- 键盘用户的第一个 Tab 落点：跳过侧边导航与顶栏动作组直达正文（批 45） -->
@@ -114,7 +114,7 @@ function go(path: string) {
          否则抽屉展开后会把顶栏那颗「展开/收起导航」按钮自己盖住，点不回去。 -->
     <aside
       id="dashboard-sidebar"
-      class="flex flex-col shrink-0 border-e transition-transform duration-200 z-50 select-none backdrop-blur-xl fixed inset-y-0 left-0 w-[var(--w-sidebar)] md:hidden shadow-2xl"
+      class="flex flex-col shrink-0 border-e transition-transform duration-200 z-50 select-none fixed inset-y-0 left-0 w-[var(--w-sidebar)] md:hidden"
       :class="mobileNavOpen ? 'translate-x-0' : '-translate-x-full'"
       style="background-color: var(--surface-sidebar); border-color: var(--line-2)"
     >
@@ -241,20 +241,20 @@ function go(path: string) {
     />
 
     <!-- 一体化全宽工作区（无左侧栏割裂，图表与矩阵完全展开） -->
-    <div class="flex-1 flex flex-col min-w-0 h-screen overflow-hidden w-full">
+    <div class="flex-1 flex flex-col min-w-0 w-full">
       <!-- 顶栏一体化导航条 -->
       <TopBar
         :nav-expanded="mobileNavOpen"
         @toggle-sidebar="mobileNavOpen = !mobileNavOpen"
       />
 
-      <!-- 主工作区滚动容器 -->
+      <!-- 主工作区：原生 window 文档滚动 + 居宽 1440px 留白画布 -->
       <main
         id="main-content"
         tabindex="-1"
-        class="flex-1 overflow-y-auto overflow-x-hidden min-w-0 p-3 sm:p-4 pb-20 md:pb-6 outline-none"
+        class="flex-1 min-w-0 overflow-x-clip outline-none"
       >
-        <div class="mx-auto w-full max-w-[2048px]">
+        <div class="mx-auto w-full max-w-[1440px] px-5 sm:px-8 pt-6 pb-20 md:pb-12">
           <!-- 陌生人的第一公里：只在读不到账户数据时出现，就绪即消失 -->
           <FirstRunGuide />
           <KeepAlive :max="5">

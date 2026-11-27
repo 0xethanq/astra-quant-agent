@@ -7,7 +7,6 @@ import { computed, ref } from 'vue';
 import {
   ExternalLink,
   ShieldAlert,
-  Radio,
   X,
   Flame,
   ChevronDown,
@@ -142,32 +141,28 @@ function toggleCoinFilter(sym: string) {
 </script>
 
 <template>
-  <div class="space-y-3">
-    <!-- 页头：移动端分层自适应，彻底杜绝单字竖排挤压断行 -->
-    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 pt-0.5">
-      <div class="flex items-center gap-2 flex-wrap min-w-0">
-        <h1 class="text-xs sm:text-sm font-bold tracking-tight text-[var(--ink-strong)] flex items-center gap-1.5 whitespace-nowrap shrink-0">
-          <Radio class="h-3.5 w-3.5 text-[var(--accent)] shrink-0" />
+  <div class="w-full">
+    <!-- 无边框舒展页头 -->
+    <div class="mb-6 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+      <div class="flex items-center gap-3 flex-wrap min-w-0">
+        <h1 class="text-2xl font-semibold tracking-tight text-[var(--ink-strong)] whitespace-nowrap shrink-0">
           {{ t('dash.news.title') }}
         </h1>
-        <span
-          class="rounded-full px-2 py-0.5 border text-3xs font-mono font-medium whitespace-nowrap shrink-0"
-          style="background-color: var(--surface-2); border-color: var(--line-1); color: var(--ink-2)"
-        >
+        <span class="text-3xs font-mono text-[var(--ink-3)] whitespace-nowrap shrink-0">
           {{ t('dash.news.count', undefined, { n: rawNews.length }) }}
         </span>
         <span
-          class="rounded-full px-2 py-0.5 border text-3xs font-medium whitespace-nowrap shrink-0 inline-flex items-center gap-1"
-          :class="macro.includes('多') ? 'text-[var(--up)] border-[var(--up-line)] bg-[var(--up-bg)]' : macro.includes('空') ? 'text-[var(--down)] border-[var(--down-line)] bg-[var(--down-bg)]' : 'text-[var(--ink-2)] border-[var(--line-1)] bg-[var(--surface-2)]'"
+          class="rounded-xs px-2 py-0.5 text-4xs font-mono font-medium whitespace-nowrap shrink-0 inline-flex items-center gap-1.5"
+          :class="macro.includes('多') ? 'text-[var(--up)] bg-[var(--up-bg)]' : macro.includes('空') ? 'text-[var(--down)] bg-[var(--down-bg)]' : 'text-[var(--ink-2)] bg-[var(--surface-2)]'"
         >
-          <span class="inline-block h-1.5 w-1.5 rounded-full shrink-0" :class="macro.includes('多') ? 'bg-[var(--up)] animate-pulse' : macro.includes('空') ? 'bg-[var(--down)] animate-pulse' : 'bg-[var(--ink-3)]'" />
+          <span class="inline-block h-1.5 w-1.5 rounded-full shrink-0" :class="macro.includes('多') ? 'bg-[var(--up)]' : macro.includes('空') ? 'bg-[var(--down)]' : 'bg-[var(--ink-3)]'" />
           <span>{{ macro }}</span>
         </span>
       </div>
 
-      <!-- 信源状态与新鲜度：防溢出保护 + 优雅换行 -->
-      <div class="flex flex-wrap items-center gap-1.5 max-w-full min-w-0">
-        <span class="dsh-pill max-w-full min-w-0 whitespace-nowrap" :title="sourceReason">
+      <!-- 信源状态与新鲜度 -->
+      <div class="flex flex-wrap items-center gap-4 max-w-full min-w-0 text-3xs font-mono text-[var(--ink-3)]">
+        <span class="inline-flex items-center gap-1.5 max-w-full min-w-0 whitespace-nowrap" :title="sourceReason">
           <span class="dsh-status-dot shrink-0" :class="isSourceActive ? 'active' : 'warn'" aria-hidden="true" />
           <span class="text-[var(--ink-2)] truncate min-w-0">{{ isSourceActive ? sourceReason : t('status.attention') }}</span>
         </span>
@@ -179,7 +174,7 @@ function toggleCoinFilter(sym: string) {
         >
           {{ sourceReason }}
         </span>
-        <span v-if="freshAt" class="dsh-pill text-3xs font-mono text-[var(--ink-3)] whitespace-nowrap shrink-0">
+        <span v-if="freshAt" class="inline-flex items-center gap-1 whitespace-nowrap shrink-0">
           <span>{{ t('dash.news.freshness') }}</span>
           <TimeAgo :time="freshAt" />
         </span>
@@ -187,172 +182,165 @@ function toggleCoinFilter(sym: string) {
     </div>
 
     <DataGate>
-      <!-- 黑天鹅重大熔断预警卡 -->
-      <div
-        v-if="isCbActive"
-        class="dsh-card p-3.5 border-[var(--down-line)] bg-[var(--down-bg)]"
-      >
-        <div class="flex items-start gap-3">
-          <ShieldAlert class="h-5 w-5 text-[var(--down)] shrink-0 mt-0.5" />
-          <div class="flex-1 space-y-1">
-            <div class="flex items-center justify-between">
-              <h3 class="text-xs font-bold text-[var(--down)] uppercase tracking-wider">
-                {{ circuitBreaker.headline || t('dash.news.cb.headlineFallback') }}
-              </h3>
-              <span class="dsh-pill border-[var(--down-line)] text-[var(--down)] font-mono text-3xs">
-                {{ t('dash.news.cb.badge') }}
-              </span>
-            </div>
-            <p class="text-xs text-[var(--ink-1)] leading-body">
-              {{ circuitBreaker.reason || circuitBreaker.detail || t('dash.news.cb.actionFallback') }}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <!-- 币种情绪极性矩阵 (Coin Sentiment Polarity Matrix) -->
-      <div v-if="coins.length" class="dsh-card overflow-hidden">
-        <header class="dsh-card-header flex items-center justify-between gap-2">
-          <div class="flex items-center gap-2 min-w-0">
-            <h2 class="text-xs font-bold uppercase tracking-wider text-[var(--ink-strong)] flex items-center gap-1.5 whitespace-nowrap shrink-0">
-              <Flame class="h-3.5 w-3.5 text-[var(--accent)] shrink-0" />
-              {{ t('dash.news.band.title') }}
-            </h2>
-          </div>
-
-          <div class="flex items-center gap-1.5 shrink-0">
-            <button
-              v-if="selectedCoin"
-              type="button"
-              class="btn btn-ghost h-6 px-2 text-3xs font-medium cursor-pointer inline-flex items-center gap-1 text-[var(--accent)] border border-[var(--accent)]/30 rounded"
-              :aria-label="`${t('dash.news.clearFilter')} (${selectedCoin})`"
-              @click="selectedCoin = null"
-            >
-              <X class="h-3 w-3 shrink-0" />
-              <span class="whitespace-nowrap">{{ t('dash.news.clearFilter') }} (${{ selectedCoin }})</span>
-            </button>
-
-            <!-- 折叠/展开多空面板开关 -->
-            <button
-              type="button"
-              class="btn btn-ghost h-6 px-2 text-3xs font-medium cursor-pointer inline-flex items-center gap-1 text-[var(--ink-2)] hover:text-[var(--ink-strong)] rounded"
-              :aria-label="isBandCollapsed ? t('dash.news.expandBand') : t('dash.news.collapseBand')"
-              :aria-expanded="!isBandCollapsed"
-              :aria-controls="coins.length ? 'news-sentiment-band' : undefined"
-              @click="isBandCollapsed = !isBandCollapsed"
-            >
-              <span class="whitespace-nowrap">{{ isBandCollapsed ? t('dash.news.expandBand') : t('dash.news.collapseBand') }}</span>
-              <ChevronDown v-if="isBandCollapsed" class="h-3 w-3 shrink-0" />
-              <ChevronUp v-else class="h-3 w-3 shrink-0" />
-            </button>
-          </div>
-        </header>
-
-        <!-- 极性卡片网格 -->
-        <div id="news-sentiment-band" v-show="!isBandCollapsed" class="grid grid-cols-2 gap-2 p-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 border-b border-[var(--line-1)]/40">
-          <button
-            v-for="c in coins"
-            :key="c.sym"
-            type="button"
-            class="dsh-card-sub p-2.5 text-left transition-all cursor-pointer relative flex flex-col justify-between"
-            :class="selectedCoin === c.sym ? 'border-[var(--accent)] bg-[var(--surface-3)] shadow-sm shadow-[var(--accent)]/10 ring-1 ring-[var(--accent)]/30' : 'hover:border-[var(--line-2)]'"
-            :aria-pressed="selectedCoin === c.sym"
-            :aria-label="`${c.sym} ${t('dash.news.filterCoin', undefined, { sym: c.sym })}`"
-            @click="toggleCoinFilter(c.sym)"
-          >
-            <!-- 头部：Logo + 币种 + 状态 -->
-            <div class="flex items-center justify-between gap-1 mb-1.5">
-              <div class="flex items-center gap-1.5 min-w-0">
-                <CryptoLogo :symbol="c.sym" :size="16" class="shrink-0" />
-                <span class="font-mono font-bold text-xs text-[var(--ink-strong)] truncate">{{ c.sym }}</span>
-              </div>
-              <span
-                class="rounded px-1 py-0.5 text-4xs font-mono font-semibold uppercase border shrink-0 whitespace-nowrap"
-                :class="c.label === 'bullish' ? 'text-[var(--up)] border-[var(--up-line)] bg-[var(--up-bg)]' : c.label === 'bearish' ? 'text-[var(--down)] border-[var(--down-line)] bg-[var(--down-bg)]' : 'text-[var(--ink-3)] border-[var(--line-1)] bg-[var(--surface-2)]'"
-              >
-                {{ c.label === 'bullish' ? t('common.dir.long') : c.label === 'bearish' ? t('common.dir.short') : t('common.dir.flat') }}
-              </span>
-            </div>
-
-            <!-- 多空力量条 -->
-            <div
-              class="h-1.5 w-full overflow-hidden rounded bg-[var(--down)] flex mb-1.5"
-              role="progressbar"
-              :aria-valuenow="Math.round(c.bull)"
-              aria-valuemin="0"
-              aria-valuemax="100"
-              :aria-label="`${c.sym} ${t('dash.news.ratioLabel')}`"
-              :aria-valuetext="`${Math.round(c.bull)}% / ${Math.round(100 - c.bull)}%`"
-            >
-              <div
-                class="h-full bg-[var(--up)] transition-all"
-                :style="{ width: `${c.bull}%` }"
-              />
-            </div>
-
-            <!-- 多空比例与指标（两行清晰排布，彻底根除挤压折断） -->
-            <div class="space-y-1">
-              <div class="flex items-center justify-between text-4xs font-mono whitespace-nowrap">
-                <span class="text-[var(--up)] font-medium">{{ t('dash.news.pctBull', undefined, { n: c.bull.toFixed(0) }) }}</span>
-                <span class="text-[var(--down)] font-medium">{{ t('dash.news.pctBear', undefined, { n: c.bear.toFixed(0) }) }}</span>
-              </div>
-              <div class="flex items-center justify-between text-4xs font-mono text-[var(--ink-3)] pt-1 border-t border-[var(--line-1)]/50 whitespace-nowrap">
-                <span :title="t('dash.news.ratioHint')">
-                  {{ t('dash.news.ratioLabel') }} <strong class="text-[var(--ink-2)] font-semibold">{{ c.ls || '--' }}</strong>
+      <div class="space-y-6">
+        <!-- 黑天鹅重大熔断预警带 -->
+        <div
+          v-if="isCbActive"
+          class="rounded-lg border border-[var(--down-line)] bg-[var(--down-bg)] px-5 py-4"
+        >
+          <div class="flex items-start gap-3 max-w-4xl">
+            <ShieldAlert class="h-5 w-5 text-[var(--down)] shrink-0 mt-0.5" />
+            <div class="flex-1 space-y-1">
+              <div class="flex items-center justify-between gap-2">
+                <h3 class="text-xs font-bold text-[var(--down)] uppercase tracking-wider">
+                  {{ circuitBreaker.headline || t('dash.news.cb.headlineFallback') }}
+                </h3>
+                <span class="dsh-pill border-[var(--down-line)] text-[var(--down)] font-mono text-3xs">
+                  {{ t('dash.news.cb.badge') }}
                 </span>
-                <span v-if="c.mentions > 0" class="text-3xs text-[var(--accent)] font-medium">
-                  {{ t('dash.news.mentions', undefined, { n: c.mentions }) }}
-                </span>
-                <span v-else class="text-[var(--ink-4)]">--</span>
               </div>
+              <p class="text-xs text-[var(--ink-1)] leading-body">
+                {{ circuitBreaker.reason || circuitBreaker.detail || t('dash.news.cb.actionFallback') }}
+              </p>
             </div>
-          </button>
+          </div>
         </div>
 
-        <!-- 底部微提示栏 -->
-        <div v-show="!isBandCollapsed" class="px-3 py-1.5 text-4xs text-[var(--ink-3)] flex items-center justify-between bg-[var(--surface-2)]/30">
-          <span>{{ t('dash.news.matrixHint') }}</span>
-          <span v-if="selectedCoin" class="text-[var(--accent)] font-medium">{{ t('dash.news.selectedFilter') }}: ${{ selectedCoin }}</span>
-        </div>
-      </div>
+        <!-- 色调分组币种情绪极性矩阵（留白方格替代硬切网格） -->
+        <div v-if="coins.length" class="dsh-card overflow-hidden">
+          <header class="dsh-card-header flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2 min-w-0">
+              <h2 class="text-xs font-mono font-semibold uppercase tracking-wider text-[var(--ink-strong)] flex items-center gap-1.5 whitespace-nowrap shrink-0">
+                <Flame class="h-3.5 w-3.5 text-[var(--accent)] shrink-0" />
+                {{ t('dash.news.band.title') }}
+              </h2>
+            </div>
 
-      <!-- 舆情快讯情报流 (News Stream) -->
-      <div class="dsh-card overflow-hidden min-h-[480px] flex flex-col">
-        <!-- 筛选与搜索栏 -->
-        <header class="dsh-card-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 min-w-0">
-          <!-- 来源 Tab 组：移动端横向滑动，带防越界与平滑手势 -->
-          <div class="w-full sm:w-auto min-w-0 max-w-full overflow-x-auto scrollbar-none -mx-1 px-1 py-0.5" style="-webkit-overflow-scrolling: touch;">
-            <div class="seg inline-flex shrink-0 whitespace-nowrap" role="tablist" :aria-label="t('dash.news.feed.source')">
+            <div class="flex items-center gap-1.5 shrink-0">
               <button
-                v-for="(f, fi) in sourceFilters"
-                :key="f.key"
-                :ref="setSourceRef(fi)"
+                v-if="selectedCoin"
                 type="button"
-                role="tab"
-                :aria-selected="selectedSource === f.key"
-                :tabindex="sourceRoving(selectedSource === f.key)"
-                :class="{ 'seg-on': selectedSource === f.key }"
-                @click="selectedSource = f.key"
-                @keydown="onSourceKey($event, fi)"
+                class="btn btn-quiet h-6 px-2 text-3xs font-medium cursor-pointer inline-flex items-center gap-1 text-[var(--accent)] rounded-xs"
+                :aria-label="`${t('dash.news.clearFilter')} (${selectedCoin})`"
+                @click="selectedCoin = null"
               >
-                {{ f.label }}
+                <X class="h-3 w-3 shrink-0" />
+                <span class="whitespace-nowrap">{{ t('dash.news.clearFilter') }} (${{ selectedCoin }})</span>
+              </button>
+
+              <button
+                type="button"
+                class="btn btn-quiet h-6 px-2 text-3xs font-medium cursor-pointer inline-flex items-center gap-1 text-[var(--ink-2)] hover:text-[var(--ink-strong)] rounded-xs"
+                :aria-label="isBandCollapsed ? t('dash.news.expandBand') : t('dash.news.collapseBand')"
+                :aria-expanded="!isBandCollapsed"
+                :aria-controls="coins.length ? 'news-sentiment-band' : undefined"
+                @click="isBandCollapsed = !isBandCollapsed"
+              >
+                <span class="whitespace-nowrap">{{ isBandCollapsed ? t('dash.news.expandBand') : t('dash.news.collapseBand') }}</span>
+                <ChevronDown v-if="isBandCollapsed" class="h-3 w-3 shrink-0" />
+                <ChevronUp v-else class="h-3 w-3 shrink-0" />
               </button>
             </div>
+          </header>
+
+          <!-- 色调小卡网格（零网格边框） -->
+          <div id="news-sentiment-band" v-show="!isBandCollapsed" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 px-5 pb-4">
+            <button
+              v-for="c in coins"
+              :key="c.sym"
+              type="button"
+              class="rounded-md px-3.5 py-3 text-left transition-colors cursor-pointer flex flex-col justify-between"
+              :class="selectedCoin === c.sym ? 'bg-[var(--surface-2)] ring-1 ring-inset ring-[var(--accent)]' : 'bg-[var(--surface-2)]/50 hover:bg-[var(--surface-2)]'"
+              :aria-pressed="selectedCoin === c.sym"
+              :aria-label="`${c.sym} ${t('dash.news.filterCoin', undefined, { sym: c.sym })}`"
+              @click="toggleCoinFilter(c.sym)"
+            >
+              <div class="flex items-center justify-between gap-1 mb-1.5">
+                <div class="flex items-center gap-1.5 min-w-0">
+                  <CryptoLogo :symbol="c.sym" :size="15" class="shrink-0" />
+                  <span class="font-mono font-bold text-xs text-[var(--ink-strong)] truncate">{{ c.sym }}</span>
+                </div>
+                <span
+                  class="rounded-xs px-1 py-0.5 text-4xs font-mono font-semibold uppercase shrink-0 whitespace-nowrap"
+                  :class="c.label === 'bullish' ? 'text-[var(--up)] bg-[var(--up-bg)]' : c.label === 'bearish' ? 'text-[var(--down)] bg-[var(--down-bg)]' : 'text-[var(--ink-3)] bg-[var(--surface-1)]'"
+                >
+                  {{ c.label === 'bullish' ? t('common.dir.long') : c.label === 'bearish' ? t('common.dir.short') : t('common.dir.flat') }}
+                </span>
+              </div>
+
+              <div
+                class="h-1 w-full overflow-hidden rounded-xs bg-[var(--down)] flex mb-1.5"
+                role="progressbar"
+                :aria-valuenow="Math.round(c.bull)"
+                aria-valuemin="0"
+                aria-valuemax="100"
+                :aria-label="`${c.sym} ${t('dash.news.ratioLabel')}`"
+                :aria-valuetext="`${Math.round(c.bull)}% / ${Math.round(100 - c.bull)}%`"
+              >
+                <div
+                  class="h-full bg-[var(--up)] transition-all"
+                  :style="{ width: `${c.bull}%` }"
+                />
+              </div>
+
+              <div class="space-y-1">
+                <div class="flex items-center justify-between text-4xs font-mono whitespace-nowrap">
+                  <span class="text-[var(--up)] font-medium">{{ t('dash.news.pctBull', undefined, { n: c.bull.toFixed(0) }) }}</span>
+                  <span class="text-[var(--down)] font-medium">{{ t('dash.news.pctBear', undefined, { n: c.bear.toFixed(0) }) }}</span>
+                </div>
+                <div class="flex items-center justify-between text-4xs font-mono text-[var(--ink-3)] whitespace-nowrap">
+                  <span :title="t('dash.news.ratioHint')">
+                    {{ t('dash.news.ratioLabel') }} <strong class="text-[var(--ink-2)] font-semibold">{{ c.ls || '--' }}</strong>
+                  </span>
+                  <span v-if="c.mentions > 0" class="text-4xs text-[var(--accent)] font-medium">
+                    {{ t('dash.news.mentions', undefined, { n: c.mentions }) }}
+                  </span>
+                  <span v-else>--</span>
+                </div>
+              </div>
+            </button>
           </div>
 
-          <!-- 搜索与条数指示 -->
-          <div class="flex items-center gap-2 justify-between sm:justify-end min-w-0 w-full sm:w-auto">
-            <div class="relative flex items-center flex-1 sm:w-56">
-              <Search class="absolute left-2 h-3.5 w-3.5 text-[var(--ink-3)] pointer-events-none shrink-0" aria-hidden="true" />
-              <input
-                v-model="searchQuery"
-                type="search"
-                autocomplete="off"
-                spellcheck="false"
-                :placeholder="t('dash.news.searchPlaceholder')"
-                :aria-label="t('dash.news.searchPlaceholder')"
-                class="pl-7 pr-6 h-7 text-xs w-full bg-[var(--surface-2)] rounded border border-[var(--line-1)] focus:border-[var(--accent)] text-[var(--ink-1)] outline-none"
-              />
+          <div v-show="!isBandCollapsed" class="px-5 pb-3 text-4xs font-mono text-[var(--ink-3)] flex items-center justify-between">
+            <span>{{ t('dash.news.matrixHint') }}</span>
+            <span v-if="selectedCoin" class="text-[var(--accent)] font-medium">{{ t('dash.news.selectedFilter') }}: ${{ selectedCoin }}</span>
+          </div>
+        </div>
+
+        <!-- 舆情快讯流 -->
+        <div class="dsh-card overflow-hidden min-h-[480px] flex flex-col">
+          <header class="dsh-card-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 min-w-0">
+            <div class="w-full sm:w-auto min-w-0 max-w-full overflow-x-auto scrollbar-none -mx-1 px-1 py-0.5" style="-webkit-overflow-scrolling: touch;">
+              <div class="seg inline-flex shrink-0 whitespace-nowrap" role="tablist" :aria-label="t('dash.news.feed.source')">
+                <button
+                  v-for="(f, fi) in sourceFilters"
+                  :key="f.key"
+                  :ref="setSourceRef(fi)"
+                  type="button"
+                  role="tab"
+                  :aria-selected="selectedSource === f.key"
+                  :tabindex="sourceRoving(selectedSource === f.key)"
+                  :class="{ 'seg-on': selectedSource === f.key }"
+                  @click="selectedSource = f.key"
+                  @keydown="onSourceKey($event, fi)"
+                >
+                  {{ f.label }}
+                </button>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-2.5 justify-between sm:justify-end min-w-0 w-full sm:w-auto">
+              <div class="relative flex items-center flex-1 sm:w-60">
+                <Search class="absolute left-2.5 h-3.5 w-3.5 text-[var(--ink-3)] pointer-events-none shrink-0" aria-hidden="true" />
+                <input
+                  v-model="searchQuery"
+                  type="search"
+                  autocomplete="off"
+                  spellcheck="false"
+                  :placeholder="t('dash.news.searchPlaceholder')"
+                  :aria-label="t('dash.news.searchPlaceholder')"
+                  class="pl-8 pr-6 h-7 text-xs font-mono w-full bg-[var(--surface-2)]/80 rounded-md border-0 focus:outline-none focus:ring-1 focus:ring-[var(--accent)] text-[var(--ink-1)]"
+                />
               <button
                 v-if="searchQuery"
                 type="button"
@@ -370,49 +358,42 @@ function toggleCoinFilter(sym: string) {
           </div>
         </header>
 
-        <!-- 空态 -->
         <BaseEmpty v-if="!filteredNews.length" class="flex-1 flex items-center justify-center py-12" :text="t('dash.news.feed.empty')" />
 
-        <!-- 快讯卡片列表 -->
         <div v-else class="divide-y flex-1" style="border-color: var(--line-1)">
           <article
             v-for="item in filteredNews"
             :key="item.id || item.title"
-            class="p-3 sm:p-4 transition-colors hover:bg-[var(--surface-2)] flex flex-col gap-2 border-l-2"
+            class="px-5 sm:px-6 py-4 transition-colors hover:bg-[var(--surface-2)]/50 flex flex-col gap-2 border-l-2"
             :class="item.importance === 'high' ? 'border-l-[var(--down)] bg-[var(--down-bg)]/10' : 'border-l-transparent hover:border-l-[var(--accent)]'"
           >
-            <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="flex flex-wrap items-center justify-between gap-2 max-w-4xl">
               <div class="flex items-center gap-2 flex-wrap">
-                <!-- 时间 -->
                 <span class="num font-mono text-xs font-semibold text-[var(--ink-strong)] whitespace-nowrap">
                   {{ fmtHM(item.timestamp || item.time) }}
                 </span>
 
-                <!-- 重要度 -->
                 <span
                   v-if="item.importance === 'high'"
-                  class="rounded px-1.5 py-0.5 text-4xs font-mono font-bold uppercase text-[var(--down)] border border-[var(--down-line)] bg-[var(--down-bg)] inline-flex items-center gap-1 shrink-0"
+                  class="rounded-xs px-1.5 py-0.5 text-4xs font-mono font-bold uppercase text-[var(--down)] border border-[var(--down-line)] bg-[var(--down-bg)] inline-flex items-center gap-1 shrink-0"
                 >
-                  <span class="h-1 w-1 rounded-full bg-[var(--down)] animate-ping" />
                   HIGH
                 </span>
 
-                <!-- 来源渠道 -->
                 <span
                   v-for="p in (item.platforms || [])"
                   :key="p"
-                  class="rounded px-1.5 py-0.5 text-4xs font-mono text-[var(--ink-2)] border border-[var(--line-1)] bg-[var(--surface-2)] shrink-0"
+                  class="dsh-pill max-w-full min-w-0 text-4xs font-mono text-[var(--ink-3)] border-[var(--line-1)] bg-[var(--surface-1)]"
                 >
-                  {{ p }}
+                  <span class="truncate min-w-0">{{ p }}</span>
                 </span>
 
-                <!-- 关联币种 -->
                 <button
                   v-for="coin in (item.coins || [])"
                   :key="coin"
                   type="button"
-                  class="rounded px-1.5 py-0.5 text-4xs font-mono font-bold border cursor-pointer transition-colors shrink-0"
-                  :class="selectedCoin === coin ? 'text-[var(--accent)] border-[var(--accent)] bg-[var(--surface-3)] ring-1 ring-[var(--accent)]' : 'text-[var(--accent)] border-[var(--line-2)] hover:bg-[var(--surface-3)]'"
+                  class="rounded-xs px-1.5 py-0.5 text-4xs font-mono font-bold border cursor-pointer transition-colors shrink-0"
+                  :class="selectedCoin === coin ? 'text-[var(--accent)] border-[var(--accent)] bg-[var(--surface-2)]' : 'text-[var(--ink-2)] border-[var(--line-1)] hover:border-[var(--line-2)] hover:text-[var(--ink-strong)]'"
                   :aria-pressed="selectedCoin === coin"
                   :aria-label="t('dash.news.filterCoin', undefined, { sym: coin })"
                   @click="toggleCoinFilter(coin)"
@@ -421,13 +402,12 @@ function toggleCoinFilter(sym: string) {
                 </button>
               </div>
 
-              <!-- 外链 -->
               <a
                 v-if="item.url"
                 :href="item.url"
                 target="_blank"
                 rel="noopener noreferrer"
-                class="relative text-3xs text-[var(--ink-3)] hover:text-[var(--accent)] inline-flex items-center gap-1 transition-colors px-1 -mx-1 py-1 -my-1 shrink-0 whitespace-nowrap"
+                class="relative text-3xs font-mono text-[var(--ink-3)] hover:text-[var(--accent)] inline-flex items-center gap-1 transition-colors px-1 -mx-1 py-1 -my-1 shrink-0 whitespace-nowrap"
               >
                 <span>{{ t('common.more') }}</span>
                 <span class="sr-only">{{ t('common.opensInNewTab') }}</span>
@@ -435,25 +415,26 @@ function toggleCoinFilter(sym: string) {
               </a>
             </div>
 
-            <!-- 标题与正文 -->
-            <h3 class="text-xs font-bold text-[var(--ink-strong)] leading-snug">
-              {{ item.title }}
-            </h3>
-            <p v-if="item.summary && item.summary.trim() !== item.title.trim() && !item.summary.includes(item.title)" class="text-xs text-[var(--ink-2)] leading-relaxed font-sans">
-              {{ item.summary }}
-            </p>
+            <div class="max-w-4xl space-y-1">
+              <h3 class="text-sm font-semibold text-[var(--ink-strong)] leading-snug">
+                {{ item.title }}
+              </h3>
+              <p v-if="item.summary && item.summary.trim() !== item.title.trim() && !item.summary.includes(item.title)" class="text-xs text-[var(--ink-2)] leading-body">
+                {{ item.summary }}
+              </p>
+            </div>
           </article>
         </div>
 
-        <!-- 底部结束提示，消除移动端大幅留白错觉 -->
-        <footer
-          v-if="filteredNews.length"
-          class="mt-auto p-3.5 text-center text-3xs text-[var(--ink-3)] font-mono flex items-center justify-center gap-2 border-t border-[var(--line-1)] bg-[var(--surface-1)]/40"
-        >
-          <span class="h-px w-8 bg-[var(--line-1)]" aria-hidden="true" />
-          <span>{{ t('dash.news.feedEnd') }}</span>
-          <span class="h-px w-8 bg-[var(--line-1)]" aria-hidden="true" />
-        </footer>
+          <footer
+            v-if="filteredNews.length"
+            class="mt-auto p-3.5 text-center text-3xs text-[var(--ink-3)] font-mono flex items-center justify-center gap-2 border-t border-[var(--line-3)] bg-[var(--surface-1)]"
+          >
+            <span class="h-px w-8 bg-[var(--line-3)]" aria-hidden="true" />
+            <span>{{ t('dash.news.feedEnd') }}</span>
+            <span class="h-px w-8 bg-[var(--line-3)]" aria-hidden="true" />
+          </footer>
+        </div>
       </div>
     </DataGate>
   </div>

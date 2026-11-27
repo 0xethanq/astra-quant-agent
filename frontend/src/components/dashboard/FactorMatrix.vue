@@ -172,15 +172,12 @@ const processedRows = computed(() => {
     <!-- 面板头部 -->
     <header class="dsh-card-header flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
       <div>
-        <div class="flex items-center gap-2">
-          <h2 class="text-xs font-bold uppercase tracking-wider text-[var(--ink-strong)] flex items-center gap-1.5">
+        <div class="flex items-center gap-2.5">
+          <h2 class="text-xs font-mono font-semibold uppercase tracking-wider text-[var(--ink-strong)] flex items-center gap-1.5">
             <Activity class="h-3.5 w-3.5 text-[var(--accent)]" />
             {{ t('dash.matrix.matrix.title') }}
           </h2>
-          <span
-            class="rounded-full px-2 py-0.5 border text-3xs font-mono font-medium"
-            style="background-color: var(--surface-2); border-color: var(--line-1); color: var(--ink-2)"
-          >
+          <span class="text-3xs font-mono text-[var(--ink-3)]">
             {{ processedRows.length }} / {{ rows.length }} {{ t('common.unitCoin') }}
           </span>
         </div>
@@ -199,7 +196,7 @@ const processedRows = computed(() => {
             spellcheck="false"
             :aria-label="t('dash.matrix.searchPlaceholder')"
             :placeholder="t('dash.matrix.searchPlaceholder')"
-            class="h-6 w-36 rounded-full border border-[var(--line-1)] pl-6 pr-6 text-3xs transition-all focus:outline-none focus:border-[var(--ds-color-border-input-focus)] focus:ring-1 focus:ring-[var(--ds-color-border-input-focus)]"
+            class="h-7 w-52 rounded-md border-0 pl-6 pr-7 text-3xs font-mono transition-colors focus:outline-none focus:ring-1 focus:ring-[var(--ds-color-border-input-focus)]"
             style="background-color: var(--surface-2); color: var(--ink-1)"
           />
           <kbd
@@ -210,10 +207,10 @@ const processedRows = computed(() => {
           </kbd>
         </div>
 
-        <!-- 多空过滤小标签 -->
+        <!-- 多空过滤分段条 -->
         <div
-          class="flex items-center gap-0.5 rounded-full p-0.5"
-          style="background-color: var(--surface-2); border: 1px solid var(--line-1)"
+          class="flex items-center gap-0.5 rounded-md p-0.5 border-0"
+          style="background-color: var(--surface-2)"
         >
           <button type="button"
             v-for="m in [
@@ -223,11 +220,11 @@ const processedRows = computed(() => {
               { key: 'wait', label: t('dash.matrix.filterWait') },
             ] as const"
             :key="m.key"
-            class="px-2 py-0.5 rounded-full text-3xs font-medium cursor-pointer transition-all"
+            class="px-2.5 py-0.5 rounded-xs text-3xs font-medium cursor-pointer transition-colors"
             :class="
               filterMode === m.key
-                ? 'bg-[var(--surface-3)] text-[var(--ink-strong)] font-semibold border border-[var(--line-2)] shadow-xs'
-                : 'text-[var(--ink-3)] hover:bg-[var(--ds-color-bg-hover)] hover:text-[var(--ink-1)]'
+                ? 'bg-[var(--surface-1)] text-[var(--ink-strong)] font-semibold border border-[var(--line-2)]'
+                : 'text-[var(--ink-3)] hover:bg-[var(--ds-color-bg-hover)] hover:text-[var(--ink-1)] border border-transparent'
             "
             @click="filterMode = m.key"
           >
@@ -389,12 +386,12 @@ const processedRows = computed(() => {
         </table>
       </div>
 
-      <!-- 移动端卡片视图 -->
-      <div class="grid grid-cols-1 gap-2 p-2.5 sm:grid-cols-2 lg:hidden">
+      <!-- 移动端平铺列表（轻分割，去嵌套圆角盒） -->
+      <div class="grid grid-cols-1 divide-y divide-[var(--line-3)] lg:hidden">
         <div
           v-for="f in processedRows"
           :key="f.instId"
-          class="clickable dsh-card-sub flex flex-col gap-1.5 p-3 text-left transition-colors hover:border-[var(--line-2)]"
+          class="clickable flex flex-col gap-1.5 px-4 py-3 text-left transition-colors hover:bg-[var(--surface-2)]/60"
           role="button"
           tabindex="0"
           @click="openDetail(f)"

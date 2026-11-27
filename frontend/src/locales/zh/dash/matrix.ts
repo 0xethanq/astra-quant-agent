@@ -236,4 +236,13 @@ export const zhMatrix = {
   focusExit: '退出沉浸',
   // ── 批 41：本地化写死文案（FactorMatrix 搜索框）──
   searchPlaceholder: '搜索标的 (BTC/ETH)...',
+  councilRail: {
+    title: 'AI 投委会裁决',
+    empty: '等待本轮 AI 投委会推演快照',
+    inspect: '推演详情',
+    allCycles: '完整序列',
+    waitMode: '全市场观望 · 空仓防御',
+    councilOn: '投委会开启',
+    councilOff: '单模推演',
+  },
 };

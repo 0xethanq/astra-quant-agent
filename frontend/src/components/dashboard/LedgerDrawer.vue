@@ -165,7 +165,7 @@ const cells = computed(() => [
               v-if="isScaleOut"
               class="rounded px-1.5 py-0.5 text-3xs font-semibold border text-[var(--accent)] border-[var(--accent-line)] bg-[var(--accent-bg)]"
             >
-              🎯 {{ t('dash.ledger.scaleOutBadge') }}
+              {{ t('dash.ledger.scaleOutBadge') }}
             </span>
             <span
               class="rounded px-1.5 py-0.5 text-3xs font-semibold uppercase border"

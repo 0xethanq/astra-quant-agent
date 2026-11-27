@@ -16,14 +16,13 @@
 .dsh-card,
 .section {
   background-color: var(--ds-color-bg-surface-card);
-  border: 1px solid var(--ds-color-border-default);
+  border: 1px solid var(--ds-color-border-subtle);
   border-radius: var(--r-card);
-  box-shadow: var(--shadow-card);
-  transition: border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+  box-shadow: none;
+  transition: border-color var(--dur-fast) var(--ease-out);
 }
 .card:hover {
   border-color: var(--ds-color-border-hover);
-  box-shadow: var(--ds-shadow-card-hover);
 }
 .card,
 .dsh-card {
@@ -33,12 +32,24 @@
 }
 .card-flat {
   background-color: var(--ds-color-bg-surface-card);
-  border: 1px solid var(--ds-color-border-default);
+  border: 1px solid var(--ds-color-border-subtle);
   border-radius: var(--r-card);
 }
 
-/* 卡片头：统一 44px 基线高度 */
-.card-head,
+/* 卡片头：后台标准头部 */
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ds-space-3);
+  flex-wrap: wrap;
+  min-height: 40px;
+  padding: var(--sp-4) var(--sp-7);
+  border-bottom: 1px solid var(--ds-color-border-default);
+  background-color: var(--ds-color-bg-surface-inset);
+}
+
+/* 公开工作台面板头：无底纹无分割线，纯留白对齐 */
 .dsh-card-header {
   display: flex;
   align-items: center;
@@ -46,9 +57,9 @@
   gap: var(--ds-space-3);
   flex-wrap: wrap;
   min-height: 44px;
-  padding: var(--sp-5) var(--sp-7);
-  border-bottom: 1px solid var(--ds-color-border-default);
-  background-color: var(--ds-color-bg-surface-inset);
+  padding: var(--sp-7) var(--sp-8) var(--sp-4);
+  border-bottom: 0;
+  background-color: transparent;
 }
 .card-title,
 .section-title {
@@ -81,19 +92,16 @@
   line-height: var(--leading-body);
   color: var(--ds-color-text-description);
 }
-/* 嵌套子面板 */
+/* 嵌套子面板：平面发丝线容器，去除浮雕阴影 */
 .dsh-card-sub {
-  background-color: var(--ds-color-bg-surface-2);
+  background-color: var(--ds-color-bg-surface-inset);
   border: 1px solid var(--ds-color-border-default);
   border-radius: var(--r-ctl);
-  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.04) inset;
-  /* 只声明真的会变的两件事：`transform` 原先挂在过渡表里，但 `:hover` 从不设
-     它 —— 属于「声明了却永不触发」的死过渡属性，读代码时容易误以为有位移动效。 */
-  transition: border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+  transition: border-color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
 }
 .dsh-card-sub:hover {
-  border-color: var(--ds-color-border-hover);
-  box-shadow: 0 4px 14px -2px rgba(0, 0, 0, 0.08);
+  border-color: var(--ds-color-border-strong);
+  background-color: var(--ds-color-bg-surface-2);
 }
 
 /* =========================================================================
@@ -290,8 +298,8 @@ textarea.input {
   align-items: center;
   gap: 6px;
   height: 20px;
-  padding: 0 8px;
-  border-radius: var(--r-pill);
+  padding: 0 6px;
+  border-radius: var(--r-xs);
   border: 1px solid var(--ds-color-border-default);
   background-color: var(--ds-color-bg-surface-2);
   color: var(--ds-color-text-description);
@@ -370,7 +378,7 @@ textarea.input {
   scrollbar-width: none;
   padding: 2px;
   background-color: var(--ds-color-bg-surface-2);
-  border: 1px solid var(--ds-color-border-default);
+  border: 1px solid transparent;
   border-radius: var(--r-ctl);
   user-select: none;
 }
@@ -407,8 +415,8 @@ textarea.input {
 .seg button.seg-on {
   background-color: var(--ds-color-bg-surface-card);
   color: var(--ds-color-text-primary);
-  border-color: var(--ds-color-border-hover);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  border-color: var(--ds-color-border-default);
+  box-shadow: none;
   font-weight: 600;
 }
 .seg-lg button {
@@ -432,20 +440,20 @@ textarea.input {
   text-align: left;
 }
 .table th {
-  background-color: var(--ds-color-bg-surface-inset);
+  background-color: transparent;
   color: var(--ds-color-text-placeholder);
   font-size: var(--text-3xs);
   font-weight: 500;
   letter-spacing: var(--track-label);
   text-transform: uppercase;
-  padding: var(--ds-space-2) var(--ds-space-3);
-  border-bottom: 1px solid var(--ds-color-border-default);
+  padding: var(--ds-space-3) var(--ds-space-4);
+  border-bottom: 1px solid var(--ds-color-border-secondary);
   white-space: nowrap;
 }
 .table td {
   height: var(--row-h);
-  padding: 0 var(--ds-space-3);
-  border-bottom: 1px solid var(--ds-color-border-default);
+  padding: 0 var(--ds-space-4);
+  border-bottom: 1px solid var(--ds-color-border-secondary);
   color: var(--ds-color-text-secondary);
   line-height: var(--leading-dense);
 }

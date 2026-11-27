@@ -89,12 +89,12 @@
         嵌套同心圆角由 `calc(外层 - 内边距)` 就地推导（见 `.seg button`），
         不再手写第二个字面值 —— 手写就会出现「外 10 内 6、间距 2」这种
         肉眼可见的偏心。 */
-  --r-xs: 6px;
-  --ds-radius-sm: 8px;
-  --ds-radius-input: 8px;
-  --ds-radius-media: 12px;
-  --ds-radius-panel: 12px;
-  --ds-radius-card: 12px;
+  --r-xs: 4px;
+  --ds-radius-sm: 6px;
+  --ds-radius-input: 6px;
+  --ds-radius-media: 8px;
+  --ds-radius-panel: 8px;
+  --ds-radius-card: 8px;
   --ds-radius-pill: 100px;
 
   /* —— 玻璃磨砂令牌 —— */
@@ -157,12 +157,12 @@
   /* —— 控件尺寸 —— */
   --r-ctl: var(--ds-radius-sm);
   --r-card: var(--ds-radius-card);
-  --r-float: 14px;
+  --r-float: 10px;
   --r-pill: var(--ds-radius-pill);
   --h-sm: 24px;
   --h-md: 30px;
   --h-lg: 36px;
-  --row-h: 34px;
+  --row-h: 40px;
 
   /* —— 工作台骨架 —— */
   --w-sidebar: 236px;
@@ -211,12 +211,12 @@
   --ds-color-bg-input-hover: #141418;
   --ds-color-bg-code: rgba(0, 0, 0, 0.5);
 
-  --ds-color-border-subtle: #1f1f23;
-  --ds-color-border-default: rgba(255, 255, 255, 0.09);
-  --ds-color-border-divider: #1f1f23;
+  --ds-color-border-subtle: rgba(255, 255, 255, 0.045);
+  --ds-color-border-default: rgba(255, 255, 255, 0.065);
+  --ds-color-border-divider: rgba(255, 255, 255, 0.05);
   --ds-color-border-hover: rgba(255, 94, 43, 0.4);
   --ds-color-border-strong: rgba(255, 255, 255, 0.18);
-  --ds-color-border-secondary: rgba(255, 255, 255, 0.06);
+  --ds-color-border-secondary: rgba(255, 255, 255, 0.04);
   --ds-color-border-input: rgba(255, 255, 255, 0.1);
   --ds-color-border-input-focus: #ff5e2b;
 
@@ -271,12 +271,12 @@
   --ds-color-bg-code: rgba(17, 17, 19, 0.05);
   --ds-color-bg-sidebar: #f6f5f2;
 
-  --ds-color-border-subtle: #e4e2db;
-  --ds-color-border-default: rgba(17, 17, 19, 0.09);
+  --ds-color-border-subtle: rgba(17, 17, 19, 0.06);
+  --ds-color-border-default: rgba(17, 17, 19, 0.07);
   --ds-color-border-divider: #e4e2db;
   --ds-color-border-hover: rgba(224, 72, 25, 0.38);
   --ds-color-border-strong: rgba(17, 17, 19, 0.18);
-  --ds-color-border-secondary: rgba(17, 17, 19, 0.06);
+  --ds-color-border-secondary: rgba(17, 17, 19, 0.045);
   --ds-color-border-input: rgba(17, 17, 19, 0.12);
   --ds-color-border-input-focus: #e04819;
 
@@ -345,7 +345,7 @@
    ========================================================================= */
 :root,
 :root[data-theme='dark'] {
-  --chart-grid: rgba(255, 255, 255, 0.05);
+  --chart-grid: rgba(255, 255, 255, 0.025);
   --chart-grid-active: #334155;
   --chart-crosshair-h: #3b82f6;
   --chart-crosshair-v: #475569;

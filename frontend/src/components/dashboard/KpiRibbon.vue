@@ -72,77 +72,75 @@ const ocoCoverage = computed(() => {
 </script>
 
 <template>
-  <div class="dsh-card">
-    <!-- 6 个核心指标单元格 -->
-    <div class="grid grid-cols-2 gap-2 p-2.5 sm:grid-cols-3 xl:grid-cols-6 bg-[var(--surface-1)]">
-      <div class="rounded-xl bg-[var(--surface-2)] hover:bg-[var(--surface-3)] border border-[var(--line-1)] hover:border-[var(--ds-color-border-hover)] p-3 transition-all flex flex-col justify-between">
-        <BaseStat
-          :label="t('dash.matrix.kpi.equity')"
-          :value="totalEquity"
-          :hint="totalEquityNum === null ? t('dash.matrix.kpi.equityEmpty') : t('dash.matrix.kpi.equityTip')"
-        >
-          <!-- 今日盈亏：总权益未知时这一行整块不渲染；今日盈亏本身在下方的「今日已实现」有专格。 -->
-          <template v-if="totalEquityNum !== null" #extra>
-            <div class="flex items-center gap-2 mt-1">
-              <span class="num text-xs font-semibold px-2 py-0.5 rounded-md" :class="todayNet >= 0 ? 'up bg-[var(--up-bg)] border border-[var(--up-line)]' : 'down bg-[var(--down-bg)] border border-[var(--down-line)]'">
-                <template v-if="todayNet !== 0">{{ arrow(todayNet) }} </template>{{ fmtSigned(todayNet) }}
-              </span>
-            </div>
-          </template>
-        </BaseStat>
-      </div>
-
-      <div class="rounded-xl bg-[var(--surface-2)] hover:bg-[var(--surface-3)] border border-[var(--line-1)] hover:border-[var(--ds-color-border-hover)] p-3 transition-all flex flex-col justify-between">
-        <BaseStat
-          :label="t('dash.matrix.kpi.todayPnl')"
-          :value="fmtSigned(todayNet)"
-          :delta="todayTrades ? `${todayTrades} ${t('common.unitCount')} · ${todayWinRate}%` : undefined"
-          :delta-tone="todayWinRate === null ? 'muted' : todayWinRate >= 50 ? 'up' : 'down'"
-          :hint="t('dash.matrix.kpi.todayTip')"
-        />
-      </div>
-
-      <div class="rounded-xl bg-[var(--surface-2)] hover:bg-[var(--surface-3)] border border-[var(--line-1)] hover:border-[var(--ds-color-border-hover)] p-3 transition-all flex flex-col justify-between">
-        <BaseStat
-          :label="t('dash.matrix.kpi.floatPnl')"
-          :value="fmtSigned(floatPnl)"
-          :delta="store.positions.length ? `(${fmtPct(floatRoi)})` : '--'"
-          :delta-tone="floatPnl >= 0 ? 'up' : 'down'"
-          :hint="t('dash.matrix.kpi.floatTip')"
-        />
-      </div>
-
-      <div class="rounded-xl bg-[var(--surface-2)] hover:bg-[var(--surface-3)] border border-[var(--line-1)] hover:border-[var(--ds-color-border-hover)] p-3 transition-all flex flex-col justify-between">
-        <BaseStat
-          :label="t('dash.matrix.kpi.ls')"
-          :value="`${longCount} / ${shortCount}`"
-          hint="L / S"
-        />
-      </div>
-
-      <div class="rounded-xl bg-[var(--surface-2)] hover:bg-[var(--surface-3)] border border-[var(--line-1)] hover:border-[var(--ds-color-border-hover)] p-3 transition-all flex flex-col justify-between">
-        <BaseStat
-          :label="t('dash.matrix.kpi.margin')"
-          :value="`${fmtNum(marginUsage, 1)}%`"
-          :delta="actualMarginUsed > 0 ? `${fmtNum(actualMarginUsed, 2)} U` : '0.00 U'"
-          :delta-tone="marginUsage > 70 ? 'down' : marginUsage > 30 ? 'warn' : 'muted'"
-          :hint="t('dash.matrix.kpi.marginTip')"
-        />
-      </div>
-
-      <div class="rounded-xl bg-[var(--surface-2)] hover:bg-[var(--surface-3)] border border-[var(--line-1)] hover:border-[var(--ds-color-border-hover)] p-3 transition-all flex flex-col justify-between">
-        <BaseStat
-          :label="t('dash.matrix.kpi.oco')"
-          :value="`${ocoCoverage.pct}%`"
-          :delta="ocoCoverage.missing ? t('dash.matrix.kpi.missN', undefined, { n: ocoCoverage.missing }) : t('dash.matrix.kpi.allCovered')"
-          :delta-tone="ocoCoverage.pct === 100 ? 'up' : 'warn'"
-          :hint="t('dash.matrix.kpi.ocoTip')"
-        >
-          <template #extra>
-            <ShieldCheck class="h-4 w-4 shrink-0 mt-1" :style="{ color: ocoCoverage.pct === 100 ? 'var(--up)' : 'var(--warn)' }" />
-          </template>
-        </BaseStat>
-      </div>
+  <section
+    class="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between pb-1"
+    :aria-label="t('dash.matrix.kpi.equity')"
+  >
+    <!-- 左侧主锚点：无框开放式总权益数字大字体 -->
+    <div class="shrink-0">
+      <BaseStat
+        :hero="true"
+        :bare="true"
+        :label="t('dash.matrix.kpi.equity')"
+        :value="totalEquity"
+        :hint="totalEquityNum === null ? t('dash.matrix.kpi.equityEmpty') : t('dash.matrix.kpi.equityTip')"
+      >
+        <template v-if="totalEquityNum !== null" #extra>
+          <span class="num text-xs font-mono font-semibold" :class="todayNet >= 0 ? 'up' : 'down'">
+            <template v-if="todayNet !== 0">{{ arrow(todayNet) }} </template>{{ fmtSigned(todayNet) }}
+          </span>
+        </template>
+      </BaseStat>
     </div>
-  </div>
+
+    <!-- 右侧开放式 5 维辅助指标（纯留白间距，零竖线零框线） -->
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-x-8 gap-y-4 xl:gap-x-10">
+      <BaseStat
+        :bare="true"
+        :label="t('dash.matrix.kpi.todayPnl')"
+        :value="fmtSigned(todayNet)"
+        :delta="todayTrades ? `${todayTrades} ${t('common.unitCount')} · ${todayWinRate}%` : undefined"
+        :delta-tone="todayWinRate === null ? 'muted' : todayWinRate >= 50 ? 'up' : 'down'"
+        :hint="t('dash.matrix.kpi.todayTip')"
+      />
+
+      <BaseStat
+        :bare="true"
+        :label="t('dash.matrix.kpi.floatPnl')"
+        :value="fmtSigned(floatPnl)"
+        :delta="store.positions.length ? `${fmtPct(floatRoi)}` : '--'"
+        :delta-tone="floatPnl >= 0 ? 'up' : 'down'"
+        :hint="t('dash.matrix.kpi.floatTip')"
+      />
+
+      <BaseStat
+        :bare="true"
+        :label="t('dash.matrix.kpi.ls')"
+        :value="`${longCount} / ${shortCount}`"
+        hint="L / S"
+      />
+
+      <BaseStat
+        :bare="true"
+        :label="t('dash.matrix.kpi.margin')"
+        :value="`${fmtNum(marginUsage, 1)}%`"
+        :delta="actualMarginUsed > 0 ? `${fmtNum(actualMarginUsed, 2)} U` : '0.00 U'"
+        :delta-tone="marginUsage > 70 ? 'down' : marginUsage > 30 ? 'warn' : 'muted'"
+        :hint="t('dash.matrix.kpi.marginTip')"
+      />
+
+      <BaseStat
+        :bare="true"
+        :label="t('dash.matrix.kpi.oco')"
+        :value="`${ocoCoverage.pct}%`"
+        :delta="ocoCoverage.missing ? t('dash.matrix.kpi.missN', undefined, { n: ocoCoverage.missing }) : t('dash.matrix.kpi.allCovered')"
+        :delta-tone="ocoCoverage.pct === 100 ? 'up' : 'warn'"
+        :hint="t('dash.matrix.kpi.ocoTip')"
+      >
+        <template #extra>
+          <ShieldCheck class="h-3.5 w-3.5 shrink-0" :style="{ color: ocoCoverage.pct === 100 ? 'var(--up)' : 'var(--warn)' }" />
+        </template>
+      </BaseStat>
+    </div>
+  </section>
 </template>

@@ -4,7 +4,7 @@
  * 包含：汇总指标 HUD、多维实时筛选工具栏、高密度等宽订单流表格、生命周期穿透抽屉与底层巡检日志
  */
 import { computed, ref, watch, onMounted } from 'vue';
-import { Download, ScrollText, History, Landmark, Zap, Database } from 'lucide-vue-next';
+import { Download, ScrollText, Landmark, Zap, Database } from 'lucide-vue-next';
 import { useDashboardStore } from '../../stores/dashboard';
 import DataGate from '../../components/dashboard/DataGate.vue';
 import { useI18n } from '../../composables/useI18n';
@@ -244,111 +244,95 @@ const truncation = computed<{ kept: number; total: number } | null>(() => {
 </script>
 
 <template>
-  <div class="space-y-3">
-    <!-- 页头：标题与工位状态 -->
-    <div class="flex items-center justify-between gap-2 pt-0.5">
-      <div class="flex items-center gap-2">
-        <h1 class="text-sm font-semibold tracking-tight text-[var(--ink-strong)] flex items-center gap-2">
-          <History class="h-4 w-4 text-[var(--accent)]" />
+  <div class="w-full">
+    <!-- 无边框舒展页头 -->
+    <div class="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div class="flex items-baseline gap-3 flex-wrap">
+        <h1 class="text-2xl font-semibold tracking-tight text-[var(--ink-strong)]">
           {{ t('dash.ledger.title') }}
         </h1>
-        <span
-          class="rounded-full px-2 py-0.5 border text-3xs font-mono font-medium"
-          style="background-color: var(--surface-2); border-color: var(--line-1); color: var(--ink-2)"
-        >
-          <span :class="allTimeScope ? 'text-[var(--ds-color-amber)]' : 'text-[var(--accent)]'">{{ allTimeScope ? t('dash.ledger.scopeAllBadge') : t('dash.ledger.scopeCycleBadge') }}</span>
+        <span class="text-3xs font-mono text-[var(--ink-3)]">
+          <span :class="allTimeScope ? 'text-[var(--warn)]' : 'text-[var(--ds-color-brand)]'">{{ allTimeScope ? t('dash.ledger.scopeAllBadge') : t('dash.ledger.scopeCycleBadge') }}</span>
           · {{ t('dash.ledger.countRecords', undefined, { a: filtered.length, b: all.length }) }}
         </span>
       </div>
 
-      <!-- 范围切换与快速导出 CSV -->
       <div class="flex items-center gap-1.5">
         <button
           type="button"
-          class="btn btn-quiet h-7 px-2.5 text-xs font-medium cursor-pointer inline-flex items-center gap-1 rounded-full transition-all"
+          class="btn btn-quiet btn-sm text-3xs font-mono cursor-pointer inline-flex items-center gap-1.5 rounded-md transition-colors"
           :title="allTimeScope ? t('dash.ledger.loadCycleHistory') : t('dash.ledger.loadAllHistory')"
           @click="toggleScope"
         >
-          <Database class="h-3 w-3 text-[var(--accent)]" :class="{ 'animate-spin': loadingFull }" />
+          <Database class="h-3.5 w-3.5 text-[var(--ink-3)]" :class="{ 'animate-spin': loadingFull }" />
           <span>{{ allTimeScope ? t('dash.ledger.loadCycleHistory') : t('dash.ledger.loadAllHistory') }}</span>
         </button>
 
         <button type="button"
-          class="btn btn-ghost h-7 px-3 text-xs font-medium cursor-pointer inline-flex items-center gap-1.5 rounded-full transition-all"
+          class="btn btn-quiet btn-sm text-3xs font-mono cursor-pointer inline-flex items-center gap-1.5 rounded-md transition-colors"
           :disabled="!filtered.length"
           @click="exportCsv"
         >
-          <Download class="h-3.5 w-3.5 text-[var(--accent)]" />
+          <Download class="h-3.5 w-3.5 text-[var(--ds-color-brand)]" />
           <span>{{ t('dash.ledger.exportCsv') }}</span>
         </button>
       </div>
     </div>
 
     <DataGate>
-      <!-- 汇总指标 HUD -->
-      <div class="dsh-card">
-        <div class="grid grid-cols-2 gap-2 p-2.5 sm:grid-cols-3 xl:grid-cols-6 bg-[var(--surface-1)]">
-          <div class="rounded-xl bg-[var(--surface-2)] hover:bg-[var(--surface-3)] border border-[var(--line-1)] hover:border-[var(--ds-color-border-hover)] p-3 transition-all">
-            <BaseStat :label="t('dash.ledger.summary.total')" :value="fmtNum(filtered.length, 0)" />
-          </div>
-          <div class="rounded-xl bg-[var(--surface-2)] hover:bg-[var(--surface-3)] border border-[var(--line-1)] hover:border-[var(--ds-color-border-hover)] p-3 transition-all">
-            <BaseStat
-              :label="t('dash.ledger.summary.winRate')"
-              :value="winRate != null ? fmtNum(winRate, 1) + '%' : '--'"
-              :delta="`${wins} / ${filtered.length}`"
-              delta-tone="muted"
-            />
-          </div>
-          <div class="rounded-xl bg-[var(--surface-2)] hover:bg-[var(--surface-3)] border border-[var(--line-1)] hover:border-[var(--ds-color-border-hover)] p-3 transition-all">
-            <BaseStat :label="t('dash.ledger.summary.net')" :value="fmtSigned(netSum)" />
-          </div>
-          <div class="rounded-xl bg-[var(--surface-2)] hover:bg-[var(--surface-3)] border border-[var(--line-1)] hover:border-[var(--ds-color-border-hover)] p-3 transition-all">
-            <BaseStat :label="t('dash.ledger.summary.fees')" :value="feeSum ? `-${fmtNum(feeSum, 2)}` : fmtNum(0, 2)" />
-          </div>
-          <div class="rounded-xl bg-[var(--surface-2)] hover:bg-[var(--surface-3)] border border-[var(--line-1)] hover:border-[var(--ds-color-border-hover)] p-3 transition-all">
-            <BaseStat
-              :label="t('dash.ledger.summary.fundingNet')"
-              :value="fmtSigned(fundingSum)"
-              :delta="`${fundingIncome ? '+' + fmtNum(fundingIncome, 2) : fmtNum(0, 2)} / ${fundingExpense ? '-' + fmtNum(fundingExpense, 2) : fmtNum(0, 2)}`"
-              :delta-tone="fundingSum >= 0 ? 'up' : 'down'"
-              :hint="t('dash.ledger.summary.fundingNetHint')"
-            />
-          </div>
-          <div class="rounded-xl bg-[var(--surface-2)] hover:bg-[var(--surface-3)] border border-[var(--line-1)] hover:border-[var(--ds-color-border-hover)] p-3 transition-all">
-            <BaseStat
-              :label="t('dash.ledger.summary.pf')"
-              :value="perf.profit_factor != null ? fmtNum(perf.profit_factor, 2) : '--'"
-              :delta="perf.all_trades != null ? t('dash.ledger.summary.pfSource', undefined, { n: perf.all_trades }) : undefined"
-              delta-tone="muted"
-              :hint="t('dash.ledger.summary.tipPf')"
-            />
-          </div>
-        </div>
+      <!-- 开放式无边框 6 指标 HUD（保持 BaseStat delta-tone 契约） -->
+      <div class="mb-6 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-x-8 gap-y-4">
+        <BaseStat :bare="true" :label="t('dash.ledger.summary.total')" :value="fmtNum(filtered.length, 0)" />
+        <BaseStat
+          :bare="true"
+          :label="t('dash.ledger.summary.winRate')"
+          :value="winRate != null ? fmtNum(winRate, 1) + '%' : '--'"
+          :delta="`${wins} / ${filtered.length}`"
+          delta-tone="muted"
+        />
+        <BaseStat :bare="true" :label="t('dash.ledger.summary.net')" :value="fmtSigned(netSum)" />
+        <BaseStat :bare="true" :label="t('dash.ledger.summary.fees')" :value="feeSum ? `-${fmtNum(feeSum, 2)}` : fmtNum(0, 2)" />
+        <BaseStat
+          :bare="true"
+          :label="t('dash.ledger.summary.fundingNet')"
+          :value="fmtSigned(fundingSum)"
+          :delta="`${fundingIncome ? '+' + fmtNum(fundingIncome, 2) : fmtNum(0, 2)} / ${fundingExpense ? '-' + fmtNum(fundingExpense, 2) : fmtNum(0, 2)}`"
+          :delta-tone="fundingSum >= 0 ? 'up' : 'down'"
+          :hint="t('dash.ledger.summary.fundingNetHint')"
+        />
+        <BaseStat
+          :bare="true"
+          :label="t('dash.ledger.summary.pf')"
+          :value="perf.profit_factor != null ? fmtNum(perf.profit_factor, 2) : '--'"
+          :delta="perf.all_trades != null ? t('dash.ledger.summary.pfSource', undefined, { n: perf.all_trades }) : undefined"
+          delta-tone="muted"
+          :hint="t('dash.ledger.summary.tipPf')"
+        />
       </div>
 
-      <!-- 数理快照异常或截断提示：仅在有截断或不可观测时展示，正常时不干扰视线 -->
+      <!-- 数理快照异常或截断提示 -->
       <div
         v-if="truncation || snapshotAudit.unobservable > 0"
-        class="dsh-card-sub flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5 text-3xs"
+        class="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-3xs font-mono"
       >
         <span
           v-if="truncation"
-          class="rounded border px-1.5 py-0.5 font-medium"
-          style="color: var(--warn, var(--ink-2)); border-color: var(--line-1); background-color: var(--surface-2)"
+          class="rounded-xs px-2 py-0.5 font-medium"
+          style="color: var(--warn, var(--ink-2)); background-color: var(--surface-2)"
           :title="t('dash.ledger.truncatedHint')"
         >
           {{ t('dash.ledger.truncated', undefined, { kept: truncation.kept, total: truncation.total }) }}
         </span>
         <span
           v-if="snapshotAudit.unobservable"
-          class="rounded border px-1.5 py-0.5 font-medium"
-          style="color: var(--ink-2); border-color: var(--line-1); background-color: var(--surface-2)"
+          class="rounded-xs px-2 py-0.5 font-medium"
+          style="color: var(--ink-2); background-color: var(--surface-2)"
         >
           {{ t('dash.ledger.observability.unobservable', undefined, { n: snapshotAudit.unobservable, total: snapshotAudit.total }) }}
         </span>
       </div>
 
-      <!-- 筛选工具栏与台账表格 -->
+      <!-- 色调分层台账卡片 -->
       <div class="dsh-card overflow-hidden">
         <!-- 筛选栏 -->
         <header class="dsh-card-header flex flex-wrap items-center justify-between gap-2">
@@ -411,7 +395,7 @@ const truncation = computed<{ kept: number; total: number } | null>(() => {
         <!-- 数据表 -->
         <template v-else>
           <div class="overflow-x-auto">
-            <table class="table w-full max-w-[1360px]" :aria-label="t('dash.ledger.title')">
+            <table class="table w-full" :aria-label="t('dash.ledger.title')">
               <thead>
                 <tr>
                   <th scope="col" class="min-w-[180px]">{{ t('dash.ledger.col.symbol') }}</th>
@@ -516,30 +500,32 @@ const truncation = computed<{ kept: number; total: number } | null>(() => {
             </table>
           </div>
 
-          <div class="border-t p-2" style="border-color: var(--line-1)">
+          <div class="border-t border-[var(--line-3)] p-2.5">
             <BasePager v-model:page="page" :page-count="pageCount" :total="filtered.length" />
           </div>
         </template>
       </div>
 
       <!-- 巡检日志 -->
-      <BaseCollapse>
-        <template #head>
-          <span class="flex items-center gap-2 text-xs font-semibold text-[var(--ink-strong)]">
-            <ScrollText class="h-3.5 w-3.5 text-[var(--accent)]" />
-            {{ t('dash.ledger.logs.title') }}
-          </span>
-        </template>
-        <div class="scroll-y max-h-80 p-2">
-          <BaseEmpty v-if="!store.logs.length" :text="t('dash.ledger.logs.empty')" />
-          <pre
-            v-else
-            class="rounded p-2.5 font-mono text-3xs leading-body whitespace-pre-wrap select-text"
-            tabindex="0"
-            style="background-color: var(--surface-input); border: 1px solid var(--line-1); color: var(--ink-2)"
-          >{{ store.logs.join('\n') }}</pre>
-        </div>
-      </BaseCollapse>
+      <div class="mt-6">
+        <BaseCollapse>
+          <template #head>
+            <span class="flex items-center gap-2 text-xs font-mono font-semibold text-[var(--ink-strong)]">
+              <ScrollText class="h-3.5 w-3.5 text-[var(--accent)]" />
+              {{ t('dash.ledger.logs.title') }}
+            </span>
+          </template>
+          <div class="scroll-y max-h-80 p-2">
+            <BaseEmpty v-if="!store.logs.length" :text="t('dash.ledger.logs.empty')" />
+            <pre
+              v-else
+              class="rounded-md p-2.5 font-mono text-3xs leading-body whitespace-pre-wrap select-text"
+              tabindex="0"
+              style="background-color: var(--surface-input); border: 1px solid var(--line-1); color: var(--ink-2)"
+            >{{ store.logs.join('\n') }}</pre>
+          </div>
+        </BaseCollapse>
+      </div>
 
       <!-- 订单生命周期穿透抽屉 -->
       <LedgerDrawer :trade="detail" @close="detail = null" />
