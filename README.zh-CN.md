@@ -25,17 +25,17 @@ AstraQuant 将大语言模型多维度研判（宏观趋势、技术形态、盘
 
 | | |
 |---|---|
-| **机构量化交易大屏**<br>![交易工作台](backend/docs/images/v850_live_dashboard.png) | **决策思维链 (CoT) 抽屉**<br>![思维链详情](backend/docs/images/v850_trajectory_cot.png) |
-| **物理风控管理中心**<br>![风控管理](backend/docs/images/v850_risk_control.png) | **多模型协同投委会看板**<br>![投委会看板](backend/docs/images/v850_council_board.png) |
+| **机构量化交易大屏 (Signal Orange)**<br>![交易工作台](backend/docs/images/v871_live_dashboard.png) | **AI 推演信号与决策审计雷达**<br>![AI Radar](backend/docs/images/v871_factors_radar.png) |
+| **闭环经验自进化中枢**<br>![经验自进化](backend/docs/images/v871_self_evolution.png) | **实况交易台账与持仓生命周期**<br>![交易台账](backend/docs/images/v871_ledger.png) |
 
 <details>
-<summary><b>展开查看更多系统界面</b>（提示词工坊、自进化、系统治理、安全凭证等）</summary>
+<summary><b>展开查看更多系统界面</b>（思维链详情、风控中心、提示词工坊、系统治理、安全凭证等）</summary>
 
 | | |
 |---|---|
-| **提示词工程工坊**<br>![提示词工坊](backend/docs/images/v850_prompt_studio.png) | **闭环经验自进化中枢**<br>![经验自进化](backend/docs/images/v850_self_evolution.png) |
-| **大模型网关与思考配置**<br>![大模型中枢](backend/docs/images/v850_llm_hub.png) | **系统治理与运维概览**<br>![系统治理](backend/docs/images/v850_admin_overview.png) |
-| **安全与密钥凭证管理**<br>![安全中心](backend/docs/images/v850_security_plaza.png) | **多维因子遥测矩阵**<br>![量化因子矩阵](backend/docs/images/v850_calculus_factors.png) |
+| **决策思维链 (CoT) 抽屉**<br>![思维链详情](backend/docs/images/v850_trajectory_cot.png) | **物理风控管理中心**<br>![风控管理](backend/docs/images/v850_risk_control.png) |
+| **提示词工程工坊**<br>![提示词工坊](backend/docs/images/v850_prompt_studio.png) | **大模型网关与思考配置**<br>![大模型中枢](backend/docs/images/v850_llm_hub.png) |
+| **系统治理与运维概览**<br>![系统治理](backend/docs/images/v850_admin_overview.png) | **安全与密钥凭证管理**<br>![安全中心](backend/docs/images/v850_security_plaza.png) |
 
 </details>
 

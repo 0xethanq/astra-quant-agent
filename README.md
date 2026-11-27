@@ -25,17 +25,17 @@ AstraQuant combines large language models (macro, technical, and microstructure 
 
 | | |
 |---|---|
-| **Quant Trading Workstation**<br>![Live Workstation](backend/docs/images/v850_live_dashboard.png) | **Chain-of-Thought (CoT) Decision Drawer**<br>![Chain of Thought](backend/docs/images/v850_trajectory_cot.png) |
-| **Execution Risk Control Center**<br>![Risk Control](backend/docs/images/v850_risk_control.png) | **Multi-Model Committee Board**<br>![Council Board](backend/docs/images/v850_council_board.png) |
+| **Quant Trading Workstation (Signal Orange)**<br>![Live Workstation](backend/docs/images/v871_live_dashboard.png) | **AI Signal & Decision Radar**<br>![AI Radar](backend/docs/images/v871_factors_radar.png) |
+| **Closed-Loop Self-Evolution Hub**<br>![Self Evolution](backend/docs/images/v871_self_evolution.png) | **Live Trade Ledger & Position Lifecycle**<br>![Trade Ledger](backend/docs/images/v871_ledger.png) |
 
 <details>
-<summary><b>Additional Interface Previews</b> (Click to expand: Prompt Studio, Evolution, Admin, Security)</summary>
+<summary><b>Additional Interface Previews</b> (Click to expand: CoT Drawer, Risk Control, Prompt Studio, Admin, Security)</summary>
 
 | | |
 |---|---|
-| **Prompt Engineering Studio**<br>![Prompt Studio](backend/docs/images/v850_prompt_studio.png) | **Closed-Loop Self-Evolution Hub**<br>![Self Evolution](backend/docs/images/v850_self_evolution.png) |
-| **LLM Gateway & Thinking Config**<br>![LLM Hub](backend/docs/images/v850_llm_hub.png) | **System Governance & Admin Overview**<br>![Admin Overview](backend/docs/images/v850_admin_overview.png) |
-| **Security & Credential Plaza**<br>![Security Plaza](backend/docs/images/v850_security_plaza.png) | **Factor Telemetry Table**<br>![Factor Matrix](backend/docs/images/v850_calculus_factors.png) |
+| **Chain-of-Thought (CoT) Decision Drawer**<br>![Chain of Thought](backend/docs/images/v850_trajectory_cot.png) | **Execution Risk Control Center**<br>![Risk Control](backend/docs/images/v850_risk_control.png) |
+| **Prompt Engineering Studio**<br>![Prompt Studio](backend/docs/images/v850_prompt_studio.png) | **LLM Gateway & Thinking Config**<br>![LLM Hub](backend/docs/images/v850_llm_hub.png) |
+| **System Governance & Admin Overview**<br>![Admin Overview](backend/docs/images/v850_admin_overview.png) | **Security & Credential Plaza**<br>![Security Plaza](backend/docs/images/v850_security_plaza.png) |
 
 </details>
 
