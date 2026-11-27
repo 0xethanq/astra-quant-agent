@@ -51,9 +51,11 @@ git log --oneline --grep="第.*刀" -- frontend/package-lock.json → 0
 > 脚本与 `engines.node >= 24`。**依赖清单零变动**（无增、无删、无换版本），
 > 基线哈希随之更新。
 
+> 2026-11-27 (v8.7.1)：移除零引用死依赖 `lightweight-charts`，基线哈希与清单随之更新。
+
 `frontend/package.json` 的 `dependencies`：
 `@tailwindcss/vite` `lucide-vue-next` `pinia` `tailwindcss` `vue`
-`vue-router` `klinecharts` `lightweight-charts`
+`vue-router` `klinecharts`
 
 > 本测试只锁"依赖清单不变"，**不锁版本号写法**——
 > 版本号变化同样会翻红（哈希敏感），但那属于依赖变更，本就该人工过目。
@@ -82,9 +84,8 @@ BASELINE: dict[str, str] = {
     "backend/requirements.txt":
         "fcb6c397cdaf2e710aa5c1d303dd5e42a524f81e71f7b8c566e2c37d57e38a7e",
     "frontend/package.json":
-        # 2026-11-21 更新：CI 任务增加 `typecheck`/`test` 脚本与 `engines.node >= 24`。
-        # ⚠️ 依赖清单零变动（无增、无删、无换版本）—— 只改了 scripts/engines。
-        "c590cbc542916de13a5439db0f90c555d2fb50184e6b92660d60e957e95df54a",
+        # 2026-11-27 更新 (v8.7.1)：移除零引用死依赖 `lightweight-charts`。
+        "ccb2cca9c09f0c51a497d774c979b7e815f0ecb4efab491b23f6f9588466b117",
 }
 
 

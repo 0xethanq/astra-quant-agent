@@ -54,11 +54,11 @@ F7 的另一种解法（推广）对这两个组件目前**不成立**，理由�
 | 组件 | 消费者数 | 消费者 |
 | --- | --- | --- |
 | `base/BaseDrawer` | 4 | `dashboard/` 的 FactorDrawer · LedgerDrawer · PeekDrawer · RadarDrawer |
-| `base/CopyButton` | 7 | `base/BaseCodeBlock` · `dashboard/AboutModal` · `dashboard/FirstRunGuide` · `dashboard/PeekDrawer` · `views/admin/AboutPage` · `views/admin/DecisionsPage` · `views/admin/PromptStudioPage` |
-| `base/BaseDialog` | 15 | `base/ConfirmHost` · `dashboard/AboutModal` · `dashboard/QuickSetupModal` · `views/admin/GatewayPage` · `views/admin/CouncilPage` · `views/admin/PromptStudioPage` · `views/admin/PolicySnapshotPage` · `views/admin/EvolutionPage` · `views/admin/NotifyPage` · `views/admin/AboutPage` · `views/admin/llm/ModelEditDialog` · `views/admin/llm/RemoteFetchDialog` · `views/admin/SecurityPage` · `views/admin/BackupPage` |
+| `base/CopyButton` | 8 | `base/BaseCodeBlock` · `dashboard/AboutModal` · `dashboard/FirstRunGuide` · `dashboard/PeekDrawer` · `dashboard/RebateModal` · `views/admin/AboutPage` · `views/admin/DecisionsPage` · `views/admin/PromptStudioPage` |
+| `base/BaseDialog` | 16 | `base/ConfirmHost` · `dashboard/AboutModal` · `dashboard/QuickSetupModal` · `dashboard/RebateModal` · `views/admin/AdminSysPage` · `views/admin/AuditPage` · `views/admin/GatewayPage` · `views/admin/CouncilPage` · `views/admin/PromptStudioPage` · `views/admin/PolicySnapshotPage` · `views/admin/EvolutionPage` · `views/admin/NotifyPage` · `views/admin/AboutPage` · `views/admin/llm/ModelEditDialog` · `views/admin/llm/RemoteFetchDialog` · `views/admin/SecurityPage` |
 | `base/BaseSwitch` | 10 | `dashboard/SettingsPopover` · `views/admin/CouncilPage` · `views/admin/PromptStudioPage` · `views/admin/EvolutionPage` · `views/admin/NotifyPage` · `views/admin/llm/ProviderListView` · `views/admin/llm/ProviderDetailView` · `views/admin/SecurityPage` · `views/admin/RiskPage` |
 | `base/BaseTabs` | 4 | `dashboard/RadarDrawer` · `views/admin/GatewayPage` · `views/admin/DecisionsPage` · `views/admin/BackupPage`（后三个是后台宿主页的页签栏） |
-| `dashboard/DataStatus` | 1 | `dashboard/KpiRibbon` |
+| `dashboard/DataStatus` | 1 | `dashboard/TopBar` |
 | `dashboard/SettingsPopover` | 1 | `dashboard/TopBar` |
 | `dashboard/FactorDrawer` | 1 | `dashboard/FactorMatrix` |
 

@@ -755,7 +755,7 @@ def execute_batch_ai_brain_cycle(
     print(f"[AI Brain Batch] 📌 当前决策策略快照: {policy_version} ({policy_hash})")
 
     print(f"[AI Brain Batch] 并行获取 {len(TARGET_INSTRUMENTS)} 币种原生行情、技术指标与顶级聪明钱数据...")
-    with ThreadPoolExecutor(max_workers=8) as executor:
+    with ThreadPoolExecutor(max_workers=2) as executor:
         packages = list(executor.map(fetch_single_instrument_package, TARGET_INSTRUMENTS))
 
     # 顶级聪明钱与大户持仓数据接入（OKX Rubik 公开统计，单一来源）

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * DocsView.vue · AstraQuant 技术与量化策略文档中心 (v8.7.0)
+ * DocsView.vue · AstraQuant 技术与量化策略文档中心 (v8.7.1)
  * 包含：双轨工作台骨架、目录大纲索引树 (TOC) 与平滑滚动侦测、全功能架构透视、
  * 7 梯队因子与硬防线技术规范、Prompt Caching 提示词缓存体系、AGPL-3.0 + Commons Clause 许可说明
  */
@@ -702,7 +702,7 @@ onUnmounted(() => {
             <div class="dsh-card-sub p-3 space-y-2">
               <h3 class="font-bold text-[var(--ink-strong)]">Q: 如何在 Claude Code / Codex / Cursor 等 AI 助手中使用加密货币交易技能？</h3>
               <p class="text-[var(--ink-2)] leading-body">
-                A: 欢迎访问我们的姊妹项目 <strong>TradeSkill (tradeskill.si)</strong>，获取支持 15 个 AI 客户端的 156+ 开源加密货币交易技能与 4 大交易所同步手续费返佣通道。
+                A: 欢迎访问我们的姊妹项目 <strong>TradeSkill (tradeskill.si)</strong>，获取支持 16 家交易所与 DEX 的 103 个可直装技能包、164+ 官方加密货币交易技能与 4 大交易所同步手续费返佣通道。
               </p>
               <div class="flex flex-wrap items-center gap-2 pt-1">
                 <a

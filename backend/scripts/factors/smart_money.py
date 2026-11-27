@@ -7,11 +7,49 @@
 from __future__ import annotations
 
 import json
+import time
+import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 _HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+
+
+def _rubik_hooks() -> Tuple[Callable[[str], None], Callable[[str], None]]:
+    """Reuse the process-wide OKX Rubik rate-limiter (5 req / 2s per IP)."""
+    try:
+        from scripts.factors import okx_quant_factors as _qf
+        return _qf._throttle_rubik, _qf._mark_rubik_called
+    except ImportError:
+        try:
+            from factors import okx_quant_factors as _qf
+            return _qf._throttle_rubik, _qf._mark_rubik_called
+        except Exception:
+            return (lambda _url: None), (lambda _url: None)
+
+
+def _okx_rubik_get(url: str, timeout: float = 3.5) -> Optional[Dict[str, Any]]:
+    """Fetch an OKX Rubik endpoint with shared throttling and 429 exponential backoff."""
+    throttle_rubik, mark_rubik_called = _rubik_hooks()
+    for attempt, backoff in enumerate((0.0, 0.5, 1.5)):
+        if backoff:
+            time.sleep(backoff)
+        throttle_rubik(url)
+        try:
+            req = urllib.request.Request(url, headers=_HEADERS)
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                payload = json.loads(resp.read().decode("utf-8"))
+            mark_rubik_called(url)
+            return payload if isinstance(payload, dict) else None
+        except urllib.error.HTTPError as exc:
+            mark_rubik_called(url)
+            if exc.code == 429 and attempt < 2:
+                continue
+            return None
+        except Exception:
+            return None
+    return None
 
 
 def fetch_smart_money_for_symbol(
@@ -40,26 +78,22 @@ def _fetch_from_okx_rubik(ccy: str, price: float = 0.0, timeout: float = 3.5) ->
 
     try:
         url = f"https://www.okx.com/api/v5/rubik/stat/contracts/long-short-pos-ratio?ccy={ccy}&period=5m"
-        req = urllib.request.Request(url, headers=_HEADERS)
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            d = json.loads(resp.read().decode("utf-8"))
-            if d.get("code") == "0" and d.get("data") and len(d["data"]) > 0:
-                raw_ratio = float(d["data"][0][1])
-                ls_ratio = raw_ratio
-                w_long = round(raw_ratio / (1.0 + raw_ratio), 4)
+        d = _okx_rubik_get(url, timeout=timeout)
+        if d and d.get("code") == "0" and d.get("data") and len(d["data"]) > 0:
+            raw_ratio = float(d["data"][0][1])
+            ls_ratio = raw_ratio
+            w_long = round(raw_ratio / (1.0 + raw_ratio), 4)
     except Exception:
         pass
 
     if w_long is None:
         try:
             url2 = f"https://www.okx.com/api/v5/rubik/stat/contracts/long-short-account-ratio?ccy={ccy}&period=5m"
-            req2 = urllib.request.Request(url2, headers=_HEADERS)
-            with urllib.request.urlopen(req2, timeout=timeout) as resp:
-                d2 = json.loads(resp.read().decode("utf-8"))
-                if d2.get("code") == "0" and d2.get("data") and len(d2["data"]) > 0:
-                    raw_ratio2 = float(d2["data"][0][1])
-                    ls_ratio = raw_ratio2
-                    w_long = round(raw_ratio2 / (1.0 + raw_ratio2), 4)
+            d2 = _okx_rubik_get(url2, timeout=timeout)
+            if d2 and d2.get("code") == "0" and d2.get("data") and len(d2["data"]) > 0:
+                raw_ratio2 = float(d2["data"][0][1])
+                ls_ratio = raw_ratio2
+                w_long = round(raw_ratio2 / (1.0 + raw_ratio2), 4)
         except Exception:
             pass
 
@@ -68,18 +102,16 @@ def _fetch_from_okx_rubik(ccy: str, price: float = 0.0, timeout: float = 3.5) ->
 
     try:
         url_t = f"https://www.okx.com/api/v5/rubik/stat/taker-volume?ccy={ccy}&instType=CONTRACTS&period=5m"
-        req_t = urllib.request.Request(url_t, headers=_HEADERS)
-        with urllib.request.urlopen(req_t, timeout=timeout) as resp:
-            d_t = json.loads(resp.read().decode("utf-8"))
-            if d_t.get("code") == "0" and d_t.get("data") and len(d_t["data"]) > 0:
-                b_vol = float(d_t["data"][0][1])
-                s_vol = float(d_t["data"][0][2])
-                net_notional_usd = b_vol - s_vol
-                taker_str = (
-                    f"{round(net_notional_usd / 1e4, 1)}万 U"
-                    if abs(net_notional_usd) >= 1e4
-                    else f"{round(net_notional_usd, 0)} U"
-                )
+        d_t = _okx_rubik_get(url_t, timeout=timeout)
+        if d_t and d_t.get("code") == "0" and d_t.get("data") and len(d_t["data"]) > 0:
+            b_vol = float(d_t["data"][0][1])
+            s_vol = float(d_t["data"][0][2])
+            net_notional_usd = b_vol - s_vol
+            taker_str = (
+                f"{round(net_notional_usd / 1e4, 1)}万 U"
+                if abs(net_notional_usd) >= 1e4
+                else f"{round(net_notional_usd, 0)} U"
+            )
     except Exception:
         pass
 

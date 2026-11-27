@@ -44,7 +44,8 @@ log() { echo "[$(TZ=Asia/Shanghai date '+%F %T +08:00')] $*" >> "$LOG"; }
 find_backend_pid() {
     local p cmd
     for p in $(ls /proc 2>/dev/null | grep -E '^[0-9]+$'); do
-        cmd=$(tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null)
+        [ -r "/proc/$p/cmdline" ] || continue
+        cmd=$({ tr '\0' ' ' < "/proc/$p/cmdline"; } 2>/dev/null) || continue
         case "$cmd" in *"m uvicorn astra_backend.app:app"*) echo "$p"; return;; esac
     done
 }
@@ -55,7 +56,8 @@ kill_stale() {  # 杀掉卡死但不再应答的旧后端与孤儿 worker
     sleep 2
     kill "$pid" 2>/dev/null
     for p in $(ls /proc 2>/dev/null | grep -E '^[0-9]+$'); do
-        cmd=$(tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null)
+        [ -r "/proc/$p/cmdline" ] || continue
+        cmd=$({ tr '\0' ' ' < "/proc/$p/cmdline"; } 2>/dev/null) || continue
         case "$cmd" in *"m astra_gateway.worker"*)
             # 后端已死/未建立父子关系，孤儿 worker 必须让出调度锁
             kill "$p" 2>/dev/null && log "已清理孤儿 worker PID=$p"
@@ -90,7 +92,8 @@ LIVENESS_TIMEOUT="${ASTRA_GATEWAY_LIVENESS_TIMEOUT_SECONDS:-90}"
 find_worker_pid() {
     local p cmd
     for p in $(ls /proc 2>/dev/null | grep -E '^[0-9]+$'); do
-        cmd=$(tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null)
+        [ -r "/proc/$p/cmdline" ] || continue
+        cmd=$({ tr '\0' ' ' < "/proc/$p/cmdline"; } 2>/dev/null) || continue
         case "$cmd" in *"m astra_gateway.worker"*) echo "$p"; return;; esac
     done
 }

@@ -6,9 +6,9 @@
 
 ### Autonomous Crypto Trading System with Multi-LLM Analysis & Deterministic Risk Control
 
-[![Release](https://img.shields.io/badge/Release-v8.7.0-FF5E2B.svg?style=flat-square)](https://github.com/0xethanq/astra-quant-agent/releases)
+[![Release](https://img.shields.io/badge/Release-v8.7.1-FF5E2B.svg?style=flat-square)](https://github.com/0xethanq/astra-quant-agent/releases)
 [![Website](https://img.shields.io/badge/Website-astraquant.top-f59e0b.svg?style=flat-square)](https://astraquant.top/)
-[![TradeSkill](https://img.shields.io/badge/Skills_Hub-TradeSkill_95%2B-FF5E2B.svg?style=flat-square)](https://github.com/0xethanq/crypto-trading-skills)
+[![TradeSkill](https://img.shields.io/badge/Skills_Hub-TradeSkill_103%2B-FF5E2B.svg?style=flat-square)](https://github.com/0xethanq/crypto-trading-skills)
 [![License](https://img.shields.io/badge/License-AGPLv3%20%2B%20Commons%20Clause-blue.svg?style=flat-square)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.11-3776AB.svg?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![Vue 3](https://img.shields.io/badge/Vue-3.5%2B-4FC08D.svg?style=flat-square&logo=vuedotjs&logoColor=white)](https://vuejs.org/)
@@ -239,7 +239,7 @@ backend/.venv/bin/ruff check backend
 
 ## Ecosystem: TradeSkill (AI Agent Crypto Skills)
 
-Looking for on-demand crypto exchange skills inside **Claude Code**, **Cursor**, **Codex CLI**, or **Windsurf** to complement AstraQuant's 24/7 autonomous execution? Pair it with our sister open-source repository **[TradeSkill (`tradeskill.si`)](https://tradeskill.si/en/)** ([`0xethanq/crypto-trading-skills`](https://github.com/0xethanq/crypto-trading-skills)) — 95 bundled MIT/Apache-2.0 skills and 156 official catalog entries across 15 exchanges & DEXs.
+Looking for on-demand crypto exchange skills inside **Claude Code**, **Cursor**, **Codex CLI**, or **Windsurf** to complement AstraQuant's 24/7 autonomous execution? Pair it with our sister open-source repository **[TradeSkill (`tradeskill.si`)](https://tradeskill.si/en/)** ([`0xethanq/crypto-trading-skills`](https://github.com/0xethanq/crypto-trading-skills)) — 103 bundled MIT/Apache-2.0 skills and 164 official catalog entries across 16 exchanges & DEXs.
 
 ---
 

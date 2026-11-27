@@ -6,9 +6,9 @@
 
 ### 基于多大模型分析与确定性代码风控的加密货币自主量化交易系统
 
-[![Release](https://img.shields.io/badge/Release-v8.7.0-FF5E2B.svg?style=flat-square)](https://github.com/0xethanq/astra-quant-agent/releases)
+[![Release](https://img.shields.io/badge/Release-v8.7.1-FF5E2B.svg?style=flat-square)](https://github.com/0xethanq/astra-quant-agent/releases)
 [![Website](https://img.shields.io/badge/官方网站-astraquant.top-f59e0b.svg?style=flat-square)](https://astraquant.top/)
-[![TradeSkill](https://img.shields.io/badge/技能中心-TradeSkill_95%2B-FF5E2B.svg?style=flat-square)](https://github.com/0xethanq/crypto-trading-skills)
+[![TradeSkill](https://img.shields.io/badge/技能中心-TradeSkill_103%2B-FF5E2B.svg?style=flat-square)](https://github.com/0xethanq/crypto-trading-skills)
 [![License](https://img.shields.io/badge/License-AGPLv3%20%2B%20Commons%20Clause-blue.svg?style=flat-square)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.11-3776AB.svg?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![Vue 3](https://img.shields.io/badge/Vue-3.5%2B-4FC08D.svg?style=flat-square&logo=vuedotjs&logoColor=white)](https://vuejs.org/)
@@ -237,7 +237,7 @@ backend/.venv/bin/ruff check backend
 
 ## 生态联动：TradeSkill（AI Agent 交易所技能中心）
 
-除了部署 AstraQuant 作为 7×24 无人值守量化执行节点，如果你希望在 **Claude Code**、**Cursor**、**Codex CLI** 或 **Windsurf** 中按需调用各大交易所官方 CLI 与行情工具，可搭配姊妹开源项目 **[TradeSkill (`tradeskill.si`)](https://tradeskill.si/)**（[`0xethanq/crypto-trading-skills`](https://github.com/0xethanq/crypto-trading-skills)）—— 收录 15 家主流交易所与 DEX 的 95 个可直装 MIT/Apache-2.0 技能包与 156 个官方技能索引。
+除了部署 AstraQuant 作为 7×24 无人值守量化执行节点，如果你希望在 **Claude Code**、**Cursor**、**Codex CLI** 或 **Windsurf** 中按需调用各大交易所官方 CLI 与行情工具，可搭配姊妹开源项目 **[TradeSkill (`tradeskill.si`)](https://tradeskill.si/)**（[`0xethanq/crypto-trading-skills`](https://github.com/0xethanq/crypto-trading-skills)）—— 收录 16 家主流交易所与 DEX 的 103 个可直装 MIT/Apache-2.0 技能包与 164 个官方技能索引。
 
 ---
 
