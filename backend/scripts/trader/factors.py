@@ -94,6 +94,8 @@ def fetch_single_instrument_data(item, all_positions, usdt_available, *,
         # `atr`/`price` 保留 0.0 **哨兵**：结尾 `market_data_valid` 硬闸 `price > 0 and atr > 0`，
         # 三条下游（signals/position_exit/scale_out）都先查该闸 ⇒ fail-closed，不会当成"零波动"。
         "atr": 0.0,
+        "atr_1h": 0.0,
+        "atr_15m": 0.0,
         "atr_pct": None,
         "vol_15m": None,
         "vol_ma20": None,
@@ -266,7 +268,12 @@ def fetch_single_instrument_data(item, all_positions, usdt_available, *,
         #   与止损宽度实际上按 **价格的固定 1.2%** 而非市场真实波动走。
         #   这是**风险参数**不是假数据（它明示是下限），但对"按波动自适应"的预期有偏差；
         #   高波动时段（真实 ATR > 1.2% 价）才会回到按波动标定。
-        f["atr"] = max(f["atr_1h"], f["atr_15m"] * 1.5, f["price"] * 0.012)
+        _atr_floor_ratio = {
+            "tier_1_bluechip": 0.005,
+            "tier_2_momentum": 0.008,
+            "tier_3_high_vol": 0.012,
+        }.get(str(item.get("tier") or ""), 0.008)
+        f["atr"] = max(f["atr_1h"], f["atr_15m"] * 1.5, f["price"] * _atr_floor_ratio)
         # ⚠️ 2026-09-30 真机事故：15M 取数被 OKX **429 限流**时 `f["price"]` 保持默认 0
         # （15M 分支整段跳过），而 1H 取数成功 ⇒ 走到这里直接 ZeroDivisionError，
         # **整个交易周期崩掉**（连持仓的追踪止损都不再执行 —— 最危险的失败形态）。

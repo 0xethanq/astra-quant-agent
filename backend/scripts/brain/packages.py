@@ -45,7 +45,7 @@ import time
 import urllib.request
 from pathlib import Path
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 # 行情取数失败的可观测性（第 137 刀）：只计数 + 每类一次性告警，绝不改变取值行为。
 try:                      # 以脚本方式运行（SCRIPTS_DIR 在 sys.path 上）
@@ -71,6 +71,25 @@ def _factor_snapshot_path() -> str:
     return os.path.join(data_dir, "factor_library_snapshot.json")
 
 
+def _load_quant_factor_entry(inst_id: str, *, path: str = None) -> Optional[Dict[str, Any]]:
+    """从因子引擎快照里查找单标的条目；永不抛异常。"""
+    target = path or _factor_snapshot_path()
+    try:
+        with open(target, "r", encoding="utf-8") as f:
+            snap = json.load(f)
+    except Exception:
+        return None
+    instruments = snap.get("instruments") if isinstance(snap, dict) else None
+    if not isinstance(instruments, list):
+        return None
+    for item in instruments:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("instId")) == str(inst_id):
+            return item
+    return None
+
+
 def load_quant_factor_tiers(inst_id: str, *, path: str = None) -> Dict[str, Any]:
     """按 `instId` 从因子引擎快照里取出各梯队因子块。
 
@@ -78,23 +97,23 @@ def load_quant_factor_tiers(inst_id: str, *, path: str = None) -> Dict[str, Any]
     显示"因子快照缺失"，**绝不编造中性因子**）。本函数**永不抛异常** ——
     它在每分钟一轮的主脑循环里，抛一次就毁掉整轮决策。
     """
-    target = path or _factor_snapshot_path()
-    try:
-        with open(target, "r", encoding="utf-8") as f:
-            snap = json.load(f)
-    except Exception:
+    item = _load_quant_factor_entry(inst_id, path=path)
+    if not item:
         return {}
-    instruments = snap.get("instruments") if isinstance(snap, dict) else None
-    if not isinstance(instruments, list):
+    return {tier: item[tier] for tier in QUANT_FACTOR_TIERS
+            if isinstance(item.get(tier), dict)}
+
+
+def load_quant_factor_meta(inst_id: str, *, path: str = None) -> Dict[str, Any]:
+    """按 `instId` 取出因子快照顶层元信息（composite_alpha_score / signal_recommendation）。"""
+    item = _load_quant_factor_entry(inst_id, path=path)
+    if not item:
         return {}
-    for item in instruments:
-        if not isinstance(item, dict):
-            continue
-        if str(item.get("instId")) != str(inst_id):
-            continue
-        return {tier: item[tier] for tier in QUANT_FACTOR_TIERS
-                if isinstance(item.get(tier), dict)}
-    return {}
+    return {
+        k: item[k]
+        for k in ("composite_alpha_score", "signal_recommendation")
+        if item.get(k) is not None
+    }
 
 
 def fetch_single_instrument_package(item: Dict[str, Any], *,
@@ -328,8 +347,9 @@ def fetch_single_instrument_package(item: Dict[str, Any], *,
                 with urllib.request.urlopen(req, timeout=3) as resp:
                     d = json.loads(resp.read().decode("utf-8"))
                     if d.get("code") == "0" and d.get("data") and len(d["data"]) > 0:
-                        b_vol = float(d["data"][0][1])
-                        s_vol = float(d["data"][0][2])
+                        # OKX rubik/stat/taker-volume 返回列序: [ts, sellVol, buyVol]
+                        s_vol = float(d["data"][0][1])
+                        b_vol = float(d["data"][0][2])
                         net_diff = b_vol - s_vol
                         pkg["takerNetUsd"] = f"{round(net_diff / 1e4, 1)}万 U"
             except Exception as exc:
@@ -355,6 +375,9 @@ def fetch_single_instrument_package(item: Dict[str, Any], *,
     #    `pkg["calculus"]` 只保留**显式不可用**的默认占位 —— 键位不动，
     #    供 calculus_snapshot.json / 台账兜底读取链使用；**不再计算任何东西**。
     pkg["quant_factors"] = load_quant_factor_tiers(inst_id)
+    _qf_meta = load_quant_factor_meta(inst_id)
+    if _qf_meta:
+        pkg.update(_qf_meta)
     pkg["data_quality"] = "valid" if required_market_data else "invalid"
 
     # 标的体制状态（综合 4H 宏观、1H 结构与 1H ADX 趋势强度）

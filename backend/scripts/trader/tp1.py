@@ -46,19 +46,29 @@ def effective_atr(atr: Any, cur_px: Any) -> float:
 
 
 def compute_tp1(entry_px: Any, atr: Any, is_long: bool, prec: int = 2,
-                cur_px: Any = None, multiple: Optional[float] = None) -> float:
-    """首批止盈价（TP1）= 入场价 ± `SCALE_OUT_TRIGGER_ATR × ATR`。
+                cur_px: Any = None, multiple: Optional[float] = None,
+                initial_stop_px: Any = None) -> float:
+    """首批止盈价（TP1）= 入场价 ± max(SCALE_OUT_TRIGGER_ATR × ATR, 1.0 × 初始止损距离 1R)。
 
     `cur_px` 只在 ATR 无效时用来兜底（旧口径），冻结场景传 None 即可。
     """
     entry = float(entry_px or 0.0)
     mult = float(SCALE_OUT_TRIGGER_ATR if multiple is None else multiple)
     threshold = mult * effective_atr(atr, cur_px if cur_px is not None else entry)
+    if initial_stop_px is not None:
+        try:
+            sl = float(initial_stop_px)
+            r_dist = (entry - sl) if is_long else (sl - entry)
+            if sl > 0 and r_dist > 0:
+                threshold = max(threshold, r_dist)
+        except (TypeError, ValueError):
+            pass
     return round(entry + threshold if is_long else entry - threshold, int(prec or 2))
 
 
 def freeze_tp1(tracker: Dict[str, Any], *, entry_px: Any, atr: Any, is_long: bool,
-               prec: int = 2, multiple: Optional[float] = None) -> float:
+               prec: int = 2, multiple: Optional[float] = None,
+               initial_stop_px: Any = None) -> float:
     """把 TP1 冻结进 tracker（幂等：已有值就用已有值，绝不重算覆盖）。
 
     ⚠️ 只在**没有值**时计算：一旦挂腿，TP1 就是交易所上的一个真实价格，
@@ -72,7 +82,7 @@ def freeze_tp1(tracker: Dict[str, Any], *, entry_px: Any, atr: Any, is_long: boo
                 return value
         except (TypeError, ValueError):
             pass
-    value = compute_tp1(entry_px, atr, is_long, prec, multiple=multiple)
+    value = compute_tp1(entry_px, atr, is_long, prec, multiple=multiple, initial_stop_px=initial_stop_px)
     tracker["scale_out_tp"] = value
     return value
 

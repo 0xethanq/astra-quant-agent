@@ -139,17 +139,22 @@ class OkxRubikSourceTests(_HttpMixin, unittest.TestCase):
         # ★★ OKX 口径：taker 是**合约张数差**，**不乘价格**（既有行为，不是笔误）。
         #    钉住它以免被"顺手统一"成金额加权口径。
         res = self._okx({"long-short-pos-ratio": {"code": "0", "data": [["t", "3.0"]]},
-                         "taker-volume": {"code": "0", "data": [["t", "30000", "10000"]]}},
+                         "taker-volume": {"code": "0", "data": [["t", "10000", "30000"]]}},
                         price=100.0)
         self.assertEqual(res["notional"]["netNotionalUsdt"], 20000.0)
         self.assertEqual(res["takerNetUsd"], "2.0万 U")
 
     def test_taker_uses_the_second_and_third_columns(self):
         res = self._okx({"long-short-pos-ratio": {"code": "0", "data": [["t", "1.0"]]},
-                         "taker-volume": {"code": "0", "data": [["t", "600", "100"]]}})
+                         "taker-volume": {"code": "0", "data": [["t", "100", "600"]]}})
         self.assertEqual(res["notional"]["netNotionalUsdt"], 500.0)
         # 小额分支走 `round(x, 0)` ⇒ float ⇒ 带 ".0"
         self.assertEqual(res["takerNetUsd"], "500.0 U")
+
+        neg = self._okx({"long-short-pos-ratio": {"code": "0", "data": [["t", "1.0"]]},
+                         "taker-volume": {"code": "0", "data": [["t", "600", "100"]]}})
+        self.assertEqual(neg["notional"]["netNotionalUsdt"], -500.0)
+        self.assertEqual(neg["takerNetUsd"], "-500.0 U")
 
     def test_taker_failure_leaves_the_placeholder(self):
         res = self._okx({"long-short-pos-ratio": {"code": "0", "data": [["t", "3.0"]]},

@@ -257,7 +257,7 @@ def execute_scale_out_if_eligible(
     t["currentSz"] = remaining_sz
     t["trailingStopPx"] = breakeven_sl
     t["scale_count"] = 999  # 永久互斥锁定金字塔加仓
-    t["stage_desc"] = (f"已分批止盈50% (余仓保证金 ~{_margin_of(remaining_sz):.2f}U"
+    t["stage_desc"] = (f"已分批止盈{ratio*100:.0f}% (余仓保证金 ~{_margin_of(remaining_sz):.2f}U"
                        f" · 保本止损 {breakeven_sl})")
 
     # 8. 记录平仓台账与通知
@@ -287,7 +287,7 @@ def execute_scale_out_if_eligible(
             timestamp_full=timestamp_full,
             name=name,
             action_type="分批止盈",
-            side_suffix="首批平仓50%",
+            side_suffix=f"首批平仓{ratio*100:.0f}%",
             pos_sz=close_sz,
             cur_px=cur_px,
             fee=fee_val,

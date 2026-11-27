@@ -121,6 +121,29 @@ def construct_full_market_prompt(packages: List[Dict[str, Any]], pos_summary: st
 
     tz_bj = datetime.timezone(datetime.timedelta(hours=8))
     now_bj_str = current_time_str or datetime.datetime.now(tz_bj).strftime("%Y-%m-%d %H:%M:%S (北京时间)")
+    _recent_intents_by_inst: Dict[str, List[str]] = {}
+    if news_sentiment_file:
+        _intents_path = os.path.join(os.path.dirname(os.path.abspath(news_sentiment_file)), "open_order_intents.json")
+        if os.path.exists(_intents_path):
+            try:
+                with open(_intents_path, "r", encoding="utf-8") as _if:
+                    _raw_intents = json.load(_if)
+                if isinstance(_raw_intents, list):
+                    _now_ms = int(datetime.datetime.now(datetime.timezone.utc).timestamp() * 1000)
+                    _four_h_ms = 4 * 3600 * 1000
+                    for _it in _raw_intents:
+                        if not isinstance(_it, dict):
+                            continue
+                        _iid = str(_it.get("instId") or "")
+                        _its = int(_it.get("ts") or 0)
+                        if not _iid or _its <= 0 or (_now_ms - _its) > _four_h_ms:
+                            continue
+                        _age_m = max(0, int((_now_ms - _its) / 60000))
+                        _side_s = str(_it.get("side") or "")
+                        _px_s = _it.get("px") or _it.get("limit_px") or "--"
+                        _recent_intents_by_inst.setdefault(_iid, []).append(f"{_side_s}@{_px_s}({_age_m}m前)")
+            except Exception:
+                pass
     market_lines = []
     for p in packages:
         quality = p.get("data_quality", "invalid")
@@ -253,12 +276,20 @@ def construct_full_market_prompt(packages: List[Dict[str, Any]], pos_summary: st
         elif regime_desc == "CHOP_RANGE":
             regime_desc = "CHOP_RANGE (区间震荡·严禁追单)"
 
+        _comp_alpha = p.get("composite_alpha_score")
+        _sig_rec = p.get("signal_recommendation")
+        _alpha_tag = ""
+        if _comp_alpha is not None or _sig_rec:
+            _alpha_tag = f" | 综合Alpha分={_comp_alpha if _comp_alpha is not None else '--'} ({_sig_rec or '--'})"
         info = f"""---------------------------------------------------------
 【{p['name']} ({p['instId']})】| 数据质量: {quality} | 现价: {p['price']} | 24H涨跌: {p['chg24h']}% | 盘口买/卖: {p['bidPx']}/{p['askPx']}
-- 🏛️ 三重滤网宏观结构: 4H宏观大势={(p.get('macro_4h') or '--')} | 1H波段结构={(p.get('structure_1h') or '--')} | 标的体制={regime_desc}
+- 🏛️ 三重滤网宏观结构: 4H宏观大势={(p.get('macro_4h') or '--')} | 1H波段结构={(p.get('structure_1h') or '--')} | 标的体制={regime_desc}{_alpha_tag}
 {tier_block}
 - 💰 T2 期限与资金成本: 季度基差年化={_t(smd, 'basis_annualized_pct')}% | 杠杆借贷利率={_t(smd, 'loan_rate_usdt')}%
-- 👑 顶级聪明钱 (SmartMoney Top100 加权流): {("加权做多占比=" + str(sm.get('weighted_long_pct')) + "% | 24H净流入=" + str(sm.get('net_flow_usdt', '--')) + " | 多头均价=" + str(sm.get('avg_long_entry', '--')) + " | 空头均价=" + str(sm.get('avg_short_entry', '--')) + " | " + str(sm.get('top_win_rate', ''))) if sm.get('available') else "该项（Top100 加权多空比/净流）无公开 V5 等价接口 ⇒ 本行不构成证据；**持仓方向的替代证据见 T0 的「精英账户比 / 精英持仓比 / 精英背离」**（OKX 官方 top-trader 端点，真实可得）。禁止臆测填充"}"""
+- 👑 顶级聪明钱 (SmartMoney Top100 加权流): {("加权做多占比=" + str(sm.get('weighted_long_pct')) + "% | 5M主动吃单净流=" + str(sm.get('net_flow_usdt', '--')) + " | 多头均价=" + str(sm.get('avg_long_entry', '--')) + " | 空头均价=" + str(sm.get('avg_short_entry', '--')) + " | " + str(sm.get('top_win_rate', ''))) if sm.get('available') else "该项（Top100 加权多空比/净流）无公开 V5 等价接口 ⇒ 本行不构成证据；**持仓方向的替代证据见 T0 的「精英账户比 / 精英持仓比 / 精英背离」**（OKX 官方 top-trader 端点，真实可得）。禁止臆测填充"}"""
+        _ri_list = _recent_intents_by_inst.get(p.get("instId", ""))
+        if _ri_list:
+            info += "\n- 📝 近期挂单/开仓意图(4H内): " + " ; ".join(_ri_list[-3:])
         market_lines.append(info)
 
     all_market_str = "\n".join(market_lines)

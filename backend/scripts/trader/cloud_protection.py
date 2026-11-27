@@ -32,10 +32,11 @@ except ImportError:      # scripts/ 在 sys.path 上（双拼写铁律）
     from tag_markers import normalize_legacy_markers
 
 
-def _live_oco_coverage(orders: List[Dict[str, Any]], pos_side: str,
-                              *,
-                              _float_or_zero) -> float:
-    """Return contract size covered by live, reduce-only OCO TP/SL orders."""
+def _matching_oco_orders(orders: List[Dict[str, Any]], pos_side: str,
+                         *,
+                         _float_or_zero) -> Tuple[List[Dict[str, Any]], float]:
+    """Return matching live, reduce-only OCO orders and total covered contract size."""
+    matched: List[Dict[str, Any]] = []
     coverage = 0.0
     close_side = "sell" if pos_side == "long" else "buy"
     for order in orders:
@@ -50,7 +51,16 @@ def _live_oco_coverage(orders: List[Dict[str, Any]], pos_side: str,
         reduce_only = str(order.get("reduceOnly", "true")).lower() in {"true", "1", "yes"}
         if not reduce_only:
             continue
+        matched.append(order)
         coverage += _float_or_zero(order.get("sz") or order.get("actualSz"))
+    return matched, coverage
+
+
+def _live_oco_coverage(orders: List[Dict[str, Any]], pos_side: str,
+                       *,
+                       _float_or_zero) -> float:
+    """Return contract size covered by live, reduce-only OCO TP/SL orders."""
+    _, coverage = _matching_oco_orders(orders, pos_side, _float_or_zero=_float_or_zero)
     return coverage
 
 

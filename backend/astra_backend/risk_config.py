@@ -162,6 +162,26 @@ _PARAMS: list[dict[str, Any]] = [
      "label": "单笔最大止盈宽度 (×ATR)", "label_en": "Max Take-Profit ATR Band",
      "desc": "单笔止盈单距离入场价的最大 ATR 跨度。超出此倍数的止盈单会被执行层平滑收窄钳制，防止止盈目标过远导致行情反转无法落袋。",
      "type": "float", "min": 1.5, "max": 8.0, "step": 0.1, "unit": "× ATR", "display_scale": 1},
+    {"key": "ASTRA_MAX_PORTFOLIO_OPEN_RISK_R", "group": "exposure", "tier": "core",
+     "label": "组合在途净风险上限 (R)", "label_en": "Max Portfolio Open Risk (R)",
+     "desc": "所有未保本在途持仓的合计初始下行风险上限（以 1R 为单位）。已提损保本或锁利的仓位记为 0R，超出该上限时抑制新开仓。",
+     "type": "float", "min": 0.5, "max": 10.0, "step": 0.5, "unit": "R", "display_scale": 1},
+    {"key": "ASTRA_COUNTER_4H_RISK_SCALE", "group": "per_trade", "tier": "internal",
+     "label": "逆 4H 大势风险缩放系数", "label_en": "Counter-4H Risk Scale",
+     "desc": "开仓方向与 4H 宏观趋势相反时，对单笔 1R 风险预算的缩减倍率（例如 0.5 表示逆势半仓试探）。",
+     "type": "float", "min": 0.1, "max": 1.0, "step": 0.1, "unit": "×", "display_scale": 1},
+    {"key": "ASTRA_COUNTER_4H_MIN_CONFIDENCE", "group": "per_trade", "tier": "internal",
+     "label": "逆 4H 大势最低置信度", "label_en": "Counter-4H Min Confidence",
+     "desc": "开仓方向逆 4H 宏观大势时要求达到的最低 AI 置信度，低于该门槛直接拦截。",
+     "type": "float", "min": 60.0, "max": 95.0, "step": 1.0, "unit": "%", "display_scale": 1},
+    {"key": "ASTRA_LIMIT_ORDER_TTL_MINUTES", "group": "exit_strategy", "tier": "internal",
+     "label": "限价挂单有效期 (分钟)", "label_en": "Limit Order TTL (min)",
+     "desc": "未成交非减仓限价入场单超过该分钟数后自动撤单，释放账户保证金与并发槽位。",
+     "type": "int", "min": 5, "max": 360, "step": 5, "unit": "分钟", "display_scale": 1},
+    {"key": "ASTRA_LIMIT_ORDER_DRIFT_ATR", "group": "exit_strategy", "tier": "internal",
+     "label": "限价单偏离撤单阈值 (×ATR)", "label_en": "Limit Order Drift (×ATR)",
+     "desc": "现价偏离未成交限价入场单价格超过该倍数的 1H ATR 时，自动撤单避免滞后成交。",
+     "type": "float", "min": 0.2, "max": 3.0, "step": 0.1, "unit": "× ATR", "display_scale": 1},
 ]
 
 _INDEX = {p["key"]: p for p in _PARAMS}
@@ -187,6 +207,9 @@ SUITES: list[dict[str, Any]] = [
          "ASTRA_MAX_TOTAL_EXPOSURE_USDT": 600.0,
          "ASTRA_SCALE_OUT_ENABLED": 1, "ASTRA_SCALE_OUT_RATIO": 0.30, "ASTRA_SCALE_OUT_TRIGGER_ATR": 2.20,
          "ASTRA_MAX_TAKE_PROFIT_ATR": 2.80,
+         "ASTRA_MAX_PORTFOLIO_OPEN_RISK_R": 2.0, "ASTRA_COUNTER_4H_RISK_SCALE": 0.3,
+         "ASTRA_COUNTER_4H_MIN_CONFIDENCE": 85.0, "ASTRA_LIMIT_ORDER_TTL_MINUTES": 45,
+         "ASTRA_LIMIT_ORDER_DRIFT_ATR": 0.6,
      }},
     {"id": "balanced", "name": "平衡", "tagline": "出厂默认推荐 · 攻守兼备",
      "desc": "系统出厂推荐基准，适合绝大多数常规趋势行情。杠杆自适应在 2x~5x 之间，单笔仓位上限 20%，"
@@ -213,6 +236,9 @@ SUITES: list[dict[str, Any]] = [
          "ASTRA_MAX_TOTAL_EXPOSURE_USDT": 50000.0,
          "ASTRA_SCALE_OUT_ENABLED": 1, "ASTRA_SCALE_OUT_RATIO": 0.40, "ASTRA_SCALE_OUT_TRIGGER_ATR": 2.20,
          "ASTRA_MAX_TAKE_PROFIT_ATR": 4.50,
+         "ASTRA_MAX_PORTFOLIO_OPEN_RISK_R": 4.5, "ASTRA_COUNTER_4H_RISK_SCALE": 0.7,
+         "ASTRA_COUNTER_4H_MIN_CONFIDENCE": 75.0, "ASTRA_LIMIT_ORDER_TTL_MINUTES": 90,
+         "ASTRA_LIMIT_ORDER_DRIFT_ATR": 1.2,
      }},
 ]
 
@@ -336,6 +362,11 @@ def process_values() -> dict[str, float | int]:
         "ASTRA_SCALE_OUT_RATIO": rc.SCALE_OUT_RATIO,
         "ASTRA_SCALE_OUT_TRIGGER_ATR": rc.SCALE_OUT_TRIGGER_ATR,
         "ASTRA_MAX_TAKE_PROFIT_ATR": rc.MAX_TAKE_PROFIT_ATR,
+        "ASTRA_MAX_PORTFOLIO_OPEN_RISK_R": rc.MAX_PORTFOLIO_OPEN_RISK_R,
+        "ASTRA_COUNTER_4H_RISK_SCALE": rc.COUNTER_4H_RISK_SCALE,
+        "ASTRA_COUNTER_4H_MIN_CONFIDENCE": rc.COUNTER_4H_MIN_CONFIDENCE,
+        "ASTRA_LIMIT_ORDER_TTL_MINUTES": rc.LIMIT_ORDER_TTL_MINUTES,
+        "ASTRA_LIMIT_ORDER_DRIFT_ATR": rc.LIMIT_ORDER_DRIFT_ATR,
     }
     return {key: mapping.get(key, DEFAULTS.get(key, 0)) for key in RISK_ENV_KEYS}
 

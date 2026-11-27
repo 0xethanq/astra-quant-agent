@@ -62,5 +62,9 @@ def collect_okx_position_payloads(all_factors: List[Dict[str, Any]],
         position_payload["takeProfitPx"] = tracker.get("takeProfitPx")
         position_payload["stage_desc"] = tracker.get("stage_desc", "")
         position_payload["atr"] = f.get("atr", 0.0)
+        if tracker.get("entryTs"):
+            position_payload["entryTs"] = tracker.get("entryTs")
+        if tracker.get("initialStopPx"):
+            position_payload["initialStopPx"] = tracker.get("initialStopPx")
         active_pos_list.append(position_payload)
     return active_pos_list

@@ -34,13 +34,37 @@ except Exception:                       # pragma: no cover
     SCALE_OUT_RATIO = 0.50
 
 
-def _freeze_tp1_from_entry(entry_px: float, atr: float, is_long: bool, prec: int) -> Optional[float]:
+def _freeze_tp1_from_entry(
+    entry_px: float, atr: float, is_long: bool, prec: int, initial_stop_px: Any = None
+) -> Optional[float]:
     """建仓瞬间冻结首批止盈价（双腿挂单与软件判定共用同一价格）。"""
     try:
         from scripts.trader.tp1 import compute_tp1
-        return compute_tp1(entry_px, atr, is_long, prec)
+        return compute_tp1(entry_px, atr, is_long, prec, initial_stop_px=initial_stop_px)
     except Exception:
         return None
+
+
+def _read_live_cloud_oco_prices(
+    inst_id: str, pos_side: str, is_long: bool, pos_sz: float, *, _float_or_zero
+) -> Tuple[Optional[float], Optional[float]]:
+    """首轮补建 tracker 时，优先读取交易所实挂且数量匹配的 OCO 止损/止盈价。"""
+    if pos_sz <= 0:
+        return None, None
+    try:
+        import scripts.okx_rest as _okx_rest
+        from scripts.trader.cloud_protection import _matching_oco_orders
+        rows = _okx_rest.pending_algo_orders(inst_id=inst_id) or []
+        matched, matched_sz = _matching_oco_orders(rows, pos_side, _float_or_zero=_float_or_zero)
+        if matched_sz <= 0 or abs(matched_sz - pos_sz) > max(1e-6, pos_sz * 0.05):
+            return None, None
+        sl_vals = [float(o.get("slTriggerPx") or 0.0) for o in matched if float(o.get("slTriggerPx") or 0.0) > 0]
+        tp_vals = [float(o.get("tpTriggerPx") or 0.0) for o in matched if float(o.get("tpTriggerPx") or 0.0) > 0]
+        sl_px = (min(sl_vals) if is_long else max(sl_vals)) if sl_vals else None
+        tp_px = (max(tp_vals) if is_long else min(tp_vals)) if tp_vals else None
+        return sl_px, tp_px
+    except Exception:
+        return None, None
 
 
 def _is_simulated() -> bool:
@@ -95,7 +119,11 @@ def manage_position_tp_and_trailing(f, curr_pos, trackers, timestamp_full, execu
     cur_px = f["price"]
     asset_type = f.get("type", "crypto")
     profile = ASSET_CLASS_PROFILES.get(asset_type, ASSET_CLASS_PROFILES["crypto"])
+    sl_atr_mult = float(f.get("sl_atr_mult") or profile["sl_atr_mult"])
+    tp_atr_mult = float(f.get("tp_atr_mult") or profile["tp_atr_mult"])
+    min_profit_ratio = float(f.get("min_profit_ratio") or profile["min_profit_ratio"])
     atr = max(f["atr"], cur_px * 0.005)
+    atr_1h_val = round(float(f.get("atr_1h") or atr), 8)
     prec = f["precision"]
     ct_val = float(curr_pos.get("ctVal") or f["ctVal"])
     
@@ -122,6 +150,14 @@ def manage_position_tp_and_trailing(f, curr_pos, trackers, timestamp_full, execu
         # 后续周期覆盖，那时再读就是错的数据 —— 故此处一次性写进追踪器，供
         # `close_evidence` 在平仓归档时取用（单模型时 adopted_role 为 None）。
         _decision_source, _adopted_role = resolve_decision_attribution(inst_id)
+        _init_pos_side = "long" if is_long else "short"
+        _default_sl = round((entry_px - atr * sl_atr_mult) if is_long else (entry_px + atr * sl_atr_mult), prec)
+        _default_tp = round((entry_px + max(atr * tp_atr_mult, entry_px * min_profit_ratio)) if is_long else (entry_px - max(atr * tp_atr_mult, entry_px * min_profit_ratio)), prec)
+        _cloud_sl, _cloud_tp = _read_live_cloud_oco_prices(
+            inst_id, _init_pos_side, is_long, pos_sz, _float_or_zero=_float_or_zero
+        )
+        _init_sl = round(_cloud_sl, prec) if _cloud_sl else _default_sl
+        _init_tp = round(_cloud_tp, prec) if _cloud_tp else _default_tp
         trackers[pos_key] = {
             "instId": inst_id,
             "name": name,
@@ -143,15 +179,16 @@ def manage_position_tp_and_trailing(f, curr_pos, trackers, timestamp_full, execu
             #   scale_out_tp —— 首批止盈价**冻结**，挂腿与软件判定共用同一价格，
             #                不再每轮按当轮 ATR 重算（详见 scripts/trader/tp1.py）。
             "entry_sz": pos_sz,
-            "scale_out_tp": _freeze_tp1_from_entry(entry_px, atr, is_long, prec),
+            "atr_1h": atr_1h_val,
+            "scale_out_tp": _freeze_tp1_from_entry(entry_px, atr, is_long, prec, initial_stop_px=_init_sl),
             "highWaterMark": cur_px,
             "lowWaterMark": cur_px,
-            "trailingStopPx": round((entry_px - atr * profile["sl_atr_mult"]) if is_long else (entry_px + atr * profile["sl_atr_mult"]), prec),
+            "trailingStopPx": _init_sl,
             # 初始止损距离**冻结**（2026-10）：`trailingStopPx` 会被三档棘轮逐级上移，
             # 平仓时已经不是"1R"的基准了。自进化的 MFE/MAE 回吐分析需要**建仓那一刻**
             # 的止损距离当 1R 分母，故在此独立冻结一份 —— 与 `scale_out_tp` 同一手法。
-            "initialStopPx": round((entry_px - atr * profile["sl_atr_mult"]) if is_long else (entry_px + atr * profile["sl_atr_mult"]), prec),
-            "takeProfitPx": round((entry_px + max(atr * profile["tp_atr_mult"], entry_px * profile["min_profit_ratio"])) if is_long else (entry_px - max(atr * profile["tp_atr_mult"], entry_px * profile["min_profit_ratio"])), prec),
+            "initialStopPx": _init_sl,
+            "takeProfitPx": _init_tp,
             "signal_snapshot": build_signal_snapshot(f),
             "stage_desc": "持有监控中"
         }
@@ -168,6 +205,8 @@ def manage_position_tp_and_trailing(f, curr_pos, trackers, timestamp_full, execu
         })
 
     t = trackers[pos_key]
+    if not float(t.get("atr_1h") or 0):
+        t["atr_1h"] = atr_1h_val
     # 价格精度**每轮刷新**（来自合约规格，不是冻结决策）：持仓中调止盈要按它取整，
     # 2026-09-29 真机实测混用张数精度把 0.2236 下发成 0.22（差 1.6%）。
     t["px_prec"] = int(f.get("precision", 2) or 2)
@@ -299,10 +338,13 @@ def manage_position_tp_and_trailing(f, curr_pos, trackers, timestamp_full, execu
     # Tier 2: Solid Wave Profit Lock at +2.2x ATR (~1.6R profit, lock in at least +1.0x ATR profit)
     # Tier 3: Kinetic Momentum Pullback Exit (Symmetric >= 2.0x ATR peak profit with 0.75x ATR pullback)
     
-    tier1_breakeven_trigger = (0.9 * atr) if is_chop_pos else (1.5 * atr)
-    tier2_lock_trigger = 2.2 * atr
-    momentum_tp_trigger = 2.0 * atr
-    momentum_pullback_buffer = 0.75 * atr
+    _init_sl = float(t.get("initialStopPx") or 0.0)
+    _raw_r = abs(entry_px - _init_sl) if (_init_sl > 0 and entry_px > 0) else 0.0
+    _r_unit = min(_raw_r, 3.0 * atr) if _raw_r > 0 else 0.0
+    tier1_breakeven_trigger = (0.9 * atr) if is_chop_pos else max(1.5 * atr, 1.0 * _r_unit)
+    tier2_lock_trigger = max(2.2 * atr, 1.6 * _r_unit)
+    momentum_tp_trigger = max(2.0 * atr, 1.5 * _r_unit)
+    momentum_pullback_buffer = max(0.75 * atr, 0.5 * _r_unit)
     
     if is_long:
         # Dynamic Ratchet Stop Calculation for Long（数学见 scripts/trader/protection.py）

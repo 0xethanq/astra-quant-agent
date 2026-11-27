@@ -192,7 +192,19 @@ def _reset_cache_for_tests() -> None:
 #: 故进程内串行节流到 0.42s 一次（≈ 4.8 次/2s，留出余量）。
 _RUBIK_MIN_INTERVAL = 0.42
 _RUBIK_LOCK = threading.Lock()
+_RUBIK_CALL_LOCK = threading.Lock()
 _RUBIK_LAST_AT = [0.0]
+
+
+class _NoopLock:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+
+_NOOP_LOCK = _NoopLock()
 
 
 def _throttle_rubik(path: str) -> None:
@@ -244,28 +256,30 @@ def _public_get(path: str, params: Optional[Dict[str, Any]] = None,
         url = f"{host}{path}{query}"
         # 429（按 IP 限频）**指数退避重试**：直接吞掉会静默退化成"因子为 0/中性"
         # （实盘已观测到 1H taker 长期取空）。三次尝试后仍失败才走下一个主机。
-        for attempt, backoff in enumerate((0.0, 0.5, 1.5, 0.0)):
+        _call_lock = _RUBIK_CALL_LOCK if "/rubik/" in path else _NOOP_LOCK
+        for attempt, backoff in enumerate((0.0, 0.6, 1.5, 3.0)):
             if backoff:
                 time.sleep(backoff)
-            _throttle_rubik(path)
-            try:
-                req = urllib.request.Request(url, headers=_HEADERS)
-                with urllib.request.urlopen(req, timeout=timeout) as resp:
-                    payload = json.loads(resp.read().decode("utf-8"))
-                _mark_rubik_called(path)      # 服务器确实收到了这次请求
-                if str(payload.get("code")) == "0":
-                    data = payload.get("data")
-                    if isinstance(data, list) and cache_key:
-                        _cache_put(cache_key, data)
-                    return data if isinstance(data, list) else None
-                break
-            except urllib.error.HTTPError as exc:
-                _mark_rubik_called(path)      # 有状态码 ⇒ 也到了服务器（如 429）
-                if exc.code == 429 and attempt < 2:
-                    continue
-                break
-            except Exception:
-                break                       # 本地失败 ⇒ 不记账、不占用限频额度
+            with _call_lock:
+                _throttle_rubik(path)
+                try:
+                    req = urllib.request.Request(url, headers=_HEADERS)
+                    with urllib.request.urlopen(req, timeout=timeout) as resp:
+                        payload = json.loads(resp.read().decode("utf-8"))
+                    _mark_rubik_called(path)      # 服务器确实收到了这次请求
+                    if str(payload.get("code")) == "0":
+                        data = payload.get("data")
+                        if isinstance(data, list) and cache_key:
+                            _cache_put(cache_key, data)
+                        return data if isinstance(data, list) else None
+                    break
+                except urllib.error.HTTPError as exc:
+                    _mark_rubik_called(path)      # 有状态码 ⇒ 也到了服务器（如 429）
+                    if exc.code == 429 and attempt < 3:
+                        continue
+                    break
+                except Exception:
+                    break                       # 本地失败 ⇒ 不记账、不占用限频额度
     return None
 
 

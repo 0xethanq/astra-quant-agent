@@ -51,6 +51,7 @@ import urllib.request
 import subprocess
 import tempfile
 import fcntl
+import functools
 from typing import Dict, Any, List, Optional, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -204,6 +205,7 @@ def atomic_write_json(path: str, payload: Any) -> None:
 
 def single_brain_cycle(func):
     """Prevent overlapping cron runs from overwriting the shared decision cache."""
+    @functools.wraps(func)
     def wrapped(*args, **kwargs):
         os.makedirs(DATA_DIR, exist_ok=True)
         lock_handle = open(AI_BRAIN_LOCK_FILE, "a+", encoding="utf-8")
@@ -548,7 +550,10 @@ def build_risk_budget_text(usdt_available: float = None) -> str:
             if rc.SCALE_OUT_ENABLED else
             "- 分批止盈机制: 【已禁用】(全仓奔跑至目标止盈位或触发动态追踪止损)\n"
         )
-        + f"- 止损后同标的冷静期: {rc.STOP_COOLDOWN_MINUTES} 分钟"
+        + f"- 止损后同标的冷静期: {rc.STOP_COOLDOWN_MINUTES} 分钟\n"
+        + f"- 组合在途风险预算上限: Σ open_risk_R <= {rc.MAX_PORTFOLIO_OPEN_RISK_R:g}R (已保本/锁利仓位计 0R)\n"
+        + f"- 逆 4H 顺势降权约束: 置信度 >= {rc.COUNTER_4H_MIN_CONFIDENCE:g}% 且风险缩放 {rc.COUNTER_4H_RISK_SCALE:g}x\n"
+        + f"- 限价挂单生命周期: TTL {rc.LIMIT_ORDER_TTL_MINUTES} 分钟 / 偏离现价 > {rc.LIMIT_ORDER_DRIFT_ATR:g}x ATR 自动撤单"
     )
     if _eq < 200.0:
         text += (
@@ -651,7 +656,6 @@ def assemble_decision_cache(
 
 
 
-@single_brain_cycle
 def _pending_order_margin_usdt(o: Dict[str, Any]) -> Optional[float]:
     """挂单的**保证金**（USDT）。
 
@@ -731,6 +735,7 @@ def execute_brain_pending_cancels(pending_mgmt_list: List[Any]) -> List[Dict[str
     return log
 
 
+@single_brain_cycle
 def execute_batch_ai_brain_cycle(
     pos_summary: str = "[MISSING_CONTEXT:account_positions]",
     active_positions_detail: List[Dict[str, Any]] = None,
@@ -820,13 +825,17 @@ def execute_batch_ai_brain_cycle(
     # 刷新本轮数据包中的 7 梯队因子快照，确保发给模型的 Prompt 拥有最新因子
     try:
         try:
-            from scripts.brain.packages import load_quant_factor_tiers
+            from scripts.brain.packages import load_quant_factor_tiers, load_quant_factor_meta
         except ImportError:
-            from brain.packages import load_quant_factor_tiers
+            from brain.packages import load_quant_factor_tiers, load_quant_factor_meta
         for _pkg in packages:
-            _fresh_tiers = load_quant_factor_tiers(_pkg.get("instId", ""))
+            _inst_key = _pkg.get("instId", "")
+            _fresh_tiers = load_quant_factor_tiers(_inst_key)
             if _fresh_tiers:
                 _pkg["quant_factors"] = _fresh_tiers
+            _fresh_meta = load_quant_factor_meta(_inst_key)
+            if _fresh_meta:
+                _pkg.update(_fresh_meta)
     except Exception as _qf_err:
         print(f"[AI Brain Batch] Quant factor refresh warning: {_qf_err}")
 

@@ -37,6 +37,15 @@ from __future__ import annotations
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
+try:
+    from scripts.risk_constants import LIMIT_ORDER_TTL_MINUTES, LIMIT_ORDER_DRIFT_ATR
+except Exception:
+    try:
+        from risk_constants import LIMIT_ORDER_TTL_MINUTES, LIMIT_ORDER_DRIFT_ATR
+    except Exception:
+        LIMIT_ORDER_TTL_MINUTES = 60
+        LIMIT_ORDER_DRIFT_ATR = 0.8
+
 
 def clean_stale_open_orders(keep_ord_ids: Optional[set] = None,
                               *,
@@ -171,4 +180,87 @@ def reconcile_pending_orders(trackers: Dict[str, Any] = None, now_ms: int = None
         if not _cancel_orphan(RECONCILE_REASON_ORPHAN):
             return False, kept
     return True, kept
+
+
+def cancel_expired_or_drifted_limit_orders(
+    *,
+    all_factors: Optional[List[Dict[str, Any]]],
+    okx_rest,
+    now_ms: Optional[int] = None,
+    ttl_minutes: Optional[float] = None,
+    drift_atr: Optional[float] = None,
+    executed_actions: Optional[List[str]] = None,
+) -> List[Dict[str, Any]]:
+    """自动撤销超时未成交或现价偏离过远的入场限价挂单，释放槽位与保证金。"""
+    now_ms = int(now_ms or time.time() * 1000)
+    ttl_min = float(LIMIT_ORDER_TTL_MINUTES if ttl_minutes is None else ttl_minutes)
+    drift_mult = float(LIMIT_ORDER_DRIFT_ATR if drift_atr is None else drift_atr)
+    try:
+        pending = okx_rest.pending_orders()
+    except Exception as exc:
+        print(f"[限价单生命周期] 拉取在途挂单失败（跳过本轮清理）: {exc}")
+        return []
+    if not isinstance(pending, list):
+        return []
+
+    factors_by_id = {
+        item.get("instId"): item
+        for item in (all_factors or [])
+        if isinstance(item, dict) and item.get("instId")
+    }
+    cancelled: List[Dict[str, Any]] = []
+    for order in pending:
+        if not isinstance(order, dict):
+            continue
+        inst_id = str(order.get("instId") or "")
+        ord_id = str(order.get("ordId") or "")
+        side = str(order.get("side") or "").lower()
+        state = str(order.get("state", "live")).lower()
+        ord_type = str(order.get("ordType", "limit") or "limit").lower()
+        reduce_only = str(order.get("reduceOnly", "false")).lower() in {"true", "1", "yes"}
+        if not inst_id or not ord_id or reduce_only:
+            continue
+        if state not in {"live", "partially_filled"}:
+            continue
+        if ord_type not in {"", "limit", "post_only"}:
+            continue
+
+        reason = ""
+        try:
+            c_time = int(order.get("cTime") or 0)
+        except (TypeError, ValueError):
+            c_time = 0
+        if c_time > 0 and ttl_min > 0 and (now_ms - c_time) > ttl_min * 60_000.0:
+            age_m = int((now_ms - c_time) / 60_000.0)
+            reason = f"限价挂单超时未成交({age_m}m>{ttl_min:g}m)"
+
+        if not reason and drift_mult > 0:
+            f = factors_by_id.get(inst_id) or {}
+            try:
+                order_px = float(order.get("px") or 0.0)
+                cur_px = float(f.get("price") or 0.0)
+                atr_val = float(f.get("atr") or 0.0)
+            except (TypeError, ValueError):
+                order_px, cur_px, atr_val = 0.0, 0.0, 0.0
+            if order_px > 0 and cur_px > 0 and atr_val > 0 and abs(cur_px - order_px) > drift_mult * atr_val:
+                reason = f"现价偏离挂单超过 {drift_mult:g}x ATR"
+
+        if not reason:
+            continue
+        try:
+            okx_rest.cancel_order(inst_id, ord_id)
+        except Exception as exc:
+            print(f"[限价单生命周期] 撤单失败 instId={inst_id} ordId={ord_id}: {exc}")
+            continue
+        msg = f"[{inst_id}] 自动撤单释放配额 ({reason}, ordId={ord_id})"
+        print(f"[限价单生命周期] {msg}")
+        if isinstance(executed_actions, list):
+            executed_actions.append(msg)
+        cancelled.append({
+            "instId": inst_id,
+            "ordId": ord_id,
+            "side": side,
+            "reason": reason,
+        })
+    return cancelled
 

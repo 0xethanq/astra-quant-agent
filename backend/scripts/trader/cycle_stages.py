@@ -304,6 +304,37 @@ def fetch_positions_and_reconcile(*,
     return (active_pos_count, all_positions, entries_blocked, long_count, pending_inst_ids, real_pos_dict, reserved_long_count, reserved_short_count, reserved_slot_count, short_count, usdt_available)
 
 
+def _build_refreshed_pos_dict(refreshed_positions, all_factors, trackers):
+    """构建持仓管理上下文，补齐 OKX 实时仓位缺失的 ATR 与跟踪止损价。"""
+    factors_by_id = {
+        item.get("instId"): item
+        for item in (all_factors or [])
+        if isinstance(item, dict) and item.get("instId")
+    }
+    trackers = trackers or {}
+    out = {}
+    for p in refreshed_positions:
+        if float(p.get("pos", 0) or 0) <= 0:
+            continue
+        pid = p.get("instId")
+        enriched = dict(p)
+        pf = factors_by_id.get(pid) or {}
+        if pf:
+            if not float(enriched.get("atr_1h") or 0):
+                enriched["atr_1h"] = float(pf.get("atr_1h") or pf.get("atr") or 0.0)
+            if not float(enriched.get("atr") or 0):
+                enriched["atr"] = float(pf.get("atr") or pf.get("atr_1h") or 0.0)
+        _ps_raw = str(p.get("posSide", "net") or "").lower()
+        pside = _ps_raw if _ps_raw in ("long", "short") else str(p.get("side") or "").lower()
+        if pside not in ("long", "short"):
+            pside = "long" if float(p.get("pos", 0) or 0) >= 0 else "short"
+        ptr = trackers.get(f"{pid}_{pside}")
+        if isinstance(ptr, dict) and not float(enriched.get("trailingStopPx") or 0):
+            enriched["trailingStopPx"] = float(ptr.get("trailingStopPx") or 0.0)
+        out[pid] = enriched
+    return out
+
+
 def scan_risk_gates_and_ai_brain(*,
         venue_position_span,
         active_pos_count,
@@ -359,10 +390,9 @@ def scan_risk_gates_and_ai_brain(*,
                 if not refreshed_ok:
                     executed_actions.append(f"AI持仓管理跳过：无法刷新真实仓位 ({refreshed_error})")
                 else:
-                    refreshed_pos_dict = {
-                        p.get("instId"): p for p in refreshed_positions
-                        if float(p.get("pos", 0) or 0) > 0
-                    }
+                    refreshed_pos_dict = _build_refreshed_pos_dict(
+                        refreshed_positions, all_factors, trackers
+                    )
                     # 刷新的是 OKX 直签链的权威持仓（`query_positions` 只读 OKX）；
                     # OKX 专用化后它就是全部持仓，无需再并回任何外所记录。
                     execute_ai_position_management(refreshed_pos_dict, trackers, timestamp_full, executed_actions)

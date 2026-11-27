@@ -123,14 +123,27 @@ def build_position_lines(active_positions_detail: Optional[List[Dict[str, Any]]]
             stage_desc = p.get('stage_desc') or p.get('stageDesc') or '持有监控中'
 
             profit_desc = ""
+            _init_sl = safe_float(p.get("initialStopPx"))
             if is_long and hwm > entry_px and entry_px > 0:
                 peak_gain_pct = round((hwm - entry_px) / entry_px * 100, 2)
                 dd_from_peak = round((hwm - cur_px) / (hwm - entry_px) * 100, 1) if hwm > entry_px else 0.0
-                profit_desc = f" | 曾最高到: {hwm} (极值浮盈 +{peak_gain_pct}%, 现已从极值回撤 {dd_from_peak}%)"
+                _init_r = (entry_px - _init_sl) if _init_sl > 0 else 0.0
+                _mfe_suffix = f", MFE {round((hwm - entry_px) / _init_r, 2)}R" if _init_r > 0 else ""
+                profit_desc = f" | 曾最高到: {hwm} (极值浮盈 +{peak_gain_pct}%, 现已从极值回撤 {dd_from_peak}%{_mfe_suffix})"
             elif not is_long and lwm > 0 and lwm < entry_px and entry_px > 0:
                 peak_gain_pct = round((entry_px - lwm) / entry_px * 100, 2)
                 dd_from_peak = round((cur_px - lwm) / (entry_px - lwm) * 100, 1) if lwm < entry_px else 0.0
-                profit_desc = f" | 曾最低到: {lwm} (极值浮盈 +{peak_gain_pct}%, 现已从极值回撤 {dd_from_peak}%)"
+                _init_r = (_init_sl - entry_px) if _init_sl > 0 else 0.0
+                _mfe_suffix = f", MFE {round((entry_px - lwm) / _init_r, 2)}R" if _init_r > 0 else ""
+                profit_desc = f" | 曾最低到: {lwm} (极值浮盈 +{peak_gain_pct}%, 现已从极值回撤 {dd_from_peak}%{_mfe_suffix})"
+
+            hold_desc = ""
+            _entry_ts = safe_float(p.get("entryTs"))
+            if _entry_ts > 0:
+                import time as _time
+                _entry_sec = _entry_ts / 1000.0 if _entry_ts > 1e11 else _entry_ts
+                _hold_h = max(0.0, (_time.time() - _entry_sec) / 3600.0)
+                hold_desc = f" | 持仓时长: {_hold_h:.1f}h"
 
             v_badge = f"[{str(p.get('venue', 'OKX')).upper()}] "
             # 止损线同样走 `or` 链（trailingStopPx → trailingSl → exchangeSl → `--`）
@@ -144,7 +157,7 @@ def build_position_lines(active_positions_detail: Optional[List[Dict[str, Any]]]
                 _orphan_seen.add(_venue_key)
                 _prot_txt += _orphan_legs_text(p)
             pos_lines.append(
-                f"- {v_badge}标的: {inst_name} | 方向: {side} {p.get('lever', p.get('leverage', '3'))}x | 开仓均价: {p.get('avgPx')} | 当前价: {cur_px} | 浮盈: {p.get('upl')} U (ROI: {round(safe_float(p.get('uplRatio')) * 100, 2)}%){profit_desc} | 动态止损线: {sl_px} | 目标止盈: {tp_px} | 状态: {stage_desc}{_prot_txt}"
+                f"- {v_badge}标的: {inst_name} | 方向: {side} {p.get('lever', p.get('leverage', '3'))}x | 开仓均价: {p.get('avgPx')} | 当前价: {cur_px} | 浮盈: {p.get('upl')} U (ROI: {round(safe_float(p.get('uplRatio')) * 100, 2)}%){profit_desc}{hold_desc} | 动态止损线: {sl_px} | 目标止盈: {tp_px} | 状态: {stage_desc}{_prot_txt}"
             )
     else:
         pos_lines.append("[MISSING_CONTEXT:account_positions]" if active_positions_detail is None else "当前无任何在途持仓敞口 (100% 现金空仓状态)")

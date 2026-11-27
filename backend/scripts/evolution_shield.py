@@ -114,7 +114,7 @@ RETIRED_FACTOR_TOKENS = (
     "velocity", "power_regime", "continuation_prob_pct", "RANGE_LOW_VELOCITY",
     "KINETIC_ACCELERATING", "KINETIC_EXHAUSTION", "KINETIC_DECELERATING",
     "KINETIC_REVERSAL", "STEADY_FLUX", "energy_integral", "deviation_area_integral",
-    "calculus_dynamics", "math_prob_rationale", "阻力高空",
+    "calculus_dynamics", "math_prob_rationale",
     # ── 2026-10：**中文散文形态**（补门禁漏洞）──────────────────────────────
     # 实测漏洞：存量心法 `lesson_80fab4e2…`
     #   「若 1H RSI > 72 严重超买且 1H **动能加速度 a** 明显转负…**条件延续概率**偏高」

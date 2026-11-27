@@ -104,8 +104,9 @@ def _fetch_from_okx_rubik(ccy: str, price: float = 0.0, timeout: float = 3.5) ->
         url_t = f"https://www.okx.com/api/v5/rubik/stat/taker-volume?ccy={ccy}&instType=CONTRACTS&period=5m"
         d_t = _okx_rubik_get(url_t, timeout=timeout)
         if d_t and d_t.get("code") == "0" and d_t.get("data") and len(d_t["data"]) > 0:
-            b_vol = float(d_t["data"][0][1])
-            s_vol = float(d_t["data"][0][2])
+            # OKX rubik/stat/taker-volume 返回列序: [ts, sellVol, buyVol]
+            s_vol = float(d_t["data"][0][1])
+            b_vol = float(d_t["data"][0][2])
             net_notional_usd = b_vol - s_vol
             taker_str = (
                 f"{round(net_notional_usd / 1e4, 1)}万 U"

@@ -61,6 +61,9 @@ _EXIT_CAUSE_LABELS = (
     ("平仓失败", "close_failed"),
     ("AI高置信度整仓退出", "ai_close"),
     ("AI平仓", "ai_close"),
+    ("ai_close", "ai_close"),
+    ("交易所", "exchange_closed"),
+    ("exchange_closed", "exchange_closed"),
     ("分批止盈", "scale_out"),
     ("保本", "breakeven"),
 )

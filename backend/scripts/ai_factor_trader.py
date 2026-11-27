@@ -91,6 +91,7 @@ from scripts.trader.cloud_protection import (
 from scripts.trader.order_lifecycle import (
     clean_stale_open_orders as _order_lifecycle_clean,
     reconcile_pending_orders as _order_lifecycle_reconcile,
+    cancel_expired_or_drifted_limit_orders,
 )
 # 交易时段闸门（2026-09-30）：判定是纯函数（子模块），配置读取走 store。
 # 两者都**不在 import 期取值**（除函数引用外无绑定）：配置每个周期重读一次，
@@ -974,7 +975,7 @@ def manage_position_tp_and_trailing(f, curr_pos, trackers, timestamp_full, execu
     """壳（第八十九刀搬至 `scripts/trader/position_exit.py`，调用期同名注入）。"""
     try:
         from scripts.trader.scale_out import execute_scale_out_if_eligible
-        execute_scale_out_if_eligible(
+        _so_result = execute_scale_out_if_eligible(
             f, curr_pos, trackers, timestamp_full, executed_actions,
             okx_rest=okx_rest,
             venue_registry=venue_registry,
@@ -985,6 +986,19 @@ def manage_position_tp_and_trailing(f, curr_pos, trackers, timestamp_full, execu
             TAKER_FEE_RATE=TAKER_FEE_RATE,
             ensure_cloud_position_protection=ensure_cloud_position_protection,
         )
+        _so_scaled = (
+            isinstance(_so_result, tuple) and len(_so_result) >= 1 and bool(_so_result[0])
+        ) or (isinstance(_so_result, dict) and bool(_so_result.get("scaled")))
+        if _so_scaled and isinstance(curr_pos, dict):
+            _pos_key = f"{f.get('instId', '')}_{curr_pos.get('side', '')}"
+            _rem_sz = (
+                _so_result.get("remaining_sz")
+                if isinstance(_so_result, dict)
+                else (trackers or {}).get(_pos_key, {}).get("currentSz")
+            )
+            if _rem_sz is not None:
+                curr_pos = dict(curr_pos)
+                curr_pos["pos"] = str(_rem_sz)
     except Exception as _so_err:
         print(f"[Scale-Out] 分批止盈判定跳过: {_so_err}")
 
@@ -1260,6 +1274,27 @@ def execute_portfolio():
         manage_position_tp_and_trailing=manage_position_tp_and_trailing,
         prune_trackers=prune_trackers,
         save_trackers=save_trackers    )
+
+    if pending_inst_ids and any(isinstance(x, dict) for x in (all_factors or [])):
+        _cancelled_limits = cancel_expired_or_drifted_limit_orders(
+            all_factors=all_factors, okx_rest=okx_rest, executed_actions=executed_actions
+        )
+        if _cancelled_limits:
+            for _co in _cancelled_limits:
+                reserved_slot_count = max(0, reserved_slot_count - 1)
+                if _order_pos_side(_co.get("side", "")) == "long":
+                    reserved_long_count = max(0, reserved_long_count - 1)
+                else:
+                    reserved_short_count = max(0, reserved_short_count - 1)
+            try:
+                _still_pending = {
+                    str(o.get("instId") or "")
+                    for o in (okx_rest.pending_orders() or [])
+                    if isinstance(o, dict) and o.get("instId")
+                }
+                pending_inst_ids = {iid for iid in pending_inst_ids if iid in _still_pending}
+            except Exception:
+                pass
 
     # 4. Check Circuit Breaker & Batch AI Brain Scan (Including Active Positions Detail)
     ASSET_MARGIN_CAP, brain_cache, cb_active, cb_reason = scan_risk_gates_and_ai_brain(

@@ -315,6 +315,7 @@ class ExecuteBatchCycleTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.calls = {}
+        self._patch("AI_BRAIN_LOCK_FILE", os.path.join(self.tmp.name, ".ai_brain_cycle.lock"))
 
     def _patch(self, name, value):
         patcher = patch.object(abt, name, value)

@@ -47,7 +47,8 @@ TICKER = {"code": "0", "data": [{"last": "100.0", "bidPx": "99.5", "askPx": "100
 FUNDING = {"code": "0", "data": [{"fundingRate": "0.00012"}]}
 OPEN_INTEREST = {"code": "0", "data": [{"oiUsd": "123456789.0"}]}
 LS_RATIO = {"code": "0", "data": [["1700000000000", "1.85"]]}
-TAKER = {"code": "0", "data": [["1700000000000", "50000", "40000"]]}
+# OKX rubik/stat/taker-volume 返回列序: [ts, sellVol, buyVol] => (50000 - 40000) = +1.0万 U
+TAKER = {"code": "0", "data": [["1700000000000", "40000", "50000"]]}
 
 
 def _candles(n, *, start=100.0, step=1.0, vol=10.0, newest_first=True):
@@ -394,7 +395,7 @@ class CryptoOnlySourceTests(_Base, unittest.TestCase):
 
     def test_taker_net_is_formatted_in_ten_thousands(self):
         pkg = self._run()
-        self.assertEqual(pkg["takerNetUsd"], "1.0万 U")  # (50000-40000)/1e4
+        self.assertEqual(pkg["takerNetUsd"], "1.0万 U")  # [ts, sellVol, buyVol] => (50000-40000)/1e4
 
     def test_no_ccy_skips_rubik_queries(self):
         pkg = self._run(item=self._item(ccy=""))

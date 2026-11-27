@@ -100,9 +100,9 @@ def execute_ai_position_management(real_pos_dict, trackers, timestamp_full, exec
                 if tr and isinstance(tr, dict):
                     try:
                         from scripts.trader.close_evidence import build_close_evidence, append_close_evidence
-                        from astra_backend.dashboard_payload.readers import DATA_DIR
+                        _ev_dir = os.path.dirname(os.path.abspath(ai_position_management_file))
                         append_close_evidence(
-                            os.path.join(DATA_DIR, "closed_trade_evidence.json"),
+                            os.path.join(_ev_dir, "closed_trade_evidence.json"),
                             build_close_evidence(
                                 tracker=tr,
                                 position_key=f"{inst_id}_{pos_side}",
@@ -110,8 +110,8 @@ def execute_ai_position_management(real_pos_dict, trackers, timestamp_full, exec
                                 closed_at=timestamp_full,
                             )
                         )
-                    except Exception:
-                        pass
+                    except Exception as _ev_err:
+                        print(f"[Close Evidence] ai_close write warn: {_ev_err}")
                 trackers.pop(f"{inst_id}_{pos_side}", None)
             else:
                 executed_actions.append(f"[{name}] AI平仓请求未获交易所确认，仓位保持不变: {close_detail}")
@@ -120,7 +120,14 @@ def execute_ai_position_management(real_pos_dict, trackers, timestamp_full, exec
             new_sl = float(instruction.get("suggested_sl_price", 0) or 0)
             # 反过早收紧判定见 scripts/trader/protection.py::ai_tightens_stop
             # （判定收紧方向；放松即账户裸奔）。三个阈值常量随函数搬去，值未改。
-            tightens_risk = ai_tightens_stop(instruction, position)
+            _sl_tr = trackers.get(f"{inst_id}_{pos_side}")
+            _pos_for_sl = position
+            if isinstance(position, dict) and isinstance(_sl_tr, dict):
+                if not float(position.get("atr_1h") or 0) and not float(position.get("atr") or 0):
+                    _tr_atr = float(_sl_tr.get("atr_1h") or 0)
+                    if _tr_atr > 0:
+                        _pos_for_sl = {**position, "atr_1h": _tr_atr, "atr": _tr_atr}
+            tightens_risk = ai_tightens_stop(instruction, _pos_for_sl)
 
             if not tightens_risk:
                 executed_actions.append(f"[{name}] 浮盈空间不足或与现价缓冲过近({current_px} vs 拟调SL {new_sl})，拒绝过早收紧止损")
@@ -210,7 +217,10 @@ def execute_ai_position_management(real_pos_dict, trackers, timestamp_full, exec
                     sl_px=float(tracker.get("trailingStopPx") or 0.0) or None,
                     phase=_phase, leg_algo_ids=tracker.get("leg_algo_ids"),
                     tracker=tracker, okx_rest=okx_rest,
-                    atr=float(position.get("atr") or 0.0) if isinstance(position, dict) else 0.0,
+                    atr=float(
+                        (position.get("atr") or position.get("atr_1h") or tracker.get("atr_1h") or 0.0)
+                        if isinstance(position, dict) else (tracker.get("atr_1h") or 0.0)
+                    ),
                     # ⚠️ 必须传**价格**精度：张数精度（ARB=0、BTC=1）会把 0.2236 取整成 0.22。
                     cur_px=current_px, px_prec=int(tracker.get("px_prec", 2) or 2),
                 )

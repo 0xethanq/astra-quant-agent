@@ -29,6 +29,35 @@ import json
 import os
 from typing import Any, Dict, List, Optional, Tuple
 
+try:
+    from scripts.risk_constants import (
+        MAX_PORTFOLIO_OPEN_RISK_R,
+        COUNTER_4H_RISK_SCALE,
+        COUNTER_4H_MIN_CONFIDENCE,
+        RISK_PER_TRADE_EQUITY_RATIO,
+        MAX_RISK_PER_TRADE_USDT,
+    )
+except Exception:
+    try:
+        from risk_constants import (
+            MAX_PORTFOLIO_OPEN_RISK_R,
+            COUNTER_4H_RISK_SCALE,
+            COUNTER_4H_MIN_CONFIDENCE,
+            RISK_PER_TRADE_EQUITY_RATIO,
+            MAX_RISK_PER_TRADE_USDT,
+        )
+    except Exception:
+        MAX_PORTFOLIO_OPEN_RISK_R = 3.0
+        COUNTER_4H_RISK_SCALE = 0.5
+        COUNTER_4H_MIN_CONFIDENCE = 80.0
+        RISK_PER_TRADE_EQUITY_RATIO = 0.02
+        MAX_RISK_PER_TRADE_USDT = 0.0
+
+try:
+    from scripts.trader.sizing import size_for_stop_risk, estimate_portfolio_open_risk_r
+except Exception:
+    from trader.sizing import size_for_stop_risk, estimate_portfolio_open_risk_r
+
 
 def submitted_bracket(venue_ctx: Any, px: float, tp_px: float,
                       sl_px: float) -> Tuple[float, float, float]:
@@ -76,6 +105,99 @@ def _record_entry_diagnostic(name, source, confidence, reason):
         })
     except Exception:
         pass
+
+
+def _is_counter_4h(is_long: bool, f: Dict[str, Any]) -> bool:
+    """判定开仓方向是否逆 4H 宏观趋势（兼顾 factors.py 布尔字段与文本字段）。"""
+    if is_long:
+        if f.get("trend_4h_bearish") is True and not f.get("trend_4h_bullish"):
+            return True
+    else:
+        if f.get("trend_4h_bullish") is True and not f.get("trend_4h_bearish"):
+            return True
+    macro = str(f.get("trend_4h") or f.get("macro_4h") or "").upper()
+    if is_long and "BEAR" in macro:
+        return True
+    if not is_long and "BULL" in macro:
+        return True
+    return False
+
+
+def _apply_phase2b_entry_risk_controls(
+    *,
+    is_long: bool,
+    f: Dict[str, Any],
+    ai_conf: float,
+    limit_px: float,
+    sl_px: float,
+    actual_sz: float,
+    ai_margin: float,
+    ai_lever: float,
+    ct_val: float,
+    step_sz: float,
+    min_sz: float,
+    usdt_available: float,
+    asset_margin_cap: float,
+    all_factors: Optional[List[Dict[str, Any]]],
+    trackers: Optional[Dict[str, Any]],
+    is_scale_in: bool = False,
+) -> Tuple[bool, float, float, str]:
+    """Phase 2B 入场风控前置：逆 4H 过滤缩放 + 组合在途总风险 R 上限 + 1R 止损距离仓位。"""
+    del is_scale_in
+    counter_4h = _is_counter_4h(is_long, f)
+    if counter_4h and float(ai_conf or 0.0) < float(COUNTER_4H_MIN_CONFIDENCE):
+        return (
+            False,
+            0.0,
+            0.0,
+            f"逆4H大势置信度不足 ({float(ai_conf or 0.0):.1f}% < {COUNTER_4H_MIN_CONFIDENCE:g}%)",
+        )
+    risk_scale = float(COUNTER_4H_RISK_SCALE) if counter_4h else 1.0
+
+    eq = float(usdt_available or 0.0)
+    if eq <= 0 or float(limit_px or 0.0) <= 0 or float(sl_px or 0.0) <= 0 or float(ct_val or 0.0) <= 0:
+        return True, actual_sz, ai_margin, ""
+
+    open_risk_r = estimate_portfolio_open_risk_r(
+        all_factors=all_factors,
+        trackers=trackers,
+        equity_usdt=eq,
+        risk_per_trade_ratio=RISK_PER_TRADE_EQUITY_RATIO,
+        max_risk_per_trade_usdt=MAX_RISK_PER_TRADE_USDT,
+    )
+    rem_r = float(MAX_PORTFOLIO_OPEN_RISK_R) - open_risk_r
+    if rem_r <= 0.15:
+        return (
+            False,
+            0.0,
+            0.0,
+            f"组合在途风险已近上限 ({open_risk_r:.2f}R / {MAX_PORTFOLIO_OPEN_RISK_R:g}R)",
+        )
+
+    effective_scale = min(risk_scale, rem_r)
+    m_cap = float(asset_margin_cap or 0.0)
+    if float(ai_margin or 0.0) > 0:
+        m_cap = min(m_cap, float(ai_margin)) if m_cap > 0 else float(ai_margin)
+
+    sized_sz, _risk_usd, sized_margin = size_for_stop_risk(
+        equity_usdt=eq,
+        entry_px=float(limit_px),
+        stop_px=float(sl_px),
+        ct_val=float(ct_val),
+        leverage=max(1.0, float(ai_lever or 1.0)),
+        step_sz=float(step_sz or 0.0),
+        min_sz=float(min_sz or 0.0),
+        max_margin_usdt=m_cap,
+        risk_per_trade_ratio=RISK_PER_TRADE_EQUITY_RATIO,
+        max_risk_per_trade_usdt=MAX_RISK_PER_TRADE_USDT,
+        risk_scale=effective_scale,
+        ai_margin_cap=float(ai_margin or 0.0),
+    )
+    if sized_sz <= 0:
+        return False, 0.0, 0.0, "按1R止损距离缩放后低于最小下单手数"
+    capped_sz = min(float(actual_sz), sized_sz) if float(actual_sz or 0.0) > 0 else sized_sz
+    out_margin = min(float(ai_margin), sized_margin) if float(ai_margin or 0.0) > 0 else sized_margin
+    return True, capped_sz, out_margin, ""
 
 
 def execute_entry_scan(*,
@@ -313,11 +435,23 @@ def execute_entry_scan(*,
                     is_long=True, limit_px=limit_px, tp_px=tp_px, sl_px=sl_px,
                     sl_dist=sl_dist, tp_dist=tp_dist, price=f["price"], prec=prec)
 
+                _p2b_ok, actual_sz, _p2b_margin, _p2b_reason = _apply_phase2b_entry_risk_controls(
+                    is_long=True, f=f, ai_conf=ai_conf, limit_px=limit_px, sl_px=sl_px,
+                    actual_sz=actual_sz, ai_margin=ai_margin, ai_lever=ai_lever,
+                    ct_val=ct_val, step_sz=step_sz, min_sz=step_sz,
+                    usdt_available=usdt_available, asset_margin_cap=ASSET_MARGIN_CAP,
+                    all_factors=all_factors, trackers=trackers, is_scale_in=is_scale_in,
+                )
+                if not _p2b_ok:
+                    print(f"[Phase2B Risk Guard] 拦截 {f['name']} 做多: {_p2b_reason}")
+                    allow_entry = False
+
+            if allow_entry:
                 # US-003 决策面上下文：名义额（选所硬筛/深度需求）+ 保证金估算
                 # （预算预留额）+ 意图号（同一条 AI 决策重投幂等，不重复占预算）
                 # 审计 P0-1：多所路径保证金与 OKX 同尺（AI 计划额 ∩ 张数隐含额 ∩ 权益占比 ∩ 单标的封顶）
                 _order_margin = order_margin_gate(
-                    ai_margin, size=actual_sz, price=limit_px, ct_val=ct_val,
+                    _p2b_margin, size=actual_sz, price=limit_px, ct_val=ct_val,
                     leverage=ai_lever, usdt_available=usdt_available)
                 _side, _pos_side, _venue_ctx = build_order_intent(
                     is_long=True, inst_id=inst_id, actual_sz=actual_sz, ct_val=ct_val,
@@ -451,11 +585,23 @@ def execute_entry_scan(*,
                     is_long=False, limit_px=limit_px, tp_px=tp_px, sl_px=sl_px,
                     sl_dist=sl_dist, tp_dist=tp_dist, price=f["price"], prec=prec)
 
+                _p2b_ok, actual_sz, _p2b_margin, _p2b_reason = _apply_phase2b_entry_risk_controls(
+                    is_long=False, f=f, ai_conf=ai_conf, limit_px=limit_px, sl_px=sl_px,
+                    actual_sz=actual_sz, ai_margin=ai_margin, ai_lever=ai_lever,
+                    ct_val=ct_val, step_sz=step_sz, min_sz=step_sz,
+                    usdt_available=usdt_available, asset_margin_cap=ASSET_MARGIN_CAP,
+                    all_factors=all_factors, trackers=trackers, is_scale_in=is_scale_in,
+                )
+                if not _p2b_ok:
+                    print(f"[Phase2B Risk Guard] 拦截 {f['name']} 做空: {_p2b_reason}")
+                    allow_entry = False
+
+            if allow_entry:
                 # US-003 决策面上下文：名义额（选所硬筛/深度需求）+ 保证金估算
                 # （预算预留额）+ 意图号（同一条 AI 决策重投幂等，不重复占预算）
                 # 审计 P0-1：多所路径保证金与 OKX 同尺（AI 计划额 ∩ 张数隐含额 ∩ 权益占比 ∩ 单标的封顶）
                 _order_margin = order_margin_gate(
-                    ai_margin, size=actual_sz, price=limit_px, ct_val=ct_val,
+                    _p2b_margin, size=actual_sz, price=limit_px, ct_val=ct_val,
                     leverage=ai_lever, usdt_available=usdt_available)
                 _side, _pos_side, _venue_ctx = build_order_intent(
                     is_long=False, inst_id=inst_id, actual_sz=actual_sz, ct_val=ct_val,

@@ -655,6 +655,11 @@ class ConfigEffectMatrixTests(_Base):
         "ASTRA_MAX_RISK_REWARD": ("scripts/risk_constants.py", "MAX_RISK_REWARD_RATIO"),
         "ASTRA_STOP_LOSS_ATR_MULT": ("scripts/risk_constants.py", "STOP_LOSS_ATR_MULT"),
         "ASTRA_MAX_TAKE_PROFIT_ATR": ("scripts/risk_constants.py", "MAX_TAKE_PROFIT_ATR"),
+        "ASTRA_MAX_PORTFOLIO_OPEN_RISK_R": ("scripts/trader/entry_execution.py", "MAX_PORTFOLIO_OPEN_RISK_R"),
+        "ASTRA_COUNTER_4H_RISK_SCALE": ("scripts/trader/entry_execution.py", "COUNTER_4H_RISK_SCALE"),
+        "ASTRA_COUNTER_4H_MIN_CONFIDENCE": ("scripts/trader/entry_execution.py", "COUNTER_4H_MIN_CONFIDENCE"),
+        "ASTRA_LIMIT_ORDER_TTL_MINUTES": ("scripts/trader/order_lifecycle.py", "LIMIT_ORDER_TTL_MINUTES"),
+        "ASTRA_LIMIT_ORDER_DRIFT_ATR": ("scripts/trader/order_lifecycle.py", "LIMIT_ORDER_DRIFT_ATR"),
     }
 
     def test_every_knob_has_an_enforcer(self):

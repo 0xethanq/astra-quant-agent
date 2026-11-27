@@ -89,6 +89,11 @@ class MoveIsLosslessTest(unittest.TestCase):
         #   `tests/ops/test_brain_packages.py::DefaultShapeTests`）。
         '        "vol_ratio": 1.0,':
             '        "vol_ratio": None,',
+        # OKX rubik/stat/taker-volume 返回列序是 [ts, sellVol, buyVol]；v8.8.0 修正买卖列反转
+        '                        b_vol = float(d["data"][0][1])':
+            '                        s_vol = float(d["data"][0][1])',
+        '                        s_vol = float(d["data"][0][2])':
+            '                        b_vol = float(d["data"][0][2])',
     }
 
     def _normalise(self, lines):

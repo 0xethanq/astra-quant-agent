@@ -42,6 +42,9 @@
 """
 from __future__ import annotations
 
+import math
+from typing import Any, Dict, List, Optional, Tuple
+
 
 def size_for_decision(*, ai_margin, ai_lever, price, ct_val, step_sz, base_sz,
                       usdt_available, actual_sz, quantize_size,
@@ -73,3 +76,108 @@ def size_for_decision(*, ai_margin, ai_lever, price, ct_val, step_sz, base_sz,
         actual_sz = quantize_size(actual_sz, step_sz)
 
     return actual_sz
+
+
+def size_for_stop_risk(
+    *,
+    equity_usdt: float,
+    entry_px: float,
+    stop_px: float,
+    ct_val: float,
+    leverage: float,
+    step_sz: float,
+    min_sz: float,
+    max_margin_usdt: float,
+    risk_per_trade_ratio: float,
+    max_risk_per_trade_usdt: float,
+    risk_scale: float = 1.0,
+    ai_margin_cap: float = 0.0,
+) -> Tuple[float, float, float]:
+    """按真实止损距离（1R = equity × risk_ratio）反推等风险仓位张数。
+
+    返回 `(final_sz, actual_risk_usdt, actual_margin_usdt)`；无法满足最小手数时全 0。
+    """
+    eq = float(equity_usdt or 0.0)
+    entry = float(entry_px or 0.0)
+    stop = float(stop_px or 0.0)
+    cv = float(ct_val or 0.0)
+    lev = float(leverage or 0.0)
+    stop_dist = abs(entry - stop)
+    if eq <= 0 or entry <= 0 or stop <= 0 or cv <= 0 or lev <= 0 or stop_dist <= 0:
+        return 0.0, 0.0, 0.0
+
+    ratio_r = eq * float(risk_per_trade_ratio or 0.0)
+    cap_r = float(max_risk_per_trade_usdt or 0.0)
+    one_r = min(ratio_r, cap_r) if cap_r > 0 else ratio_r
+    if one_r <= 0:
+        return 0.0, 0.0, 0.0
+    scale = max(0.05, float(risk_scale if risk_scale is not None else 1.0))
+    risk_budget_usdt = one_r * scale
+    risk_based_sz = risk_budget_usdt / (stop_dist * cv)
+
+    m_cap = float(max_margin_usdt or 0.0)
+    if float(ai_margin_cap or 0.0) > 0:
+        m_cap = min(m_cap, float(ai_margin_cap)) if m_cap > 0 else float(ai_margin_cap)
+    margin_based_sz = (m_cap * lev) / (entry * cv) if m_cap > 0 else float("inf")
+    raw_sz = min(risk_based_sz, margin_based_sz)
+
+    step = float(step_sz or 0.0)
+    if step > 0:
+        final_sz = round(math.floor(raw_sz / step + 1e-9) * step, 8)
+    else:
+        final_sz = round(raw_sz, 8)
+
+    if final_sz <= 0 or final_sz < float(min_sz or 0.0):
+        return 0.0, 0.0, 0.0
+
+    actual_risk_usdt = round(final_sz * stop_dist * cv, 4)
+    actual_margin_usdt = round((final_sz * entry * cv) / lev, 4)
+    return float(final_sz), actual_risk_usdt, actual_margin_usdt
+
+
+def estimate_portfolio_open_risk_r(
+    *,
+    all_factors: Optional[List[Dict[str, Any]]],
+    trackers: Optional[Dict[str, Any]],
+    equity_usdt: float,
+    risk_per_trade_ratio: float,
+    max_risk_per_trade_usdt: float,
+) -> float:
+    """估算组合当前在途总下行风险（以 1R 为单位）；已保本/锁利仓位贡献 0R。"""
+    eq = float(equity_usdt or 0.0)
+    ratio_r = eq * float(risk_per_trade_ratio or 0.0)
+    cap_r = float(max_risk_per_trade_usdt or 0.0)
+    one_r = min(ratio_r, cap_r) if cap_r > 0 else ratio_r
+    if eq <= 0 or one_r <= 0:
+        return 0.0
+
+    total_risk_usdt = 0.0
+    trackers = trackers or {}
+    for f in all_factors or []:
+        if not isinstance(f, dict):
+            continue
+        pos = f.get("position")
+        if not isinstance(pos, dict):
+            continue
+        pos_sz = abs(float(pos.get("pos") or 0.0))
+        if pos_sz <= 0:
+            continue
+        side = str(pos.get("side") or pos.get("posSide", "net") or "").lower()
+        if side not in ("long", "short"):
+            continue
+        inst_id = str(f.get("instId") or "")
+        entry_px = float(pos.get("avgPx") or pos.get("entryPx") or f.get("price") or 0.0)
+        ct_val = float(f.get("ctVal") or pos.get("ctVal") or 1.0)
+        tr = trackers.get(f"{inst_id}_{side}")
+        sl_px = 0.0
+        if isinstance(tr, dict):
+            sl_px = float(tr.get("trailingStopPx") or tr.get("initialStopPx") or 0.0)
+        if sl_px <= 0:
+            sl_px = float(pos.get("trailingStopPx") or 0.0)
+        if sl_px <= 0 or entry_px <= 0:
+            total_risk_usdt += one_r
+            continue
+        downside = max(0.0, entry_px - sl_px) if side == "long" else max(0.0, sl_px - entry_px)
+        total_risk_usdt += downside * pos_sz * ct_val
+
+    return round(total_risk_usdt / one_r, 3)

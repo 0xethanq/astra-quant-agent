@@ -481,6 +481,8 @@ def load_closed_trades(start_time_override: str | None = None):
                     gross = float(t.get("gross_pnl", pnl) or pnl)
                     fee = abs(float(t.get("fee", 0.0) or 0.0))
                     strat = str(t.get("strategy") or "⚡ 趋势")
+                    if strat == "⚡ 阻力高空":
+                        strat = "⚡ 阻力抛压空"
                     reason = str(t.get("exit_reason") or t.get("remark") or "")
 
                     # join 铁律：方向一致、非未来、非过期；宿主逐单标注可观测性
