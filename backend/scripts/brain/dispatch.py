@@ -70,6 +70,7 @@ def dispatch_llm_and_persist_decisions(*,
         t0 = time.time()
         raw_res = None
         brain_output = None
+        content = ""
 
         # Transparent check: is Multi-Agent Council enabled?
         council_enabled = False
@@ -96,6 +97,8 @@ def dispatch_llm_and_persist_decisions(*,
                     timeout=float(c_cfg.get("timeout_seconds", 240.0)),
                     runtime_context=runtime_context,
                 )
+                if brain_output is not None:
+                    content = json.dumps(brain_output, ensure_ascii=False)
                 council_status = {
                     "ran": True,
                     "duration_ms": int(council_transcript.get("total_duration_ms") or 0),
