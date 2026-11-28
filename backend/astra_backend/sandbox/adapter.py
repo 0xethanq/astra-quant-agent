@@ -158,8 +158,9 @@ class SandboxExchangeAdapter(BaseExchangeAdapter):
             ct_val = float(pos.get("ct_val") or self._ct_val_for(base))
             mark = float(pos.get("mark_price") or pos.get("entry_price") or 0.0)
             notional = float(pos["amount"]) * ct_val * mark
+            pos_side = str(pos.get("posSide") or "net").lower()
             # 正费率：多头付、空头收；负费率相反
-            funding_pnl = (-notional * rate) if pos["posSide"] == "long" else (notional * rate)
+            funding_pnl = (-notional * rate) if pos_side == "long" else (notional * rate)
             self.cash += funding_pnl
             pos["funding_paid_usd"] = float(pos.get("funding_paid_usd", 0.0)) + funding_pnl
 

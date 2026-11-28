@@ -166,8 +166,9 @@ class CooldownAndRoutingGatesTests(unittest.TestCase):
 
     def test_order_submit_does_not_clamp_below_80_conf_rr_floor(self):
         src = Path(order_submit.__file__).read_text(encoding="utf-8")
-        self.assertIn("1.2 if _ai_conf >= 80.0 else None", src)
-        self.assertIn("1.2 if _ai_conf >= 80.0 else 0.0", src)
+        self.assertIn("COUNTER_4H_MIN_CONFIDENCE", src)
+        self.assertIn("1.2 if _ai_conf >= _high_conf_gate else None", src)
+        self.assertIn("1.2 if _ai_conf >= _high_conf_gate else 0.0", src)
 
     def test_entry_execution_reads_normalized_macd_accel_pct_and_flat_quadrant(self):
         f = _sample_factor(

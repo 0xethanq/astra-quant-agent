@@ -78,7 +78,7 @@ class CouncilPresetAlignmentTests(unittest.TestCase):
         for needle in ("提案输出格式（强制）",
                        "标的 | 倾向 | 限价 | 止损 | 止盈 | 拟用保证金(USDT) | 置信度(0-100) | 一句话依据",
                        "标准报价单",                      # CIO 侧逐项对比与偏离说明指令
-                       "1.8~2.2x 1H ATR 分层止损"):
+                       "1H ATR 结构止损（结合【本周期风险预算】"):
             where = [str(f) for f, s in sources.items() if needle in s]
             self.assertTrue(where, f"运行时模板缺少强制片段：{needle}")
         # 运行时旧写死数字必须已清除
