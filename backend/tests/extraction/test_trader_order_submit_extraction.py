@@ -89,7 +89,6 @@ BODY_DELTAS: list = [
      "\n    venue_ctx['submitted_px'] = effective_px"
      "\n    venue_ctx['submitted_tp'] = effective_tp"
      "\n    venue_ctx['submitted_sl'] = effective_sl"
-     "\n    venue_ctx['submitted_ord_type'] = order_mode"
      "\nfrom scripts.order_risk import validate_quote_geometry_and_rr"),
 ]
 

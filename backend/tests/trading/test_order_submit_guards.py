@@ -296,7 +296,6 @@ class OkxDirectTest(unittest.TestCase):
         _, _, _, kw = okx.orders[0]
         self.assertEqual(kw["ord_type"], "market")
         self.assertIsNone(kw["px"])
-        self.assertEqual(ctx["submitted_ord_type"], "market")
 
     def test_smart_mode_high_confidence_within_1_2_pct_submits_market(self):
         """smart 模式：高置信度（>= 78%）且距离 <= 1.2% 时即时走市价。"""
@@ -310,7 +309,6 @@ class OkxDirectTest(unittest.TestCase):
         self.assertTrue(ok, why)
         _, _, _, kw = okx.orders[0]
         self.assertEqual(kw["ord_type"], "market")
-        self.assertEqual(ctx["submitted_ord_type"], "market")
 
     def test_smart_mode_deep_pullback_places_limit_order(self):
         """smart 模式：深回踩（> 1.2%）挂 Maker 限价单等待打折成交。"""
@@ -325,7 +323,6 @@ class OkxDirectTest(unittest.TestCase):
         _, _, _, kw = okx.orders[0]
         self.assertEqual(kw["ord_type"], "limit")
         self.assertEqual(kw["px"], 97000.0)
-        self.assertEqual(ctx["submitted_ord_type"], "limit")
 
     def test_smart_mode_missing_market_price_falls_back_to_limit(self):
         """smart 模式：现价不可用时 fail-closed 回退限价单（不走市价锚定拒单）。"""

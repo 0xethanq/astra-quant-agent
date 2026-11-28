@@ -323,7 +323,6 @@ def submit_protected_limit_order(inst_id: str, side: str, pos_side: str, size: f
         venue_ctx["submitted_px"] = effective_px
         venue_ctx["submitted_tp"] = effective_tp
         venue_ctx["submitted_sl"] = effective_sl
-        venue_ctx["submitted_ord_type"] = order_mode
 
     # Final Non-Bypassable Verification: verify actual effective price, tp and sl
     from scripts.order_risk import validate_quote_geometry_and_rr

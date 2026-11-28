@@ -236,28 +236,6 @@ def apply_agent_proposal(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@router.post("/api/v1/admin/agent/proposals/{proposal_id}/rollback")
-def rollback_agent_proposal(
-    proposal_id: str,
-    x_astra_session: str | None = Header(default=None, alias="X-Astra-Session"),
-) -> dict[str, Any]:
-    refresh_settings()
-    actor = require_superadmin(x_astra_session)
-    _validate_proposal_id(proposal_id)
-    try:
-        return rollback_proposal(
-            store=_STORE,
-            proposal_id=proposal_id,
-            actor=str(actor.get("username") or "admin"),
-        )
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"提案回滚失败：{exc}") from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"提案应用失败：{exc}") from exc
 

@@ -700,8 +700,12 @@ class AgentRouterApiTests(_AgentSandboxCase):
         self.assertIn("历史工具摘要", joined)
         self.assertIn("已回滚", joined)
 
+        stream_turn = 0
+
         async def _parallel_stream(runtime, messages, tools, **kwargs):
-            if len(messages) == 2:
+            nonlocal stream_turn
+            stream_turn += 1
+            if stream_turn == 1:
                 yield {
                     "type": "tool_calls",
                     "calls": [
