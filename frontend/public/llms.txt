@@ -1,0 +1,28 @@
+# AstraQuant v9.2
+
+> AI Multi-Agent Quantitative Cryptocurrency Trading System & OKX Live/Demo Terminal (`https://astraquant.top/`).
+
+AstraQuant combines a Vue 3 + TypeScript trading terminal, FastAPI backend, OKX V5 perpetual futures execution runtime, multi-agent Investment Council (`alpha-hunter`, `quant-analyst`, `risk-officer`), 28+ quantitative factor matrix, and strict automated risk guardrails.
+
+## Public Pages
+
+- [AstraQuant Live Terminal](https://astraquant.top/): Live OKX USDT-M perpetual trading dashboard, interactive K-line / equity curve, active positions, and account telemetry.
+- [Live Dashboard (/trading)](https://astraquant.top/trading): Real-time market view, position monitoring, and live strategy execution state.
+- [AI Decisions & Factor Matrix (/factors)](https://astraquant.top/factors): Multi-agent Investment Council verdicts, Chain-of-Thought trajectories, and quantitative factor radar.
+- [Market Intelligence Feed (/news)](https://astraquant.top/news): Real-time crypto market newsflow, macro catalysts, and AI sentiment impact scores.
+- [Quantitative Strategy Lab (/lab)](https://astraquant.top/lab): Automated strategy review, multi-horizon replay, slippage/fee attribution, and evolution proposals.
+- [Trading Ledger (/history)](https://astraquant.top/history): Closed trade ledger, PnL attribution, funding/commission breakdown, and daily equity curve.
+- [System Documentation (/docs)](https://astraquant.top/docs): Architecture manual, setup guide, API reference, and AI assistant control-plane guide.
+
+## Machine-Readable Endpoints
+
+- Sitemap (with image metadata): https://astraquant.top/sitemap.xml
+- Robots Policy: https://astraquant.top/robots.txt
+- Health Check API: https://astraquant.top/api/v1/health
+
+## Related Resources
+
+- Source Repository: https://github.com/0xethanq/astra-quant-agent
+- TradeSkill Official Trading Skills Hub: https://tradeskill.si/
+- AstraQuant v9.2 Illustrated Guide (ZH): https://tradeskill.si/guides/astraquant-v9-ai-assistant-and-control-plane-guide.html
+- AstraQuant v9.2 Illustrated Guide (EN): https://tradeskill.si/en/guides/astraquant-v9-ai-assistant-and-control-plane-guide.html

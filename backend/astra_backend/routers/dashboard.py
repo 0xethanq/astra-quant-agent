@@ -15,6 +15,7 @@ from astra_backend.dependencies import (
     ROOT, REPO_ROOT, DATA_DIR, VUE_DIST, okx, read_json, require_admin_header,
 )
 import astra_backend.dashboard_cache as dash_app
+from astra_backend.seo import inject_route_seo
 from astra_backend.web_shell import serve_vue_spa, templates
 from .plaza import router as plaza_router
 
@@ -334,6 +335,25 @@ async def indexnow_key_txt():
     return Response(status_code=404)
 
 
+@router.get("/llms.txt", include_in_schema=False)
+async def llms_txt():
+    name = "llms.txt"
+    f = VUE_DIST / name
+    if f.is_file():
+        return FileResponse(str(f), media_type="text/plain; charset=utf-8", headers={"Cache-Control": "public, max-age=300, s-maxage=3600"})
+    pf = REPO_ROOT / "frontend" / "public" / name
+    if pf.is_file():
+        return FileResponse(str(pf), media_type="text/plain; charset=utf-8", headers={"Cache-Control": "public, max-age=300, s-maxage=3600"})
+    fallback = (
+        "# AstraQuant\n\n"
+        f"> AI Multi-Agent Quantitative Cryptocurrency Trading System ({APP_SITE}/).\n\n"
+        f"- Home: {APP_SITE}/\n"
+        f"- Sitemap: {APP_SITE}/sitemap.xml\n"
+        f"- Robots: {APP_SITE}/robots.txt\n"
+    )
+    return PlainTextResponse(fallback, headers={"Cache-Control": "public, max-age=300, s-maxage=3600"})
+
+
 @router.get("/docs/images/{img_name}", include_in_schema=False)
 def docs_images(img_name: str):
     clean_name = Path(img_name).name
@@ -351,12 +371,13 @@ def docs_images(img_name: str):
 @router.api_route("/history", methods=["GET", "HEAD"], include_in_schema=False)
 @router.api_route("/docs", methods=["GET", "HEAD"], include_in_schema=False)
 @router.api_route("/docs/{subpath:path}", methods=["GET", "HEAD"], include_in_schema=False)
-def serve_vue_spa_subroutes(subpath: str = "") -> Response:
+def serve_vue_spa_subroutes(request: Request = None, subpath: str = "") -> Response:
+    route_path = request.url.path if request is not None else "/trading"
     vue_index = VUE_DIST / "index.html"
     if vue_index.is_file():
-        return serve_vue_spa(str(vue_index), is_public=True)
+        return inject_route_seo(serve_vue_spa(str(vue_index), is_public=True), route_path, is_public=True)
     fallback_index = REPO_ROOT / "frontend" / "index.html"
-    return serve_vue_spa(str(fallback_index), is_public=True)
+    return inject_route_seo(serve_vue_spa(str(fallback_index), is_public=True), route_path, is_public=True)
 
 
 @router.get("/admin", include_in_schema=False)
@@ -371,14 +392,19 @@ def admin_page(subpath: str = "") -> Response:
             admin_root = (VUE_DIST / "admin").resolve()
             cand = (admin_root / subpath).resolve()
             if cand.is_file() and cand.is_relative_to(admin_root):
-                return FileResponse(str(cand), headers={"Cache-Control": "no-cache"})
+                return inject_route_seo(
+                    FileResponse(str(cand), headers={"Cache-Control": "no-cache"}),
+                    f"/admin/{subpath}",
+                    is_public=False,
+                )
         except (OSError, ValueError):
             pass
     vue_index = VUE_DIST / "index.html"
+    admin_path = f"/admin/{subpath}".rstrip("/") or "/admin"
     if vue_index.is_file():
-        return serve_vue_spa(str(vue_index), is_public=False)
+        return inject_route_seo(serve_vue_spa(str(vue_index), is_public=False), admin_path, is_public=False)
     fallback_index = REPO_ROOT / "frontend" / "index.html"
-    return serve_vue_spa(str(fallback_index), is_public=False)
+    return inject_route_seo(serve_vue_spa(str(fallback_index), is_public=False), admin_path, is_public=False)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -410,7 +436,7 @@ async def favicon_svg():
 async def index(request: Request):
     vue_index_file = os.path.join(str(VUE_DIST), "index.html")
     if os.path.isfile(vue_index_file):
-        return serve_vue_spa(vue_index_file, is_public=True)
+        return inject_route_seo(serve_vue_spa(vue_index_file, is_public=True), "/", is_public=True)
     return templates.TemplateResponse(
         request=request,
         name="index.html",
@@ -423,7 +449,7 @@ async def docs_spa_root(request: Request, subpath: str = ""):
     """Serve the public system documentation page in Vue SPA."""
     vue_index_file = os.path.join(str(VUE_DIST), "index.html")
     if os.path.isfile(vue_index_file):
-        return serve_vue_spa(vue_index_file, is_public=True)
+        return inject_route_seo(serve_vue_spa(vue_index_file, is_public=True), "/docs", is_public=True)
     return HTMLResponse("Vue build not found. Run `npm run build` in frontend/.", status_code=503)
 
 

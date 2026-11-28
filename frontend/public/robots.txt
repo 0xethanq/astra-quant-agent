@@ -1,20 +1,22 @@
 ﻿User-agent: *
-Allow: /
-Allow: /trading
-Allow: /factors
-Allow: /news
-Allow: /lab
-Allow: /history
-Allow: /docs
-Allow: /images/
+Allow: /$
+Allow: /trading$
+Allow: /factors$
+Allow: /news$
+Allow: /lab$
+Allow: /history$
+Allow: /docs$
+Allow: /llms.txt$
 Allow: /assets/
+Allow: /images/
+Allow: /favicon.ico
+Allow: /favicon.svg
 Disallow: /admin/
-Disallow: /admin/*
+Disallow: /login
 Disallow: /api/
-Disallow: /api/*
 
-# Host
 Host: https://astraquant.top
-
-# Sitemaps
 Sitemap: https://astraquant.top/sitemap.xml
+
+# AI Agent & LLM Discovery
+# llms-txt: https://astraquant.top/llms.txt

@@ -119,9 +119,24 @@ router.beforeEach(async (to) => {
   }
 })
 
-/* SEO 标题：中文为主（与后端钉扎测试与 CF 缓存语义一致），后台 noindex */
+interface PublicRouteSeoMeta {
+  title: string
+  description: string
+  image: string
+  canonicalPath?: string
+}
+
+const DEFAULT_PUBLIC_SEO: PublicRouteSeoMeta = {
+  title: 'AstraQuant | 量化交易终端',
+  description:
+    'AstraQuant 是一套自托管的 OKX 永续合约 AI 量化决策与执行系统：支持多时间框架量化因子、AI 决策主脑、32 项 Fail-Closed 物理风控门禁、智能委托路由与分批止盈，全链路可审计。',
+  image: '/images/dashboard_preview.png',
+  canonicalPath: '/',
+}
+
+/* SEO 标题与描述：与后端 SSR 元数据及 sitemap.xml 保持一致，后台 noindex */
 const PUBLIC_TITLES: Record<string, string> = {
-  '/': 'AstraQuant | 量化交易终端',
+  '/': DEFAULT_PUBLIC_SEO.title,
   '/trading': '实盘看板 | AstraQuant',
   '/factors': 'AI 决策 | AstraQuant',
   '/news': '市场快讯 | AstraQuant',
@@ -130,10 +145,78 @@ const PUBLIC_TITLES: Record<string, string> = {
   '/docs': '系统文档 | AstraQuant',
 }
 
+const PUBLIC_ROUTE_SEO: Record<string, PublicRouteSeoMeta> = {
+  '/': DEFAULT_PUBLIC_SEO,
+  '/trading': {
+    title: PUBLIC_TITLES['/trading'],
+    description:
+      'AstraQuant OKX USDT 永续合约实盘看板：多周期交互 K 线、实时持仓浮盈、盘口深度与自动风控状态实时监控。',
+    image: '/images/v920_dashboard.png',
+  },
+  '/factors': {
+    title: PUBLIC_TITLES['/factors'],
+    description:
+      'AstraQuant 多智能体 AI 投委会决策面板：alpha-hunter、quant-analyst 与 risk-officer 协同裁决与 28+ 量化因子雷达。',
+    image: '/images/v920_decisions.png',
+  },
+  '/news': {
+    title: PUBLIC_TITLES['/news'],
+    description:
+      'AstraQuant 7x24 加密市场快讯与宏观日历：BTC/ETH 突发催化、ETF 资金流与 AI 情绪影响评级实时聚合。',
+    image: '/images/v920_news.png',
+  },
+  '/lab': {
+    title: PUBLIC_TITLES['/lab'],
+    description:
+      'AstraQuant 量化策略复盘实验室：多周期回放、滑点与手续费归因分析、胜率统计与 AI 参数自演化提案。',
+    image: '/images/v920_review.png',
+  },
+  '/history': {
+    title: PUBLIC_TITLES['/history'],
+    description:
+      'AstraQuant 历史交易台账：逐笔成交明细、资金费率与手续费拆解、日度净值曲线与分币种绩效归因。',
+    image: '/images/v920_ledger.png',
+  },
+  '/docs': {
+    title: PUBLIC_TITLES['/docs'],
+    description:
+      'AstraQuant v9.2 系统文档：多智能体量化架构、一键部署指南、AI 助手控制面操作说明与安全风控体系。',
+    image: '/images/v920_cot_drawer.png',
+  },
+  '/doc': {
+    title: PUBLIC_TITLES['/docs'],
+    description:
+      'AstraQuant v9.2 系统文档：多智能体量化架构、一键部署指南、AI 助手控制面操作说明与安全风控体系。',
+    image: '/images/v920_cot_drawer.png',
+    canonicalPath: '/docs',
+  },
+}
+
+function upsertMeta(attr: 'name' | 'property', key: string, content: string) {
+  let el = document.querySelector(`meta[${attr}="${key}"]`) as HTMLMetaElement | null
+  if (!el) {
+    el = document.createElement('meta')
+    el.setAttribute(attr, key)
+    document.head.appendChild(el)
+  }
+  el.content = content
+}
+
+function upsertCanonical(href: string) {
+  let link = document.querySelector('link[rel="canonical"]') as HTMLLinkElement | null
+  if (!link) {
+    link = document.createElement('link')
+    link.rel = 'canonical'
+    document.head.appendChild(link)
+  }
+  link.href = href
+}
+
 export function updateDocumentTitle(to = router.currentRoute.value) {
   const { t } = useI18n()
   let title = 'AstraQuant'
   let isNoIndex = false
+  let seoMeta: PublicRouteSeoMeta | null = null
 
   if (to.name === 'not-found') {
     isNoIndex = true
@@ -151,23 +234,41 @@ export function updateDocumentTitle(to = router.currentRoute.value) {
     title = pageName
       ? `${pageName} · ${t('nav.actions.console')} · AstraQuant`
       : `${t('nav.actions.console')} · AstraQuant`
-  } else if (PUBLIC_TITLES[to.path]) {
-    title = PUBLIC_TITLES[to.path]
+  } else {
+    const matched = PUBLIC_ROUTE_SEO[to.path]
+    if (matched) {
+      seoMeta = matched
+      title = matched.title
+    } else if (PUBLIC_TITLES[to.path]) {
+      title = PUBLIC_TITLES[to.path]
+    }
   }
 
   document.title = title
 
-  // Ensure search engines do not index administrative routes
-  let robotsMeta = document.querySelector('meta[name="robots"]') as HTMLMetaElement | null
-  if (isNoIndex) {
-    if (!robotsMeta) {
-      robotsMeta = document.createElement('meta')
-      robotsMeta.name = 'robots'
-      document.head.appendChild(robotsMeta)
-    }
-    robotsMeta.content = 'noindex, nofollow, noarchive'
-  } else if (robotsMeta) {
-    robotsMeta.content = 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1'
+  upsertMeta(
+    'name',
+    'robots',
+    isNoIndex
+      ? 'noindex, nofollow, noarchive'
+      : 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1',
+  )
+
+  if (!isNoIndex && seoMeta) {
+    const origin = window.location.origin
+    const canonPath = seoMeta.canonicalPath || to.path || '/'
+    const canonicalUrl = `${origin}${canonPath}`
+    const imageUrl = `${origin}${seoMeta.image}`
+    upsertCanonical(canonicalUrl)
+    upsertMeta('name', 'description', seoMeta.description)
+    upsertMeta('property', 'og:title', title)
+    upsertMeta('property', 'og:description', seoMeta.description)
+    upsertMeta('property', 'og:url', canonicalUrl)
+    upsertMeta('property', 'og:image', imageUrl)
+    upsertMeta('name', 'twitter:title', title)
+    upsertMeta('name', 'twitter:description', seoMeta.description)
+    upsertMeta('name', 'twitter:url', canonicalUrl)
+    upsertMeta('name', 'twitter:image', imageUrl)
   }
 }
 

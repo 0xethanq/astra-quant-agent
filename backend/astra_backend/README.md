@@ -47,7 +47,7 @@
 ### L1 启动与装配
 
 `app.py`（FastAPI 装配，`include_router` 8 个路由）、`scheduler.py`、
-`spawn.py`、`web_shell.py`、`config.py`、`settings_store.py`、`version.py`、
+`spawn.py`、`web_shell.py`、`seo.py`、`config.py`、`settings_store.py`、`version.py`、
 `dependencies.py`、`routers/`。
 
 **这一层不要拆。** 它们是进程入口，改动收益低、回归面是整个服务。
