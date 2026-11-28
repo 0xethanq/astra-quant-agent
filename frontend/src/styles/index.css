@@ -5,6 +5,7 @@
 @import './tokens.css';
 @import './base.css' layer(base);
 @import './components.css' layer(components);
+@import './admin-workbench.css' layer(components);
 @import './compat.css' layer(components);
 
 /* =========================================================================

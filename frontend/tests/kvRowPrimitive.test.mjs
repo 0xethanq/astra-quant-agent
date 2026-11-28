@@ -50,8 +50,8 @@ export const KV_ROW_USERS = {
   'views/admin/AboutPage.vue': 5,
   'views/admin/BackupPage.vue': 2,
   'views/admin/llm/ProviderDetailView.vue': 5,
-  // 2026-10：多交易所凭证卡删除后，其键值行随 OKX 凭证区迁入 SecurityPage
-  'views/admin/SecurityPage.vue': 1,
+  // 2026-11：SecurityPage 拆分后 OKX 凭证键值行归属 SecurityVenueTab
+  'views/admin/security/SecurityVenueTab.vue': 1,
 };
 
 /** 允许保留的形态 delta（值=理由）。它们只许写 padding，不许再抄整份形状。 */

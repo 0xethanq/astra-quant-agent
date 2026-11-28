@@ -1,31 +1,23 @@
 <script setup lang="ts">
 /**
- * SettingsSection · 设置区块外壳（**仅供 SecurityPage 使用**）
- * ---------------------------------------------------------------------------
- * 批 10 重构：改用全局 `.card` / `.card-head` 语汇（与其余管理页的分层卡片一致），
- * 不再自带一套 `rounded-xl + shadow-xs + 内联 surface 三元`。
- * 对外接口（props / slots）保持兼容：title · description · tone · actions / default。
+ * SettingsSection · Admin v2 设置区块外壳
  */
-import type { Component } from 'vue'
+import type { Component } from 'vue';
 
 defineProps<{
-  title: string
-  description?: string
-  /** tone: 'default' 分层卡 | 'subtle' 内嵌底 */
-  tone?: 'default' | 'subtle'
-  /** 可选图标（重构新增；不传则不渲染，向后兼容） */
-  icon?: Component
-}>()
+  title: string;
+  description?: string;
+  tone?: 'default' | 'subtle';
+  icon?: Component;
+}>();
 </script>
 
 <template>
   <section class="card ss" :class="{ 'is-subtle': tone === 'subtle' }">
     <header class="card-head">
       <div class="ss-head-text">
-        <!-- 批 45：h3 → h2。本组件承载的是**页面一级分区**，直接挂在布局 h1 之下，
-             跳级（h1→h3）会让读屏器/大纲工具误判层级；其余管理页的卡片标题已是 h2。 -->
         <h2 class="card-title">
-          <component :is="icon" v-if="icon" :size="14" />
+          <component :is="icon" v-if="icon" :size="15" />
           {{ title }}
         </h2>
         <p v-if="description" class="card-sub">{{ description }}</p>
@@ -60,6 +52,6 @@ defineProps<{
   justify-content: flex-end;
 }
 .ss-body {
-  padding: var(--ds-space-4);
+  padding: var(--ds-space-5);
 }
 </style>

@@ -27,7 +27,10 @@ import path from 'node:path';
 const SRC = path.resolve(import.meta.dirname, '..', 'src');
 
 test('SecurityPage 本金保存与紧急平仓按钮必须受短语与密码前置门禁保护', () => {
-  const vue = readFileSync(path.join(SRC, 'views/admin/SecurityPage.vue'), 'utf8');
+  const vue =
+    readFileSync(path.join(SRC, 'views/admin/security/SecurityPortfolioTab.vue'), 'utf8')
+    + '\n'
+    + readFileSync(path.join(SRC, 'views/admin/security/SecurityEmergencyTab.vue'), 'utf8');
 
   // 1. 本金保存按钮门禁
   assert.match(

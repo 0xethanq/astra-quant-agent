@@ -699,7 +699,7 @@ onMounted(load)
   gap: 8px;
 }
 .bk-switch-text {
-  font-size: var(--text-3xs);
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--ds-color-text-placeholder);
 }
@@ -714,7 +714,7 @@ onMounted(load)
   border-bottom: 1px solid var(--ds-color-border-default);
   background-color: var(--warn-bg);
   color: var(--warn);
-  font-size: var(--text-3xs);
+  font-size: var(--text-xs);
   line-height: var(--leading-body);
 }
 .bk-legacy > svg {
@@ -775,7 +775,7 @@ onMounted(load)
   background-color: var(--ds-color-bg-surface-inset);
 }
 .bk-readonly-note {
-  font-size: var(--text-3xs);
+  font-size: var(--text-xs);
   color: var(--ds-color-text-placeholder);
 }
 
@@ -797,11 +797,11 @@ onMounted(load)
   flex-direction: column;
 }
 .bk-kv-k {
-  font-size: var(--text-xs);
+  font-size: var(--text-base);
   color: var(--ds-color-text-description);
 }
 .bk-kv-v {
-  font-size: var(--text-3xs);
+  font-size: var(--text-base);
   color: var(--ds-color-text-primary);
 }
 .bk-schedule {
@@ -810,7 +810,7 @@ onMounted(load)
   gap: 6px;
   padding: var(--ds-space-3) var(--ds-space-4);
   border-top: 1px solid var(--ds-color-border-default);
-  font-size: var(--text-4xs);
+  font-size: var(--text-xs);
   line-height: var(--leading-body);
   color: var(--ds-color-text-placeholder);
 }
@@ -846,13 +846,13 @@ onMounted(load)
   min-width: 0;
 }
 .bk-archive-name {
-  font-size: var(--text-3xs);
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--ds-color-text-primary);
   min-width: 0;
 }
 .bk-archive-meta {
-  font-size: var(--text-4xs);
+  font-size: var(--text-xs);
   color: var(--ds-color-text-placeholder);
 }
 .bk-archive-actions {
@@ -864,7 +864,7 @@ onMounted(load)
 .bk-hint {
   padding: var(--ds-space-3) var(--ds-space-4);
   border-top: 1px solid var(--ds-color-border-default);
-  font-size: var(--text-4xs);
+  font-size: var(--text-xs);
   color: var(--ds-color-text-placeholder);
 }
 

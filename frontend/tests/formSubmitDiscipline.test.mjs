@@ -101,8 +101,8 @@ test('所有带 form 关联的按钮必须对应同模板内存在的 <form id="
 });
 
 test('弹窗操作表单的处理函数必须包含重入闭锁守卫', () => {
-  // 1. SecurityPage::confirmClose
-  const sec = stripComments(readFileSync(path.join(SRC, 'views/admin/SecurityPage.vue'), 'utf8'));
+  // 1. SecurityAdmin::confirmClose
+  const sec = stripComments(readFileSync(path.join(SRC, 'views/admin/security/useSecurityAdmin.ts'), 'utf8'));
   assert.match(
     sec,
     /async\s+function\s+confirmClose\(\)\s*\{\s*if\s*\(\s*closing\.value\s*\)\s*return/,

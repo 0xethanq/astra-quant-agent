@@ -1,6 +1,7 @@
 import { zhAdminShell } from './shell';
 import { zhAdminLogin } from './login';
 import { zhAdminAgent } from './agent';
+import { zhAdminStrategy } from './strategy';
 import { zhAdminPolicySnapshot } from './policySnapshot';
 import { zhAdminAdminSys } from './adminSys';
 import { zhAdminAbout } from './about';
@@ -16,6 +17,7 @@ export const zhAdmin = {
   shell: zhAdminShell,
   login: zhAdminLogin,
   agent: zhAdminAgent,
+  strategy: zhAdminStrategy,
   policySnapshot: zhAdminPolicySnapshot,
   adminsys: zhAdminAdminSys,
   about: zhAdminAbout,

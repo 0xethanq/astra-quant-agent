@@ -157,7 +157,7 @@ test('字段栈模板用法必须在白名单内（防漂移出新写法）', ()
   ]);
   const bad = [...counts.keys()].filter((k) => !allowed.has(k));
   assert.deepEqual(bad, [], `出现未登记的字段栈写法：\n  ${bad.join('\n  ')}`);
-  assert.equal(total, 34, `field-stack 实例应为 34 个，实测 ${total}`);
+  assert.equal(total, 44, `field-stack 实例应为 44 个，实测 ${total}`);
 });
 
 test('豁免/白名单必须都有理由，且文件真实存在', () => {

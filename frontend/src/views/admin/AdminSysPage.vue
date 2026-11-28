@@ -452,7 +452,7 @@ onMounted(load)
 .as-hint {
   padding: var(--ds-space-3) var(--ds-space-4);
   border-top: 1px solid var(--ds-color-border-default);
-  font-size: var(--text-4xs);
+  font-size: var(--text-xs);
   line-height: var(--leading-body);
   color: var(--ds-color-text-placeholder);
 }
@@ -485,7 +485,7 @@ onMounted(load)
   padding-top: 0;
   padding-bottom: 0;
   background-color: var(--ds-color-bg-surface-inset);
-  font-size: var(--text-3xs);
+  font-size: var(--text-xs);
   font-weight: 500;
   letter-spacing: var(--track-label);
   text-transform: uppercase;
@@ -499,7 +499,7 @@ onMounted(load)
   min-width: 0;
 }
 .as-name {
-  font-size: var(--text-xs);
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--ds-color-text-primary);
 }
@@ -509,7 +509,7 @@ onMounted(load)
   min-width: 0;
 }
 .as-login {
-  font-size: var(--text-4xs);
+  font-size: var(--text-xs);
   color: var(--ds-color-text-placeholder);
 }
 .as-actions {
@@ -556,7 +556,7 @@ onMounted(load)
   border-radius: var(--r-ctl);
   background-color: var(--down-bg);
   color: var(--down);
-  font-size: var(--text-3xs);
+  font-size: var(--text-base);
   overflow-wrap: anywhere;
 }
 .as-dlg-error > svg {

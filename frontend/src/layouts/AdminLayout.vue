@@ -1,19 +1,14 @@
 <script setup lang="ts">
 /**
- * AdminLayout.vue · ASTRA 开发者工作台外壳
+ * AdminLayout.vue · ASTRA 现代量化控制台外壳 (v9.2.0)
  * ---------------------------------------------------------------------------
- * 视觉语言：AstraQuant 极简工作台布局架构
- *   · 画布与侧栏同底（#0a0a0a），靠 6% 发丝描边分区，不用独立侧栏底色
- *   · 导航项 30px 基线；选中态 = 白色 alpha 分层 + 品牌蓝图标，不做加粗染色
- *   · 顶栏 48px 与画布同底 + 底描边；面包屑弱化，动作区右对齐
- *   · 内容区留白走 --ds-space-5，全站无渐变、无 glow、无点阵背景
- *
- * 行为契约：与重构前完全一致 —— 折叠持久化、鉴权退出、面包屑、大屏跳转、
- *          主题切换、移动端抽屉、后台 chunk 空闲预取，逻辑未做任何改动。
+ * · 左侧 248px 精度导航栏（surface-1 柔和阶差，无 backdrop-filter，左橙条选中指示）
+ * · 底部常驻当前管理员身份卡 + 一键退出
+ * · 56px 顶部工具栏：面包屑 / 全局交易暂停态徽章 / 更新提醒 / 语言直切 / 北京时间 / 主题 / 返回大屏
+ * · 沉浸模式（/admin/agent）自动铺满视口、消除多余外边距
  */
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { useRouteFocus } from '../composables/useRouteFocus';
 import {
   PanelLeftClose,
   PanelLeftOpen,
@@ -24,29 +19,34 @@ import {
   Sun,
   Moon,
   ArrowUpCircle,
+  PauseCircle,
+  Activity,
+  Languages,
 } from 'lucide-vue-next';
 import { useAuthStore } from '../stores/auth';
 import { useI18n } from '../composables/useI18n';
 import { useTheme } from '../composables/useTheme';
 import { useLocalStorage } from '../composables/useLocalStorage';
 import { useUpdateNotice } from '../composables/useUpdateNotice';
+import { useApi } from '../composables/useApi';
+import { useRouteFocus } from '../composables/useRouteFocus';
 import { adminGroups } from '../config/nav';
 import { APP_VERSION } from '../config/version';
 import BeijingClock from '../components/base/BeijingClock.vue';
 import SkipLink from '../components/base/SkipLink.vue';
 
 const route = useRoute();
-
-// 批 112：切页后把焦点交给主内容（首次进入不抢，见组合式头注）
-useRouteFocus();
 const router = useRouter();
 const auth = useAuthStore();
-const { t } = useI18n();
+const { t, toggleLocale } = useI18n();
 const { theme, toggleTheme } = useTheme();
 const { updateAvailable, behindCount } = useUpdateNotice();
+const { api } = useApi();
+useRouteFocus();
 
 const collapsed = useLocalStorage('astra_admin_sidebar', false);
 const drawerOpen = ref(false);
+const tradingPaused = ref<boolean | null>(null);
 
 const currentKey = computed(() => (route.name as string) || 'admin-agent');
 const isImmersiveAgent = computed(() => route.path === '/admin/agent');
@@ -58,6 +58,8 @@ const currentMeta = computed(() => {
   return null;
 });
 
+const operatorInitial = computed(() => (auth.user?.username || 'A').slice(0, 1).toUpperCase());
+
 function go(path: string) {
   drawerOpen.value = false;
   if (route.path !== path) router.push(path);
@@ -68,9 +70,30 @@ function logout() {
   router.push('/admin/login');
 }
 
-/* 后台 chunk 空闲预取（2026-09-30：组件名改由 `config/nav.ts` 单一来源提供，
-   删除本文件原先手写的 key → 组件名映射 —— 那份副本在页面增删后必然漂移） */
+async function refreshEngineBadge() {
+  if (!auth.isAuthenticated) return;
+  try {
+    const data = await api('/api/v1/admin/control-plane/state');
+    if (typeof data?.trading_paused === 'boolean') {
+      tradingPaused.value = data.trading_paused;
+    }
+  } catch {
+    // Non-blocking header indicator
+  }
+}
+
+function onControlPlaneChanged(ev: Event) {
+  const detail = (ev as CustomEvent)?.detail;
+  if (detail && typeof detail.trading_paused === 'boolean') {
+    tradingPaused.value = detail.trading_paused;
+  } else {
+    void refreshEngineBadge();
+  }
+}
+
 onMounted(() => {
+  void refreshEngineBadge();
+  window.addEventListener('astra:control-plane-changed', onControlPlaneChanged);
   const prefetch = () =>
     adminGroups
       .flatMap((g) => g.items)
@@ -81,25 +104,28 @@ onMounted(() => {
   else setTimeout(prefetch, 400);
 });
 
+onBeforeUnmount(() => {
+  window.removeEventListener('astra:control-plane-changed', onControlPlaneChanged);
+});
+
 watch(() => route.path, () => (drawerOpen.value = false));
 </script>
 
 <template>
   <div class="wb">
-    <!-- 键盘用户的第一个 Tab 落点：跳过侧边导航直达正文（批 45；2026-09-30 起 11 项） -->
     <SkipLink />
 
-    <!-- ═══ 侧边导航 ═══ -->
+    <!-- ═══ 桌面侧边导航 ═══ -->
     <aside id="admin-desktop-sidebar" class="wb-rail" :class="{ 'is-collapsed': collapsed }">
-      <!-- 品牌 -->
       <div class="wb-brand">
         <img src="/favicon.svg" class="wb-logo" alt="" />
         <div v-if="!collapsed" class="wb-brand-text">
           <span class="wb-brand-name">Astra<span class="text-[var(--ds-color-brand)]">Quant</span></span>
           <span class="wb-version">{{ APP_VERSION }}</span>
         </div>
-        <button type="button"
+        <button
           v-if="!collapsed"
+          type="button"
           class="wb-icon-btn wb-collapse"
           :title="t('admin.shell.collapse')"
           :aria-expanded="!collapsed"
@@ -110,14 +136,14 @@ watch(() => route.path, () => (drawerOpen.value = false));
         </button>
       </div>
 
-      <!-- 导航分组 -->
       <nav class="wb-nav scroll-area">
         <div v-for="g in adminGroups" :key="g.key" class="wb-group">
           <div v-if="!collapsed" class="wb-group-label">{{ t(g.labelKey) }}</div>
           <div v-else class="wb-group-sep" />
-          <button type="button"
+          <button
             v-for="item in g.items"
             :key="item.key"
+            type="button"
             class="wb-item"
             :class="{ 'is-active': currentKey === item.key }"
             :title="collapsed ? t(item.labelKey) : undefined"
@@ -130,10 +156,10 @@ watch(() => route.path, () => (drawerOpen.value = false));
         </div>
       </nav>
 
-      <!-- 底部动作 -->
       <div class="wb-rail-foot">
-        <button type="button"
+        <button
           v-if="collapsed"
+          type="button"
           class="wb-icon-btn wb-expand"
           :title="t('admin.shell.expand')"
           :aria-expanded="!collapsed"
@@ -142,6 +168,17 @@ watch(() => route.path, () => (drawerOpen.value = false));
         >
           <PanelLeftOpen :size="16" />
         </button>
+
+        <div v-if="auth.user && !collapsed" class="wb-user-card">
+          <span class="wb-user-avatar mono">{{ operatorInitial }}</span>
+          <div class="wb-user-meta">
+            <span class="wb-user-name truncate">{{ auth.user.username }}</span>
+            <span class="wb-user-role mono">
+              {{ auth.isSuperadmin ? t('admin.shell.roleSuperadmin') : t('admin.shell.roleAdmin') }}
+            </span>
+          </div>
+        </div>
+
         <button type="button" class="wb-item wb-item-danger" :title="t('nav.actions.logout')" @click="logout">
           <LogOut :size="16" class="wb-item-icon" />
           <span v-if="!collapsed" class="wb-item-text">{{ t('nav.actions.logout') }}</span>
@@ -151,9 +188,9 @@ watch(() => route.path, () => (drawerOpen.value = false));
 
     <!-- ═══ 主工位 ═══ -->
     <div class="wb-stage">
-      <!-- 顶栏 -->
       <header class="wb-topbar">
-        <button type="button"
+        <button
+          type="button"
           class="wb-icon-btn wb-burger"
           :title="drawerOpen ? t('admin.shell.collapse') : t('admin.shell.expand')"
           :aria-label="drawerOpen ? t('admin.shell.collapse') : t('admin.shell.expand')"
@@ -171,41 +208,79 @@ watch(() => route.path, () => (drawerOpen.value = false));
             <span class="wb-crumb-dim">{{ t(currentMeta.group.labelKey) }}</span>
             <span class="wb-crumb-sep">/</span>
             <span class="wb-crumb-cur">
-              <component :is="currentMeta.item.icon" :size="14" />
-              {{ t(currentMeta.item.labelKey) }}
+              <component :is="currentMeta.item.icon" :size="15" />
+              <span>{{ t(currentMeta.item.labelKey) }}</span>
             </span>
           </template>
         </nav>
 
         <div class="wb-topbar-right">
-          <!-- 远端新版本更新提醒 -->
+          <button
+            v-if="tradingPaused !== null"
+            type="button"
+            class="badge wb-engine-pill"
+            :class="tradingPaused ? 'badge-warn' : 'badge-up'"
+            :title="t('admin.shell.engineStatusTip')"
+            @click="router.push('/admin/strategy?tab=schedule')"
+          >
+            <PauseCircle v-if="tradingPaused" :size="13" />
+            <Activity v-else :size="13" />
+            <span>{{ tradingPaused ? t('admin.shell.enginePaused') : t('admin.shell.engineRunning') }}</span>
+          </button>
+
           <button
             v-if="updateAvailable"
             type="button"
-            class="btn btn-quiet h-7 px-2 text-3xs font-semibold gap-1.5 cursor-pointer text-amber-400 bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 rounded-lg inline-flex items-center"
+            class="badge badge-warn wb-update-pill"
             :title="t('dash.shell.updateTooltip', undefined, { n: behindCount })"
             @click="router.push('/admin/backup?tab=version')"
           >
-            <ArrowUpCircle :size="14" class="text-amber-400 animate-pulse" />
+            <ArrowUpCircle :size="13" />
             <span class="hidden sm:inline">{{ t('dash.shell.updateAvailable') }}</span>
-            <span class="num text-4xs bg-amber-500/20 px-1 py-0.5 rounded font-mono">{{ behindCount }}</span>
+            <span class="mono num">{{ behindCount }}</span>
           </button>
 
           <BeijingClock class="wb-clock" />
 
-          <button type="button" class="wb-icon-btn" :title="t('nav.actions.theme')" :aria-label="t('nav.actions.theme')" @click="toggleTheme">
+          <button
+            type="button"
+            class="wb-icon-btn wb-lang-btn"
+            :title="t('admin.shell.switchLanguage')"
+            :aria-label="t('admin.shell.switchLanguage')"
+            @click="toggleLocale"
+          >
+            <Languages :size="15" />
+          </button>
+
+          <button
+            type="button"
+            class="wb-icon-btn"
+            :title="t('nav.actions.theme')"
+            :aria-label="t('nav.actions.theme')"
+            @click="toggleTheme"
+          >
             <Sun v-if="theme === 'dark'" :size="15" />
             <Moon v-else :size="15" />
           </button>
 
-          <button type="button" class="wb-icon-btn" :title="t('nav.actions.backToScreen')" @click="router.push('/')">
-            <MonitorPlay :size="15" />
+          <button
+            type="button"
+            class="btn btn-ghost btn-sm wb-screen-btn"
+            :title="t('nav.actions.backToScreen')"
+            @click="router.push('/')"
+          >
+            <MonitorPlay :size="14" />
+            <span class="hidden md:inline">{{ t('nav.actions.backToScreen') }}</span>
           </button>
         </div>
       </header>
 
-      <!-- 内容区 -->
-      <main id="main-content" tabindex="-1" class="wb-main scroll-area outline-none" :class="{ 'is-immersive': isImmersiveAgent }">
+      <main
+        id="main-content"
+        tabindex="-1"
+        class="wb-main scroll-area outline-none"
+        :class="{ 'is-immersive': isImmersiveAgent }"
+      >
         <div class="wb-content">
           <router-view />
         </div>
@@ -218,7 +293,8 @@ watch(() => route.path, () => (drawerOpen.value = false));
       <aside id="admin-mobile-drawer" class="wb-drawer" :aria-label="t('admin.shell.brand')">
         <div class="wb-drawer-head">
           <span class="wb-brand-name">Astra<span class="text-[var(--ds-color-brand)]">Quant</span> {{ t('admin.shell.brand') }}</span>
-          <button type="button"
+          <button
+            type="button"
             class="wb-icon-btn"
             :title="t('common.close')"
             :aria-label="t('common.close')"
@@ -230,9 +306,10 @@ watch(() => route.path, () => (drawerOpen.value = false));
         <nav class="wb-nav scroll-area">
           <div v-for="g in adminGroups" :key="g.key" class="wb-group">
             <div class="wb-group-label">{{ t(g.labelKey) }}</div>
-            <button type="button"
+            <button
               v-for="item in g.items"
               :key="item.key"
+              type="button"
               class="wb-item"
               :class="{ 'is-active': currentKey === item.key }"
               :aria-current="currentKey === item.key ? 'page' : undefined"
@@ -255,7 +332,6 @@ watch(() => route.path, () => (drawerOpen.value = false));
 </template>
 
 <style scoped>
-/* ── 外壳：画布满高，无独立底色，靠描边分区 ── */
 .wb {
   display: flex;
   height: 100svh;
@@ -270,13 +346,13 @@ watch(() => route.path, () => (drawerOpen.value = false));
   display: none;
   flex-direction: column;
   flex-shrink: 0;
-  width: var(--w-sidebar);
+  width: 248px;
   border-right: 1px solid var(--ds-color-border-default);
-  background-color: var(--surface-sidebar);
+  background-color: var(--ds-color-bg-surface-1);
   transition: width var(--dur-base) var(--ease-out);
 }
 .wb-rail.is-collapsed {
-  width: var(--w-sidebar-collapsed);
+  width: 60px;
 }
 @media (min-width: 768px) {
   .wb-rail {
@@ -288,26 +364,26 @@ watch(() => route.path, () => (drawerOpen.value = false));
   display: flex;
   align-items: center;
   gap: var(--ds-space-2);
-  height: var(--h-topbar);
+  height: 56px;
   padding: 0 var(--ds-space-3);
-  border-bottom: 1px solid var(--ds-color-border-default);
+  border-bottom: 1px solid var(--ds-color-border-subtle);
   flex-shrink: 0;
 }
 .wb-logo {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   border-radius: var(--r-xs);
   flex-shrink: 0;
 }
 .wb-brand-text {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--sp-3);
   min-width: 0;
   flex: 1;
 }
 .wb-brand-name {
-  font-size: var(--text-md);
+  font-size: var(--text-lg);
   font-weight: 600;
   letter-spacing: var(--track-title);
   color: var(--ds-color-text-primary);
@@ -319,17 +395,16 @@ watch(() => route.path, () => (drawerOpen.value = false));
   color: var(--ds-color-text-placeholder);
   border: 1px solid var(--ds-color-border-default);
   border-radius: var(--r-xs);
-  padding: 0 4px;
-  line-height: 15px;
+  padding: 0 var(--sp-2);
+  line-height: 16px;
 }
 .wb-collapse {
   margin-left: auto;
 }
 
-/* 导航列表 */
 .wb-nav {
   flex: 1;
-  padding: var(--ds-space-3) var(--ds-space-2);
+  padding: var(--ds-space-4) var(--ds-space-2);
   display: flex;
   flex-direction: column;
   gap: var(--ds-space-4);
@@ -337,14 +412,13 @@ watch(() => route.path, () => (drawerOpen.value = false));
 .wb-group {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: var(--sp-1);
 }
 .wb-group-label {
-  padding: 0 var(--ds-space-2) 6px;
+  padding: 0 var(--ds-space-3) var(--sp-3);
   font-size: var(--text-xs);
-  font-weight: 500;
+  font-weight: 600;
   letter-spacing: var(--track-label);
-  text-transform: uppercase;
   color: var(--ds-color-text-placeholder);
 }
 .wb-group-sep {
@@ -354,11 +428,12 @@ watch(() => route.path, () => (drawerOpen.value = false));
 }
 
 .wb-item {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--sp-5);
   width: 100%;
-  height: 36px;
+  height: 40px;
   padding: 0 var(--ds-space-3);
   border: 1px solid transparent;
   border-radius: var(--r-ctl);
@@ -366,7 +441,7 @@ watch(() => route.path, () => (drawerOpen.value = false));
   color: var(--ds-color-text-description);
   font-family: inherit;
   font-size: var(--text-base);
-  font-weight: 400;
+  font-weight: 500;
   text-align: left;
   cursor: pointer;
   transition: background-color var(--dur-fast) var(--ease-out),
@@ -381,12 +456,11 @@ watch(() => route.path, () => (drawerOpen.value = false));
   background-color: var(--astra-brand-bg);
   color: var(--ds-color-text-primary);
   font-weight: 600;
-  border: 1px solid var(--astra-brand-line);
-  box-shadow: none;
+  border-color: var(--astra-brand-line);
 }
 .wb-item-icon {
   flex-shrink: 0;
-  opacity: 0.6;
+  opacity: 0.72;
 }
 .wb-item.is-active .wb-item-icon {
   opacity: 1;
@@ -402,29 +476,65 @@ watch(() => route.path, () => (drawerOpen.value = false));
   color: var(--down);
 }
 
-/* 底部 */
 .wb-rail-foot {
   flex-shrink: 0;
-  padding: var(--ds-space-2);
-  border-top: 1px solid var(--ds-color-border-default);
+  padding: var(--ds-space-3) var(--ds-space-2);
+  border-top: 1px solid var(--ds-color-border-subtle);
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: var(--sp-2);
 }
 .wb-expand {
   align-self: center;
   margin-bottom: var(--ds-space-1);
 }
 
-/* 图标按钮 */
+.wb-user-card {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-5);
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border-radius: var(--r-ctl);
+  background-color: var(--ds-color-bg-surface-2);
+}
+.wb-user-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-pill);
+  background-color: var(--astra-brand-bg);
+  color: var(--ds-color-brand);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.wb-user-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: var(--sp-1);
+}
+.wb-user-name {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--ds-color-text-primary);
+  line-height: 1.2;
+}
+.wb-user-role {
+  font-size: var(--text-4xs);
+  color: var(--ds-color-text-placeholder);
+  letter-spacing: 0.04em;
+  line-height: 1.1;
+}
+
 .wb-icon-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  /* 批 35：写死 28px。全站控件高度梯队是 --h-sm/md/lg = 24/30/36，
-     28 不在梯队上，且同一行里的 .btn（30）比它高 2px。改用 --h-md。 */
-  width: var(--h-md);
-  height: var(--h-md);
+  width: var(--h-lg);
+  height: var(--h-lg);
   border: 1px solid transparent;
   border-radius: var(--r-ctl);
   background: transparent;
@@ -453,17 +563,15 @@ watch(() => route.path, () => (drawerOpen.value = false));
   display: flex;
   align-items: center;
   gap: var(--ds-space-3);
-  height: var(--h-topbar);
-  padding: 0 var(--ds-space-3);
+  height: 56px;
+  padding: 0 var(--ds-space-4);
   border-bottom: 1px solid var(--ds-color-border-default);
-  background-color: var(--surface-header);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background-color: var(--ds-color-bg-page);
   flex-shrink: 0;
 }
 @media (min-width: 768px) {
   .wb-topbar {
-    padding: 0 var(--ds-space-4);
+    padding: 0 var(--ds-space-5);
   }
 }
 .wb-burger {
@@ -475,7 +583,6 @@ watch(() => route.path, () => (drawerOpen.value = false));
   }
 }
 
-/* 面包屑 */
 .wb-crumbs {
   display: flex;
   align-items: center;
@@ -492,7 +599,7 @@ watch(() => route.path, () => (drawerOpen.value = false));
   color: var(--ds-color-text-placeholder);
 }
 .wb-crumb-dim {
-  color: var(--ds-color-text-placeholder);
+  color: var(--ds-color-text-description);
   display: none;
 }
 @media (min-width: 640px) {
@@ -503,9 +610,9 @@ watch(() => route.path, () => (drawerOpen.value = false));
 .wb-crumb-cur {
   display: flex;
   align-items: center;
-  gap:6px;
-  color: var(--ds-color-text-secondary);
-  font-weight: 500;
+  gap: var(--sp-3);
+  color: var(--ds-color-text-primary);
+  font-weight: 600;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -516,7 +623,18 @@ watch(() => route.path, () => (drawerOpen.value = false));
   margin-left: auto;
   display: flex;
   align-items: center;
-  gap: var(--ds-space-1);
+  gap: var(--ds-space-2);
+}
+.wb-engine-pill,
+.wb-update-pill {
+  cursor: pointer;
+}
+.wb-lang-btn {
+  width: var(--h-md);
+  height: var(--h-md);
+}
+.wb-screen-btn {
+  margin-left: var(--ds-space-1);
 }
 .wb-clock {
   display: none;
@@ -524,7 +642,7 @@ watch(() => route.path, () => (drawerOpen.value = false));
 @media (min-width: 1024px) {
   .wb-clock {
     display: block;
-    margin-right: var(--ds-space-2);
+    margin: 0 var(--ds-space-1);
   }
 }
 
@@ -535,25 +653,24 @@ watch(() => route.path, () => (drawerOpen.value = false));
   display: flex;
   flex-direction: column;
   padding: var(--ds-space-5) var(--ds-space-6);
-  padding-bottom: var(--ds-space-6);
 }
 .wb-main.is-immersive {
   overflow: hidden;
-  padding: var(--ds-space-3) var(--ds-space-4);
+  padding: 0;
 }
 .wb-content {
   flex: 1;
   min-height: 0;
-  max-width: 1600px;
+  max-width: 1440px;
   width: 100%;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: var(--ds-space-4);
+  gap: var(--ds-space-5);
 }
 .wb-main.is-immersive .wb-content {
   max-width: 100%;
-  gap: var(--ds-space-2);
+  gap: 0;
 }
 
 /* ══ 移动端抽屉 ══ */
@@ -575,7 +692,7 @@ watch(() => route.path, () => (drawerOpen.value = false));
   flex-direction: column;
   width: 268px;
   max-width: 82vw;
-  background-color: var(--ds-color-bg-page);
+  background-color: var(--ds-color-bg-surface-1);
   border-right: 1px solid var(--ds-color-border-default);
 }
 .wb-drawer-head {
@@ -583,7 +700,7 @@ watch(() => route.path, () => (drawerOpen.value = false));
   align-items: center;
   justify-content: space-between;
   gap: var(--ds-space-2);
-  height: var(--h-topbar);
+  height: 56px;
   padding: 0 var(--ds-space-3);
   border-bottom: 1px solid var(--ds-color-border-default);
   flex-shrink: 0;

@@ -114,7 +114,7 @@ test('模板文本节点里不得出现硬编码中文（DocsView 长文正文�
   const bad = [];
 
   for (const file of sourceFiles(SRC)) {
-    const rel = path.relative(SRC, file);
+    const rel = path.relative(SRC, file).replace(/\\/g, '/');
     if (rel === DOCS_PAGE) continue; // 整页中文文档，单独决策
     const raw = readFileSync(file, 'utf8');
     // ⚠️ 先剥 script/style 再取模板块：本仓有文件的**脚本注释里写着裸的 template 开标签**，
@@ -139,7 +139,7 @@ test('toast / 确认框的文案不得硬编码中文', () => {
   let examined = 0;
 
   for (const file of sourceFiles(SRC)) {
-    const rel = path.relative(SRC, file);
+    const rel = path.relative(SRC, file).replace(/\\/g, '/');
     const code = stripComments(readFileSync(file, 'utf8'));
     if (!/toast\.|ask\(/.test(code)) continue;
     examined += 1;

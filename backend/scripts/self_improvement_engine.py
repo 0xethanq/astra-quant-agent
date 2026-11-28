@@ -1059,6 +1059,18 @@ def derive_deterministic_insights(closed_trades: List[Dict[str, Any]],
 
 @single_evolution_cycle
 def run_self_evolution(force: bool = False):
+    if not force:
+        try:
+            from astra_backend.evolution_config import load_evolution_config
+            if not load_evolution_config().get("enabled", True):
+                log_msg("⏸ 自进化开关已关闭（evolution_config.enabled=False），跳过本轮自动复盘")
+                return {
+                    "status": "skipped",
+                    "reason": "evolution_disabled",
+                    "message": "自进化已关闭，跳过本次自动复盘",
+                }
+        except Exception:
+            pass
     tz_bj = datetime.timezone(datetime.timedelta(hours=8))
     now_bj = datetime.datetime.now(tz_bj)
     timestamp_str = now_bj.strftime("%Y-%m-%d %H:%M:%S")

@@ -99,7 +99,7 @@ export function viewportMath(text) {
 }
 
 const FILES = [
-  ...vueFiles(SRC).map((f) => ({ rel: path.relative(SRC, f), text: readFileSync(f, 'utf8') })),
+  ...vueFiles(SRC).map((f) => ({ rel: path.relative(SRC, f).replace(/\\/g, '/'), text: readFileSync(f, 'utf8') })),
   ...['styles/base.css', 'styles/components.css', 'styles/tokens.css'].map((r) => ({
     rel: r,
     text: readFileSync(path.join(SRC, r), 'utf8'),

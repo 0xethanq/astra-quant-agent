@@ -621,19 +621,19 @@ onMounted(() => {
       </header>
 
       <div class="dc-tools">
-        <div class="relative flex-1 max-w-sm">
-          <Search :size="13" class="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
+        <div class="relative flex-1 max-w-md">
+          <Search :size="14" class="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
           <input
             v-model="issueSearch"
             type="search"
             autocomplete="off"
             spellcheck="false"
-            class="field pl-8 w-full text-xs"
+            class="field pl-8 w-full text-sm"
             :placeholder="t('admin.decisions.searchErrorsPlaceholder')"
             :aria-label="t('admin.decisions.searchErrorsAria')"
           />
         </div>
-        <div class="ms-auto text-3xs text-zinc-400">
+        <div class="ms-auto text-xs text-zinc-400">
           {{ t('admin.decisions.matchCount', undefined, { n: filteredIssues.length }) }}
         </div>
       </div>
@@ -664,13 +664,13 @@ onMounted(() => {
           v-else-if="!criticalIssues.length"
           class="flex flex-col items-center justify-center p-12 text-center border border-[var(--line-1)] rounded-2xl bg-[var(--surface-head)]"
         >
-          <div class="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center mb-3">
-            <CheckCircle2 :size="24" class="text-emerald-400" />
+          <div class="w-12 h-12 rounded-full bg-[var(--up-bg)] flex items-center justify-center mb-3">
+            <CheckCircle2 :size="24" class="text-[var(--up)]" />
           </div>
-          <h3 class="text-sm font-semibold text-[var(--ink-strong)] mb-1">
+          <h3 class="text-base font-semibold text-[var(--ink-strong)] mb-1">
             {{ t('admin.decisions.errorsEmpty') }}
           </h3>
-          <p class="text-xs text-[var(--ink-2)] max-w-md">
+          <p class="text-sm text-[var(--ink-2)] max-w-md">
             {{ t('admin.decisions.errorsEmptyDesc') }}
           </p>
         </div>
@@ -692,20 +692,20 @@ onMounted(() => {
               <div class="flex items-center gap-2">
                 <span class="badge badge-down font-mono font-bold">{{ item.level }}</span>
                 <span class="badge font-mono">{{ item.sourceName }}</span>
-                <time class="text-3xs font-mono text-[var(--ink-2)]">{{ item.time || '--' }}</time>
+                <time class="text-xs font-mono text-[var(--ink-2)]">{{ item.time || '--' }}</time>
               </div>
               <CopyButton :text="item.raw" :title="t('admin.decisions.copyError')" />
             </div>
 
             <!-- 主错误行 -->
-            <p class="text-xs font-mono text-[var(--down)] font-medium break-all whitespace-pre-wrap leading-relaxed">
+            <p class="text-sm font-mono text-[var(--down)] font-medium break-all whitespace-pre-wrap leading-relaxed">
               {{ item.msg }}
             </p>
 
             <!-- 附加堆栈 (如果有) -->
             <div
               v-if="item.extra && item.extra.length"
-              class="p-2.5 rounded-lg bg-[var(--surface-input)] border border-[var(--line-1)] font-mono text-3xs text-[var(--ink-2)] overflow-x-auto whitespace-pre leading-relaxed"
+              class="p-2.5 rounded-lg bg-[var(--surface-input)] border border-[var(--line-1)] font-mono text-xs text-[var(--ink-2)] overflow-x-auto whitespace-pre leading-relaxed"
             >
               <div v-for="(ex, ei) in item.extra" :key="ei">{{ ex }}</div>
             </div>
@@ -752,19 +752,19 @@ onMounted(() => {
       </header>
 
       <div class="dc-tools">
-        <div class="relative flex-1 max-w-sm">
-          <Search :size="13" class="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
+        <div class="relative flex-1 max-w-md">
+          <Search :size="14" class="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
           <input
             v-model="decisionSearch"
             type="search"
             autocomplete="off"
             spellcheck="false"
-            class="field pl-8 w-full text-xs"
+            class="field pl-8 w-full text-sm"
             :placeholder="t('admin.decisions.searchDecisionsPlaceholder')"
             :aria-label="t('admin.decisions.searchDecisionsAria')"
           />
         </div>
-        <div class="ms-auto text-3xs text-zinc-400">
+        <div class="ms-auto text-xs text-zinc-400">
           {{ t('admin.decisions.matchCount', undefined, { n: filteredDecisions.length }) }}
         </div>
       </div>
@@ -804,28 +804,28 @@ onMounted(() => {
             <div>
               <div class="flex items-center justify-between gap-2 mb-2">
                 <div class="flex items-center gap-2">
-                  <span class="font-mono font-bold text-sm text-[var(--ink-strong)]">{{ d.instId }}</span>
+                  <span class="font-mono font-bold text-base text-[var(--ink-strong)]">{{ d.instId }}</span>
                   <span class="badge" :class="decisionActionTone(d.action)">
                     <component :is="decisionActionIcon(d.action)" :size="11" class="inline -mt-0.5 me-0.5" />
                     {{ d.action }}
                   </span>
                 </div>
-                <time class="text-3xs font-mono text-[var(--ink-2)]">{{ d.timestamp ? fmtDateTime(d.timestamp).slice(5) : '--' }}</time>
+                <time class="text-xs font-mono text-[var(--ink-2)]">{{ d.timestamp ? fmtDateTime(d.timestamp).slice(5) : '--' }}</time>
               </div>
 
               <!-- 决策理由与推演 -->
-              <p class="text-xs text-[var(--ink-1)] leading-relaxed line-clamp-3 mb-3">
+              <p class="text-sm text-[var(--ink-1)] leading-relaxed line-clamp-3 mb-3">
                 {{ d.reason || t('admin.decisions.noDecisionsReason') }}
               </p>
             </div>
 
             <!-- 置信度进度条 -->
-            <div class="pt-2 border-t border-[var(--line-1)] flex items-center justify-between gap-3 text-3xs font-mono">
+            <div class="pt-2 border-t border-[var(--line-1)] flex items-center justify-between gap-3 text-xs font-mono">
               <span class="text-[var(--ink-2)]">{{ t('admin.decisions.confidence') }}</span>
               <div class="flex items-center gap-2 flex-1 max-w-[140px]">
                 <div class="flex-1 h-1.5 rounded-full bg-[var(--surface-3)] overflow-hidden">
                   <div
-                    class="h-full bg-emerald-400 rounded-full"
+                    class="h-full bg-[var(--up)] rounded-full"
                     :style="{ width: `${Math.min(100, Math.max(0, (d.confidence || 0) * 100))}%` }"
                   />
                 </div>
@@ -892,7 +892,7 @@ onMounted(() => {
 .dc-seg-n {
   margin-left: 4px;
   color: var(--ds-color-text-placeholder);
-  font-size: var(--text-4xs);
+  font-size: var(--text-xs);
 }
 .dc-tools-right {
   margin-left: auto;
@@ -901,7 +901,7 @@ onMounted(() => {
   gap: var(--ds-space-2);
 }
 .dc-count {
-  font-size: var(--text-3xs);
+  font-size: var(--text-xs);
   color: var(--ds-color-text-placeholder);
   white-space: nowrap;
 }
@@ -934,7 +934,7 @@ onMounted(() => {
   padding: 4px var(--ds-space-4);
   border-left: 2px solid transparent;
   font-family: var(--ds-font-mono);
-  font-size: var(--text-2xs);
+  font-size: var(--text-xs);
   line-height: var(--leading-dense);
 }
 .dc-entry:hover {
@@ -956,7 +956,7 @@ onMounted(() => {
   font-variant-numeric: tabular-nums;
 }
 .dc-level {
-  font-size: var(--text-4xs);
+  font-size: var(--text-xs);
   font-weight: 600;
   letter-spacing: 0.04em;
   color: var(--ds-color-text-placeholder);

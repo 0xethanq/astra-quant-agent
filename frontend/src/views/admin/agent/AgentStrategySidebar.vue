@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
+import { RouterLink } from 'vue-router';
 import {
   RefreshCw,
   ShieldCheck,
@@ -11,8 +12,11 @@ import {
   AlertTriangle,
   CheckCircle2,
   MessageSquarePlus,
+  SlidersHorizontal,
+  ArrowUpRight,
 } from 'lucide-vue-next';
 import BaseSegmented from '../../../components/base/BaseSegmented.vue';
+import BaseSwitch from '../../../components/base/BaseSwitch.vue';
 import { useI18n } from '../../../composables/useI18n';
 import type { AgentInspectorPayload, StagedPromptContext } from './agentLogic';
 
@@ -22,11 +26,15 @@ const props = defineProps<{
   summary: Record<string, any> | null;
   inspector?: AgentInspectorPayload | null;
   loading?: boolean;
+  tradingPaused?: boolean;
+  togglingKey?: string;
+  isSuperadmin?: boolean;
 }>();
 
 const emit = defineEmits<{
   (e: 'refresh'): void;
   (e: 'stage', payload: StagedPromptContext): void;
+  (e: 'toggle', payload: { target: string; enabled: boolean; itemId?: string; label: string }): void;
 }>();
 
 const { t } = useI18n();
@@ -57,6 +65,17 @@ const auditBadgeLabel = computed(() => {
   if (warn > 0) return t('admin.agent.inspectorAuditWarning', undefined, { count: warn });
   return t('admin.agent.inspectorAuditHealthy');
 });
+
+const isTradingPaused = computed(() =>
+  typeof props.tradingPaused === 'boolean'
+    ? props.tradingPaused
+    : Boolean(ov.value?.trading_paused),
+);
+const isScaleOutEnabled = computed(() =>
+  Boolean(props.inspector?.risk?.values?.SCALE_OUT_ENABLED ?? ov.value?.risk?.scale_out_enabled),
+);
+const isSessionEnabled = computed(() => Boolean(ov.value?.trading_session?.enabled));
+const isCouncilEnabled = computed(() => ov.value?.council?.enabled !== false);
 
 const tradingSystemModules = computed<any[]>(() => {
   const mods = props.inspector?.prompt?.pipelines?.trading_system;
@@ -91,11 +110,20 @@ const archiveList = computed<any[]>(() => {
 function stageQuick(labelKey: string, promptKey: string) {
   emit('stage', { label: t(labelKey), prompt: t(promptKey) });
 }
+
+function handleSwitch(target: string, enabled: boolean, label: string, itemId?: string) {
+  emit('toggle', { target, enabled, itemId, label });
+}
+
+function isBusy(target: string, itemId?: string): boolean {
+  const key = itemId ? `${target}:${itemId}` : target;
+  return !props.isSuperadmin || props.togglingKey === key;
+}
 </script>
 
 <template>
   <aside class="ag-side" :aria-label="t('admin.agent.summaryTitle')">
-    <header class="card-head">
+    <header class="ag-side-head">
       <h2 class="ag-side-title">{{ t('admin.agent.summaryTitle') }}</h2>
       <button
         type="button"
@@ -119,6 +147,51 @@ function stageQuick(labelKey: string, promptKey: string) {
     <div v-if="ov && Object.keys(ov).length" class="ag-side-body scroll-area">
       <!-- Tab 1: Overview -->
       <template v-if="activeTab === 'overview'">
+        <section class="ag-sum-block">
+          <div class="ag-sum-head">
+            <span class="ag-sum-label"><SlidersHorizontal :size="14" />{{ t('admin.agent.quickControlsTitle') }}</span>
+            <RouterLink to="/admin/strategy" class="ag-link-chip">
+              <span>{{ t('admin.agent.openStrategyCenter') }}</span>
+              <ArrowUpRight :size="12" />
+            </RouterLink>
+          </div>
+
+          <div class="ag-toggle-stack">
+            <div class="ag-toggle-item">
+              <div class="ag-toggle-meta">
+                <span class="ag-toggle-name">{{ t('admin.agent.pauseEntriesLabel') }}</span>
+                <span class="ag-sum-meta">{{ t('admin.agent.pauseEntriesDesc') }}</span>
+              </div>
+              <BaseSwitch
+                :modelValue="isTradingPaused"
+                :disabled="isBusy('trading_paused')"
+                :label="t('admin.agent.pauseEntriesLabel')"
+                @update:modelValue="handleSwitch('trading_paused', $event, t('admin.agent.pauseEntriesLabel'))"
+              />
+            </div>
+
+            <div class="ag-toggle-item">
+              <span class="ag-toggle-name">{{ t('admin.agent.scaleOutToggleLabel') }}</span>
+              <BaseSwitch
+                :modelValue="isScaleOutEnabled"
+                :disabled="isBusy('scale_out_enabled')"
+                :label="t('admin.agent.scaleOutToggleLabel')"
+                @update:modelValue="handleSwitch('scale_out_enabled', $event, t('admin.agent.scaleOutToggleLabel'))"
+              />
+            </div>
+
+            <div class="ag-toggle-item">
+              <span class="ag-toggle-name">{{ t('admin.agent.sessionToggleLabel') }}</span>
+              <BaseSwitch
+                :modelValue="isSessionEnabled"
+                :disabled="isBusy('trading_session_enabled')"
+                :label="t('admin.agent.sessionToggleLabel')"
+                @update:modelValue="handleSwitch('trading_session_enabled', $event, t('admin.agent.sessionToggleLabel'))"
+              />
+            </div>
+          </div>
+        </section>
+
         <section class="ag-sum-block">
           <div class="ag-sum-head">
             <span class="ag-sum-label"><ShieldCheck :size="14" />{{ t('admin.agent.summaryRisk') }}</span>
@@ -152,10 +225,10 @@ function stageQuick(labelKey: string, promptKey: string) {
           </div>
           <button
             type="button"
-            class="btn btn-ghost ag-ask-btn"
+            class="btn btn-ghost btn-sm ag-ask-btn"
             @click="stageQuick('admin.agent.summaryAskRisk', 'admin.agent.summaryAskRiskPrompt')"
           >
-            <MessageSquarePlus :size="15" />
+            <MessageSquarePlus :size="14" />
             <span>{{ t('admin.agent.summaryAskRisk') }}</span>
           </button>
         </section>
@@ -169,15 +242,12 @@ function stageQuick(labelKey: string, promptKey: string) {
             <span class="ag-sum-label"><Sparkles :size="14" />{{ t('admin.agent.summaryEvolution') }}</span>
             <span class="badge mono num">{{ ov.evolution?.enabled_lessons ?? 0 }}/{{ ov.evolution?.total_lessons ?? 0 }}</span>
           </div>
-          <div class="ag-sum-meta mono">
-            {{ t('admin.agent.summarySessionWindow') }}: {{ ov.trading_session?.enabled ? t('admin.agent.summaryEnabled') : t('admin.agent.summaryDisabled') }}
-          </div>
           <button
             type="button"
-            class="btn btn-ghost ag-ask-btn"
+            class="btn btn-ghost btn-sm ag-ask-btn"
             @click="stageQuick('admin.agent.summaryAskSession', 'admin.agent.summaryAskSessionPrompt')"
           >
-            <MessageSquarePlus :size="15" />
+            <MessageSquarePlus :size="14" />
             <span>{{ t('admin.agent.summaryAskSession') }}</span>
           </button>
         </section>
@@ -214,12 +284,16 @@ function stageQuick(labelKey: string, promptKey: string) {
               <span>{{ iss.detail }}</span>
             </li>
           </ul>
+          <RouterLink to="/admin/strategy?tab=risk" class="btn btn-ghost btn-sm ag-ask-btn">
+            <span>{{ t('admin.agent.openStrategyTabRisk') }}</span>
+            <ArrowUpRight :size="13" />
+          </RouterLink>
           <button
             type="button"
-            class="btn btn-ghost ag-ask-btn"
+            class="btn btn-ghost btn-sm ag-ask-btn"
             @click="stageQuick('admin.agent.inspectorAskCancelCheck', 'admin.agent.inspectorAskCancelCheckPrompt')"
           >
-            <MessageSquarePlus :size="15" />
+            <MessageSquarePlus :size="14" />
             <span>{{ t('admin.agent.inspectorAskCancelCheck') }}</span>
           </button>
         </section>
@@ -245,19 +319,28 @@ function stageQuick(labelKey: string, promptKey: string) {
             <div v-for="m in tradingSystemModules" :key="m.id" class="ag-mod-row">
               <div class="ag-mod-top">
                 <span class="ag-mod-name truncate">{{ m.title }}</span>
-                <span class="badge mono" :class="m.locked ? 'badge-warn' : m.enabled ? 'badge-up' : ''">
-                  {{ m.id }}
-                </span>
+                <BaseSwitch
+                  v-if="!m.locked"
+                  :modelValue="Boolean(m.enabled)"
+                  :disabled="isBusy('prompt_module_enabled', m.id)"
+                  :label="m.title || m.id"
+                  @update:modelValue="handleSwitch('prompt_module_enabled', $event, m.title || m.id, m.id)"
+                />
+                <span v-else class="badge mono badge-warn">{{ m.id }}</span>
               </div>
               <p v-if="m.preview" class="ag-mod-prev">{{ m.preview }}</p>
             </div>
           </div>
+          <RouterLink to="/admin/strategy?tab=prompt" class="btn btn-ghost btn-sm ag-ask-btn">
+            <span>{{ t('admin.agent.openStrategyTabPrompt') }}</span>
+            <ArrowUpRight :size="13" />
+          </RouterLink>
           <button
             type="button"
-            class="btn btn-ghost ag-ask-btn"
+            class="btn btn-ghost btn-sm ag-ask-btn"
             @click="stageQuick('admin.agent.summaryAskPrompt', 'admin.agent.summaryAskPromptPrompt')"
           >
-            <MessageSquarePlus :size="15" />
+            <MessageSquarePlus :size="14" />
             <span>{{ t('admin.agent.summaryAskPrompt') }}</span>
           </button>
         </section>
@@ -267,10 +350,13 @@ function stageQuick(labelKey: string, promptKey: string) {
       <template v-else-if="activeTab === 'council'">
         <section class="ag-sum-block">
           <div class="ag-sum-head">
-            <span class="ag-sum-label"><Users :size="14" />{{ t('admin.agent.summaryCouncil') }}</span>
-            <span class="badge" :class="ov.council?.enabled ? 'badge-up' : ''">
-              {{ ov.council?.enabled ? t('admin.agent.summaryEnabled') : t('admin.agent.summaryDisabled') }}
-            </span>
+            <span class="ag-sum-label"><Users :size="14" />{{ t('admin.agent.councilToggleLabel') }}</span>
+            <BaseSwitch
+              :modelValue="isCouncilEnabled"
+              :disabled="isBusy('council_enabled')"
+              :label="t('admin.agent.councilToggleLabel')"
+              @update:modelValue="handleSwitch('council_enabled', $event, t('admin.agent.councilToggleLabel'))"
+            />
           </div>
           <div class="ag-sum-meta mono">
             {{ ov.council?.consensus_mode || 'standard' }} · {{ ov.council?.timeout_seconds ?? 240 }}s
@@ -279,19 +365,31 @@ function stageQuick(labelKey: string, promptKey: string) {
             <div v-for="role in councilRoles" :key="role.id" class="ag-mod-row">
               <div class="ag-mod-top">
                 <span class="ag-mod-name truncate">{{ role.name }}</span>
+                <BaseSwitch
+                  :modelValue="Boolean(role.enabled)"
+                  :disabled="isBusy('council_role_enabled', role.id)"
+                  :label="role.name"
+                  @update:modelValue="handleSwitch('council_role_enabled', $event, role.name, role.id)"
+                />
+              </div>
+              <div class="ag-mod-top">
+                <span class="ag-sum-meta mono truncate">{{ role.model_id || 'auto-brain' }}</span>
                 <span class="badge mono" :class="role.enabled ? (role.registered ? 'badge-up' : 'badge-warn') : ''">
                   w={{ role.weight }}
                 </span>
               </div>
-              <span class="ag-sum-meta mono truncate">{{ role.model_id || 'auto-brain' }}</span>
             </div>
           </div>
+          <RouterLink to="/admin/strategy?tab=council" class="btn btn-ghost btn-sm ag-ask-btn">
+            <span>{{ t('admin.agent.openStrategyTabCouncil') }}</span>
+            <ArrowUpRight :size="13" />
+          </RouterLink>
           <button
             type="button"
-            class="btn btn-ghost ag-ask-btn"
+            class="btn btn-ghost btn-sm ag-ask-btn"
             @click="stageQuick('admin.agent.summaryAskCouncil', 'admin.agent.summaryAskCouncilPrompt')"
           >
-            <MessageSquarePlus :size="15" />
+            <MessageSquarePlus :size="14" />
             <span>{{ t('admin.agent.summaryAskCouncil') }}</span>
           </button>
         </section>
@@ -314,6 +412,10 @@ function stageQuick(labelKey: string, promptKey: string) {
           <div v-else class="ag-sum-meta">
             {{ t('admin.agent.summaryNoSnapshot') }}
           </div>
+          <RouterLink to="/admin/strategy?tab=schedule" class="btn btn-ghost btn-sm ag-ask-btn">
+            <span>{{ t('admin.agent.openStrategyTabSchedule') }}</span>
+            <ArrowUpRight :size="13" />
+          </RouterLink>
         </section>
       </template>
     </div>
@@ -324,14 +426,22 @@ function stageQuick(labelKey: string, promptKey: string) {
 .ag-side {
   display: flex;
   flex-direction: column;
-  flex: 0 0 348px;
-  width: 348px;
+  flex: 0 0 360px;
+  width: 360px;
   min-height: 0;
-  border: 1px solid var(--ds-color-border-default);
-  border-radius: var(--r-card);
+  border-left: 1px solid var(--ds-color-border-subtle);
   background-color: var(--ds-color-bg-surface-1);
   overflow: hidden;
   max-height: 100%;
+}
+.ag-side-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ds-space-2);
+  padding: var(--ds-space-3) var(--ds-space-4);
+  min-height: 52px;
+  border-bottom: 1px solid var(--ds-color-border-subtle);
 }
 .ag-side-title {
   margin: 0;
@@ -347,18 +457,20 @@ function stageQuick(labelKey: string, promptKey: string) {
 .ag-side-body {
   display: flex;
   flex-direction: column;
-  gap: var(--ds-space-3);
-  padding: var(--ds-space-3);
+  gap: var(--ds-space-4);
+  padding: var(--ds-space-4);
   overflow-y: auto;
 }
 .ag-sum-block {
   display: flex;
   flex-direction: column;
   gap: var(--ds-space-3);
-  padding: var(--ds-space-3);
-  border: 1px solid var(--ds-color-border-default);
-  border-radius: var(--r-ctl);
-  background-color: var(--ds-color-bg-surface-inset);
+  padding-bottom: var(--ds-space-4);
+  border-bottom: 1px solid var(--ds-color-border-subtle);
+}
+.ag-sum-block:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
 }
 .ag-sum-head {
   display: flex;
@@ -382,6 +494,44 @@ function stageQuick(labelKey: string, promptKey: string) {
 .ag-sum-meta {
   font-size: var(--text-xs);
   color: var(--ds-color-text-description);
+  line-height: 1.45;
+}
+.ag-link-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--ds-color-brand);
+  text-decoration: none;
+}
+.ag-link-chip:hover {
+  text-decoration: underline;
+}
+.ag-toggle-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+}
+.ag-toggle-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ds-space-3);
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border-radius: var(--r-ctl);
+  background-color: var(--ds-color-bg-surface-inset);
+}
+.ag-toggle-meta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+.ag-toggle-name {
+  font-size: var(--text-base);
+  font-weight: 500;
+  color: var(--ds-color-text-primary);
 }
 .ag-kv-list {
   display: grid;
@@ -396,7 +546,7 @@ function stageQuick(labelKey: string, promptKey: string) {
   gap: var(--ds-space-2);
   padding: var(--ds-space-2) var(--ds-space-3);
   border-radius: var(--r-ctl);
-  background-color: var(--ds-color-bg-surface-1);
+  background-color: var(--ds-color-bg-surface-inset);
   color: var(--ds-color-text-description);
 }
 .ag-kv-list strong {
@@ -419,8 +569,7 @@ function stageQuick(labelKey: string, promptKey: string) {
   gap: var(--ds-space-1);
   padding: var(--ds-space-2) var(--ds-space-3);
   border-radius: var(--r-ctl);
-  border: 1px solid var(--ds-color-border-subtle);
-  background: var(--ds-color-bg-surface-1);
+  background-color: var(--ds-color-bg-surface-inset);
   font-size: var(--text-xs);
 }
 .ag-mod-top {
@@ -446,11 +595,14 @@ function stageQuick(labelKey: string, promptKey: string) {
 .ag-ask-btn {
   width: 100%;
   justify-content: center;
+  text-decoration: none;
 }
 @media (max-width: 1120px) {
   .ag-side {
     flex: none;
     width: 100%;
+    border-left: 0;
+    border-top: 1px solid var(--ds-color-border-subtle);
   }
 }
 </style>

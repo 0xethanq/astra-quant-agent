@@ -242,7 +242,7 @@ const bandFacts = computed(() => {
             </div>
 
             <!-- 核心一句话定调 -->
-            <div class="mx-4 mt-3 p-3 rounded-lg border border-[var(--astra-brand-line)] bg-[var(--astra-brand-bg)] text-xs text-[var(--ink-1)] leading-relaxed">
+            <div class="mx-4 mt-3 p-3 rounded-lg border border-[var(--astra-brand-line)] bg-[var(--astra-brand-bg)] text-sm text-[var(--ink-1)] leading-relaxed">
               <p class="font-medium text-[var(--ds-color-brand)] mb-1 flex items-center gap-1.5">
                 <Sparkles :size="13" />
                 <span>{{ t('admin.about.pitchTitle') }}</span>
@@ -349,7 +349,7 @@ const bandFacts = computed(() => {
                 <span v-if="about.update?.ahead && !about.update?.dirty" class="ab-ahead">
                   {{ t('admin.about.ahead', undefined, { n: about.update.ahead }) }}
                 </span>
-                <span v-else-if="about.update?.dirty" class="ab-ahead text-amber-400 font-normal">
+                <span v-else-if="about.update?.dirty" class="ab-ahead text-[var(--warn)] font-normal">
                   {{ t('admin.about.uncommittedChanges') }}
                 </span>
               </span>
@@ -361,25 +361,25 @@ const bandFacts = computed(() => {
             v-if="about.update?.dirty"
             role="status"
             aria-live="polite"
-            class="mx-4 mb-3 p-3 rounded-lg border border-amber-500/20 bg-amber-500/5 flex items-start gap-2.5 text-xs text-amber-300/90 leading-relaxed"
+            class="mx-4 mb-3 p-3 rounded-lg border border-[var(--warn-line)] bg-[var(--warn-bg)] flex items-start gap-2.5 text-sm text-[var(--warn)] leading-relaxed"
           >
-            <AlertTriangle :size="15" class="shrink-0 text-amber-400 mt-0.5" />
+            <AlertTriangle :size="15" class="shrink-0 text-[var(--warn)] mt-0.5" />
             <div>
-              <p class="font-medium text-amber-200">{{ t('admin.about.dirtyAlertTitle') }}</p>
-              <p class="text-3xs text-amber-300/70 mt-0.5">{{ t('admin.about.dirtyAlertDesc') }}</p>
+              <p class="font-medium text-[var(--warn)]">{{ t('admin.about.dirtyAlertTitle') }}</p>
+              <p class="text-xs text-[var(--warn)] opacity-85 mt-0.5">{{ t('admin.about.dirtyAlertDesc') }}</p>
             </div>
           </div>
 
           <!-- 待更新提交清单（有差额且有 commit 摘要时展示） -->
           <div
             v-if="(about.update?.behind || 0) > 0 && about.update?.commits?.length"
-            class="mx-4 mb-3 p-3 rounded-lg border border-[var(--astra-brand-line)] bg-[var(--astra-brand-bg)] text-xs"
+            class="mx-4 mb-3 p-3 rounded-lg border border-[var(--astra-brand-line)] bg-[var(--astra-brand-bg)] text-sm"
           >
             <p class="font-medium text-[var(--ds-color-brand)] mb-1.5 flex items-center gap-1.5">
               <ArrowUpRight :size="14" class="text-[var(--ds-color-brand)]" />
               <span>{{ t('admin.about.commitsTitle') }}</span>
             </p>
-            <ul class="space-y-1 font-mono text-3xs text-[var(--ink-2)]">
+            <ul class="space-y-1 font-mono text-xs text-[var(--ink-2)]">
               <li v-for="(c, i) in about.update.commits" :key="i" class="truncate flex items-center gap-1.5">
                 <span class="text-[var(--ds-color-brand)]">•</span>
                 <span>{{ c }}</span>
@@ -514,7 +514,7 @@ const bandFacts = computed(() => {
 }
 .ab-channels-lead {
   margin: 0 0 var(--ds-space-3);
-  font-size: var(--text-xs);
+  font-size: var(--text-base);
   line-height: var(--leading-body);
   color: var(--ds-color-text-description);
 }
@@ -547,13 +547,13 @@ const bandFacts = computed(() => {
   gap: var(--ds-space-2);
 }
 .ab-channel-name {
-  font-size: var(--text-xs);
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--ds-color-text-primary);
 }
 .ab-channel-url {
   font-family: var(--ds-font-mono);
-  font-size: var(--text-4xs);
+  font-size: var(--text-xs);
   color: var(--ds-color-text-placeholder);
   min-width: 0;
 }
@@ -587,11 +587,11 @@ const bandFacts = computed(() => {
   flex-direction: column;
 }
 .ab-kv-k {
-  font-size: var(--text-xs);
+  font-size: var(--text-base);
   color: var(--ds-color-text-description);
 }
 .ab-kv-v {
-  font-size: var(--text-xs);
+  font-size: var(--text-base);
   color: var(--ds-color-text-primary);
   text-align: right;
   overflow-wrap: anywhere;
@@ -617,11 +617,11 @@ const bandFacts = computed(() => {
    批 90 的判据只拉黑了 `ab-comp"`（带引号）这种**模板用法**，漏掉了
    **伪类形态的 CSS 规则**；本批把死 CSS 探针扩展到 scoped 样式后由它抓出。 */
 .ab-comp-name {
-  font-size: var(--text-xs);
+  font-size: var(--text-base);
   color: var(--ds-color-text-secondary);
 }
 .ab-comp-ver {
-  font-size: var(--text-3xs);
+  font-size: var(--text-xs);
   color: var(--ds-color-text-placeholder);
 }
 
@@ -656,7 +656,7 @@ const bandFacts = computed(() => {
   }
 }
 .ab-tel-v {
-  font-size: var(--text-xs);
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--ds-color-text-primary);
   overflow-wrap: anywhere;
@@ -672,7 +672,7 @@ const bandFacts = computed(() => {
 }
 .ab-ahead {
   font-weight: 400;
-  font-size: var(--text-4xs);
+  font-size: var(--text-xs);
   color: var(--ds-color-text-placeholder);
 }
 
@@ -692,7 +692,7 @@ const bandFacts = computed(() => {
   margin: 0 var(--ds-space-4);
   padding: 10px var(--ds-space-3);
   border-radius: var(--r-ctl);
-  font-size: var(--text-3xs);
+  font-size: var(--text-base);
   line-height: var(--leading-body);
 }
 .ab-result.is-ok {
@@ -725,14 +725,14 @@ const bandFacts = computed(() => {
   gap:6px;
   padding: var(--ds-space-2) var(--ds-space-3);
   border-bottom: 1px solid var(--ds-color-border-default);
-  font-size: var(--text-4xs);
+  font-size: var(--text-xs);
   color: var(--ds-color-text-placeholder);
 }
 .ab-git-pre {
   margin: 0;
   padding: var(--ds-space-3);
   font-family: var(--ds-font-mono);
-  font-size: var(--text-4xs);
+  font-size: var(--text-xs);
   line-height: var(--leading-body);
   color: var(--ds-color-text-secondary);
   white-space: pre-wrap;
@@ -746,7 +746,7 @@ const bandFacts = computed(() => {
   gap: 6px;
   padding: var(--ds-space-3) var(--ds-space-4);
   border-top: 1px solid var(--ds-color-border-default);
-  font-size: var(--text-4xs);
+  font-size: var(--text-xs);
   line-height: var(--leading-body);
   color: var(--ds-color-text-placeholder);
 }
@@ -762,7 +762,7 @@ const bandFacts = computed(() => {
   gap: var(--ds-space-3);
 }
 .ab-confirm-text {
-  font-size: var(--text-xs);
+  font-size: var(--text-base);
   line-height: var(--leading-body);
   color: var(--ds-color-text-description);
 }

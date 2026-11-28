@@ -74,11 +74,11 @@ test('被吸收页面及已退场页面的旧路径必须保留重定向（书�
   const routerText = readFileSync(path.join(SRC, 'router/index.ts'), 'utf8');
   const redirects = {
     overview: '/admin/agent',
-    risk: '/admin/agent',
-    promptlib: '/admin/agent',
-    council: '/admin/agent',
-    evolution: '/admin/agent',
-    gateway: '/admin/agent',
+    risk: '/admin/strategy',
+    promptlib: '/admin/strategy',
+    council: '/admin/strategy',
+    evolution: '/admin/strategy',
+    gateway: '/admin/strategy',
     agents: '/admin/agent',
     interceptors: '/admin/agent',
     plugins: '/admin/agent',

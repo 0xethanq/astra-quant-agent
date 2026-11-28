@@ -23,6 +23,7 @@ export const enNav = {
   },
   admin: {
     agent: 'AI Console',
+    strategy: 'Strategy & Jobs',
     decisions: 'System Logs',
     security: 'Account & Emergency',
     llm: 'LLM Providers',

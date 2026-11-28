@@ -20,15 +20,19 @@ import {
   Eye,
   EyeOff,
   ArrowLeft,
-  ShieldCheck
+  ShieldCheck,
+  Sun,
+  Moon
 } from 'lucide-vue-next';
 import { useAuthStore } from '../../stores/auth';
 import { useI18n } from '../../composables/useI18n';
+import { useTheme } from '../../composables/useTheme';
 import { APP_VERSION } from '../../config/version';
 
 const auth = useAuthStore();
 const router = useRouter();
 const { t, currentLocale, setLocale, LOCALE_OPTIONS } = useI18n();
+const { theme, toggleTheme } = useTheme();
 
 const username = ref('');
 const password = ref('');
@@ -53,20 +57,31 @@ async function handleLogin() {
         <span>{{ t('admin.login.backToScreen') }}</span>
       </button>
 
-      <!-- 批 75：语言名此前硬编码在模板里（`中文` / `EN`），与设置面板的
-           `中文` / `English` 不一致。现按 useI18n 导出的唯一常量渲染。 -->
-      <div class="auth-lang-pill" role="group" :aria-label="t('common.language')">
-        <template v-for="(opt, i) in LOCALE_OPTIONS" :key="opt.value">
-          <span v-if="i > 0" class="auth-lang-sep" />
-          <button type="button"
-            class="auth-lang-opt"
-            :class="{ 'is-active': currentLocale === opt.value }"
-            :aria-pressed="currentLocale === opt.value"
-            @click="setLocale(opt.value)"
-          >
-            {{ opt.label }}
-          </button>
-        </template>
+      <div class="auth-topbar-right">
+        <button
+          type="button"
+          class="auth-theme-btn"
+          :title="t('nav.actions.theme')"
+          :aria-label="t('nav.actions.theme')"
+          @click="toggleTheme"
+        >
+          <Sun v-if="theme === 'dark'" :size="15" />
+          <Moon v-else :size="15" />
+        </button>
+
+        <div class="auth-lang-pill" role="group" :aria-label="t('common.language')">
+          <template v-for="(opt, i) in LOCALE_OPTIONS" :key="opt.value">
+            <span v-if="i > 0" class="auth-lang-sep" />
+            <button type="button"
+              class="auth-lang-opt"
+              :class="{ 'is-active': currentLocale === opt.value }"
+              :aria-pressed="currentLocale === opt.value"
+              @click="setLocale(opt.value)"
+            >
+              {{ opt.label }}
+            </button>
+          </template>
+        </div>
       </div>
     </header>
 
@@ -190,6 +205,31 @@ async function handleLogin() {
   z-index: 20;
 }
 
+.auth-topbar-right {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+}
+
+.auth-theme-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--h-lg);
+  height: var(--h-lg);
+  border-radius: var(--r-ctl);
+  border: 1px solid var(--ds-color-border-default);
+  background: var(--surface-2);
+  color: var(--ds-color-text-description);
+  cursor: pointer;
+  transition: color var(--dur-fast), background-color var(--dur-fast), border-color var(--dur-fast);
+}
+.auth-theme-btn:hover {
+  color: var(--ds-color-text-primary);
+  border-color: var(--ds-color-border-hover);
+  background: var(--ds-color-bg-hover);
+}
+
 .auth-back-btn {
   display: inline-flex;
   align-items: center;
@@ -199,7 +239,7 @@ async function handleLogin() {
   background: transparent;
   border: 1px solid transparent;
   color: var(--ds-color-text-description);
-  font-size: var(--text-xs);
+  font-size: var(--text-base);
   cursor: pointer;
   transition: all var(--dur-fast) var(--ease-out);
 }
@@ -220,7 +260,7 @@ async function handleLogin() {
 .auth-lang-opt {
   border: 0;
   background: transparent;
-  font-size: var(--text-3xs);
+  font-size: var(--text-xs);
   color: var(--ds-color-text-placeholder);
   cursor: pointer;
   /* 批 18：热区提到 24px 高（原 29×21 / 22×21） */
@@ -246,8 +286,18 @@ async function handleLogin() {
   background: var(--line-1);
 }
 
+.auth-card-wrap {
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--ds-space-4);
+}
+
 /* 卡片本体 */
 .auth-card {
+  width: 100%;
   padding: var(--ds-space-6) var(--ds-space-5);
   border-radius: var(--r-card);
   background: var(--ds-color-bg-surface-card);
@@ -290,7 +340,7 @@ async function handleLogin() {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: var(--text-xs);
+  font-size: var(--text-base);
   color: var(--ds-color-text-description);
   margin-top: var(--sp-2);
 }
@@ -333,20 +383,20 @@ async function handleLogin() {
   justify-content: space-between;
 }
 .auth-label {
-  font-size: var(--text-2xs);
+  font-size: var(--text-base);
   font-weight: 500;
   color: var(--ds-color-text-secondary);
 }
 
 .auth-input {
   width: 100%;
-  height: 38px;
+  height: 40px;
   padding: 0 12px;
   border-radius: var(--r-ctl);
   background: var(--ds-color-bg-input);
   border: 1px solid var(--ds-color-border-input);
   color: var(--ds-color-text-primary);
-  font-size: var(--text-xs);
+  font-size: var(--text-base);
   outline: none;
   transition: all var(--dur-fast) var(--ease-out);
 }
@@ -397,13 +447,13 @@ async function handleLogin() {
   justify-content: center;
   gap: 8px;
   width: 100%;
-  height: 40px;
+  height: 42px;
   margin-top: 8px;
   border-radius: var(--r-ctl);
   background: var(--ds-btn-primary-bg);
   border: 1px solid var(--ds-btn-primary-bg);
   color: var(--ds-btn-primary-text);
-  font-size: var(--text-xs);
+  font-size: var(--text-base);
   font-weight: 600;
   cursor: pointer;
   box-shadow: none;
@@ -428,7 +478,7 @@ async function handleLogin() {
   margin-top: 20px;
   padding-top: var(--sp-6);
   border-top: 1px solid var(--line-1);
-  font-size: var(--text-4xs);
+  font-size: var(--text-xs);
   color: var(--ds-color-text-placeholder);
   line-height: 1.4;
 }

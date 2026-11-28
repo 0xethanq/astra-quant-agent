@@ -545,7 +545,7 @@ onMounted(() => {
 .pol-unit-head {
   min-height: 30px;
   background-color: var(--ds-color-bg-surface-inset);
-  font-size: var(--text-3xs);
+  font-size: var(--text-xs);
   font-weight: 500;
   letter-spacing: var(--track-label);
   text-transform: uppercase;
@@ -558,7 +558,7 @@ onMounted(() => {
   min-width: 0;
 }
 .pol-unit-name {
-  font-size: var(--text-xs);
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--ds-color-text-primary);
 }
@@ -577,14 +577,14 @@ onMounted(() => {
   min-width: 0;
 }
 .pol-kv dt {
-  font-size: var(--text-4xs);
+  font-size: var(--text-xs);
   color: var(--ds-color-text-placeholder);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .pol-kv dd {
-  font-size: var(--text-xs);
+  font-size: var(--text-base);
   font-weight: 500;
   color: var(--ds-color-text-primary);
   white-space: nowrap;
@@ -607,7 +607,7 @@ onMounted(() => {
   padding: 4px 8px;
   margin: -4px -8px;
   border-radius: var(--r-xs);
-  font-size: var(--text-3xs);
+  font-size: var(--text-xs);
   color: var(--ds-color-brand);
   white-space: nowrap;
 }
@@ -617,7 +617,7 @@ onMounted(() => {
 }
 .pol-unit-note {
   grid-column: 2 / -1;
-  font-size: var(--text-4xs);
+  font-size: var(--text-xs);
   line-height: var(--leading-body);
   color: var(--ds-color-text-placeholder);
 }
@@ -677,7 +677,7 @@ onMounted(() => {
   color: var(--ds-color-text-primary);
 }
 .pol-arc-desc {
-  font-size: var(--text-3xs);
+  font-size: var(--text-base);
   color: var(--ds-color-text-description);
 }
 .pol-arc-meta {
@@ -685,7 +685,7 @@ onMounted(() => {
   flex-wrap: wrap;
   align-items: center;
   gap: var(--ds-space-3);
-  font-size: var(--text-4xs);
+  font-size: var(--text-xs);
   color: var(--ds-color-text-placeholder);
 }
 .pol-arc-summary {

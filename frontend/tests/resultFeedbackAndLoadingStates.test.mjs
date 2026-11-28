@@ -52,7 +52,7 @@ test('内联结果面板按成败分级通报（回归锚点）', () => {
       'NotifyPage 通道测试结果',
     ],
     [
-      'views/admin/SecurityPage.vue',
+      'views/admin/security/SecurityEmergencyTab.vue',
       /:role="snapshotError \? 'alert' : 'status'"/,
       'SecurityPage 持仓刷新状态',
     ],
@@ -90,11 +90,12 @@ test('刻意不弹 toast 的动作，其内联反馈必须自带通报语义', (
 });
 
 test('加载态与失败态必须分流，不得共用旋转图标', () => {
-  const text = readFileSync(path.join(SRC, 'views/admin/SecurityPage.vue'), 'utf8');
+  const logic = readFileSync(path.join(SRC, 'views/admin/security/useSecurityAdmin.ts'), 'utf8');
+  const text = readFileSync(path.join(SRC, 'views/admin/security/SecurityEmergencyTab.vue'), 'utf8');
 
   // 分流标志
-  assert.match(text, /const snapshotError = ref\(false\)/, 'SecurityPage 未区分加载态与失败态');
-  assert.match(text, /snapshotError\.value = true/, '失败分支未置位 snapshotError');
+  assert.match(logic, /const snapshotError = ref\(false\)/, 'SecurityPage 未区分加载态与失败态');
+  assert.match(logic, /snapshotError\.value = true/, '失败分支未置位 snapshotError');
 
   // 旋转图标必须受 !snapshotError 约束
   assert.match(

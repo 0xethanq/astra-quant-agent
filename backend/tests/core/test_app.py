@@ -666,12 +666,12 @@ class AppWiringTests(unittest.TestCase):
                 methods.update({m: route.name for m in route.methods})
         self.assertEqual(set(methods), {"GET", "POST", "PUT"})
 
-    def test_the_nine_routers_are_mounted(self):
-        """⚠️ 本版 FastAPI 的 `include_router` 是**惰性**的：`app.routes` 里躺着 9 个
+    def test_the_ten_routers_are_mounted(self):
+        """⚠️ 本版 FastAPI 的 `include_router` 是**惰性**的：`app.routes` 里躺着 10 个
         `_IncludedRouter` 包装（`path=None`），真正的路由路径要经 `app.openapi()` 才摊开。
-        所以这里两件事都验：包装数=9，且每个 router 的代表性路径确实生效。"""
+        所以这里两件事都验：包装数=10，且每个 router 的代表性路径确实生效。"""
         included = [r for r in A.app.routes if type(r).__name__ == "_IncludedRouter"]
-        self.assertEqual(len(included), 9, "9 个 APIRouter 必须都挂上")
+        self.assertEqual(len(included), 10, "10 个 APIRouter 必须都挂上")
         paths = _openapi_paths()
         for path in ("/api/v1/health",            # system_router
                      "/api/v1/status",            # system_router
@@ -680,6 +680,7 @@ class AppWiringTests(unittest.TestCase):
                      "/api/v1/admin/risk",        # risk_router
                      "/api/v1/admin/llm/models",  # llm_router
                      "/api/v1/admin/agent/state-summary",  # agent_router
+                     "/api/v1/admin/control-plane/state",  # control_plane_router
                      "/api/all",                  # dashboard_router
                      "/api/overview"):            # dashboard_router
             self.assertIn(path, paths, f"{path} 未挂上")

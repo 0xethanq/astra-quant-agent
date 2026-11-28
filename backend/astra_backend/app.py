@@ -46,6 +46,7 @@ from astra_backend.routers import (
     gateway_router,
     dashboard_router,
     agent_router,
+    control_plane_router,
 )
 from astra_backend.routers.system import (
     runtime_overview,
@@ -293,6 +294,7 @@ app.include_router(strategy_router)
 app.include_router(llm_router)
 app.include_router(gateway_router)
 app.include_router(agent_router)
+app.include_router(control_plane_router)
 app.include_router(dashboard_router)
 
 # 静态资源与 SPA 壳（结构优化阶段 2·B2 收尾）：原先是 "

@@ -340,7 +340,7 @@ onMounted(load)
   outline: none;
   background: transparent;
   color: var(--ds-color-text-primary);
-  font-size: var(--text-3xs);
+  font-size: var(--text-base);
 }
 @media (max-width: 900px) {
   .au-search-input {
@@ -376,12 +376,12 @@ onMounted(load)
   background-color: var(--ds-color-bg-hover);
 }
 .au-time {
-  font-size: var(--text-4xs);
+  font-size: var(--text-xs);
   color: var(--ds-color-text-placeholder);
   white-space: nowrap;
 }
 .au-action {
-  font-size: var(--text-3xs);
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--ds-color-brand);
   min-width: 0;
@@ -390,7 +390,7 @@ onMounted(load)
   display: flex;
   align-items: center;
   gap:6px;
-  font-size: var(--text-4xs);
+  font-size: var(--text-xs);
   color: var(--ds-color-text-secondary);
   min-width: 0;
 }
@@ -399,14 +399,14 @@ onMounted(load)
 }
 .au-detail {
   font-family: var(--ds-font-mono);
-  font-size: var(--text-4xs);
+  font-size: var(--text-xs);
   color: var(--ds-color-text-placeholder);
   min-width: 0;
 }
 .au-hint {
   padding: var(--ds-space-3) var(--ds-space-4);
   border-top: 1px solid var(--ds-color-border-default);
-  font-size: var(--text-4xs);
+  font-size: var(--text-xs);
   color: var(--ds-color-text-placeholder);
 }
 
@@ -428,7 +428,7 @@ onMounted(load)
   flex-wrap: wrap;
 }
 .au-dlg-action {
-  font-size: var(--text-4xs);
+  font-size: var(--text-xs);
   font-weight: 400;
   color: var(--ds-color-brand);
 }
@@ -466,7 +466,7 @@ onMounted(load)
   }
 }
 .au-dlg-cell .mono {
-  font-size: var(--text-3xs);
+  font-size: var(--text-base);
   color: var(--ds-color-text-primary);
   overflow-wrap: anywhere;
 }
@@ -475,14 +475,14 @@ onMounted(load)
   align-items: center;
   gap:6px;
   margin-bottom: 6px;
-  font-size: var(--text-4xs);
+  font-size: var(--text-xs);
   color: var(--ds-color-text-placeholder);
 }
 .au-json {
   max-height: 380px;
   margin: 0;
   overflow: auto;
-  font-size: var(--text-4xs);
+  font-size: var(--text-xs);
   line-height: var(--leading-body);
   white-space: pre-wrap;
   overflow-wrap: anywhere;

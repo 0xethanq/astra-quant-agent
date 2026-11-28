@@ -126,7 +126,7 @@ test('关键通报点逐一落位（回归锚点）', () => {
 test('批 67 与新增指挥台控件逐一具备 :aria-label（回归锚点）', () => {
   const anchors = [
     ['views/admin/AboutPage.vue', 'v-model="confirmPhrase"', "admin.about.phrasePlaceholder"],
-    ['views/admin/SecurityPage.vue', 'v-model="keys.live_key"', "admin.security.liveKeyAria"],
+    ['views/admin/security/SecurityVenueTab.vue', 'v-model="keys.live_key"', "admin.security.liveKeyAria"],
     ['views/admin/AgentConsolePage.vue', 'v-model="draft"', "admin.agent.inputLabel"],
     ['views/admin/agent/AgentProposalCard.vue', 'v-model="phraseInputs[phrase]"', "admin.agent.proposalConfirmAria"],
   ];

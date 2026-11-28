@@ -1202,6 +1202,13 @@ def execute_portfolio():
     _session = trading_session_state()
     print(_session_summary(_session))
     session_restricted = _session["mode"] == "manage_only"
+    _trading_paused = (
+        os.getenv("ASTRA_TRADING_PAUSED", "0").strip().lower() in ("1", "true", "yes", "on")
+        and os.getenv("ASTRA_SESSION_FORCE", "") != "1"
+    )
+    if _trading_paused:
+        print("[TRADING_PAUSED] ASTRA_TRADING_PAUSED=1 -> manage_only（已有持仓止损止盈照常维护，暂停新开仓）")
+        session_restricted = True
 
     # US-002 fail-closed entry gate: without a static V5 API Key for the frozen
     # cycle environment the engine must physically refuse to trade.

@@ -4,6 +4,12 @@ export const enAdminShell = {
   expand: 'Expand nav',
   breadcrumbRoot: 'Console',
   unsaved: 'Unsaved',
+  roleSuperadmin: 'SUPERADMIN',
+  roleAdmin: 'ADMIN',
+  engineRunning: 'Engine Active',
+  enginePaused: 'Entries Paused',
+  engineStatusTip: 'Open Strategy & Schedule to toggle global trading gate',
+  switchLanguage: 'Switch interface language',
   saveBar: {
     dirty: '{n} unsaved change(s) on this page',
     save: 'Save changes',

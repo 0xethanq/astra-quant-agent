@@ -63,7 +63,7 @@ function vueFiles(dir, out = []) {
 }
 
 const FILES = vueFiles(SRC).map((f) => ({
-  rel: path.relative(SRC, f),
+  rel: path.relative(SRC, f).replace(/\\/g, '/'),
   text: readFileSync(f, 'utf8'),
 }));
 

@@ -40,6 +40,7 @@ MANAGED_KEYS = {
     "ASTRA_ADMIN_TOKEN",
     "ASTRA_MANUAL_CLOSE_ENABLED",
     "ASTRA_ORDER_MODE",
+    "ASTRA_TRADING_PAUSED",
 }
 
 # 执行层风控参数（后台「风控管理页」写入，scripts/risk_constants.py 读取）

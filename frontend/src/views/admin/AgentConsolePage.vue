@@ -1,18 +1,19 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
 import {
+  Activity,
   Bot,
   ChevronDown,
   ChevronRight,
   Loader2,
-  MessageSquare,
   PanelLeft,
   PanelRight,
+  PauseCircle,
   Plus,
   Send,
   Sparkles,
   Square,
-  Trash2,
   Wrench,
   X,
 } from 'lucide-vue-next';
@@ -23,6 +24,7 @@ import { useConfirm } from '../../composables/useConfirm';
 import { useI18n } from '../../composables/useI18n';
 import { useToast } from '../../composables/useToast';
 import AgentProposalCard from './agent/AgentProposalCard.vue';
+import AgentSessionDrawer from './agent/AgentSessionDrawer.vue';
 import AgentStrategySidebar from './agent/AgentStrategySidebar.vue';
 import { renderSafeMarkdown } from '../../utils/markdown';
 import {
@@ -36,6 +38,7 @@ import {
   composeStagedMessage,
 } from './agent/agentLogic';
 
+const router = useRouter();
 const { t } = useI18n();
 const auth = useAuthStore();
 const toast = useToast();
@@ -44,8 +47,9 @@ const { ask } = useConfirm();
 const loading = ref(true);
 const loadError = ref('');
 const summaryLoading = ref(false);
-const showSessionsPanel = ref(true);
+const showSessionsPanel = ref(false);
 const showSummaryPanel = ref(true);
+const togglingKey = ref('');
 
 const agentConfig = ref<any>(null);
 const stateSummary = ref<any>(null);
@@ -66,6 +70,7 @@ const streamAbort = ref<AbortController | null>(null);
 const applyingProposalId = ref('');
 const savingModel = ref(false);
 const expandedReasoning = ref<Record<string, boolean>>({});
+const expandedToolGroups = ref<Record<string, boolean>>({});
 const expandedTools = ref<Record<string, boolean>>({});
 const chatScrollRef = ref<HTMLElement | null>(null);
 
@@ -80,6 +85,7 @@ const activeBrainLabel = computed(() => {
 const envBadgeClass = computed(() =>
   stateSummary.value?.environment === 'live' ? 'badge-warn' : 'badge-accent',
 );
+const isTradingPaused = computed(() => Boolean(stateSummary.value?.trading_paused));
 const healthLabel = computed(() => {
   const h = stateSummary.value?.data_health?.overall;
   if (h === 'LIVE') return t('admin.agent.healthFresh');
@@ -129,6 +135,7 @@ async function loadStateSummary() {
 async function openSession(sessionId: string) {
   if (!sessionId) return;
   activeSessionId.value = sessionId;
+  showSessionsPanel.value = false;
   const detail = await get(`/api/v1/admin/agent/sessions/${encodeURIComponent(sessionId)}`);
   messages.value = Array.isArray(detail?.messages) ? detail.messages : [];
   proposals.value = Array.isArray(detail?.proposals) ? detail.proposals : [];
@@ -145,6 +152,7 @@ async function createSession() {
     activeSessionId.value = sess.id;
     messages.value = [];
     proposals.value = [];
+    showSessionsPanel.value = false;
   }
 }
 
@@ -182,6 +190,38 @@ async function updateModel(nextModelId: string) {
     toast.err(t('admin.agent.chatFailed', undefined, { msg: e.message }));
   } finally {
     savingModel.value = false;
+  }
+}
+
+async function handleQuickToggle(payload: {
+  target: string;
+  enabled: boolean;
+  itemId?: string;
+  label: string;
+}) {
+  if (!auth.isSuperadmin) return;
+  const key = payload.itemId ? `${payload.target}:${payload.itemId}` : payload.target;
+  togglingKey.value = key;
+  try {
+    await post('/api/v1/admin/control-plane/quick-toggle', {
+      target: payload.target,
+      enabled: payload.enabled,
+      item_id: payload.itemId,
+      auto_snapshot: true,
+    });
+    await loadStateSummary();
+    if (payload.target === 'trading_paused') {
+      window.dispatchEvent(
+        new CustomEvent('astra:control-plane-changed', {
+          detail: { trading_paused: payload.enabled },
+        }),
+      );
+    }
+    toast.ok(t('admin.agent.toggleSaved', undefined, { label: payload.label }));
+  } catch (e: any) {
+    toast.err(t('admin.agent.toggleFailed', undefined, { msg: e.message || 'error' }));
+  } finally {
+    togglingKey.value = '';
   }
 }
 
@@ -443,8 +483,21 @@ function toggleReasoning(msgId: string) {
   expandedReasoning.value[msgId] = !expandedReasoning.value[msgId];
 }
 
+function toggleToolGroup(msgId: string) {
+  expandedToolGroups.value[msgId] = !expandedToolGroups.value[msgId];
+}
+
 function toggleToolDetail(toolId: string) {
   expandedTools.value[toolId] = !expandedTools.value[toolId];
+}
+
+function toolGroupLabel(calls: any[]): string {
+  const total = calls.length;
+  const done = calls.filter((c) => c.status === 'ok' || c.status === 'error').length;
+  if (done < total) {
+    return t('admin.agent.toolsRunningSummaryLabel', undefined, { done, total });
+  }
+  return t('admin.agent.toolsSummaryLabel', undefined, { count: total });
 }
 
 function onComposerKeydown(ev: KeyboardEvent) {
@@ -462,61 +515,40 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="ag-page">
-    <PageHeader :title="t('admin.agent.title')" :description="t('admin.agent.desc')">
-      <template #actions>
-        <div class="ag-header-controls">
+    <header class="ag-topbar" :aria-label="t('admin.agent.runtimeStripAria')">
+      <div class="ag-topbar-left">
+        <PageHeader compact :title="t('admin.agent.title')" />
+        <div class="ag-strip-metrics">
+          <span class="badge mono" :class="envBadgeClass">
+            {{ String(stateSummary?.environment || 'demo').toUpperCase() }}
+          </span>
           <button
             type="button"
-            class="btn btn-ghost btn-sm"
-            :aria-expanded="showSessionsPanel"
-            :aria-controls="showSessionsPanel ? 'ag-sessions-panel' : undefined"
-            @click="showSessionsPanel = !showSessionsPanel"
+            class="badge ag-badge-btn"
+            :class="isTradingPaused ? 'badge-warn' : 'badge-up'"
+            @click="router.push('/admin/strategy?tab=schedule')"
           >
-            <PanelLeft :size="15" />
-            <span>{{ t('admin.agent.sidebarSessionsToggle') }}</span>
+            <PauseCircle v-if="isTradingPaused" :size="12" />
+            <Activity v-else :size="12" />
+            <span>{{ isTradingPaused ? t('admin.agent.enginePausedBadge') : t('admin.agent.engineLiveBadge') }}</span>
           </button>
-          <button
-            type="button"
-            class="btn btn-ghost btn-sm"
-            :aria-expanded="showSummaryPanel"
-            :aria-controls="showSummaryPanel ? 'ag-summary-panel' : undefined"
-            @click="showSummaryPanel = !showSummaryPanel"
+          <span class="badge mono num">
+            {{ t('admin.agent.stripPositions') }}: {{ stateSummary?.account?.positions_count ?? 0 }}
+          </span>
+          <span class="badge" :class="healthBadgeClass">
+            {{ healthLabel }}
+          </span>
+          <span
+            v-if="insightsPayload"
+            class="badge mono num"
+            :class="insightsPayload.critical_count > 0 ? 'badge-down' : insightsPayload.warning_count > 0 ? 'badge-warn' : 'badge-up'"
           >
-            <PanelRight :size="15" />
-            <span>{{ t('admin.agent.sidebarSummaryToggle') }}</span>
-          </button>
+            {{ t('admin.agent.insightsHealthScore', undefined, { score: insightsPayload.health_score }) }}
+          </span>
         </div>
-      </template>
-    </PageHeader>
-
-    <section class="card ag-strip" :aria-label="t('admin.agent.runtimeStripAria')">
-      <div class="ag-strip-metrics">
-        <span class="badge mono" :class="envBadgeClass">
-          {{ t('admin.agent.stripEnv') }}: {{ String(stateSummary?.environment || 'demo').toUpperCase() }}
-        </span>
-        <span class="ag-strip-pill mono">
-          {{ t('admin.agent.stripBrain') }}: <strong>{{ activeBrainLabel }}</strong>
-        </span>
-        <span class="ag-strip-pill mono num">
-          {{ t('admin.agent.stripPositions') }}: <strong>{{ stateSummary?.account?.positions_count ?? 0 }}</strong>
-        </span>
-        <span class="badge" :class="healthBadgeClass">
-          {{ t('admin.agent.stripHealth') }}: {{ healthLabel }}
-        </span>
-        <span v-if="stateSummary?.version" class="ag-strip-pill mono">
-          {{ t('admin.agent.stripVersion') }}: {{ stateSummary.version }}
-        </span>
-        <span
-          v-if="insightsPayload"
-          class="badge mono num"
-          :class="insightsPayload.critical_count > 0 ? 'badge-down' : insightsPayload.warning_count > 0 ? 'badge-warn' : 'badge-up'"
-        >
-          {{ t('admin.agent.insightsHealthScore', undefined, { score: insightsPayload.health_score }) }}
-        </span>
       </div>
 
-      <label class="ag-model-picker">
-        <span class="form-label ag-model-label">{{ t('admin.agent.modelLabel') }}</span>
+      <div class="ag-topbar-right">
         <select
           :value="selectedModelId"
           :disabled="!auth.isSuperadmin || savingModel"
@@ -525,252 +557,268 @@ onBeforeUnmount(() => {
           @change="updateModel(($event.target as HTMLSelectElement).value)"
         >
           <option value="auto">
-            {{ t('admin.agent.modelAuto', undefined, { model: activeBrainLabel }) }}
+            {{ t('admin.agent.modelAutoShort', undefined, { model: activeBrainLabel }) }}
           </option>
           <option v-for="m in availableModels" :key="m.id" :value="m.id">
             {{ m.name }} ({{ m.provider_name || m.api_format }})
           </option>
         </select>
-      </label>
-    </section>
 
-    <p v-if="!auth.isSuperadmin" role="status" class="ag-readonly-banner">
-      {{ t('admin.agent.readonlyNotice') }}
-    </p>
+        <button type="button" class="btn btn-primary btn-sm" @click="createSession">
+          <Plus :size="14" />
+          <span class="hidden sm:inline">{{ t('admin.agent.newSession') }}</span>
+        </button>
+
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm"
+          :aria-expanded="showSessionsPanel"
+          :aria-controls="showSessionsPanel ? 'ag-sessions-panel' : undefined"
+          @click="showSessionsPanel = !showSessionsPanel"
+        >
+          <PanelLeft :size="14" />
+          <span class="hidden md:inline">{{ t('admin.agent.sidebarSessionsToggle') }}</span>
+        </button>
+
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm"
+          :aria-expanded="showSummaryPanel"
+          :aria-controls="showSummaryPanel ? 'ag-summary-panel' : undefined"
+          @click="showSummaryPanel = !showSummaryPanel"
+        >
+          <PanelRight :size="14" />
+          <span class="hidden md:inline">{{ t('admin.agent.sidebarSummaryToggle') }}</span>
+        </button>
+      </div>
+    </header>
 
     <div class="ag-workspace">
-      <aside v-if="showSessionsPanel" id="ag-sessions-panel" class="card ag-sessions">
-        <header class="card-head">
-          <span class="ag-sessions-title">{{ t('admin.agent.sessionsTitle') }}</span>
-          <button type="button" class="btn btn-primary btn-sm" @click="createSession">
-            <Plus :size="14" />
-            <span>{{ t('admin.agent.newSession') }}</span>
-          </button>
-        </header>
+      <div v-if="showSessionsPanel" id="ag-sessions-panel">
+        <AgentSessionDrawer
+          :sessions="sessions"
+          :activeSessionId="activeSessionId"
+          @close="showSessionsPanel = false"
+          @select="openSession"
+          @create="createSession"
+          @delete="deleteSession"
+        />
+      </div>
 
-        <div class="ag-sessions-list">
-          <p v-if="!sessions.length" class="ag-sessions-empty">{{ t('admin.agent.sessionsEmpty') }}</p>
-          <div
-            v-for="sess in sessions"
-            :key="sess.id"
-            class="ag-sess-row"
-            :class="{ 'is-active': sess.id === activeSessionId }"
-          >
-            <button
-              type="button"
-              class="ag-sess-select"
-              @click="openSession(sess.id)"
-            >
-              <MessageSquare :size="14" class="shrink-0" />
-              <span class="truncate">{{ sess.title || t('admin.agent.sessionDefaultTitle') }}</span>
-            </button>
-            <button
-              type="button"
-              class="btn btn-quiet btn-icon btn-sm is-danger"
-              :aria-label="t('admin.agent.deleteSessionAria')"
-              :title="t('admin.agent.deleteSessionTitle')"
-              @click="deleteSession(sess.id)"
-            >
-              <Trash2 :size="13" />
-            </button>
-          </div>
-        </div>
-      </aside>
+      <section class="ag-main-stage">
+        <p v-if="!auth.isSuperadmin" role="status" class="ag-readonly-banner">
+          {{ t('admin.agent.readonlyNotice') }}
+        </p>
 
-      <section class="card ag-chat">
-        <div ref="chatScrollRef" class="ag-stream">
-          <div v-if="!messages.length && !loading" class="ag-empty">
-            <span class="ag-empty-icon"><Bot :size="22" /></span>
-            <h2 class="ag-empty-title">{{ t('admin.agent.emptyWelcomeTitle') }}</h2>
-            <p class="ag-empty-desc">{{ t('admin.agent.emptyWelcomeDesc') }}</p>
+        <div ref="chatScrollRef" class="ag-stream scroll-area">
+          <div class="ag-stream-inner">
+            <div v-if="!messages.length && !loading" class="ag-empty">
+              <span class="ag-empty-icon"><Bot :size="24" /></span>
+              <h2 class="ag-empty-title">{{ t('admin.agent.emptyWelcomeTitle') }}</h2>
+              <p class="ag-empty-desc">{{ t('admin.agent.emptyWelcomeDesc') }}</p>
 
-            <div v-if="(insightsPayload?.insights || []).length" class="ag-insights-panel" :aria-label="t('admin.agent.insightsTitle')">
-              <div class="ag-insights-head">
-                <span class="ag-insights-title">{{ t('admin.agent.insightsTitle') }}</span>
-                <span class="ag-insights-hint">{{ t('admin.agent.insightsClickToAsk') }}</span>
+              <div v-if="(insightsPayload?.insights || []).length" class="ag-insights-panel" :aria-label="t('admin.agent.insightsTitle')">
+                <div class="ag-insights-head">
+                  <span class="ag-insights-title">{{ t('admin.agent.insightsTitle') }}</span>
+                  <span class="ag-insights-hint">{{ t('admin.agent.insightsClickToAsk') }}</span>
+                </div>
+                <div class="ag-insights-grid">
+                  <button
+                    v-for="ins in insightsPayload?.insights"
+                    :key="ins.id"
+                    type="button"
+                    class="insight-card"
+                    :class="INSIGHT_CARD_CLASS[ins.severity] || 'insight-card--info'"
+                    @click="stagePrompt({ label: ins.title, prompt: ins.suggested_prompt })"
+                  >
+                    <div class="ag-insight-top">
+                      <span class="ag-insight-name">{{ ins.title }}</span>
+                      <span v-if="ins.metric" class="badge mono">{{ ins.metric }}</span>
+                    </div>
+                    <span class="ag-insight-desc">{{ ins.detail }}</span>
+                  </button>
+                </div>
               </div>
-              <div class="ag-insights-grid">
+
+              <div class="ag-starters" role="group" :aria-label="t('admin.agent.startersLabel')">
                 <button
-                  v-for="ins in insightsPayload?.insights"
-                  :key="ins.id"
+                  v-for="sp in STARTER_PROMPTS"
+                  :key="sp.id"
                   type="button"
-                  class="insight-card"
-                  :class="INSIGHT_CARD_CLASS[ins.severity] || 'insight-card--info'"
-                  @click="stagePrompt({ label: ins.title, prompt: ins.suggested_prompt })"
+                  class="btn btn-ghost btn-sm ag-starter-btn"
+                  @click="sendMessage(t(sp.key))"
                 >
-                  <div class="ag-insight-top">
-                    <span class="ag-insight-name">{{ ins.title }}</span>
-                    <span v-if="ins.metric" class="badge mono">{{ ins.metric }}</span>
-                  </div>
-                  <span class="ag-insight-desc">{{ ins.detail }}</span>
+                  <Sparkles :size="13" />
+                  <span>{{ t(sp.key) }}</span>
                 </button>
               </div>
             </div>
 
-            <div class="ag-starters" role="group" :aria-label="t('admin.agent.startersLabel')">
-              <button
-                v-for="sp in STARTER_PROMPTS"
-                :key="sp.id"
-                type="button"
-                class="btn btn-ghost btn-sm ag-starter-btn"
-                @click="sendMessage(t(sp.key))"
-              >
-                <Sparkles :size="13" />
-                <span>{{ t(sp.key) }}</span>
-              </button>
-            </div>
-          </div>
+            <article
+              v-for="msg in messages"
+              :key="msg.id"
+              class="ag-msg"
+              :class="msg.role === 'user' ? 'is-user' : 'is-assistant'"
+            >
+              <header v-if="msg.role === 'assistant'" class="ag-msg-head">
+                <span class="ag-msg-role">{{ t('admin.agent.roleAssistant') }}</span>
+                <span v-if="msg.created_at" class="ag-msg-time mono num">{{ msg.created_at }}</span>
+              </header>
 
-          <article
-            v-for="msg in messages"
-            :key="msg.id"
-            class="ag-msg"
-            :class="msg.role === 'user' ? 'is-user' : 'is-assistant'"
-          >
-            <header class="ag-msg-head">
-              <span class="ag-msg-role">
-                {{ msg.role === 'user' ? t('admin.agent.roleUser') : t('admin.agent.roleAssistant') }}
-              </span>
-              <span v-if="msg.created_at" class="ag-msg-time mono num">{{ msg.created_at }}</span>
-            </header>
+              <div v-if="msg.reasoning" class="ag-reasoning-wrap">
+                <button
+                  type="button"
+                  class="btn btn-quiet btn-sm"
+                  :aria-expanded="!!expandedReasoning[msg.id]"
+                  :aria-controls="expandedReasoning[msg.id] ? `ag-reason-${msg.id}` : undefined"
+                  @click="toggleReasoning(msg.id)"
+                >
+                  <ChevronDown v-if="expandedReasoning[msg.id]" :size="13" />
+                  <ChevronRight v-else :size="13" />
+                  <span>{{ t('admin.agent.reasoningTitle') }}</span>
+                </button>
+                <pre
+                  v-if="expandedReasoning[msg.id]"
+                  :id="`ag-reason-${msg.id}`"
+                  tabindex="0"
+                  class="ag-reasoning-box mono"
+                >{{ msg.reasoning }}</pre>
+              </div>
 
-            <div v-if="msg.reasoning" class="ag-reasoning-wrap">
-              <button
-                type="button"
-                class="btn btn-quiet btn-sm"
-                :aria-expanded="!!expandedReasoning[msg.id]"
-                :aria-controls="expandedReasoning[msg.id] ? `ag-reason-${msg.id}` : undefined"
-                @click="toggleReasoning(msg.id)"
-              >
-                <ChevronDown v-if="expandedReasoning[msg.id]" :size="13" />
-                <ChevronRight v-else :size="13" />
-                <span>{{ t('admin.agent.reasoningTitle') }}</span>
-              </button>
-              <pre
-                v-if="expandedReasoning[msg.id]"
-                :id="`ag-reason-${msg.id}`"
-                tabindex="0"
-                class="ag-reasoning-box mono"
-              >{{ msg.reasoning }}</pre>
-            </div>
+              <div v-if="(msg.tool_calls || []).length" class="ag-tools-group" :aria-label="t('admin.agent.toolsTitle')">
+                <button
+                  type="button"
+                  class="ag-tools-summary"
+                  :aria-expanded="!!expandedToolGroups[msg.id]"
+                  :aria-controls="expandedToolGroups[msg.id] ? `ag-tools-${msg.id}` : undefined"
+                  @click="toggleToolGroup(msg.id)"
+                >
+                  <Wrench :size="13" class="shrink-0" />
+                  <span>{{ toolGroupLabel(msg.tool_calls || []) }}</span>
+                  <ChevronDown v-if="expandedToolGroups[msg.id]" :size="13" class="shrink-0" />
+                  <ChevronRight v-else :size="13" class="shrink-0" />
+                </button>
 
-            <div v-if="(msg.tool_calls || []).length" class="ag-traces" :aria-label="t('admin.agent.toolsTitle')">
-              <div v-for="tc in msg.tool_calls" :key="tc.id" class="ag-trace-wrap">
-                <div class="ag-trace-row">
-                  <Wrench :size="12" class="shrink-0" />
-                  <span class="mono ag-trace-name">{{ tc.name }}</span>
-                  <span
-                    class="badge mono"
-                    :class="tc.status === 'error' ? 'badge-down' : tc.status === 'ok' ? 'badge-up' : 'badge-accent'"
-                  >
-                    {{ tc.status === 'error' ? t('admin.agent.toolError') : tc.status === 'ok' ? t('admin.agent.toolDone') : t('admin.agent.toolRunning') }}
-                  </span>
-                  <span v-if="typeof tc.duration_ms === 'number'" class="ag-trace-ms mono num">
-                    {{ t('admin.agent.toolDurationMs', undefined, { ms: tc.duration_ms }) }}
-                  </span>
-                  <span v-if="tc.summary" class="ag-trace-summary truncate">{{ tc.summary }}</span>
-                  <button
-                    v-if="tc.result_preview || (tc.arguments && Object.keys(tc.arguments).length)"
-                    type="button"
-                    class="btn btn-quiet btn-sm ag-trace-toggle"
-                    :aria-expanded="!!expandedTools[tc.id]"
-                    :aria-controls="expandedTools[tc.id] ? `ag-tool-det-${tc.id}` : undefined"
-                    @click="toggleToolDetail(tc.id)"
-                  >
-                    <span>{{ expandedTools[tc.id] ? t('admin.agent.toolCollapseDetails') : t('admin.agent.toolExpandDetails') }}</span>
-                  </button>
-                </div>
-                <div v-if="expandedTools[tc.id]" :id="`ag-tool-det-${tc.id}`" class="ag-trace-detail mono">
-                  <div v-if="tc.arguments && Object.keys(tc.arguments).length">
-                    <strong>{{ t('admin.agent.toolArgsLabel') }}:</strong> {{ JSON.stringify(tc.arguments) }}
-                  </div>
-                  <div v-if="tc.result_preview">
-                    <strong>{{ t('admin.agent.toolResultPreviewLabel') }}:</strong> {{ tc.result_preview }}
+                <div v-if="expandedToolGroups[msg.id]" :id="`ag-tools-${msg.id}`" class="ag-traces">
+                  <div v-for="tc in msg.tool_calls" :key="tc.id" class="ag-trace-wrap">
+                    <div class="ag-trace-row">
+                      <span class="mono ag-trace-name">{{ tc.name }}</span>
+                      <span
+                        class="badge mono"
+                        :class="tc.status === 'error' ? 'badge-down' : tc.status === 'ok' ? 'badge-up' : 'badge-accent'"
+                      >
+                        {{ tc.status === 'error' ? t('admin.agent.toolError') : tc.status === 'ok' ? t('admin.agent.toolDone') : t('admin.agent.toolRunning') }}
+                      </span>
+                      <span v-if="typeof tc.duration_ms === 'number'" class="ag-trace-ms mono num">
+                        {{ t('admin.agent.toolDurationMs', undefined, { ms: tc.duration_ms }) }}
+                      </span>
+                      <span v-if="tc.summary" class="ag-trace-summary truncate">{{ tc.summary }}</span>
+                      <button
+                        v-if="tc.result_preview || (tc.arguments && Object.keys(tc.arguments).length)"
+                        type="button"
+                        class="btn btn-quiet btn-sm ag-trace-toggle"
+                        :aria-expanded="!!expandedTools[tc.id]"
+                        :aria-controls="expandedTools[tc.id] ? `ag-tool-det-${tc.id}` : undefined"
+                        @click="toggleToolDetail(tc.id)"
+                      >
+                        <span>{{ expandedTools[tc.id] ? t('admin.agent.toolCollapseDetails') : t('admin.agent.toolExpandDetails') }}</span>
+                      </button>
+                    </div>
+                    <div v-if="expandedTools[tc.id]" :id="`ag-tool-det-${tc.id}`" class="ag-trace-detail mono">
+                      <div v-if="tc.arguments && Object.keys(tc.arguments).length">
+                        <strong>{{ t('admin.agent.toolArgsLabel') }}:</strong> {{ JSON.stringify(tc.arguments) }}
+                      </div>
+                      <div v-if="tc.result_preview">
+                        <strong>{{ t('admin.agent.toolResultPreviewLabel') }}:</strong> {{ tc.result_preview }}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            <div
-              v-if="msg.content && msg.role === 'assistant'"
-              class="ag-md"
-              v-html="renderSafeMarkdown(msg.content)"
-            />
-            <div v-else-if="msg.content" class="ag-msg-text">{{ msg.content }}</div>
-
-            <div v-for="pid in (msg.proposal_ids || [])" :key="pid" class="ag-msg-proposal">
-              <AgentProposalCard
-                v-if="proposalMap[pid]"
-                :proposal="proposalMap[pid]"
-                :busy="applyingProposalId === pid"
-                @apply="handleProposalApply"
-                @reject="handleProposalReject"
-                @rollback="handleProposalRollback"
+              <div
+                v-if="msg.content && msg.role === 'assistant'"
+                class="ag-md"
+                v-html="renderSafeMarkdown(msg.content)"
               />
-            </div>
-          </article>
+              <div v-else-if="msg.content" class="ag-msg-text">{{ msg.content }}</div>
+
+              <div v-for="pid in (msg.proposal_ids || [])" :key="pid" class="ag-msg-proposal">
+                <AgentProposalCard
+                  v-if="proposalMap[pid]"
+                  :proposal="proposalMap[pid]"
+                  :busy="applyingProposalId === pid"
+                  @apply="handleProposalApply"
+                  @reject="handleProposalReject"
+                  @rollback="handleProposalRollback"
+                />
+              </div>
+            </article>
+          </div>
         </div>
 
-        <footer
-          class="ag-composer"
-          :class="{ 'is-staged': Boolean(stagedContext), 'is-highlighted': composerHighlighted }"
-        >
-          <div v-if="stagedContext" class="ag-staged-bar">
-            <div class="ag-staged-top">
-              <span class="badge badge-accent ag-staged-badge">
-                <Sparkles :size="12" />
-                <span>{{ t('admin.agent.stagedContextLabel') }}: {{ stagedContext.label }}</span>
-              </span>
+        <div class="ag-composer-deck">
+          <footer
+            class="ag-composer"
+            :class="{ 'is-staged': Boolean(stagedContext), 'is-highlighted': composerHighlighted }"
+          >
+            <div v-if="stagedContext" class="ag-staged-bar">
+              <div class="ag-staged-top">
+                <span class="badge badge-accent ag-staged-badge">
+                  <Sparkles :size="12" />
+                  <span>{{ t('admin.agent.stagedContextLabel') }}: {{ stagedContext.label }}</span>
+                </span>
+                <button
+                  type="button"
+                  class="btn btn-quiet btn-icon btn-sm"
+                  :aria-label="t('admin.agent.stagedContextClearAria')"
+                  :title="t('admin.agent.stagedContextClearAria')"
+                  @click="clearStagedContext"
+                >
+                  <X :size="14" />
+                </button>
+              </div>
+              <p class="ag-staged-preview">{{ stagedContext.prompt }}</p>
+              <p class="ag-staged-hint">{{ t('admin.agent.stagedContextHint') }}</p>
+            </div>
+
+            <textarea
+              ref="composerInputRef"
+              v-model="draft"
+              rows="2"
+              autocomplete="off"
+              spellcheck="false"
+              class="field ag-input"
+              :aria-label="t('admin.agent.inputLabel')"
+              :placeholder="stagedContext ? t('admin.agent.stagedPlaceholder') : t('admin.agent.inputPlaceholder')"
+              :disabled="streaming"
+              @keydown="onComposerKeydown"
+            />
+            <div class="ag-composer-actions">
+              <span class="ag-composer-hint">{{ t('admin.agent.composerShortcutHint') }}</span>
               <button
+                v-if="streaming"
                 type="button"
-                class="btn btn-quiet btn-icon btn-sm"
-                :aria-label="t('admin.agent.stagedContextClearAria')"
-                :title="t('admin.agent.stagedContextClearAria')"
-                @click="clearStagedContext"
+                class="btn btn-ghost is-danger"
+                @click="stopGeneration"
               >
-                <X :size="14" />
+                <Square :size="14" />
+                <span>{{ t('admin.agent.stop') }}</span>
+              </button>
+              <button
+                v-else
+                type="button"
+                class="btn btn-primary"
+                :disabled="!canSend"
+                @click="sendMessage()"
+              >
+                <Loader2 v-if="loading" :size="14" class="animate-spin shrink-0" />
+                <Send v-else :size="14" />
+                <span>{{ t('admin.agent.send') }}</span>
               </button>
             </div>
-            <p class="ag-staged-preview">{{ stagedContext.prompt }}</p>
-            <p class="ag-staged-hint">{{ t('admin.agent.stagedContextHint') }}</p>
-          </div>
-
-          <textarea
-            ref="composerInputRef"
-            v-model="draft"
-            rows="3"
-            autocomplete="off"
-            spellcheck="false"
-            class="field ag-input"
-            :aria-label="t('admin.agent.inputLabel')"
-            :placeholder="stagedContext ? t('admin.agent.stagedPlaceholder') : t('admin.agent.inputPlaceholder')"
-            :disabled="streaming"
-            @keydown="onComposerKeydown"
-          />
-          <div class="ag-composer-actions">
-            <span class="ag-composer-hint">{{ t('admin.agent.composerShortcutHint') }}</span>
-            <button
-              v-if="streaming"
-              type="button"
-              class="btn btn-ghost is-danger"
-              @click="stopGeneration"
-            >
-              <Square :size="14" />
-              <span>{{ t('admin.agent.stop') }}</span>
-            </button>
-            <button
-              v-else
-              type="button"
-              class="btn btn-primary"
-              :disabled="!canSend"
-              @click="sendMessage()"
-            >
-              <Loader2 v-if="loading" :size="14" class="animate-spin shrink-0" />
-              <Send v-else :size="14" />
-              <span>{{ t('admin.agent.send') }}</span>
-            </button>
-          </div>
-        </footer>
+          </footer>
+        </div>
       </section>
 
       <AgentStrategySidebar
@@ -779,8 +827,12 @@ onBeforeUnmount(() => {
         :summary="stateSummary"
         :inspector="inspectorPayload"
         :loading="summaryLoading"
+        :tradingPaused="isTradingPaused"
+        :togglingKey="togglingKey"
+        :isSuperadmin="auth.isSuperadmin"
         @refresh="loadStateSummary"
         @stage="stagePrompt"
+        @toggle="handleQuickToggle"
       />
     </div>
   </div>
@@ -790,9 +842,113 @@ onBeforeUnmount(() => {
 .ag-page {
   display: flex;
   flex-direction: column;
-  gap: var(--ds-space-3);
   height: 100%;
   min-height: 0;
+  background-color: var(--ds-color-bg-page);
+}
+.ag-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ds-space-3);
+  padding: var(--ds-space-2) var(--ds-space-5);
+  min-height: 52px;
+  border-bottom: 1px solid var(--ds-color-border-subtle);
+  background-color: var(--ds-color-bg-surface-1);
+  flex-wrap: wrap;
+}
+.ag-topbar-left {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-3);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.ag-strip-metrics {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  flex-wrap: wrap;
+}
+.ag-badge-btn {
+  cursor: pointer;
+}
+.ag-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  flex-wrap: wrap;
+}
+.ag-model-select {
+  min-width: 210px;
+  max-width: 280px;
+  height: var(--h-md);
+  font-size: var(--text-xs);
+}
+.ag-workspace {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+.ag-main-stage {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.ag-readonly-banner {
+  margin: var(--ds-space-3) var(--ds-space-5) 0;
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border: 1px solid var(--warn-line);
+  border-radius: var(--r-ctl);
+  background-color: var(--warn-bg);
+  color: var(--warn);
+  font-size: var(--text-base);
+}
+.ag-stream {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--ds-space-5) var(--ds-space-5) var(--ds-space-4);
+}
+.ag-stream-inner {
+  max-width: 840px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-5);
+}
+.ag-empty {
+  margin: var(--ds-space-5) auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--ds-space-3);
+}
+.ag-empty-icon {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-card);
+  background-color: var(--ds-color-brand-subtle);
+  color: var(--ds-color-brand);
+}
+.ag-empty-title {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: 600;
+  color: var(--ds-color-text-primary);
+}
+.ag-empty-desc {
+  margin: 0;
+  max-width: 64ch;
+  font-size: var(--text-base);
+  line-height: var(--leading-body);
+  color: var(--ds-color-text-description);
 }
 .ag-insights-panel {
   width: 100%;
@@ -800,6 +956,7 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: var(--ds-space-2);
   text-align: left;
+  margin-top: var(--ds-space-2);
 }
 .ag-insights-head {
   display: flex;
@@ -818,7 +975,7 @@ onBeforeUnmount(() => {
 }
 .ag-insights-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
   gap: var(--ds-space-2);
 }
 .ag-insight-top {
@@ -837,199 +994,36 @@ onBeforeUnmount(() => {
   color: var(--ds-color-text-description);
   line-height: 1.5;
 }
-.ag-header-controls {
-  display: flex;
-  align-items: center;
-  gap: var(--ds-space-2);
-  flex-wrap: wrap;
-}
-.ag-strip {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--ds-space-3);
-  flex-wrap: wrap;
-  padding: var(--ds-space-2) var(--ds-space-4);
-}
-.ag-strip-metrics {
-  display: flex;
-  flex: 1 1 auto;
-  align-items: center;
-  gap: var(--ds-space-2);
-  flex-wrap: wrap;
-}
-.ag-strip-pill {
-  font-size: var(--text-xs);
-  color: var(--ds-color-text-description);
-}
-.ag-strip-pill strong {
-  color: var(--ds-color-text-primary);
-}
-.ag-model-picker {
-  display: flex;
-  align-items: center;
-  gap: var(--ds-space-2);
-  flex-shrink: 0;
-  margin-left: auto;
-}
-.ag-model-label {
-  white-space: nowrap;
-  flex-shrink: 0;
-  margin: 0;
-  font-size: var(--text-xs);
-}
-.ag-model-select {
-  min-width: 240px;
-  max-width: 340px;
-  width: auto;
-}
-.ag-readonly-banner {
-  margin: 0;
-  padding: var(--ds-space-2) var(--ds-space-4);
-  border: 1px solid var(--warn-line);
-  border-radius: var(--r-ctl);
-  background-color: var(--warn-bg);
-  color: var(--warn);
-  font-size: var(--text-base);
-}
-.ag-workspace {
-  display: flex;
-  gap: var(--ds-space-4);
-  align-items: stretch;
-  flex: 1;
-  min-height: 0;
-}
-.ag-sessions {
-  display: flex;
-  flex-direction: column;
-  flex: 0 0 224px;
-  min-height: 0;
-}
-.ag-sessions-title {
-  font-size: var(--text-md);
-  font-weight: 600;
-  color: var(--ds-color-text-primary);
-}
-.ag-sessions-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--ds-space-1);
-  padding: var(--ds-space-2);
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-}
-.ag-sessions-empty {
-  margin: 0;
-  padding: var(--ds-space-4);
-  font-size: var(--text-xs);
-  color: var(--ds-color-text-placeholder);
-}
-.ag-sess-row {
-  display: flex;
-  align-items: center;
-  gap: var(--ds-space-1);
-  padding: var(--ds-space-1);
-  border-radius: var(--r-ctl);
-  border: 1px solid transparent;
-  transition: background-color var(--dur-fast);
-}
-.ag-sess-row.is-active {
-  background-color: var(--ds-color-bg-surface-inset);
-  border-color: var(--accent-line);
-}
-.ag-sess-select {
-  display: flex;
-  align-items: center;
-  gap: var(--ds-space-2);
-  flex: 1;
-  min-width: 0;
-  background: transparent;
-  border: 0;
-  color: var(--ds-color-text-primary);
-  font-size: var(--text-base);
-  text-align: left;
-  cursor: pointer;
-  padding: var(--ds-space-2);
-}
-.ag-chat {
-  display: flex;
-  flex-direction: column;
-  flex: 1 1 0;
-  min-width: 0;
-  min-height: 460px;
-  height: 100%;
-  overflow: hidden;
-}
-.ag-stream {
-  display: flex;
-  flex-direction: column;
-  gap: var(--ds-space-4);
-  padding: var(--ds-space-5);
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-}
-.ag-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: var(--ds-space-3);
-  padding: var(--ds-space-6) var(--ds-space-4);
-}
-.ag-empty-icon {
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  border-radius: var(--r-card);
-  border: 1px solid var(--accent-line);
-  background-color: var(--accent-bg);
-  color: var(--accent);
-}
-.ag-empty-title {
-  margin: 0;
-  font-size: var(--text-lg);
-  font-weight: 600;
-  color: var(--ds-color-text-primary);
-}
-.ag-empty-desc {
-  margin: 0;
-  max-width: 600px;
-  font-size: var(--text-base);
-  color: var(--ds-color-text-description);
-  line-height: var(--leading-body);
-}
 .ag-starters {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
   gap: var(--ds-space-2);
+  margin-top: var(--ds-space-2);
 }
 .ag-starter-btn {
+  max-width: 100%;
   text-align: left;
 }
 .ag-msg {
   display: flex;
   flex-direction: column;
-  gap: var(--ds-space-3);
-  padding: var(--ds-space-4);
-  border-radius: var(--r-card);
-  border: 1px solid var(--ds-color-border-default);
+  gap: var(--ds-space-2);
 }
 .ag-msg.is-user {
+  align-self: flex-end;
+  max-width: 82%;
+  padding: var(--ds-space-3) var(--ds-space-4);
+  border-radius: var(--r-card);
+  border: 1px solid var(--ds-color-border-default);
   background-color: var(--ds-color-bg-surface-2);
-  border-color: var(--ds-color-border-default);
 }
 .ag-msg.is-assistant {
-  background-color: transparent;
-  border-color: var(--ds-color-border-subtle);
+  padding: var(--ds-space-2) 0;
 }
 .ag-msg-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: var(--ds-space-2);
 }
 .ag-msg-role {
@@ -1048,20 +1042,47 @@ onBeforeUnmount(() => {
   gap: var(--ds-space-1);
 }
 .ag-reasoning-box {
-  margin: var(--ds-space-2) 0 0;
+  width: 100%;
+  margin: 0;
   padding: var(--ds-space-3);
-  border: 1px solid var(--ds-color-border-default);
   border-radius: var(--r-ctl);
-  background-color: var(--ds-color-bg-surface-inset);
+  border: 1px solid var(--ds-color-border-subtle);
+  background-color: var(--ds-color-bg-surface-1);
+  color: var(--ds-color-text-description);
   font-size: var(--text-xs);
-  line-height: 1.55;
   white-space: pre-wrap;
-  word-break: break-word;
+  max-height: 220px;
+  overflow: auto;
+}
+.ag-tools-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+}
+.ag-tools-summary {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  padding: var(--sp-2) var(--ds-space-3);
+  min-height: 30px;
+  border-radius: var(--r-ctl);
+  border: 1px solid var(--ds-color-border-subtle);
+  background-color: var(--ds-color-bg-surface-1);
+  font-size: var(--text-xs);
+  color: var(--ds-color-text-description);
+  transition: border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+.ag-tools-summary:hover {
+  border-color: var(--ds-color-border-strong);
+  color: var(--ds-color-text-primary);
 }
 .ag-traces {
   display: flex;
   flex-direction: column;
-  gap: var(--ds-space-1);
+  gap: var(--sp-2);
+  padding-left: var(--ds-space-3);
+  border-left: 2px solid var(--ds-color-border-subtle);
 }
 .ag-trace-wrap {
   display: flex;
@@ -1072,69 +1093,116 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: var(--ds-space-2);
-  padding: var(--ds-space-2);
+  padding: var(--sp-2) var(--ds-space-3);
   border-radius: var(--r-ctl);
-  background-color: var(--ds-color-bg-surface-inset);
+  background-color: var(--ds-color-bg-surface-1);
   font-size: var(--text-xs);
 }
 .ag-trace-name {
-  color: var(--ds-color-text-primary);
   font-weight: 600;
+  color: var(--ds-color-text-primary);
 }
 .ag-trace-ms {
   color: var(--ds-color-text-placeholder);
   flex-shrink: 0;
 }
+.ag-trace-summary {
+  color: var(--ds-color-text-description);
+  flex: 1;
+  min-width: 0;
+}
 .ag-trace-toggle {
-  margin-left: auto;
   flex-shrink: 0;
 }
 .ag-trace-detail {
-  padding: var(--ds-space-2);
+  padding: var(--ds-space-2) var(--ds-space-3);
   border-radius: var(--r-ctl);
-  border: 1px solid var(--ds-color-border-subtle);
-  background-color: var(--ds-color-bg-page);
+  background-color: var(--ds-color-bg-surface-1);
   font-size: var(--text-xs);
-  color: var(--ds-color-text-secondary);
-  word-break: break-all;
-}
-.ag-trace-summary {
   color: var(--ds-color-text-description);
-  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+  word-break: break-all;
 }
 .ag-msg-text {
   font-size: var(--text-md);
   line-height: 1.65;
   color: var(--ds-color-text-primary);
   white-space: pre-wrap;
-  word-break: break-word;
+}
+.ag-md {
+  font-size: var(--text-md);
+  line-height: 1.7;
+  color: var(--ds-color-text-primary);
+}
+.ag-md :deep(p) {
+  margin: 0 0 var(--ds-space-3);
+}
+.ag-md :deep(p:last-child) {
+  margin-bottom: 0;
+}
+.ag-md :deep(ul),
+.ag-md :deep(ol) {
+  margin: 0 0 var(--ds-space-3);
+  padding-left: var(--ds-space-5);
+}
+.ag-md :deep(code) {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  background-color: var(--ds-color-bg-surface-inset);
+  padding: var(--sp-1) var(--sp-2);
+  border-radius: var(--r-ctl);
+}
+.ag-md :deep(pre) {
+  padding: var(--ds-space-3);
+  border-radius: var(--r-ctl);
+  background-color: var(--ds-color-bg-surface-inset);
+  overflow-x: auto;
+}
+.ag-md :deep(table) {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-base);
+  margin: var(--ds-space-2) 0 var(--ds-space-3);
+}
+.ag-md :deep(th),
+.ag-md :deep(td) {
+  border: 1px solid var(--ds-color-border-subtle);
+  padding: var(--ds-space-2) var(--ds-space-3);
+  text-align: left;
 }
 .ag-msg-proposal {
   margin-top: var(--ds-space-2);
 }
+.ag-composer-deck {
+  padding: 0 var(--ds-space-5) var(--ds-space-4);
+}
 .ag-composer {
+  max-width: 840px;
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
   gap: var(--ds-space-2);
   padding: var(--ds-space-3) var(--ds-space-4);
-  border-top: 1px solid var(--ds-color-border-default);
-  background-color: var(--ds-color-bg-surface-inset);
-  transition: border-color var(--dur-base), box-shadow var(--dur-base);
+  border: 1px solid var(--ds-color-border-default);
+  border-radius: var(--r-card);
+  background-color: var(--ds-color-bg-surface-1);
+  transition: border-color var(--dur-base) var(--ease-out);
 }
 .ag-composer.is-staged {
-  border-top-color: var(--astra-brand-line);
+  border-color: var(--accent-line);
 }
 .ag-composer.is-highlighted {
-  box-shadow: inset 0 2px 0 var(--ds-color-brand);
+  border-color: var(--ds-color-brand);
 }
 .ag-staged-bar {
   display: flex;
   flex-direction: column;
-  gap: var(--ds-space-1);
+  gap: var(--sp-2);
   padding: var(--ds-space-2) var(--ds-space-3);
   border-radius: var(--r-ctl);
-  border: 1px solid var(--astra-brand-line);
-  background-color: var(--astra-brand-bg);
+  background-color: var(--ds-color-brand-subtle);
 }
 .ag-staged-top {
   display: flex;
@@ -1143,13 +1211,15 @@ onBeforeUnmount(() => {
   gap: var(--ds-space-2);
 }
 .ag-staged-badge {
-  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
 }
 .ag-staged-preview {
   margin: 0;
-  font-size: var(--text-xs);
-  line-height: 1.5;
+  font-size: var(--text-base);
   color: var(--ds-color-text-primary);
+  line-height: 1.5;
 }
 .ag-staged-hint {
   margin: 0;
@@ -1158,17 +1228,31 @@ onBeforeUnmount(() => {
 }
 .ag-input {
   width: 100%;
+  height: auto;
+  padding: 0;
   resize: vertical;
-  font-family: inherit;
-  font-size: var(--text-base);
+  min-height: 52px;
+  border: 0;
+  background: transparent;
+  color: var(--ds-color-text-primary);
+  font-size: var(--text-md);
   line-height: 1.6;
-  min-height: 84px;
+  outline: none;
+}
+.ag-input:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.ag-input::placeholder {
+  color: var(--ds-color-text-placeholder);
 }
 .ag-composer-actions {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
   gap: var(--ds-space-2);
+  padding-top: var(--ds-space-1);
+  border-top: 1px solid var(--ds-color-border-subtle);
 }
 .ag-composer-hint {
   font-size: var(--text-xs);
@@ -1177,10 +1261,13 @@ onBeforeUnmount(() => {
 @media (max-width: 1120px) {
   .ag-workspace {
     flex-direction: column;
+    overflow: auto;
   }
-  .ag-sessions {
-    flex: none;
-    width: 100%;
+  .ag-main-stage {
+    min-height: 460px;
+  }
+  .ag-msg.is-user {
+    max-width: 96%;
   }
 }
 </style>

@@ -198,7 +198,7 @@ test('豁免项不得空转（改了文件就该把豁免删掉，别留死豁�
 });
 
 test('勾选行（.sc-check）必须有悬停反馈，且危险变体也要有', () => {
-  const src = readFileSync(path.join(SRC, 'views/admin/SecurityPage.vue'), 'utf8');
+  const src = readFileSync(path.join(SRC, 'views/admin/security/SecurityEmergencyTab.vue'), 'utf8');
   const clean = src.replace(/\/\*[\s\S]*?\*\//g, '');
   const hover = /\.sc-check:hover\s*\{([^}]*)\}/.exec(clean);
   assert.ok(hover, '找不到 .sc-check:hover —— 勾选行又会变得悬停毫无反应');

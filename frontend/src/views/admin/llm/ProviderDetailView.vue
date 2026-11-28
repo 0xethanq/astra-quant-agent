@@ -522,12 +522,12 @@ function monogram(name: string): string {
   min-width: 0;
 }
 .pd-name {
-  font-size: var(--text-sm);
+  font-size: var(--text-md);
   font-weight: 600;
   color: var(--ds-color-text-primary);
 }
 .pd-sub {
-  font-size: var(--text-4xs);
+  font-size: var(--text-xs);
   color: var(--ds-color-text-placeholder);
 }
 .pd-tabs {
@@ -563,7 +563,7 @@ function monogram(name: string): string {
   flex-direction: column;
 }
 .pd-kv-k {
-  font-size: var(--text-xs);
+  font-size: var(--text-base);
   color: var(--ds-color-text-primary);
 }
 .pd-kv-k-block {
@@ -573,7 +573,7 @@ function monogram(name: string): string {
   min-width: 0;
 }
 .pd-kv-v {
-  font-size: var(--text-3xs);
+  font-size: var(--text-base);
   color: var(--ds-color-text-description);
   text-align: right;
 }
@@ -647,7 +647,7 @@ function monogram(name: string): string {
   min-width: 0;
 }
 .pd-model-id {
-  font-size: var(--text-xs);
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--ds-color-text-primary);
   min-width: 0;
@@ -718,12 +718,12 @@ function monogram(name: string): string {
   flex-shrink: 0;
 }
 .pd-test-title {
-  font-size: var(--text-xs);
+  font-size: var(--text-base);
   font-weight: 600;
 }
 .pd-test-body {
   padding: var(--ds-space-3) var(--ds-space-4);
-  font-size: var(--text-3xs);
+  font-size: var(--text-base);
   line-height: var(--leading-body);
   color: var(--ds-color-text-secondary);
   overflow-wrap: anywhere;

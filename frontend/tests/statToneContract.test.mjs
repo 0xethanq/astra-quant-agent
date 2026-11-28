@@ -118,7 +118,7 @@ const TPL = (t) => (t.includes('<style') ? t.slice(0, t.indexOf('<style')) : t);
 function collect() {
   const sites = [];
   for (const f of vueFiles(SRC)) {
-    const rel = path.relative(SRC, f);
+    const rel = path.relative(SRC, f).replace(/\\/g, '/');
     const tpl = TPL(readFileSync(f, 'utf8'));
     for (const body of tagBodies(tpl, 'BaseStat')) {
       const tone = /(?<!:)\bdelta-tone="([^"]*)"/.exec(body) || /:delta-tone="([^"]*)"/.exec(body);

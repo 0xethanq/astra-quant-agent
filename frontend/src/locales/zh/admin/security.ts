@@ -268,4 +268,5 @@ export const zhAdminSecurity = {
   plazaTestCopy: '一键复制测试',
   poolReadonlyHint: '标的池增删已统一交由「AI 指挥台」对话编排与风控校验，此处仅展示当前生效的合约清单与持仓保护状态。',
   goToAgent: '前往 AI 指挥台调整',
+  capitalBandFoot: '绩效统计基准',
 };

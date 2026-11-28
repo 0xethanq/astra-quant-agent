@@ -57,6 +57,7 @@ def load_evolution_config() -> dict[str, Any]:
             effective_model_id = "auto"
 
     return {
+        "enabled": bool(data.get("enabled", True)),
         "model_id": model_id,
         "effective_model_id": effective_model_id,
         "reasoning_effort": reasoning_effort,
@@ -73,6 +74,9 @@ def save_evolution_config(payload: dict[str, Any]) -> dict[str, Any]:
 
     previous = load_evolution_config()
     updated = {**previous}
+
+    if "enabled" in payload and payload["enabled"] is not None:
+        updated["enabled"] = bool(payload["enabled"])
 
     if "model_id" in payload:
         raw_mid = str(payload["model_id"] or "").strip()

@@ -37,6 +37,7 @@ const SCRIM_ALLOWLIST = {
   'components/dashboard/TrajectoryPanel.vue': ["emit('close')"],
   'layouts/AdminLayout.vue': ['drawerOpen = false'],
   'layouts/DashboardLayout.vue': ['mobileNavOpen = false'],
+  'views/admin/agent/AgentSessionDrawer.vue': ["emit('close')"],
   'views/docs/DocsView.vue': ['mobileMenuOpen = false', 'zoomImage = null'],
 };
 
@@ -70,7 +71,7 @@ function nonNativeClicks(file, body) {
 function violations() {
   const bad = [];
   for (const file of vueFiles(SRC)) {
-    const rel = path.relative(SRC, file);
+    const rel = path.relative(SRC, file).replace(/\\/g, '/');
     const text = stripComments(readFileSync(file, 'utf8'));
     const tpl = text.match(/<template>([\s\S]*)<\/template>/);
     if (!tpl) continue;
@@ -101,7 +102,7 @@ test('非原生 @click 元素必须键盘可达（tabindex + keydown）', () => 
 test('可排序表头不得把 @click 挂在 <th> 上', () => {
   const bad = [];
   for (const file of vueFiles(SRC)) {
-    const rel = path.relative(SRC, file);
+    const rel = path.relative(SRC, file).replace(/\\/g, '/');
     const text = stripComments(readFileSync(file, 'utf8'));
     const tpl = text.match(/<template>([\s\S]*)<\/template>/);
     if (!tpl) continue;

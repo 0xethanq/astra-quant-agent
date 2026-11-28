@@ -334,8 +334,8 @@ function isPhraseInvalid(phrase: string): boolean {
 .ap-body {
   display: flex;
   flex-direction: column;
-  gap: var(--ds-space-3);
-  padding: var(--ds-space-4);
+  gap: var(--ds-space-4);
+  padding: var(--ds-space-4) var(--ds-space-5);
 }
 .ap-toolbar {
   display: flex;
@@ -343,7 +343,7 @@ function isPhraseInvalid(phrase: string): boolean {
   justify-content: space-between;
   gap: var(--ds-space-2);
   padding-bottom: var(--ds-space-2);
-  border-bottom: 1px solid var(--ds-color-border-default);
+  border-bottom: 1px solid var(--ds-color-border-subtle);
 }
 .ap-count {
   font-size: var(--text-xs);
@@ -357,10 +357,10 @@ function isPhraseInvalid(phrase: string): boolean {
   display: flex;
   flex-direction: column;
   gap: var(--ds-space-2);
-  padding: var(--ds-space-3);
-  border: 1px solid var(--ds-color-border-default);
-  border-radius: var(--r-ctl);
-  background-color: var(--ds-color-bg-surface-inset);
+}
+.ap-item + .ap-item {
+  padding-top: var(--ds-space-4);
+  border-top: 1px solid var(--ds-color-border-subtle);
 }
 .ap-item-head {
   display: flex;
@@ -399,16 +399,16 @@ function isPhraseInvalid(phrase: string): boolean {
 .ap-kv-table {
   display: flex;
   flex-direction: column;
-  gap: var(--ds-space-1);
+  gap: var(--sp-1);
 }
 .ap-kv-row {
   display: grid;
-  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   gap: var(--ds-space-2);
   padding: var(--ds-space-2) var(--ds-space-3);
   border-radius: var(--r-ctl);
-  background-color: var(--ds-color-bg-surface);
+  background-color: var(--ds-color-bg-surface-inset);
   font-size: var(--text-base);
 }
 .ap-kv-key {
@@ -449,7 +449,7 @@ function isPhraseInvalid(phrase: string): boolean {
   gap: var(--ds-space-2);
   flex-wrap: wrap;
   padding-top: var(--ds-space-2);
-  border-top: 1px solid var(--ds-color-border-default);
+  border-top: 1px solid var(--ds-color-border-subtle);
   font-size: var(--text-xs);
   color: var(--ds-color-text-description);
 }
@@ -462,8 +462,8 @@ function isPhraseInvalid(phrase: string): boolean {
   align-items: center;
   gap: var(--ds-space-2);
   flex-wrap: wrap;
-  padding: var(--ds-space-3) var(--ds-space-4);
-  border-top: 1px solid var(--ds-color-border-default);
+  padding: var(--ds-space-3) var(--ds-space-5);
+  border-top: 1px solid var(--ds-color-border-subtle);
   background-color: var(--ds-color-bg-surface-inset);
 }
 .ap-readonly {

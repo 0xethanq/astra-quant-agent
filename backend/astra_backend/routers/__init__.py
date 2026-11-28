@@ -9,6 +9,7 @@ from .gateway import router as gateway_router
 from .dashboard import router as dashboard_router
 from .plaza import router as plaza_router
 from .agent import router as agent_router
+from .control_plane import router as control_plane_router
 
 __all__ = [
     "auth_router",
@@ -21,4 +22,5 @@ __all__ = [
     "dashboard_router",
     "plaza_router",
     "agent_router",
+    "control_plane_router",
 ]

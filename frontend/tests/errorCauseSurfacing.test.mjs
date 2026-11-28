@@ -72,7 +72,7 @@ test('数据层不得吞掉真实错误：loadConfig 必须记录失败原因', 
   assert.match(text, /const cfgError = ref\(''\)/, 'useLlmConfig 未记录配置拉取失败原因');
   assert.match(text, /cfgError\.value = ''/, '成功路径未清空上一次的失败原因');
   assert.match(text, /cfgError\.value = String\(e\?\.message \|\| e\)/, 'catch 未写入真实原因');
-  assert.match(text, /\n\s+cfgError,\n/, 'cfgError 未暴露给消费方');
+  assert.match(text, /\r?\n\s+cfgError,\r?\n/, 'cfgError 未暴露给消费方');
 
   // 必须只 console.error 的老毛病不得回潮：catch 里除了日志还要有状态写入
   const catchBlock = text.slice(text.indexOf('async function loadConfig'));

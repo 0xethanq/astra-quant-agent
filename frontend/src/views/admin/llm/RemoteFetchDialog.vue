@@ -153,7 +153,7 @@ const {
   flex: 1;
 }
 .rf-endpoint {
-  font-size: var(--text-3xs);
+  font-size: var(--text-xs);
   color: var(--ds-color-text-secondary);
   min-width: 0;
 }
@@ -164,7 +164,7 @@ const {
   gap: 6px;
   padding: 8px 10px;
   border-radius: var(--r-ctl);
-  font-size: var(--text-3xs);
+  font-size: var(--text-base);
 }
 .rf-status.is-ok {
   background-color: var(--up-bg);
@@ -201,7 +201,7 @@ const {
   outline: none;
   background: transparent;
   color: var(--ds-color-text-primary);
-  font-size: var(--text-3xs);
+  font-size: var(--text-base);
 }
 
 .rf-list {
@@ -225,12 +225,12 @@ const {
   min-width: 0;
 }
 .rf-row-name {
-  font-size: var(--text-3xs);
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--ds-color-text-primary);
 }
 .rf-row-id {
-  font-size: var(--text-4xs);
+  font-size: var(--text-xs);
   color: var(--ds-color-text-placeholder);
   min-width: 0;
 }

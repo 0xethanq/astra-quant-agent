@@ -265,4 +265,5 @@ export const enAdminSecurity = {
   plazaTestCopy: 'Test Clone Parameters',
   poolReadonlyHint: 'Symbol pool additions and removals are managed safely through the AI Console with risk verification; this view displays the active pool and protection status.',
   goToAgent: 'Configure in AI Console',
+  capitalBandFoot: 'Performance baseline',
 };

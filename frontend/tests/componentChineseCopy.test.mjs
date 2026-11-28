@@ -99,7 +99,7 @@ test('组件脚本的文案字段 / 剪贴板 / 兜底字面量不得硬编码�
     }
     return out;
   })(SRC)) {
-    const rel = path.relative(SRC, file);
+    const rel = path.relative(SRC, file).replace(/\\/g, '/');
     if (rel.startsWith('locales')) continue;
     if (BOUNDARIES[rel]) continue;
     const code = scriptSections(rel, readFileSync(file, 'utf8'));

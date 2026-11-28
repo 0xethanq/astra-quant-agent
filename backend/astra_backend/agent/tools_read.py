@@ -178,6 +178,7 @@ def build_state_summary() -> Dict[str, Any]:
 
     return {
         "environment": "demo" if settings.okx_simulated else "live",
+        "trading_paused": bool(getattr(settings, "trading_paused", False)),
         "version": __version__,
         "uptime_seconds": int(max(0.0, time.time() - deps.STARTED_AT)),
         "data_health": {
@@ -252,6 +253,7 @@ def build_state_summary() -> Dict[str, Any]:
             "coverage": sess_cov,
         },
         "evolution": {
+            "enabled": bool(evo_cfg.get("enabled", True)),
             "model_id": evo_cfg.get("model_id"),
             "effective_model_id": evo_cfg.get("effective_model_id"),
             "reasoning_effort": evo_cfg.get("reasoning_effort"),
@@ -1018,6 +1020,17 @@ def build_proactive_insights() -> Dict[str, Any]:
             "detail": f"{hrs_txt}最近 {funnel_res.get('cycles_analyzed', 0)} 轮共 {total_slots} 个决策槽位全部输出 WAIT。",
             "metric": f"0/{total_slots} entries",
             "suggested_prompt": "系统近期很难开单，请诊断开单漏斗与取消原因，并帮我优化为高频活跃策略配置",
+        })
+
+    if summary.get("trading_paused"):
+        insights.append({
+            "id": "trading_paused_active",
+            "severity": "info",
+            "category": "health",
+            "title": "全局「暂停新开仓」开关已开启",
+            "detail": "交易引擎当前处于仅护盘态（manage_only）：现有持仓的止损/止盈与分批止盈照常保护，但暂停开立新仓。",
+            "metric": "PAUSED",
+            "suggested_prompt": "当前系统开启了暂停新开仓，请帮我检查持仓情况并评估是否适合恢复开仓",
         })
 
     if summary.get("data_health", {}).get("overall") != "LIVE":

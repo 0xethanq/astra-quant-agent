@@ -44,13 +44,14 @@ function vueFiles(dir, out = []) {
  * 两者不一致 = 抓错了地方（这才是那些判据真正的失效方式，比检查标签位置更忠实）。
  */
 export function extractionHijacked(raw) {
-  const naive = raw.match(/<template>([\s\S]*)<\/template>/);
-  const root = balancedRoot(raw);
+  const src = raw.replace(/\r\n/g, '\n');
+  const naive = src.match(/<template>([\s\S]*)<\/template>/);
+  const root = balancedRoot(src);
   if (!naive || !root) return null;
   if (naive[1] === root.inner) return null;
   return {
-    裸匹配起始行: raw.slice(0, naive.index).split('\n').length,
-    根模块起始行: raw.slice(0, root.start).split('\n').length,
+    裸匹配起始行: src.slice(0, naive.index).split('\n').length,
+    根模块起始行: src.slice(0, root.start).split('\n').length,
     裸匹配多出的开头: naive[1].slice(0, 40).replace(/\n/g, ' '),
   };
 }

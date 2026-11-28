@@ -1,15 +1,10 @@
 <script setup lang="ts">
 /**
- * PageHeader.vue · 页面头部基准件
+ * PageHeader.vue · 控制台页面头部基准件 (v9.2.0)
  * ---------------------------------------------------------------------------
- * DSH 语汇：标题用负字距大字，说明文字降一档并限宽 80ch，
- * 动作区右对齐且可横向滚动（窄屏不换行挤压）。无底部分隔线 —— 层级交给留白。
- * 契约：props（title / description / stacked / embedded）与 actions 插槽保持向后兼容。
- *
- * `embedded`（2026-09-30 后台精简）：页面被吸收为**宿主页的一个页签**时置真。
- * 此时宿主页负责大标题与页签标签，本组件降级为紧凑行 —— 标题降一档、说明收起，
- * 但 **actions 插槽原样渲染**。这条是硬要求：被吸收页的按钮（刷新 / 沙箱 / 新建 /
- * 归档 / 检查更新 …）必须一个不丢，所以"隐藏整个页头"的写法是错的。
+ * · 标准态：24px 负字距大标题 + 14px 清晰说明 + 右对齐动作槽
+ * · `compact`：用于 AI 指挥台单行沉浸顶栏（保留 h1 语义与动作区，无多余边距底线）
+ * · `embedded`：被吸收为宿主页页签时自动降级为紧凑分节头（保留 actions 插槽）
  */
 defineProps<{
   title: string
@@ -17,17 +12,21 @@ defineProps<{
   badge?: string
   stacked?: boolean
   embedded?: boolean
+  compact?: boolean
 }>()
 </script>
 
 <template>
-  <header class="ph" :class="{ 'is-stacked': stacked, 'is-embedded': embedded }">
+  <header
+    class="ph"
+    :class="{ 'is-stacked': stacked, 'is-embedded': embedded, 'is-compact': compact }"
+  >
     <div class="ph-main">
       <div class="ph-title-row">
         <component :is="embedded ? 'h2' : 'h1'" class="ph-title">{{ title }}</component>
         <span v-if="badge" class="badge badge-accent mono ph-badge">{{ badge }}</span>
       </div>
-      <p v-if="description && !embedded" class="ph-desc">{{ description }}</p>
+      <p v-if="description && !embedded && !compact" class="ph-desc">{{ description }}</p>
     </div>
     <div v-if="$slots.actions" class="ph-actions">
       <slot name="actions" />
@@ -40,7 +39,7 @@ defineProps<{
   display: flex;
   flex-direction: column;
   gap: var(--ds-space-3);
-  padding-bottom: var(--ds-space-3);
+  padding-bottom: var(--ds-space-4);
   border-bottom: 1px solid var(--ds-color-border-subtle);
   animation: astra-enter var(--dur-slow) var(--ease-out) backwards;
 }
@@ -56,7 +55,7 @@ defineProps<{
 @media (min-width: 640px) {
   .ph:not(.is-stacked) {
     flex-direction: row;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
   }
 }
@@ -74,7 +73,7 @@ defineProps<{
   color: var(--ds-color-text-primary);
 }
 .ph-desc {
-  margin-top: 6px;
+  margin-top: var(--sp-3);
   max-width: 80ch;
   font-size: var(--text-base);
   line-height: var(--leading-body);
@@ -83,10 +82,25 @@ defineProps<{
 
 .ph.is-embedded {
   gap: var(--ds-space-2);
+  padding-bottom: var(--ds-space-2);
+  border-bottom: 0;
 }
 .ph.is-embedded .ph-title {
   font-size: var(--text-lg);
-  color: var(--ds-color-text-secondary);
+  color: var(--ds-color-text-primary);
+}
+
+.ph.is-compact {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--ds-space-3);
+  padding-bottom: 0;
+  border-bottom: 0;
+  animation: none;
+}
+.ph.is-compact .ph-title {
+  font-size: var(--text-lg);
+  letter-spacing: var(--track-title);
 }
 
 .ph-actions {

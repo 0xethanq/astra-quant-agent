@@ -9,7 +9,7 @@
 
 | 组件 | 引用者数 | 说明 |
 | --- | --- | --- |
-| `PageHeader.vue` | **10** | 一直是共享的（Agent-First 精简删除 `OverviewPage` / `GatewayPage` / `AgentsPage` / `CouncilPage` / `PromptStudioPage` / `EvolutionPage` / `RiskPage` 后由 16 → 10，并入新增的 `AgentConsolePage`；`DataTable.vue` 因唯一消费者 `GatewayPage` 退役已一并移除）。嵌入宿主页页签时传 `embedded`，只收起标题与说明，动作插槽照渲染 |
+| `PageHeader.vue` | **11** | 一直是共享的（Agent-First 精简删除 `OverviewPage` / `GatewayPage` / `AgentsPage` / `CouncilPage` / `PromptStudioPage` / `EvolutionPage` / `RiskPage` 后由 16 → 10，并入新增的 `AgentConsolePage`；`DataTable.vue` 因唯一消费者 `GatewayPage` 退役已一并移除）。嵌入宿主页页签时传 `embedded`，只收起标题与说明，动作插槽照渲染 |
 
 ## `page-parts/` = 单页专用
 
@@ -53,9 +53,9 @@ F7 的另一种解法（推广）对这两个组件目前**不成立**，理由�
 | --- | --- | --- |
 | `base/BaseDrawer` | 4 | `dashboard/` 的 FactorDrawer · LedgerDrawer · PeekDrawer · RadarDrawer |
 | `base/CopyButton` | 8 | `base/BaseCodeBlock` · `dashboard/AboutModal` · `dashboard/FirstRunGuide` · `dashboard/PeekDrawer` · `dashboard/RebateModal` · `views/admin/agent/AgentProposalCard` · `views/admin/AboutPage` · `views/admin/DecisionsPage` |
-| `base/BaseDialog` | 12 | `base/ConfirmHost` · `dashboard/AboutModal` · `dashboard/QuickSetupModal` · `dashboard/RebateModal` · `views/admin/AdminSysPage` · `views/admin/AuditPage` · `views/admin/PolicySnapshotPage` · `views/admin/NotifyPage` · `views/admin/AboutPage` · `views/admin/llm/ModelEditDialog` · `views/admin/llm/RemoteFetchDialog` · `views/admin/SecurityPage` |
-| `base/BaseSwitch` | 6 | `dashboard/SettingsPopover` · `views/admin/NotifyPage` · `views/admin/BackupPage` · `views/admin/llm/ProviderListView` · `views/admin/llm/ProviderDetailView` · `views/admin/SecurityPage` |
-| `base/BaseTabs` | 3 | `dashboard/RadarDrawer` · `views/admin/DecisionsPage` · `views/admin/BackupPage`（后两个是后台宿主页的页签栏） |
+| `base/BaseDialog` | 13 | `base/ConfirmHost` · `dashboard/AboutModal` · `dashboard/QuickSetupModal` · `dashboard/RebateModal` · `views/admin/AdminSysPage` · `views/admin/AuditPage` · `views/admin/PolicySnapshotPage` · `views/admin/NotifyPage` · `views/admin/AboutPage` · `views/admin/llm/ModelEditDialog` · `views/admin/llm/RemoteFetchDialog` · `views/admin/SecurityPage` |
+| `base/BaseSwitch` | 14 | `dashboard/SettingsPopover` · `views/admin/NotifyPage` · `views/admin/BackupPage` · `views/admin/llm/ProviderListView` · `views/admin/llm/ProviderDetailView` · `views/admin/SecurityPage` |
+| `base/BaseTabs` | 5 | `dashboard/RadarDrawer` · `views/admin/DecisionsPage` · `views/admin/BackupPage`（后两个是后台宿主页的页签栏） |
 | `dashboard/DataStatus` | 1 | `dashboard/TopBar` |
 | `dashboard/SettingsPopover` | 1 | `dashboard/TopBar` |
 | `dashboard/FactorDrawer` | 1 | `dashboard/FactorMatrix` |

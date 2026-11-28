@@ -127,7 +127,7 @@ const title = computed(() =>
   flex-wrap: wrap;
 }
 .me-owner {
-  font-size: var(--text-4xs);
+  font-size: var(--text-xs);
   font-weight: 400;
   color: var(--ds-color-text-placeholder);
 }
@@ -152,7 +152,7 @@ const title = computed(() =>
   border: 1px solid var(--ds-color-border-default);
   border-radius: var(--r-ctl);
   background-color: transparent;
-  font-size: var(--text-3xs);
+  font-size: var(--text-xs);
   color: var(--ds-color-text-description);
   cursor: pointer;
   transition: all var(--dur-fast);

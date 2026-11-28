@@ -32,8 +32,8 @@ test('所有二次危险操作确认短语输入框必须禁用 autocomplete 与
     { file: 'components/base/ConfirmHost.vue', vmodel: 'phraseInput' },
     { file: 'views/admin/agent/AgentProposalCard.vue', vmodel: 'phraseInputs[phrase]' },
     { file: 'views/admin/AboutPage.vue', vmodel: 'confirmPhrase' },
-    { file: 'views/admin/SecurityPage.vue', vmodel: 'capitalConfirm' },
-    { file: 'views/admin/SecurityPage.vue', vmodel: 'closePhraseInput' },
+    { file: 'views/admin/security/SecurityPortfolioTab.vue', vmodel: 'capitalConfirm' },
+    { file: 'views/admin/security/SecurityEmergencyTab.vue', vmodel: 'closePhraseInput' },
   ];
 
   for (const { file, vmodel } of targets) {
@@ -71,7 +71,7 @@ test('全站搜索输入框必须禁用 autocomplete 与 spellcheck', () => {
 });
 
 test('密码与凭证输入框正确声明密码管理器支持语义', () => {
-  const sec = readFileSync(path.join(SRC, 'views/admin/SecurityPage.vue'), 'utf8');
+  const sec = readFileSync(path.join(SRC, 'views/admin/security/SecurityEmergencyTab.vue'), 'utf8');
   assert.match(sec, /<input[^>]*v-model="closePassword"[^>]*autocomplete="current-password"/, 'SecurityPage 平仓密码缺少 autocomplete="current-password"');
 
   const adm = readFileSync(path.join(SRC, 'views/admin/AdminSysPage.vue'), 'utf8');

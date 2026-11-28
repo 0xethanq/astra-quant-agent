@@ -10,6 +10,7 @@ import {
   Dna,
   ReceiptText,
   Bot,
+  SlidersHorizontal,
   Terminal,
   KeyRound,
   Cpu,
@@ -67,6 +68,14 @@ export const adminGroups: { key: string; labelKey: string; items: NavItem[] }[] 
         icon: Bot,
         alias: 'agent copilot overview risk prompt council evolution gateway 指挥台 总览 风控 提示词 委员会 自进化 网关',
         component: 'AgentConsolePage',
+      },
+      {
+        key: 'admin-strategy',
+        labelKey: 'nav.admin.strategy',
+        path: '/admin/strategy',
+        icon: SlidersHorizontal,
+        alias: 'strategy risk council prompt evolution schedule pause jobs 策略 风控 投委会 提示词 自进化 时段 暂停 定时任务',
+        component: 'StrategyCenterPage',
       },
       {
         key: 'admin-decisions',

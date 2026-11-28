@@ -5,6 +5,12 @@ export const zhAdminShell = {
   expand: '展开导航',
   breadcrumbRoot: '控制台',
   unsaved: '未保存',
+  roleSuperadmin: 'SUPERADMIN',
+  roleAdmin: 'ADMIN',
+  engineRunning: '交易正常',
+  enginePaused: '暂停开新仓',
+  engineStatusTip: '点击前往「策略与调度」切换全局交易开关',
+  switchLanguage: '切换界面语言',
   saveBar: {
     dirty: '本页有 {n} 处修改尚未保存',
     save: '保存修改',

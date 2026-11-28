@@ -24,6 +24,7 @@ export const zhNav = {
   },
   admin: {
     agent: 'AI 指挥台',
+    strategy: '策略与调度',
     decisions: '系统日志',
     security: '账户与应急',
     llm: '模型连接',

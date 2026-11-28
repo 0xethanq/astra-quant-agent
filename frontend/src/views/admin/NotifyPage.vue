@@ -750,7 +750,7 @@ onBeforeUnmount(() => {
   background-color: var(--up);
 }
 .nf-card-title {
-  font-size: var(--text-xs);
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--ds-color-text-primary);
 }
@@ -762,7 +762,7 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
 }
 .nf-state {
-  font-size: var(--text-3xs);
+  font-size: var(--text-xs);
   font-weight: 600;
   color: var(--ds-color-text-placeholder);
 }
@@ -802,7 +802,7 @@ onBeforeUnmount(() => {
   gap: 6px;
   margin-left: auto;
   min-width: 0;
-  font-size: var(--text-3xs);
+  font-size: var(--text-xs);
 }
 .nf-result.is-idle {
   color: var(--ds-color-text-placeholder);
@@ -866,7 +866,7 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
 }
 .nf-cat-name {
-  font-size: var(--text-xs);
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--ds-color-text-primary);
 }
@@ -876,7 +876,7 @@ onBeforeUnmount(() => {
   border: 1px solid var(--ds-color-border-default);
   background-color: var(--ds-color-bg-surface-1);
   font-family: var(--ds-font-mono);
-  font-size: var(--text-4xs);
+  font-size: var(--text-xs);
   color: var(--ds-color-text-placeholder);
 }
 
@@ -908,7 +908,7 @@ onBeforeUnmount(() => {
   color: var(--ds-color-text-primary);
 }
 .nf-capture-guide {
-  font-size: var(--text-3xs);
+  font-size: var(--text-base);
   line-height: var(--leading-body);
   color: var(--ds-color-text-description);
 }
@@ -920,12 +920,12 @@ onBeforeUnmount(() => {
   background-color: var(--ds-color-bg-surface-inset);
 }
 .nf-capture-meta {
-  font-size: var(--text-3xs);
+  font-size: var(--text-xs);
   color: var(--ds-color-text-placeholder);
 }
 .nf-capture-openid {
   margin-top: 6px;
-  font-size: var(--text-3xs);
+  font-size: var(--text-xs);
   color: var(--ds-color-brand);
   overflow-wrap: anywhere;
 }
@@ -947,7 +947,7 @@ onBeforeUnmount(() => {
   background-color: #fff;
 }
 .nf-bind-link {
-  font-size: var(--text-3xs);
+  font-size: var(--text-xs);
   color: var(--ds-color-brand);
   overflow-wrap: anywhere;
 }

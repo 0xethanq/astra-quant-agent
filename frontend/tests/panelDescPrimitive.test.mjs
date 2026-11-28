@@ -55,6 +55,7 @@ export const PANEL_DESC_USERS = {
 export const DESC_SHAPE_ALLOWED = {
   '.ph-desc': '页头说明（PageHeader 组件）：刻意用 --text-xs(12px) + max-width 80ch，属页头层级而非卡体说明',
   '.sc-note': '安全页提示块：带 border-top + padding-top 的独立块（不是一行说明），间距 16px 是分隔需要',
+  '.auth-footer': '登录页底部防线提示块：带 border-top + padding-top 的独立块，使用 --text-xs(13px) 与 20px 上间距与提交按钮分隔',
 };
 
 function vueFiles(dir, out = []) {
