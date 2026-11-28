@@ -120,10 +120,9 @@ function scanRepo() {
 }
 
 /**
- * 已知且接受的一项（见文件头）。**新增死界面必须在这里显式登记**，
- * 而不是悄悄放行 —— 这是本闸「不空转」的关键。
+ * 已知死 UI 豁免表：空（DocsView.vue 已接入 /images/v920_*.png 点击放大灯箱）。
  */
-const KNOWN_DEAD_UI = ['src/views/docs/DocsView.vue: zoomImage'];
+const KNOWN_DEAD_UI = [];
 
 test('不得存在「永远不会渲染」的界面开关（批 107 新增）', () => {
   const found = scanRepo().map((h) => `${h.file}: ${h.name}`);

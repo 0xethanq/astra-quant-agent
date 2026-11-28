@@ -1,8 +1,8 @@
 <script setup lang="ts">
 /**
- * DocsView.vue · AstraQuant 技术与量化策略文档中心 (v9.1.0)
- * 包含：双轨工作台骨架、目录大纲索引树 (TOC) 与平滑滚动侦测、全功能架构透视、
- * 7 梯队因子与硬防线技术规范、Prompt Caching 提示词缓存体系、AGPL-3.0 + Commons Clause 许可说明
+ * DocsView.vue · AstraQuant 系统文档与使用教程 (v9.2.0)
+ * 包含：双轨工作台布局、左侧目录索引 (TOC) 与滚动高亮、图集放大预览灯箱，
+ * 覆盖公开大屏、AI 助手控制台、5 标签策略配置、智能路由与分批止盈、安全隔离及部署排障。
  */
 import { ref, onMounted, onUnmounted, onBeforeUnmount, watch } from 'vue';
 import { useModalFocus } from '../../composables/useModalFocus';
@@ -10,10 +10,8 @@ import { useRouter } from 'vue-router';
 import {
   ShieldCheck,
   Cpu,
-  FileText,
   ArrowLeft,
   Terminal,
-  Users,
   Brain,
   TrendingUp,
   Layers,
@@ -25,7 +23,7 @@ import {
   BookOpen,
   Github,
   Scale,
-  Zap,
+  SlidersHorizontal,
   ExternalLink,
 } from 'lucide-vue-next';
 import {
@@ -53,18 +51,16 @@ watch(() => Boolean(zoomImage.value), syncZoomFocus);
 onBeforeUnmount(releaseZoomFocus);
 
 const sections = [
-  { id: 'overview', title: '1. 系统架构与量化哲学', icon: TrendingUp },
-  { id: 'dashboard', title: '2. 量化工作台与资产控制舱', icon: Terminal },
-  { id: 'council', title: '3. 对冲基金投委会 (Trading Desk)', icon: Users },
-  { id: 'policy_snapshot', title: '4. 策略版本快照控制台 (Policy Snapshot)', icon: Layers },
-  { id: 'prompt_studio', title: '5. 提示词策略与语义变量插槽', icon: FileText },
-  { id: 'execution_gate', title: '6. 大模型全权直通与执行层物理校验', icon: ShieldCheck },
-  { id: 'risk_control', title: '7. 执行层风控与分批止盈双腿', icon: Lock },
-  { id: 'llm_caching', title: '8. 模型连接、协议与 Prompt Caching', icon: Cpu },
-  { id: 'self_evolution', title: '9. 自进化认知与长期记忆闭环', icon: Brain },
-  { id: 'deployment', title: '10. 极速开箱部署与多通道通知', icon: Server },
-  { id: 'license_rider', title: '11. 开源协议与反割韭菜特约附则', icon: Scale },
-  { id: 'faq', title: '12. 常见问题解答与风控底线 (FAQ)', icon: BookOpen },
+  { id: 'overview', title: '1. 系统架构与核心工作流', icon: TrendingUp },
+  { id: 'dashboard', title: '2. 公开看板：实盘工作台与复盘审计', icon: Terminal },
+  { id: 'agent_console', title: '3. 后台控制：AI 助手与 Diff 回滚', icon: Brain },
+  { id: 'strategy_center', title: '4. 策略配置：32 项风控、智能路由与分批止盈', icon: SlidersHorizontal },
+  { id: 'llm_council', title: '5. 模型连接与多席位决策协同', icon: Cpu },
+  { id: 'security_okx', title: '6. OKX V5 接入与 DEMO/LIVE 安全隔离', icon: ShieldCheck },
+  { id: 'notify_backup', title: '7. 通知网关、自动备份与恢复排障', icon: Layers },
+  { id: 'deployment', title: '8. Docker 部署与常见配置问题', icon: Server },
+  { id: 'license_rider', title: '9. 开源协议与条款说明', icon: Scale },
+  { id: 'faq', title: '10. 常见问题与返佣说明 (FAQ)', icon: BookOpen },
 ];
 
 function scrollToSection(id: string) {
@@ -72,7 +68,7 @@ function scrollToSection(id: string) {
   mobileMenuOpen.value = false;
   const el = document.getElementById(id);
   if (el) {
-    // 批 68：base.css 的 prefers-reduced-motion 只能关掉 CSS 滚动，
+    // base.css 的 prefers-reduced-motion 只能关掉 CSS 滚动，
     // 关不掉 JS 的 behavior:'smooth' —— 前庭敏感用户仍会被强制平滑滚动。
     const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
     el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
@@ -147,7 +143,7 @@ onUnmounted(() => {
             {{ APP_NAME }}
           </h1>
           <span class="font-mono text-3xs text-[var(--ink-3)]">
-            {{ APP_VERSION }} 官方技术文档
+            {{ APP_VERSION }} 使用教程与系统文档
           </span>
         </div>
       </div>
@@ -235,474 +231,412 @@ onUnmounted(() => {
         </nav>
 
         <div class="dsh-card-sub mt-6 p-3.5 text-xs space-y-2">
-          <div class="text-3xs uppercase font-bold text-[var(--ink-3)]">开源技术社区与极客讨论</div>
+          <div class="text-3xs uppercase font-bold text-[var(--ink-3)]">OKX AI 量化开源方案</div>
           <div class="font-bold flex items-center justify-between text-[var(--ink-1)]">
-            <span>LINUX DO 社区</span>
-            <span class="font-mono font-bold text-3xs text-[var(--ink-2)]">linux.do</span>
+            <span>{{ APP_NAME }}</span>
+            <span class="font-mono font-bold text-3xs text-[var(--ink-2)]">{{ APP_VERSION }}</span>
           </div>
           <p class="text-3xs text-[var(--ink-3)] leading-body">
-            遵循 GNU AGPL-3.0 + Commons Clause v1.0 + Anti-Scam 特约附则，打造透明可信的量化基础设施。
+            遵循 GNU AGPL-3.0 + Commons Clause v1.0 + Anti-Scam 附加条款开源发布，支持自托管运行与全链路审计。
           </p>
         </div>
       </aside>
 
       <!-- Right Content Area -->
       <main class="min-w-0 flex-1 space-y-12 pb-24">
-        <!-- 1. 系统概览与量化哲学 -->
+        <!-- 1. 系统架构与核心工作流 -->
         <section id="overview" class="space-y-4 pt-2 scroll-mt-14">
           <div class="flex items-center space-x-2">
             <span class="dsh-pill font-mono font-bold text-3xs">CHAPTER 01</span>
-            <h2 class="text-lg sm:text-xl font-bold tracking-tight text-[var(--ink-strong)]">系统架构与量化哲学</h2>
+            <h2 class="text-lg sm:text-xl font-bold tracking-tight text-[var(--ink-strong)]">系统架构与核心工作流</h2>
           </div>
 
           <p class="text-xs sm:text-sm leading-body font-sans text-[var(--ink-2)]">
-            <strong>AstraQuant</strong> 是一套专为高波动加密货币（Crypto）设计的<strong>OKX 原生全自动波段量化决策与执行操作系统</strong>。系统通过 OKX V5 REST API 纯 Python 直签执行私有账户与交易请求，运行在严格的北京时间（UTC+8）自然日财务基准之上，聚焦 1H~4H 大级别顺势波段，践行<strong>“认知交给大模型，微结构交给7梯队微观因子，底线交给确定性物理风控”</strong>的工程哲学。
+            <strong>AstraQuant</strong> 是一套私有化部署的 <strong>OKX USDT 永续合约 AI 量化决策与执行系统</strong>。系统以 Python 直接签发 OKX V5 接口请求、基于北京时间（UTC+8）自然日统计账本绩效，将多周期因子计算、大模型交易研判与 32 项硬风控拦截拆解为独立可验证的阶段。
           </p>
 
-          <!-- 4 Core Pillars Grid -->
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
             <div class="dsh-card-sub p-4 space-y-2">
               <div class="flex items-center space-x-2 text-xs font-bold text-[var(--up)]">
-                <ShieldCheck class="w-4 h-4" />
-                <span>Fail-Closed 物理硬防线</span>
+                <TrendingUp class="w-4 h-4" />
+                <span>7 梯队微结构因子输入</span>
               </div>
-              <p class="text-xs text-[var(--ink-2)] leading-body">
-                风控绝不寄托于大模型提示词自我约束。底座设立不可逾越的确定性 Python 物理风控管线：行情完整性、反向持仓防冲突、报价几何合法性、单日亏损熔断、杠杆上限与 100% 交易所云端双腿 OCO 挂单保护。
+              <p class="text-3xs text-[var(--ink-2)] leading-body">
+                <code>market_radar.py</code> 按 15m/1H/4H 维度聚合均线结构、VWAP 价值区偏离、CVD 背离、资金费率与盘口失衡深度，以结构化上下文交付给模型，不依赖模型盲看裸价。
               </p>
             </div>
-
             <div class="dsh-card-sub p-4 space-y-2">
-              <div class="flex items-center space-x-2 text-xs font-bold text-[var(--accent)]">
-                <Users class="w-4 h-4" />
-                <span>多模型决策委员会 (Council Pro)</span>
+              <div class="flex items-center space-x-2 text-xs font-bold text-[var(--ds-color-brand)]">
+                <Brain class="w-4 h-4" />
+                <span>单模型主脑 / 多席位协同</span>
               </div>
-              <p class="text-xs text-[var(--ink-2)] leading-body">
-                调度宏观分析师、盘口微结构官、技术动量官等独立参谋席位并发质询，支持一票否决、加权共识与动能突破三种裁决机制，由首席终审仲裁官 (CIO) 收口输出严格机器可读契约。
+              <p class="text-3xs text-[var(--ink-2)] leading-body">
+                默认使用低延迟主模型每 15 分钟推演决策，亦可在策略配置中一键启用模型委员会（宏观、技术、风控、CIO 终审）完成多视角交叉研判。
               </p>
             </div>
-
             <div class="dsh-card-sub p-4 space-y-2">
               <div class="flex items-center space-x-2 text-xs font-bold text-[var(--ink-strong)]">
-                <Zap class="w-4 h-4" />
-                <span>Prompt Caching & 会话亲和体系</span>
+                <ShieldCheck class="w-4 h-4" />
+                <span>32 项物理风控与分批止盈</span>
               </div>
-              <p class="text-xs text-[var(--ink-2)] leading-body">
-                2026-10 升级：单前缀广播让共享市场事实占比超 90%，Zone 0~4 单调波动分级与 Claude/OpenAI/DeepSeek KV 缓存深度对齐，结合浮点防抖与 L1 查询缓存，延迟降低 70%+，成本大幅缩减。
+              <p class="text-3xs text-[var(--ink-2)] leading-body">
+                单笔 1R 预算、最小盈亏比、杠杆上下限、日亏熔断与 DEMO/LIVE 开关全部在 Python 执行层刚性校验；开启 Scale-Out 后可自动分批落袋 TP1 并将止损推至保本。
               </p>
             </div>
-
             <div class="dsh-card-sub p-4 space-y-2">
-              <div class="flex items-center space-x-2 text-xs font-bold text-[var(--warn)]">
-                <Brain class="w-4 h-4" />
-                <span>自进化认知复盘闭环</span>
+              <div class="flex items-center space-x-2 text-xs font-bold text-[var(--ink-strong)]">
+                <SlidersHorizontal class="w-4 h-4" />
+                <span>对话式 AI 助手控制台</span>
               </div>
-              <p class="text-xs text-[var(--ink-2)] leading-body">
-                每日 4 次（02:00/08:00/14:00/20:00）全自动读取真实平仓台账流水进行归因反思与数学验证，更新 <code>structured_trading_memory.json</code> 实战心法，具备时效半衰期淘汰与防虚构机制。
+              <p class="text-3xs text-[var(--ink-2)] leading-body">
+                在 <code>/admin/agent</code> 通过自然语言即可查询持仓、开单漏斗拦截与历史胜率，生成的参数调整统一展示 Diff 审批卡，应用前自动归档快照支持一键回滚。
               </p>
+            </div>
+          </div>
+
+          <div class="dsh-card p-3 space-y-2">
+            <button type="button"
+              @click="zoomImage = '/images/v920_dashboard.png'"
+              class="block w-full text-left cursor-zoom-in group"
+              :title="t('docs.zoomHint')"
+            >
+              <img
+                src="/images/v920_dashboard.png"
+                alt="AstraQuant v9.2 实盘看板主界面"
+                class="w-full rounded-md border border-[var(--line-1)]"
+              />
+            </button>
+            <div class="flex items-center justify-between text-3xs text-[var(--ink-3)] px-1">
+              <span>图 1：AstraQuant 实盘看板（K 线标线、TP1/TP2 分批止盈、活动持仓与最新决策）</span>
+              <span class="font-mono">{{ t('docs.zoomHint') }}</span>
             </div>
           </div>
         </section>
 
-        <!-- 2. 量化工作台与资产控制舱 -->
-        <section id="dashboard" class="space-y-4 pt-6 border-t scroll-mt-14" style="border-color: var(--line-1);">
+        <!-- 2. 公开看板：实盘工作台与复盘审计 -->
+        <section id="dashboard" class="space-y-4 scroll-mt-14">
           <div class="flex items-center space-x-2">
             <span class="dsh-pill font-mono font-bold text-3xs">CHAPTER 02</span>
-            <h2 class="text-lg sm:text-xl font-bold tracking-tight text-[var(--ink-strong)]">量化工作台与资产控制舱</h2>
+            <h2 class="text-lg sm:text-xl font-bold tracking-tight text-[var(--ink-strong)]">公开看板：实盘工作台与复盘审计</h2>
           </div>
 
-          <p class="text-xs sm:text-sm leading-body font-sans text-[var(--ink-2)]">
-            前台终端运行在默认原生端口 <code>http://localhost:8080/trading</code>，采用机构级双轨工作台设计，首屏无赛博朋克光污染，采用半透明微晶磨砂玻璃与双倒角高精微光界面：
+          <p class="text-xs sm:text-sm leading-body text-[var(--ink-2)]">
+            公开前端（<code>/</code>、<code>/factors</code>、<code>/news</code>、<code>/lab</code>、<code>/history</code>）与 <code>/docs</code> 面向交易与复盘查阅，全部接口仅暴露脱敏行情与脱敏统计，无写操作入口：
           </p>
 
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1 text-xs">
-            <div class="dsh-card-sub p-3.5 space-y-1.5">
-              <div class="font-bold text-xs text-[var(--ink-strong)]">主工位操盘中心</div>
-              <p class="text-[var(--ink-2)] leading-body">
-                • <strong>6 单元资产 HUD</strong>：OKX 总权益、走势折线、今日已结、持仓浮盈、多空敞口与云端防线解耦呈现。<br>
-                • <strong>资金费与手续费明细透传</strong>：实时汇总跨周期永续合约资金费与手续费，彻底消除浮盈与净盈亏之间的认知差。<br>
-                • <strong>轻量原生 K 线操盘工作站</strong>：本地打包集成，0 外部依赖免外部网络秒开；支持 150 根 K 线全屏铺满、MA/BOLL/VOL/MACD 多指标共存。
-              </p>
+          <ul class="space-y-2 text-xs text-[var(--ink-2)] list-disc pl-5 leading-body">
+            <li><strong>实盘看板 (<code>/</code>)</strong>：顶部展示账户总权益、当日已实现盈亏（按 UTC+8）、当前持仓浮盈、多空比、保证金占用与止损保护覆盖率；主图表实时标注进场均价、云端止损价 SL 与两段式分批止盈线 <code>TP1 / TP2</code>，点击右上「试算」可在本地预估单笔强平距离与期望盈亏。</li>
+            <li><strong>AI 决策 (<code>/factors</code>)</strong>：按北京时间倒序记录最近推演周期的市场总结与币种信号；点击任意周期条目可在右侧打开<strong>决策详情抽屉</strong>，逐项核对原始提示词长度、市场分析、单币建议与委员会表决理由。</li>
+            <li><strong>策略复盘 (<code>/lab</code>)</strong>：展示每批已平仓样本归因摘要（战绩归因、风控审查、节奏审计、动能分析）与当前生效的自进化经验规则。</li>
+            <li><strong>交易台账 (<code>/history</code>) 与 市场快讯 (<code>/news</code>)</strong>：核对每笔成交的开平仓均价、手续费/资金费率净扣、持仓时长与出场归因（如 <code>AI 主动止盈</code>、<code>超时保本</code>、<code>TP1 触发</code>），支持导出 CSV 与查看 OKX 多空比分布及宏观快讯。</li>
+          </ul>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+            <div class="dsh-card p-3 space-y-2">
+              <button type="button"
+                @click="zoomImage = '/images/v920_decisions.png'"
+                class="block w-full text-left cursor-zoom-in"
+                :title="t('docs.zoomHint')"
+              >
+                <img
+                  src="/images/v920_decisions.png"
+                  alt="AI 决策推演时序流界面"
+                  class="w-full rounded-md border border-[var(--line-1)]"
+                />
+              </button>
+              <div class="text-3xs text-[var(--ink-3)]">图 2：AI 决策时序流（/factors）— 按周期追踪建仓、移损与观望信号</div>
             </div>
-            <div class="dsh-card-sub p-3.5 space-y-1.5">
-              <div class="font-bold text-xs text-[var(--ink-strong)]">7 梯队微观结构因子矩阵</div>
-              <p class="text-[var(--ink-2)] leading-body">
-                • <strong>微结构全景透视</strong>：T0 费率/OI 与精英多空比、T0.5 CVD 累计成交量差与大单净流入、T1 L2 深度与 OBI 盘口失衡度、T1.5 期权 IV 波动率曲面与 Max Pain、T2 期限基差、T3 VWAP 筹码中枢与 VPVR、T4 MACD 加速度与 ADX 动量。<br>
-                • <strong>数据白盒下钻</strong>：点击任一行标的即可呼出全量微结构因子白盒抽屉与完整思考轨迹 (CoT)。
-              </p>
+            <div class="dsh-card p-3 space-y-2">
+              <button type="button"
+                @click="zoomImage = '/images/v920_cot_drawer.png'"
+                class="block w-full text-left cursor-zoom-in"
+                :title="t('docs.zoomHint')"
+              >
+                <img
+                  src="/images/v920_cot_drawer.png"
+                  alt="决策详情与思维链抽屉"
+                  class="w-full rounded-md border border-[var(--line-1)]"
+                />
+              </button>
+              <div class="text-3xs text-[var(--ink-3)]">图 3：点击决策行打开详情抽屉 — 查看完整分析上下文与模型输出</div>
+            </div>
+            <div class="dsh-card p-3 space-y-2">
+              <button type="button"
+                @click="zoomImage = '/images/v920_review.png'"
+                class="block w-full text-left cursor-zoom-in"
+                :title="t('docs.zoomHint')"
+              >
+                <img
+                  src="/images/v920_review.png"
+                  alt="策略复盘与经验规则页"
+                  class="w-full rounded-md border border-[var(--line-1)]"
+                />
+              </button>
+              <div class="text-3xs text-[var(--ink-3)]">图 4：策略复盘页（/lab）— 自动归因统计与自进化规则沉淀</div>
+            </div>
+            <div class="dsh-card p-3 space-y-2">
+              <button type="button"
+                @click="zoomImage = '/images/v920_ledger.png'"
+                class="block w-full text-left cursor-zoom-in"
+                :title="t('docs.zoomHint')"
+              >
+                <img
+                  src="/images/v920_ledger.png"
+                  alt="全量平仓交易台账页"
+                  class="w-full rounded-md border border-[var(--line-1)]"
+                />
+              </button>
+              <div class="text-3xs text-[var(--ink-3)]">图 5：交易台账页（/history）— 净盈亏、手续费、资金费率与 CSV 导出</div>
             </div>
           </div>
         </section>
 
-        <!-- 3. 多模型决策委员会 -->
-        <section id="council" class="space-y-4 pt-6 border-t scroll-mt-14" style="border-color: var(--line-1);">
+        <!-- 3. 后台控制：AI 助手与 Diff 回滚 -->
+        <section id="agent_console" class="space-y-4 scroll-mt-14">
           <div class="flex items-center space-x-2">
             <span class="dsh-pill font-mono font-bold text-3xs">CHAPTER 03</span>
-            <h2 class="text-lg sm:text-xl font-bold tracking-tight text-[var(--ink-strong)]">对冲基金投委会 (Trading Desk & Council Pro)</h2>
+            <h2 class="text-lg sm:text-xl font-bold tracking-tight text-[var(--ink-strong)]">后台控制：AI 助手与 Diff 回滚</h2>
           </div>
 
-          <p class="text-xs sm:text-sm leading-body font-sans text-[var(--ink-2)]">
-            为了彻底消除单一模型的幻觉与思考盲区，系统支持配置任意大模型席位（支持 DeepSeek、Claude、GPT、Qwen 等）组成对抗质询投委会：
+          <p class="text-xs sm:text-sm leading-body text-[var(--ink-2)]">
+            登录后默认进入 <strong>AI 助手</strong>（<code>/admin/agent</code>），右侧挂载实时「策略状态」面板（总览、风控、提示词、委员会、快照）。你无需手动对照多个文件，即可在对话中完成排障与安全调参：
           </p>
 
-          <div class="dsh-card-sub p-4 text-xs space-y-2.5">
-            <div class="font-bold text-xs text-[var(--ink-strong)]">三大投委会共识仲裁机制：</div>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-2.5 pt-1">
-              <div class="p-2.5 rounded border" style="background-color: var(--surface-2); border-color: var(--line-1);">
-                <div class="font-bold text-[var(--down)]">1. 一票否决制 (Paranoid Veto)</div>
-                <div class="text-3xs mt-1 text-[var(--ink-3)]">只要任一参谋提出宏观风险或流动性断崖预警，CIO 仲裁官无条件强制降级为 WAIT。</div>
-              </div>
-              <div class="p-2.5 rounded border" style="background-color: var(--surface-2); border-color: var(--line-1);">
-                <div class="font-bold text-[var(--accent)]">2. 加权共识制 (Weighted Majority)</div>
-                <div class="text-3xs mt-1 text-[var(--ink-3)]">按各席位置信度与历史准确率加权投票，仅在同向权重绝对占优时准许发单。</div>
-              </div>
-              <div class="p-2.5 rounded border" style="background-color: var(--surface-2); border-color: var(--line-1);">
-                <div class="font-bold text-[var(--up)]">3. 动能突破优先 (Alpha Hunter)</div>
-                <div class="text-3xs mt-1 text-[var(--ink-3)]">当 MACD 柱加速度与订单流 CVD 同向共振时，赋予突破分析师优先裁决权。</div>
-              </div>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div class="dsh-card-sub p-4 space-y-1.5">
+              <div class="text-xs font-bold text-[var(--ink-strong)]">1. 只读深度体检</div>
+              <p class="text-3xs text-[var(--ink-2)] leading-body">
+                Agent 可自动调用只读工具统计近 48 周期开单漏斗（为何某币被观望或风控拒单）、费率磨损、模型耗时以及风控冲突。
+              </p>
+            </div>
+            <div class="dsh-card-sub p-4 space-y-1.5">
+              <div class="text-xs font-bold text-[var(--ink-strong)]">2. Diff 变更提案审批</div>
+              <p class="text-3xs text-[var(--ink-2)] leading-body">
+                所有写操作不直接静默落盘，而是输出结构化键值 Diff 提案卡片，明确标出改动前后值与风险提示，由管理员审阅确认。
+              </p>
+            </div>
+            <div class="dsh-card-sub p-4 space-y-1.5">
+              <div class="text-xs font-bold text-[var(--ink-strong)]">3. 前置快照与一键回滚</div>
+              <p class="text-3xs text-[var(--ink-2)] leading-body">
+                确认应用前系统自动保存策略包哈希快照；如调参后发现实盘节奏不如预期，点击卡片左下角「回滚」按钮或切至「快照」栏即可恢复原状。
+              </p>
+            </div>
+          </div>
+
+          <div class="dsh-card-sub p-4 space-y-2 border-l-4 border-[var(--ds-color-brand)]">
+            <div class="text-xs font-bold text-[var(--ink-strong)]">Agent 安全边界（硬编码拒绝越权）</div>
+            <p class="text-3xs text-[var(--ink-2)] leading-body">
+              Agent 仅允许管理策略风控、标的池、交易时段、提示词与委员会参数；系统层<strong>严格禁止</strong> Agent 读取/导出交易所或模型 API 密钥、切换 DEMO/LIVE 账户环境、主动替你手工开平仓，或变更管理员账号口令。
+            </p>
+          </div>
+
+          <div class="dsh-card p-3 space-y-2">
+            <button type="button"
+              @click="zoomImage = '/images/v920_admin_agent.png'"
+              class="block w-full text-left cursor-zoom-in"
+              :title="t('docs.zoomHint')"
+            >
+              <img
+                src="/images/v920_admin_agent.png"
+                alt="AI 助手控制台与原子变更 Diff 提案卡片"
+                class="w-full rounded-md border border-[var(--line-1)]"
+              />
+            </button>
+            <div class="flex items-center justify-between text-3xs text-[var(--ink-3)] px-1">
+              <span>图 6：AI 助手控制台（/admin/agent）— 工具调用诊断、结构化配置 Diff 卡片、一键回滚与右侧策略状态栏</span>
+              <span class="font-mono">{{ t('docs.zoomHint') }}</span>
             </div>
           </div>
         </section>
 
-        <!-- 4. 策略版本快照控制台 -->
-        <section id="policy_snapshot" class="space-y-4 pt-6 border-t scroll-mt-14" style="border-color: var(--line-1);">
+        <!-- 4. 策略配置：32 项风控、智能路由与分批止盈 -->
+        <section id="strategy_center" class="space-y-4 scroll-mt-14">
           <div class="flex items-center space-x-2">
             <span class="dsh-pill font-mono font-bold text-3xs">CHAPTER 04</span>
-            <h2 class="text-lg sm:text-xl font-bold tracking-tight text-[var(--ink-strong)]">策略版本快照控制台 (Policy Snapshot)</h2>
+            <h2 class="text-lg sm:text-xl font-bold tracking-tight text-[var(--ink-strong)]">策略配置：32 项风控、智能路由与分批止盈</h2>
           </div>
 
-          <p class="text-xs sm:text-sm leading-body font-sans text-[var(--ink-2)]">
-            实时聚合提示词工程、自进化心法库、执行层风控基线与投委会席位配置四大单元，生成唯一不可变的 SHA256 哈希指纹（<code>policy_hash</code>）：
+          <p class="text-xs sm:text-sm leading-body text-[var(--ink-2)]">
+            <strong>策略配置页</strong>（<code>/admin/strategy</code>）将以往分散的运维面板整合为 5 个标签页，右上角常驻全局<strong>开仓开关</strong>（开启暂停后拦截所有新开仓，已持仓止损/止盈继续守护）：
           </p>
 
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-            <div class="dsh-card-sub p-3">
-              <div class="font-bold text-[var(--accent)]">1. 不可变哈希指纹</div>
-              <p class="text-3xs mt-1 text-[var(--ink-3)]">四大单元参数发生哪怕一个字变动，即时生成全新唯一指纹，交易台账严格关联此指纹。</p>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div class="dsh-card-sub p-4 space-y-2">
+              <div class="text-xs font-bold text-[var(--ink-strong)]">委托路由模式 (Order Mode)</div>
+              <ul class="text-3xs text-[var(--ink-2)] space-y-1 list-disc pl-4 leading-body">
+                <li><strong>限价挂单 (<code>limit</code>)</strong>：以挂单为主降低滑点，超时未成交则自动撤单放弃本轮机会。</li>
+                <li><strong>市价成交 (<code>market</code>)</strong>：立即按盘口最优价格吃单进场，确保信号不踏空，手续费略高。</li>
+                <li><strong>智能混合 (<code>smart</code>)</strong>：先发送 Post-Only 只挂单限价博取 Maker 低费率，等待超时后对未成交余额用 IOC 补齐（推荐配合 <code>0.15</code> 分钟轮询使用）。</li>
+              </ul>
             </div>
-            <div class="dsh-card-sub p-3">
-              <div class="font-bold text-[var(--accent)]">2. 具名版本归档</div>
-              <p class="text-3xs mt-1 text-[var(--ink-3)]">一键将实盘表现优异的全盘策略打包归档，支持版本备注、比对与跨环境导出。</p>
+            <div class="dsh-card-sub p-4 space-y-2">
+              <div class="text-xs font-bold text-[var(--ink-strong)]">两段式分批止盈 (Scale-Out TP1/TP2)</div>
+              <ul class="text-3xs text-[var(--ink-2)] space-y-1 list-disc pl-4 leading-body">
+                <li>建仓成交后在 OKX 云端自动维护保护单，当价格触发第一目标位 <strong>TP1</strong> 时自动落袋设定比例（默认 <code>35%~50%</code>）。</li>
+                <li>TP1 成交或达到保本 ATR 阈值后，追踪程序自动把剩余仓位的云端止损线移至<strong>开仓均价保本位</strong>，再由 <strong>TP2 / 追踪止盈</strong>吃下后续波段。</li>
+              </ul>
             </div>
-            <div class="dsh-card-sub p-3">
-              <div class="font-bold text-[var(--up)]">3. 秒级原子回滚</div>
-              <p class="text-3xs mt-1 text-[var(--ink-3)]">调优参数偏差导致胜率波动时，一键原子恢复历史最佳策略版本，下一周期即刻生效。</p>
+          </div>
+
+          <div class="dsh-card-sub p-4 space-y-2">
+            <div class="text-xs font-bold text-[var(--ink-strong)]">三大风控预设套件与物理底线</div>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 text-3xs text-[var(--ink-2)]">
+              <div class="p-3 rounded border border-[var(--line-1)] bg-[var(--surface-0)] space-y-1">
+                <div class="font-bold text-[var(--ink-strong)]">保守 (conservative)</div>
+                <p>2x~3x 杠杆，单笔保证金 ≤ 10%，最小盈亏比 ≥ 2.2:1，日亏 3% 触发熔断，禁用顺势加仓。</p>
+              </div>
+              <div class="p-3 rounded border border-[var(--ds-color-brand)] bg-[var(--surface-0)] space-y-1">
+                <div class="font-bold text-[var(--ds-color-brand)]">平衡 (balanced · 出厂推荐)</div>
+                <p>2x~5x 杠杆，单笔 1R 2%，仓位上限 20%，2.0:1~3.5:1 R:R，日亏 5% 熔断，默认启用 TP1 分批锁利。</p>
+              </div>
+              <div class="p-3 rounded border border-[var(--line-1)] bg-[var(--surface-0)] space-y-1">
+                <div class="font-bold text-[var(--ink-strong)]">激进 (aggressive)</div>
+                <p>最高 6x~9.9x 杠杆，单笔 1R 4.5%，允许顺势金字塔加仓，10% 日亏熔断，适合波动扩张行情。</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="dsh-card p-3 space-y-2">
+            <button type="button"
+              @click="zoomImage = '/images/v920_admin_strategy.png'"
+              class="block w-full text-left cursor-zoom-in"
+              :title="t('docs.zoomHint')"
+            >
+              <img
+                src="/images/v920_admin_strategy.png"
+                alt="策略配置 5 标签控制面"
+                class="w-full rounded-md border border-[var(--line-1)]"
+              />
+            </button>
+            <div class="flex items-center justify-between text-3xs text-[var(--ink-3)] px-1">
+              <span>图 7：策略配置（/admin/strategy）— 预设风险套件、smart 智能路由、分批止盈开关与无冲突校验</span>
+              <span class="font-mono">{{ t('docs.zoomHint') }}</span>
             </div>
           </div>
         </section>
 
-        <!-- 5. 提示词策略与变量插槽 -->
-        <section id="prompt_studio" class="space-y-4 pt-6 border-t scroll-mt-14" style="border-color: var(--line-1);">
+        <!-- 5. 模型连接与多席位决策协同 -->
+        <section id="llm_council" class="space-y-4 scroll-mt-14">
           <div class="flex items-center space-x-2">
             <span class="dsh-pill font-mono font-bold text-3xs">CHAPTER 05</span>
-            <h2 class="text-lg sm:text-xl font-bold tracking-tight text-[var(--ink-strong)]">提示词策略与 8 大语义变量插槽</h2>
+            <h2 class="text-lg sm:text-xl font-bold tracking-tight text-[var(--ink-strong)]">模型连接与多席位决策协同</h2>
           </div>
 
-          <p class="text-xs sm:text-sm leading-body font-sans text-[var(--ink-2)]">
-            <strong>全代码库零散落提示词</strong>：所有策略提示词集中管理于 <code>data/prompt_library.json</code>。输出严格采用只读的 <strong>JSON Schema 契约</strong>，彻底消除 Markdown 代码块未闭合或多余客套话带来的解析崩溃。
+          <p class="text-xs sm:text-sm leading-body text-[var(--ink-2)]">
+            模型接口统一在 <strong>模型连接</strong>（<code>/admin/llm</code>）管理，支持 OpenAI、Anthropic 及兼容 OpenAI Chat/Responses 协议的第三方或本地网关：
           </p>
 
-          <!-- Variable Table -->
-          <div class="dsh-card overflow-x-auto">
-            <table class="table w-full text-xs" aria-label="8 大核心实时语义变量插槽说明">
-              <thead>
-                <tr>
-                  <th scope="col">变量插槽</th>
-                  <th scope="col">分类</th>
-                  <th scope="col">注入内容与实战用途</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td class="font-mono font-bold text-[var(--accent)]">&#123;&#123;account_balance&#125;&#125;</td>
-                  <td>资产</td>
-                  <td class="text-[var(--ink-2)]">OKX 私有接口实时拉取的可用 USDT 现金余额与账户总权益</td>
-                </tr>
-                <tr>
-                  <td class="font-mono font-bold text-[var(--accent)]">&#123;&#123;risk_budget&#125;&#125;</td>
-                  <td>风控</td>
-                  <td class="text-[var(--ink-2)]">自适应推导的单笔保证金限额、杠杆区间、单日亏损熔断线与 R:R 底线</td>
-                </tr>
-                <tr>
-                  <td class="font-mono font-bold text-[var(--warn)]">&#123;&#123;account_positions&#125;&#125;</td>
-                  <td>持仓</td>
-                  <td class="text-[var(--ink-2)]">在途活跃持仓方向、均价、未结浮盈 ROI、最高浮盈点（HWM）及极值回撤百分比</td>
-                </tr>
-                <tr>
-                  <td class="font-mono font-bold text-[var(--warn)]">&#123;&#123;pending_orders&#125;&#125;</td>
-                  <td>挂单</td>
-                  <td class="text-[var(--ink-2)]">在途未成交 Maker 限价挂单 ID、价位、数量及挂单时长，供模型执行 KEEP 或 CANCEL</td>
-                </tr>
-                <tr>
-                  <td class="font-mono font-bold text-[var(--ink-strong)]">&#123;&#123;market_matrix&#125;&#125;</td>
-                  <td>行情</td>
-                  <td class="text-[var(--ink-2)]">全标的 7 梯队因子（T0 费率/OI · T0.5 CVD · T1 OBI · T1.5 IV · T2 基差 · T3 VWAP · T4 MACD/RSI）</td>
-                </tr>
-                <tr>
-                  <td class="font-mono font-bold text-[var(--accent)]">&#123;&#123;news_intelligence&#125;&#125;</td>
-                  <td>快讯</td>
-                  <td class="text-[var(--ink-2)]">全网最新重大突发要闻、央行决议与宏观情绪打分标签</td>
-                </tr>
-                <tr>
-                  <td class="font-mono font-bold text-[var(--up)]">&#123;&#123;trading_memory&#125;&#125;</td>
-                  <td>心法</td>
-                  <td class="text-[var(--ink-2)]">真实平仓台账反思提炼的核心教训与实战避坑铁律（源自 structured_trading_memory.json）</td>
-                </tr>
-                <tr>
-                  <td class="font-mono font-bold text-[var(--ink-3)]">&#123;&#123;decision_timestamp&#125;&#125;</td>
-                  <td>时间</td>
-                  <td class="text-[var(--ink-2)]">当前决策周期的精确北京时间戳（UTC+8），杜绝模型时间认知漂移</td>
-                </tr>
-              </tbody>
-            </table>
+          <ul class="space-y-2 text-xs text-[var(--ink-2)] list-disc pl-5 leading-body">
+            <li><strong>自动拉取与连通自检</strong>：填写 Base URL 与 API Key 后可一键拉取远端模型列表并发送测试请求，核验延迟、推理力度（<code>reasoning_effort</code>）及结构化 JSON 返回能力。</li>
+            <li><strong>多模型降级容灾 (Failover)</strong>：可指定 1~3 个备用模型；主模型连续超时或限流时，决策脚本按顺序切换备用链路，仍全败时触发 Fail-Closed 跳过当轮开仓。</li>
+            <li><strong>单模型 vs 模型委员会 (Council)</strong>：若希望追求 15 秒内极速出单并节省 Token，可在 <code>/admin/strategy?tab=council</code> 关闭多席位，由单一主模型直接依据完整系统提示词出单；需要多维度校验时再开启宏观 / 技术 / 风控 / CIO 席位。</li>
+            <li><strong>提示词模块化组装</strong>：系统提示词拆分为安全基线与可插拔策略模块（核心边界模块处于锁定状态不可关闭），支持保存多套命名档案随时切换。</li>
+          </ul>
+        </section>
+
+        <!-- 6. OKX V5 接入与 DEMO/LIVE 安全隔离 -->
+        <section id="security_okx" class="space-y-4 scroll-mt-14">
+          <div class="flex items-center space-x-2">
+            <span class="dsh-pill font-mono font-bold text-3xs">CHAPTER 06</span>
+            <h2 class="text-lg sm:text-xl font-bold tracking-tight text-[var(--ink-strong)]">OKX V5 接入与 DEMO / LIVE 安全隔离</h2>
           </div>
 
-          <!-- 5 Rules -->
-          <div class="dsh-card-sub p-4 space-y-3">
-            <h3 class="text-xs font-bold text-[var(--ink-strong)] flex items-center space-x-1.5">
-              <BookOpen class="w-3.5 h-3.5 text-[var(--accent)]" />
-              <span>💡 高胜率提示词编写五大核心军规（破解“小赚大亏”实战秘诀）</span>
-            </h3>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
-              <div class="p-2.5 rounded border" style="background-color: var(--surface-2); border-color: var(--line-1);">
-                <div class="font-bold text-[var(--up)]">1. 科学波段呼吸，严禁过早提损保本</div>
-                <div class="text-3xs mt-1 text-[var(--ink-3)]">浮盈 &lt; 1.2R 坚决给足 1.8x~2.2x ATR 宽止损呼吸空间；稳固达到 ≥ 1.5R 且波段确立后再移损保本。</div>
-              </div>
-              <div class="p-2.5 rounded border" style="background-color: var(--surface-2); border-color: var(--line-1);">
-                <div class="font-bold text-[var(--accent)]">2. 杜绝惊慌市价平仓，让主升浪充分奔跑</div>
-                <div class="text-3xs mt-1 text-[var(--ink-3)]">严禁在轻度浮盈后因正常日内回抽而市价恐慌平仓；结构未破坏前坚持 HOLD，单笔盈亏比瞄准 2.0R~2.8R。</div>
-              </div>
-              <div class="p-2.5 rounded border" style="background-color: var(--surface-2); border-color: var(--line-1);">
-                <div class="font-bold text-[var(--warn)]">3. 资产敞口自律，防范系统性 Beta 踩踏</div>
-                <div class="text-3xs mt-1 text-[var(--ink-3)]">全账户同向持仓达 2 笔以上时，自动收紧新开仓门槛至 85%+，严格禁止强相关币种同向开仓。</div>
-              </div>
-              <div class="p-2.5 rounded border" style="background-color: var(--surface-2); border-color: var(--line-1);">
-                <div class="font-bold text-[var(--down)]">4. 止损后坚决冷静，杜绝绞肉市逆势接刀</div>
-                <div class="text-3xs mt-1 text-[var(--ink-3)]">标的一旦被扫损，系统强制执行冷静期；未出现大级别真突破前严禁在同一区间重复抄底摸顶。</div>
-              </div>
-            </div>
+          <div class="dsh-card-sub p-4 space-y-2">
+            <div class="text-xs font-bold text-[var(--ink-strong)]">推荐上线验证流程（模拟盘优先）</div>
+            <ol class="text-3xs text-[var(--ink-2)] list-decimal pl-4 space-y-1.5 leading-body">
+              <li>在 OKX 网页端切换至「模拟交易」，创建一组独立 Demo API Key（权限仅勾选<strong>读取 + 交易</strong>，切勿开启提币）。</li>
+              <li>登录 AstraQuant <code>/admin/security</code>（<strong>账户与应急</strong>），在环境区选择 <code>DEMO（模拟盘）</code>，填入 API Key / Secret Key / Passphrase 并点击「测试连接」验证余额与持仓读取成功。</li>
+              <li>至少完整运行 24~48 小时，结合 <code>/admin/agent</code> 与 <code>/lab</code> 检查止损云端挂单、TP1 分批止盈及手续费净额后再考虑小资金切换 <code>LIVE</code> 实盘。</li>
+            </ol>
+          </div>
+
+          <div class="dsh-card-sub p-4 space-y-1.5">
+            <div class="text-xs font-bold text-[var(--ink-strong)]">密钥加密与静态边界</div>
+            <p class="text-3xs text-[var(--ink-2)] leading-body">
+              API 密钥与通道凭证保存在受权限掩码（<code>0600</code>）保护的持久化目录中，前端接口与系统日志均只返回脱敏后缀。所有管理员操作写入独立审计日志，可在 <strong>系统日志</strong>（<code>/admin/decisions</code>）按时间溯源。
+            </p>
           </div>
         </section>
 
-        <!-- 6. 大模型全权直通与执行层物理校验 -->
-        <section id="execution_gate" class="space-y-4 pt-6 border-t scroll-mt-14" style="border-color: var(--line-1);">
+        <!-- 7. 通知网关、自动备份与恢复排障 -->
+        <section id="notify_backup" class="space-y-4 scroll-mt-14">
           <div class="flex items-center space-x-2">
-            <span class="dsh-pill font-mono font-bold text-3xs">CHAPTER 06</span>
-            <h2 class="text-lg sm:text-xl font-bold tracking-tight text-[var(--ink-strong)]">大模型全权直通与执行层物理校验</h2>
+            <span class="dsh-pill font-mono font-bold text-3xs">CHAPTER 07</span>
+            <h2 class="text-lg sm:text-xl font-bold tracking-tight text-[var(--ink-strong)]">通知网关、自动备份与恢复排障</h2>
           </div>
 
-          <p class="text-xs sm:text-sm leading-body font-sans text-[var(--ink-2)]">
-            <strong>2026-10 策略插件系统全面裁撤</strong>：开不开单由大模型（单模型或投委会 CIO）自主裁决，底座不再做主观策略性否决，模型给出的方向、点位、杠杆与保证金<strong>原样直通执行层</strong>。
+          <ul class="space-y-2 text-xs text-[var(--ink-2)] list-disc pl-5 leading-body">
+            <li><strong>多通道通知 (<code>/admin/notify</code>)</strong>：支持 Telegram Bot、QQ 网关、企业微信 / 飞书 / 钉钉 Webhook 与 SMTP 邮件；开平仓成交通知、日亏熔断与异常告警分事件独立开关，并自带测试发送按钮。</li>
+            <li><strong>加密异地备份 (<code>/admin/backup</code>)</strong>：支持将台账数据库、策略快照与配置目录打包为 AES-256-GCM 加密归档，定时推送至 WebDAV / S3 / Telegram / 邮箱，支持在控制面直接校验口令并执行一键恢复。</li>
+            <li><strong>系统管理与更新 (<code>/admin/backup?tab=adminsys</code> / <code>about</code>)</strong>：可添加只读观察员子账号（不可改动风控与开仓开关）、一键安全退出所有管理员会话，以及查看当前版本与仓库更新状态。</li>
+          </ul>
+        </section>
+
+        <!-- 8. Docker 部署与常见配置问题 -->
+        <section id="deployment" class="space-y-4 scroll-mt-14">
+          <div class="flex items-center space-x-2">
+            <span class="dsh-pill font-mono font-bold text-3xs">CHAPTER 08</span>
+            <h2 class="text-lg sm:text-xl font-bold tracking-tight text-[var(--ink-strong)]">Docker 部署与常见配置问题</h2>
+          </div>
+
+          <p class="text-xs sm:text-sm leading-body text-[var(--ink-2)]">
+            生产环境建议使用官方 <code>docker-compose.yml</code> 启动（Node 26 构建静态资源，Python 3.14 运行控制面与交易调度器，外网建议前置 Nginx / Caddy HTTPS 反代）：
           </p>
 
-          <div class="dsh-card-sub p-3.5 space-y-2">
-            <h3 class="text-xs font-bold text-[var(--ink-strong)]">底座仅保留确定性物理必然性校验（Fail-Closed）：</h3>
-            <ul class="list-disc list-inside text-xs text-[var(--ink-2)] space-y-1">
-              <li><strong>数据完整性校验</strong>：关键行情、深度或资金费缺失时拒绝开仓，绝不拿残缺数据冒险。</li>
-              <li><strong>反向持仓防冲突</strong>：同一标的已有在途反向持仓时禁止开仓，防范净持仓模式下意外自我对冲损耗手续费。</li>
-              <li><strong>报价几何合法性</strong>：买多必须满足 <code>止损 &lt; 入场 &lt; 止盈</code>，卖空反向对称，且三价均为有限正数（防范 OKX 51001 拒单）。</li>
-              <li><strong>动态盈亏比底线</strong>：入场前物理核算期望 R:R，低于底线且无高置信度放行时物理拦截。</li>
-              <li><strong>100% 交易所云端 OCO 保护</strong>：每笔成交瞬间，原子挂出交易所侧条件止损单，遭遇断网或进程崩溃依然受到交易所保护。</li>
+          <pre tabindex="0" class="p-4 rounded-lg text-3xs font-mono leading-relaxed overflow-x-auto border bg-[var(--surface-1)] border-[var(--line-1)] text-[var(--ink-1)]"><code>git clone https://github.com/0xethanq/astra-quant-agent.git
+cd astra-quant-agent
+cp backend/env.example backend/.env &amp;&amp; chmod 600 backend/.env
+docker compose up -d --build
+curl -sS http://127.0.0.1:8080/api/v1/health</code></pre>
+
+          <div class="dsh-card-sub p-4 space-y-2">
+            <div class="text-xs font-bold text-[var(--ink-strong)]">部署后快速自检项</div>
+            <ul class="text-3xs text-[var(--ink-2)] space-y-1 list-disc pl-4 leading-body">
+              <li>确认宿主机上 <code>backend/.env</code> 是<strong>文件</strong>而不是目录；若初次直接 <code>docker compose up</code> 导致生成了同名目录，启动脚本会自动报错拦截，按提示删目录并复制 <code>env.example</code> 后重建即可。</li>
+              <li>确认服务器系统时钟已开启 NTP 对时（与 OKX 服务器时间差超过 30s 会触发签名拒收）。</li>
+              <li>若使用 Cloudflare / CDN 反代大屏，注意对 <code>/api/*</code> 禁用静态缓存以确保实时权益与持仓毫秒级刷新。</li>
             </ul>
           </div>
         </section>
 
-        <!-- 7. 执行层风控与分批止盈双腿 -->
-        <section id="risk_control" class="space-y-4 pt-6 border-t scroll-mt-14" style="border-color: var(--line-1);">
-          <div class="flex items-center space-x-2">
-            <span class="dsh-pill font-mono font-bold text-3xs">CHAPTER 07</span>
-            <h2 class="text-lg sm:text-xl font-bold tracking-tight text-[var(--ink-strong)]">执行层风控与分批止盈双腿 (Scale-Out)</h2>
-          </div>
-
-          <p class="text-xs sm:text-sm leading-body font-sans text-[var(--ink-2)]">
-            系统具备行业领先的<strong>分批止盈 (Scale-Out) 交易所侧双腿机制</strong>，解决了“单档止盈容易坐过山车、多档止盈容易丢失止损覆盖”的技术痛点：
-          </p>
-
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1 text-xs">
-            <div class="dsh-card-sub p-3.5 space-y-1.5">
-              <div class="font-bold text-xs text-[var(--up)]">首批止盈腿 (TP1 - 锁定利润)</div>
-              <p class="text-[var(--ink-2)] leading-body">
-                建仓成交后，系统自动在交易所挂出一条独立带量（<code>sz</code>）的 <code>reduceOnly</code> 算法腿（TP1 = 建仓价 ± 1.8x ATR）。由撮合引擎瞬时触发执行，不需要等待 15 分钟轮询。
-              </p>
-            </div>
-            <div class="dsh-card-sub p-3.5 space-y-1.5">
-              <div class="font-bold text-xs text-[var(--accent)]">终点止盈腿 (TP2 - 捕捉主升浪)</div>
-              <p class="text-[var(--ink-2)] leading-body">
-                剩余仓位挂出 TP2 终点目标单。<strong>两条腿各自绑定全额止损</strong>，无论哪一条腿触发，止损覆盖率恒定保持 100%。首批达成后，系统自动将剩余仓位止损抬升至开仓均价（移损保本）。
-              </p>
-            </div>
-          </div>
-        </section>
-
-        <!-- 8. 模型连接、协议与 Prompt Caching -->
-        <section id="llm_caching" class="space-y-4 pt-6 border-t scroll-mt-14" style="border-color: var(--line-1);">
-          <div class="flex items-center space-x-2">
-            <span class="dsh-pill font-mono font-bold text-3xs">CHAPTER 08</span>
-            <h2 class="text-lg sm:text-xl font-bold tracking-tight text-[var(--ink-strong)]">模型连接、协议与 Prompt Caching 提示词缓存</h2>
-          </div>
-
-          <p class="text-xs sm:text-sm leading-body font-sans text-[var(--ink-2)]">
-            <strong>2026-10 核心技术突破</strong>：AstraQuant 实现了专为多模型量化投委会设计的 <strong>Prompt Caching 提示词缓存与会话亲和架构</strong>，大幅削减大模型推理开销与响应延迟：
-          </p>
-
-          <div class="space-y-3 text-xs">
-            <div class="dsh-card-sub p-3.5 space-y-2">
-              <div class="font-bold text-xs text-[var(--accent)]">1. 单前缀广播 (Shared Market/Rules Prefix)</div>
-              <p class="text-[var(--ink-2)] leading-body">
-                投委会宏观官、微结构官、动量官并发质询时，系统将共享规则、常态化风控契约与多标的 7 层因子矩阵沉淀在前缀（占比超 90%）。通过代理会话亲和（Session Affinity）将多席位请求路由至同节点，下游直接命中已热身的 KV Cache，模型首字延迟降低 70%+。
-              </p>
-            </div>
-
-            <div class="dsh-card-sub p-3.5 space-y-2">
-              <div class="font-bold text-xs text-[var(--accent)]">2. 单调波动分级架构 (Monotonic Volatility Hierarchy)</div>
-              <p class="text-[var(--ink-2)] leading-body">
-                彻底重构提示词编排顺序，按数据变动频率严格分层：<strong>Zone 0 不变宪法</strong>（角色设定与只读 Schema）→ <strong>Zone 1 慢变心法</strong>（6 小时复盘记忆）→ <strong>Zone 2 中变舆情</strong>（10 分钟快讯）→ <strong>Zone 3 低频因子</strong>（1H 指标）→ <strong>Zone 4 极高频状态</strong>（当前毫秒与动态秒级盘口）。确保前缀绝不被末尾高频变动打碎。
-              </p>
-            </div>
-
-            <div class="dsh-card-sub p-3.5 space-y-2">
-              <div class="font-bold text-xs text-[var(--accent)]">3. Claude Ephemeral 显式断点与浮点防抖</div>
-              <p class="text-[var(--ink-2)] leading-body">
-                针对 Anthropic Claude 原生注入 <code>cache_control: {"type": "ephemeral"}</code> 边界标记；针对 DeepSeek/OpenAI 严格按 64/128 token 边界对齐。配合<strong>浮点防抖 (Float Anti-Jitter)</strong>，消除末尾微小浮点扰动对哈希命中率的影响。
-              </p>
-            </div>
-          </div>
-        </section>
-
-        <!-- 9. 自进化认知与长期记忆闭环 -->
-        <section id="self_evolution" class="space-y-4 pt-6 border-t scroll-mt-14" style="border-color: var(--line-1);">
+        <!-- 9. 开源协议与条款说明 -->
+        <section id="license_rider" class="space-y-4 scroll-mt-14">
           <div class="flex items-center space-x-2">
             <span class="dsh-pill font-mono font-bold text-3xs">CHAPTER 09</span>
-            <h2 class="text-lg sm:text-xl font-bold tracking-tight text-[var(--ink-strong)]">自进化认知与长期记忆闭环</h2>
+            <h2 class="text-lg sm:text-xl font-bold tracking-tight text-[var(--ink-strong)]">开源协议与条款说明</h2>
           </div>
 
-          <p class="text-xs sm:text-sm leading-body font-sans text-[var(--ink-2)]">
-            系统具备真正闭环的实盘自我进化机制，严格杜绝凭空臆测，只认真实交易台账：
-          </p>
-
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-            <div class="dsh-card-sub p-3 space-y-1">
-              <div class="font-bold text-[var(--ink-strong)]">真实流水对齐</div>
-              <p class="text-[var(--ink-2)] leading-body">
-                每日 4 次（02:00/08:00/14:00/20:00）自动对齐 OKX 真实平仓账单，将开仓时投委会辩论记录与平仓结果无缝关联。
-              </p>
-            </div>
-            <div class="dsh-card-sub p-3 space-y-1">
-              <div class="font-bold text-[var(--ink-strong)]">记忆半衰期淘汰</div>
-              <p class="text-[var(--ink-2)] leading-body">
-                自动归纳核心胜负因，经验条目注入心法库。若市场风格迁移导致某条旧规则在近期持续失准，系统自动启动半衰期弱化与淘汰机制。
-              </p>
-            </div>
+          <div class="dsh-card-sub p-4 space-y-2 text-xs text-[var(--ink-2)] leading-body">
+            <p>
+              <strong>GNU AGPL-3.0 + Commons Clause v1.0 + Anti-Scam 附加条款</strong>：个人研究、内部自部署及透明代码审计完全免费；未经书面授权不得将本系统打包为商业 SaaS 订阅服务对外售卖，亦严禁利用本系统或衍生界面进行虚假喊单与资金盘欺诈。完整原文见仓库根目录 <code>LICENSE</code> 文件。
+            </p>
           </div>
         </section>
 
-        <!-- 10. 极速开箱部署与多通道通知 -->
-        <section id="deployment" class="space-y-4 pt-6 border-t scroll-mt-14" style="border-color: var(--line-1);">
+        <!-- 10. 常见问题与返佣说明 (FAQ) -->
+        <section id="faq" class="space-y-4 scroll-mt-14">
           <div class="flex items-center space-x-2">
             <span class="dsh-pill font-mono font-bold text-3xs">CHAPTER 10</span>
-            <h2 class="text-lg sm:text-xl font-bold tracking-tight text-[var(--ink-strong)]">极速开箱部署与多通道通知</h2>
-          </div>
-
-          <p class="text-xs sm:text-sm leading-body font-sans text-[var(--ink-2)]">
-            AstraQuant 提供最简极速部署体验，开箱 2 分钟完成全链路环境配置：
-          </p>
-
-          <div class="dsh-card-sub p-4 space-y-3 text-xs">
-            <div class="font-bold text-[var(--accent)]">推荐部署方式：</div>
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <div class="p-2.5 rounded border" style="background-color: var(--surface-2); border-color: var(--line-1);">
-                <div class="font-bold text-[var(--up)]">1. 交互式向导 (最快)</div>
-                <div class="text-3xs mt-1 text-[var(--ink-3)] font-mono">./setup.sh</div>
-                <div class="text-3xs mt-1 text-[var(--ink-2)]">2分钟引导配置交易所、模型、风控基线与密码。</div>
-              </div>
-              <div class="p-2.5 rounded border" style="background-color: var(--surface-2); border-color: var(--line-1);">
-                <div class="font-bold text-[var(--accent)]">2. Docker 一键启动</div>
-                <div class="text-3xs mt-1 text-[var(--ink-3)] font-mono">./deploy/docker-start.sh</div>
-                <div class="text-3xs mt-1 text-[var(--ink-2)]">0 宿主机依赖，自带双向看门狗与 .env 目录陷阱拦截。</div>
-              </div>
-              <div class="p-2.5 rounded border" style="background-color: var(--surface-2); border-color: var(--line-1);">
-                <div class="font-bold text-[var(--ink-strong)]">3. 裸机守护 (Systemd)</div>
-                <div class="text-3xs mt-1 text-[var(--ink-3)] font-mono">deploy/install.sh</div>
-                <div class="text-3xs mt-1 text-[var(--ink-2)]">生产级常驻后台与网关，Prometheus 指标开箱即用。</div>
-              </div>
-            </div>
-
-            <div class="pt-2 text-[var(--ink-2)] leading-body">
-              <strong>多通道通知推送</strong>：集成 Telegram Bot、飞书 Webhook、企业微信、Discord Webhook，开仓、止盈、移损、熔断秒级推送至手机。
-            </div>
-          </div>
-        </section>
-
-        <!-- 11. 开源协议与反割韭菜特约附则 -->
-        <section id="license_rider" class="space-y-4 pt-6 border-t scroll-mt-14" style="border-color: var(--line-1);">
-          <div class="flex items-center space-x-2">
-            <span class="dsh-pill font-mono font-bold text-3xs">CHAPTER 11</span>
-            <h2 class="text-lg sm:text-xl font-bold tracking-tight text-[var(--ink-strong)]">开源协议与反割韭菜特约附则</h2>
-          </div>
-
-          <p class="text-xs sm:text-sm leading-body font-sans text-[var(--ink-2)]">
-            AstraQuant 自 v8.5.0 正式版起，正式采用 <strong>GNU AGPL-3.0 + Commons Clause v1.0 + 专有反割韭菜特约附则 (Anti-Scam Rider)</strong> 授权：
-          </p>
-
-          <div class="dsh-card-sub p-4 space-y-3 text-xs">
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div class="space-y-1">
-                <div class="font-bold text-[var(--up)]">网络服务强传染开源 (AGPL-3.0)</div>
-                <p class="text-[var(--ink-3)] leading-body">
-                  任何个人或组织修改本项目并通过网络提供服务（SaaS/Web），必须无条件向所有网络用户完整公开修改后的全部源代码。
-                </p>
-              </div>
-              <div class="space-y-1">
-                <div class="font-bold text-[var(--accent)]">严禁商业转售与收费带单 (Commons Clause)</div>
-                <p class="text-[var(--ink-3)] leading-body">
-                  严禁以任何形式直接或间接转售、分发代码或提供收费订阅与收费跟单服务。个人与机构内部自营交易完全免费。
-                </p>
-              </div>
-              <div class="space-y-1">
-                <div class="font-bold text-[var(--warn)]">严禁反向闭源与混淆改名</div>
-                <p class="text-[var(--ink-3)] leading-body">
-                  必须在所有分发和界面中显著保留原作者署名及官方仓库链接，严禁换皮打包为收费商业闭源软件。
-                </p>
-              </div>
-              <div class="space-y-1">
-                <div class="font-bold text-[var(--down)]">绝对禁止欺诈与非法集资 (Anti-Scam Rider)</div>
-                <p class="text-[var(--ink-3)] leading-body">
-                  严禁将本项目用于承诺收益、非法吸储、收费带单群、代客理财等金融黑灰产，保护社区开源极客不受欺诈侵害。
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- 12. FAQ -->
-        <section id="faq" class="space-y-4 pt-6 border-t scroll-mt-14" style="border-color: var(--line-1);">
-          <div class="flex items-center space-x-2">
-            <span class="dsh-pill font-mono font-bold text-3xs">CHAPTER 12</span>
-            <h2 class="text-lg sm:text-xl font-bold tracking-tight text-[var(--ink-strong)]">常见问题解答与风控底线 (FAQ)</h2>
+            <h2 class="text-lg sm:text-xl font-bold tracking-tight text-[var(--ink-strong)]">常见问题与返佣说明 (FAQ)</h2>
           </div>
 
           <div class="space-y-3 text-xs">
             <div class="dsh-card-sub p-3 space-y-1">
-              <h3 class="font-bold text-[var(--ink-strong)]">Q: 系统如何保证资金安全？</h3>
+              <h3 class="font-bold text-[var(--ink-strong)]">Q: 模拟盘 (DEMO) 与实盘 (LIVE) 数据会混用吗？</h3>
               <p class="text-[var(--ink-2)] leading-body">
-                A: API Key 凭证本地 Fernet 加密存储；绝不开启提现权限；所有订单均有云端双腿 OCO 止损物理保护；全盘具备单日亏损熔断保护。
+                A: 不会。两套环境的密钥、开闸标志与前端环境徽章完全隔离。切换环境时控制面会按所选环境单独鉴权拉取余额与持仓。
               </p>
             </div>
             <div class="dsh-card-sub p-3 space-y-1">
-              <h3 class="font-bold text-[var(--ink-strong)]">Q: 模型请求失败或超时会怎样？</h3>
+              <h3 class="font-bold text-[var(--ink-strong)]">Q: AI 助手或模型请求临时失败时，当前持仓还受保护吗？</h3>
               <p class="text-[var(--ink-2)] leading-body">
-                A: 系统自动触发配置的 Failover 备用模型链；若全链不可用，系统自动保持 Fail-Closed 状态（不执行任何新开仓动作）。
+                A: 会。每一笔开仓的止损/止盈单均挂在 OKX 云端条件单上，同时本地追踪循环与日亏熔断独立于 LLM 接口运行；LLM 全链不可用时自动保持 Fail-Closed，仅跳过新开仓。
               </p>
             </div>
             <div class="dsh-card-sub p-3 space-y-1">
-              <h3 class="font-bold text-[var(--ink-strong)]">Q: 为什么系统只专注 OKX 单一交易所？</h3>
+              <h3 class="font-bold text-[var(--ink-strong)]">Q: 如何配合 TradeSkill（Claude Code / Cursor 技能库）与 OKX 20% 手续费返佣？</h3>
               <p class="text-[var(--ink-2)] leading-body">
-                A: 单一交易所使得 API 签约路径单一、订单状态机极简高内聚，完全消除了跨交易所抽象层带来的执行延迟与对账分歧。
-              </p>
-            </div>
-            <div class="dsh-card-sub p-3 space-y-2">
-              <h3 class="font-bold text-[var(--ink-strong)]">Q: 如何在 Claude Code / Codex / Cursor 等 AI 助手中使用加密货币交易技能？</h3>
-              <p class="text-[var(--ink-2)] leading-body">
-                A: 欢迎访问我们的姊妹项目 <strong>TradeSkill (tradeskill.si)</strong>，获取支持 16 家交易所与 DEX 的 103 个可直装技能包、164+ 官方加密货币交易技能与 4 大交易所同步手续费返佣通道。
+                A: 若你想在日常使用 Claude Code、Cursor 或 Codex 对话看盘与手动调单，可访问姊妹开源项目 <strong>TradeSkill (tradeskill.si)</strong> 获取 16 家交易所/DEX 的官方 Skill；同时可在返佣专区绑定 OKX 官方 <strong>20% 永久返佣</strong> 渠道，配合 AstraQuant 的 <code>smart</code> Post-Only 路由显著降低自动交易长期手续费损耗。
               </p>
               <div class="flex flex-wrap items-center gap-2 pt-1">
                 <a

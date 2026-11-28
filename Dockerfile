@@ -19,9 +19,9 @@ RUN npm ci --prefer-offline || npm install
 COPY frontend/ ./
 # 若 public/images 为外部软链接则解绑防范构建断链
 RUN rm -rf public/images && mkdir -p public/images
-# 落地页以 /images/dashboard_preview.png 引用该图（本地由软链接指向 docs/images），
-# 解绑软链接后必须从构建上下文补回，否则 Vite 构建报 UNRESOLVED_IMPORT
-COPY backend/docs/images/dashboard_preview.png ./public/images/dashboard_preview.png
+# 落地页与 /docs 文档以 /images/*.png 引用文档截图（本地由软链接指向 docs/images），
+# 解绑软链接后必须从构建上下文补回，否则 Vite 构建与容器静态挂载会缺失新截图
+COPY backend/docs/images/ ./public/images/
 RUN npm run build
 
 # ------------------------------------------------------------------------------
