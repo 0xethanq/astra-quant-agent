@@ -128,9 +128,6 @@ const md = computed(() => (store.data as any)?.ai_trading_memory_md || '');
         <h1 class="text-2xl font-semibold tracking-tight text-[var(--ink-strong)]">
           {{ t('dash.evolution.title') }}
         </h1>
-        <span class="text-3xs font-mono text-[var(--ink-3)]">
-          {{ t('dash.evolution.autoIterateBadge') }}
-        </span>
       </div>
 
       <div class="flex items-center gap-2">

@@ -145,7 +145,7 @@ def _apply_single_item(item: Dict[str, Any], actor: str) -> Dict[str, Any]:
             "roles": payload.get("roles"),
         })
         audit_record("council.config.update", "success", {"actor": actor, "via": "agent", "enabled": saved.get("enabled")})
-        return {"ok": True, "detail": "已更新投委会配置"}
+        return {"ok": True, "detail": "已更新模型委员会配置"}
 
     if domain == "instrument":
         from astra_backend import dependencies as deps
@@ -190,7 +190,7 @@ def _apply_single_item(item: Dict[str, Any], actor: str) -> Dict[str, Any]:
             raise ValueError("；".join(errs))
         save_trading_session(norm_sess)
         audit_record("gateway.trading_session.update", "success", {"actor": actor, "via": "agent", "enabled": norm_sess["enabled"]})
-        return {"ok": True, "detail": "已更新交易时段闸门"}
+        return {"ok": True, "detail": "已更新交易时段限制"}
 
     if domain == "llm":
         from astra_backend.llm_manager import update_llm_settings
@@ -203,14 +203,14 @@ def _apply_single_item(item: Dict[str, Any], actor: str) -> Dict[str, Any]:
             fallback_model_ids=payload.get("fallback_model_ids"),
         )
         audit_record("llm.settings.update", "success", {"actor": actor, "via": "agent", "active_model_id": res.get("active_model_id")})
-        return {"ok": True, "detail": f"已更新 LLM 全局设置（主脑：{res.get('active_model_id')}）"}
+        return {"ok": True, "detail": f"已更新模型设置（主模型：{res.get('active_model_id')}）"}
 
     if domain == "evolution":
         from astra_backend.evolution_config import save_evolution_config
 
         save_evolution_config(payload)
         audit_record("evolution.config.update", "success", {"actor": actor, "via": "agent"})
-        return {"ok": True, "detail": "已更新自进化配置"}
+        return {"ok": True, "detail": "已更新定时复盘配置"}
 
     if domain == "memory":
         from scripts import evolution_shield
@@ -220,21 +220,21 @@ def _apply_single_item(item: Dict[str, Any], actor: str) -> Dict[str, Any]:
         if action == "add":
             evolution_shield.admin_mutate("add", texts=[str(payload["text"])], expected_version=ver)
             audit_record("memory.item.add", "success", {"actor": actor, "via": "agent"})
-            return {"ok": True, "detail": "已新增自进化心法条目"}
+            return {"ok": True, "detail": "已添加经验规则"}
         if action == "toggle":
             target = evolution_shield.toggle_lesson(str(payload["lesson_id"]), expected_version=ver)
             if not target:
-                raise ValueError("未找到指定心法条目")
+                raise ValueError("未找到指定规则条目")
             audit_record("memory.lesson.toggle", "success", {"actor": actor, "via": "agent", "id": payload["lesson_id"]})
-            return {"ok": True, "detail": f"已切换心法启停：{payload['lesson_id']}"}
+            return {"ok": True, "detail": f"已切换规则状态：{payload['lesson_id']}"}
         if action == "delete":
             evolution_shield.admin_mutate("delete", index=0, lesson_id=str(payload["lesson_id"]), expected_version=ver)
             audit_record("memory.item.delete", "success", {"actor": actor, "via": "agent", "id": payload["lesson_id"]})
-            return {"ok": True, "detail": f"已删除心法条目：{payload['lesson_id']}"}
+            return {"ok": True, "detail": f"已删除规则：{payload['lesson_id']}"}
         if action == "reset":
             evolution_shield.reset_all_lessons(expected_version=ver)
             audit_record("memory.reset_all", "success", {"actor": actor, "via": "agent"})
-            return {"ok": True, "detail": "已清空心法库"}
+            return {"ok": True, "detail": "已清空经验规则"}
 
     if domain == "policy_restore":
         from astra_backend.policy_snapshot import restore_archived_policy
@@ -278,7 +278,7 @@ def _apply_single_item(item: Dict[str, Any], actor: str) -> Dict[str, Any]:
             audit_record("agent.ops.evolution", "success" if cp.returncode == 0 else "failed", {"actor": actor, "via": "agent", "rc": cp.returncode})
             if cp.returncode != 0:
                 raise ValueError(f"自进化复盘退出码 {cp.returncode}")
-            return {"ok": True, "detail": "已完成一轮自进化认知复盘"}
+            return {"ok": True, "detail": "已完成策略复盘"}
 
         if act == "cancel_stale_limit_orders":
             from astra_backend import dependencies as deps

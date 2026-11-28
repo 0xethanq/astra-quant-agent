@@ -121,13 +121,13 @@ router.beforeEach(async (to) => {
 
 /* SEO 标题：中文为主（与后端钉扎测试与 CF 缓存语义一致），后台 noindex */
 const PUBLIC_TITLES: Record<string, string> = {
-  '/': 'AstraQuant | 机构级加密货币波段量化终端 & AI交易主脑',
-  '/trading': '实盘矩阵 | AstraQuant',
-  '/factors': 'AI 推演 · 决策审计 | AstraQuant',
-  '/news': '舆情情报 · 聪明钱 | AstraQuant',
-  '/lab': '自进化 · 认知中枢 | AstraQuant',
-  '/history': '交易台账 · 生命周期 | AstraQuant',
-  '/docs': '官方文档 | AstraQuant',
+  '/': 'AstraQuant | 量化交易终端',
+  '/trading': '实盘看板 | AstraQuant',
+  '/factors': 'AI 决策 | AstraQuant',
+  '/news': '市场快讯 | AstraQuant',
+  '/lab': '策略复盘 | AstraQuant',
+  '/history': '交易台账 | AstraQuant',
+  '/docs': '系统文档 | AstraQuant',
 }
 
 export function updateDocumentTitle(to = router.currentRoute.value) {

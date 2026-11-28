@@ -51,13 +51,9 @@ function pick(instId: string) {
     <!-- 轻量无边框顶部标题行（去掉全宽横条线，保留 Focus Mode 入口） -->
     <div class="flex items-center justify-between gap-2 mb-3">
       <div class="flex items-center gap-2.5">
-        <span class="dsh-status-dot active" aria-hidden="true" />
         <h1 class="text-xs font-mono font-semibold uppercase tracking-wider text-[var(--ink-strong)]">
           {{ t('dash.matrix.title') }}
         </h1>
-        <span class="text-4xs font-mono text-[var(--ink-3)] uppercase">
-          · {{ t('dash.matrix.hudProdDynamics') }}
-        </span>
       </div>
 
       <button type="button"

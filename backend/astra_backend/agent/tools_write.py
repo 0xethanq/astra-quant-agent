@@ -320,21 +320,21 @@ def _propose_council_update(args: Dict[str, Any]) -> Dict[str, Any]:
     if args.get("enabled") is not None:
         val = bool(args["enabled"])
         if val != bool(cur.get("enabled", False)):
-            diffs.append({"field": "enabled", "label": "投委会总开关", "before": str(bool(cur.get("enabled"))), "after": str(val)})
+            diffs.append({"field": "enabled", "label": "启用模型委员会", "before": str(bool(cur.get("enabled"))), "after": str(val)})
         nxt["enabled"] = val
 
     if args.get("consensus_mode"):
         mode = str(args["consensus_mode"]).strip().lower()
         if mode not in VALID_CONSENSUS_MODES:
-            raise ValueError(f"无效仲裁模式：{mode}（可选：{', '.join(sorted(VALID_CONSENSUS_MODES))}）")
+            raise ValueError(f"无效共识模式：{mode}（可选：{', '.join(sorted(VALID_CONSENSUS_MODES))}）")
         if mode != cur.get("consensus_mode"):
-            diffs.append({"field": "consensus_mode", "label": "仲裁模式", "before": str(cur.get("consensus_mode")), "after": mode})
+            diffs.append({"field": "consensus_mode", "label": "共识模式", "before": str(cur.get("consensus_mode")), "after": mode})
         nxt["consensus_mode"] = mode
 
     if args.get("timeout_seconds") is not None:
         t_val = clamp_council_timeout(args["timeout_seconds"])
         if abs(float(cur.get("timeout_seconds", 240.0)) - t_val) > 1e-6:
-            diffs.append({"field": "timeout_seconds", "label": "超时预算(秒)", "before": str(cur.get("timeout_seconds")), "after": str(t_val)})
+            diffs.append({"field": "timeout_seconds", "label": "超时(秒)", "before": str(cur.get("timeout_seconds")), "after": str(t_val)})
         nxt["timeout_seconds"] = t_val
 
     role_updates = args.get("role_updates")
@@ -344,7 +344,7 @@ def _propose_council_update(args: Dict[str, Any]) -> Dict[str, Any]:
             if not isinstance(patch_data, dict):
                 continue
             if rid not in roles or not isinstance(roles[rid], dict):
-                raise ValueError(f"投委会不存在席位：{rid}")
+                raise ValueError(f"模型委员会不存在席位：{rid}")
             for field_name in ("enabled", "weight", "model_id", "reasoning_effort", "temperature", "prompt", "name"):
                 if field_name not in patch_data or patch_data[field_name] is None:
                     continue
@@ -361,11 +361,11 @@ def _propose_council_update(args: Dict[str, Any]) -> Dict[str, Any]:
                 roles[rid][field_name] = new_v
 
     if not diffs:
-        raise ValueError("投委会配置与当前完全一致，无变更")
+        raise ValueError("模型委员会配置与当前一致，无变更")
 
     prob = validate_council_roles(nxt.get("roles"))
     if prob:
-        raise ValueError(f"投委会配置校验失败：{prob}")
+        raise ValueError(f"模型委员会配置校验失败：{prob}")
     model_probs = validate_seat_model_bindings(nxt.get("roles"), cur.get("roles"))
     if model_probs:
         raise ValueError("；".join(model_probs))
@@ -374,7 +374,7 @@ def _propose_council_update(args: Dict[str, Any]) -> Dict[str, Any]:
         "id": _item_id(),
         "domain": "council",
         "action": "update",
-        "title": f"更新投委会配置（{len(diffs)} 项）",
+        "title": f"更新模型委员会配置（{len(diffs)} 项）",
         "reason": reason,
         "payload": {
             "enabled": bool(nxt.get("enabled", False)),
@@ -588,21 +588,21 @@ def _propose_evolution_config_update(args: Dict[str, Any]) -> Dict[str, Any]:
             if known and mid not in known:
                 raise ValueError(f"自进化模型 {mid} 未在模型库登记")
         if mid != cur.get("model_id"):
-            diffs.append({"field": "model_id", "label": "自进化专属模型", "before": str(cur.get("model_id")), "after": mid})
+            diffs.append({"field": "model_id", "label": "复盘模型", "before": str(cur.get("model_id")), "after": mid})
             payload["model_id"] = mid
 
     if args.get("reasoning_effort"):
         eff = str(args["reasoning_effort"]).strip().lower()
         if eff not in VALID_EFFORTS:
-            raise ValueError(f"自进化思考强度无效：{eff}（可选：{', '.join(sorted(VALID_EFFORTS))}）")
+            raise ValueError(f"复盘思考强度无效：{eff}（可选：{', '.join(sorted(VALID_EFFORTS))}）")
         if eff != cur.get("reasoning_effort"):
-            diffs.append({"field": "reasoning_effort", "label": "自进化思考强度", "before": str(cur.get("reasoning_effort")), "after": eff})
+            diffs.append({"field": "reasoning_effort", "label": "思考强度", "before": str(cur.get("reasoning_effort")), "after": eff})
             payload["reasoning_effort"] = eff
 
     if args.get("thinking_timeout") is not None:
         t_val = max(MIN_TIMEOUT, min(MAX_TIMEOUT, float(args["thinking_timeout"])))
         if abs(float(cur.get("thinking_timeout", 300.0)) - t_val) > 1e-6:
-            diffs.append({"field": "thinking_timeout", "label": "自进化思考超时(秒)", "before": str(cur.get("thinking_timeout")), "after": str(t_val)})
+            diffs.append({"field": "thinking_timeout", "label": "超时(秒)", "before": str(cur.get("thinking_timeout")), "after": str(t_val)})
             payload["thinking_timeout"] = t_val
 
     if args.get("analysis_depth"):
@@ -610,23 +610,23 @@ def _propose_evolution_config_update(args: Dict[str, Any]) -> Dict[str, Any]:
         if depth not in {"standard", "deep"}:
             raise ValueError("analysis_depth 仅支持 standard 或 deep")
         if depth != cur.get("analysis_depth"):
-            diffs.append({"field": "analysis_depth", "label": "自进化复盘深度", "before": str(cur.get("analysis_depth")), "after": depth})
+            diffs.append({"field": "analysis_depth", "label": "复盘深度", "before": str(cur.get("analysis_depth")), "after": depth})
             payload["analysis_depth"] = depth
 
     if args.get("start_time"):
         st = str(args["start_time"]).strip()
         if st != cur.get("start_time"):
-            diffs.append({"field": "start_time", "label": "复盘起算时间", "before": str(cur.get("start_time")), "after": st})
+            diffs.append({"field": "start_time", "label": "起算时间", "before": str(cur.get("start_time")), "after": st})
             payload["start_time"] = st
 
     if not diffs:
-        raise ValueError("自进化配置与当前完全一致，无变更")
+        raise ValueError("定时复盘配置与当前一致，无变更")
 
     return {
         "id": _item_id(),
         "domain": "evolution",
         "action": "update",
-        "title": f"更新自进化配置（{len(diffs)} 项）",
+        "title": f"更新定时复盘配置（{len(diffs)} 项）",
         "reason": str(args.get("reason") or "").strip(),
         "payload": payload,
         "diff_type": "kv",
@@ -657,11 +657,11 @@ def _propose_memory_mutation(args: Dict[str, Any]) -> Dict[str, Any]:
             "id": _item_id(),
             "domain": "memory",
             "action": "add",
-            "title": "新增自进化实战心法",
+            "title": "添加经验规则",
             "reason": reason,
             "payload": {"text": text},
             "diff_type": "kv",
-            "diff": [{"field": "lesson", "label": "新增心法条目", "before": "—", "after": text}],
+            "diff": [{"field": "lesson", "label": "新增规则", "before": "—", "after": text}],
             "warnings": [],
             "high_risk": False,
             "required_phrase": "",
@@ -679,7 +679,7 @@ def _propose_memory_mutation(args: Dict[str, Any]) -> Dict[str, Any]:
                 "id": _item_id(),
                 "domain": "memory",
                 "action": "toggle",
-                "title": f"{'启用' if nxt_enabled else '停用'}心法：{str(target.get('rule_text') or '')[:32]}",
+                "title": f"{'启用' if nxt_enabled else '停用'}规则：{str(target.get('rule_text') or '')[:32]}",
                 "reason": reason,
                 "payload": {"lesson_id": lesson_id},
                 "diff_type": "kv",
@@ -698,7 +698,7 @@ def _propose_memory_mutation(args: Dict[str, Any]) -> Dict[str, Any]:
             "id": _item_id(),
             "domain": "memory",
             "action": "delete",
-            "title": f"删除心法：{str(target.get('rule_text') or '')[:32]}",
+            "title": f"删除规则：{str(target.get('rule_text') or '')[:32]}",
             "reason": reason,
             "payload": {"lesson_id": lesson_id},
             "diff_type": "kv",
@@ -719,15 +719,15 @@ def _propose_memory_mutation(args: Dict[str, Any]) -> Dict[str, Any]:
             "id": _item_id(),
             "domain": "memory",
             "action": "reset",
-            "title": f"清空全部 {len(lessons)} 条实战心法",
+            "title": f"清空全部 {len(lessons)} 条规则",
             "reason": reason,
             "payload": {},
             "diff_type": "kv",
-            "diff": [{"field": "lessons", "label": "心法库条数", "before": str(len(lessons)), "after": "0"}],
-            "warnings": ["该操作将清空所有已积累的心法（应用前会自动拍策略快照以便恢复）"],
+            "diff": [{"field": "lessons", "label": "规则数量", "before": str(len(lessons)), "after": "0"}],
+            "warnings": ["将清空所有已保存的经验规则（应用前自动备份快照）"],
             "high_risk": True,
             "required_phrase": "RESET MEMORY",
-            "required_phrase_reason": "清空全部自进化实战心法",
+            "required_phrase_reason": "清空全部经验规则",
         }
 
     raise ValueError(f"不支持的心法操作：{action}")
@@ -758,7 +758,7 @@ def _propose_policy_restore(args: Dict[str, Any]) -> Dict[str, Any]:
             {"field": "target_snapshot", "label": "目标策略快照", "before": "当前运行策略", "after": f"{entry.get('name', policy_hash)} ({policy_hash})"},
             {"field": "archived_at", "label": "快照归档时间", "before": "—", "after": str(entry.get("archived_at") or "—")},
         ],
-        "warnings": ["将同时恢复该快照对应的提示词方案、心法库、投委会与风控参数（恢复前会自动拍当前快照兜底）"],
+        "warnings": ["将同步恢复该快照对应的提示词、规则、模型委员会与风控参数"],
         "high_risk": False,
         "required_phrase": "",
         "required_phrase_reason": "",
@@ -791,7 +791,7 @@ def _propose_order_mode_update(args: Dict[str, Any]) -> Dict[str, Any]:
         "diff": [
             {"field": "ASTRA_ORDER_MODE", "label": "委托订单模式", "before": labels.get(current, current), "after": labels[target]},
         ],
-        "warnings": ["smart 模式在近盘/高置信度机会下自动采用市价极速吃单并重锚保护腿，深回踩位仍挂限价单"] if target == "smart" else [],
+        "warnings": ["smart 模式根据偏离程度自动选择市价或限价委托"] if target == "smart" else [],
         "high_risk": False,
         "required_phrase": "",
         "required_phrase_reason": "",
@@ -803,15 +803,15 @@ def _propose_ops_action(args: Dict[str, Any]) -> Dict[str, Any]:
     reason = str(args.get("reason") or "").strip()
     meta = {
         "run_dry_run": {
-            "title": "执行一轮实时决策快照预演 (Dry-Run)",
+            "title": "运行一次决策模拟测试 (Dry-Run)",
             "after": "立即基于最新行情与策略触发只读预演",
-            "warnings": ["仅执行推演诊断，不产生实际委托单"],
+            "warnings": ["仅作模拟测试，不会实际下单"],
             "high_risk": False,
             "phrase": "",
             "phrase_reason": "",
         },
         "trigger_evolution_review": {
-            "title": "触发一次自进化认知复盘 (Evolution Review)",
+            "title": "运行一次策略复盘",
             "after": "拉起 self_improvement_engine 执行一次只读账本复盘",
             "warnings": ["仅触发复盘分析与记忆评估，不改变实盘头寸"],
             "high_risk": False,

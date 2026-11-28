@@ -195,7 +195,7 @@ function isPhraseInvalid(phrase: string): boolean {
           >
             <CheckCircle2 v-if="resultForItem(itemIdOf(item))?.ok" :size="11" />
             <XCircle v-else :size="11" />
-            <span>{{ resultForItem(itemIdOf(item))?.detail || resultForItem(itemIdOf(item))?.error }}</span>
+            <span>{{ resultForItem(itemIdOf(item))?.ok ? t('common.ok') : (resultForItem(itemIdOf(item))?.detail || resultForItem(itemIdOf(item))?.error) }}</span>
           </span>
         </div>
 

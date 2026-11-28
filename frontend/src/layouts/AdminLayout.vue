@@ -173,8 +173,8 @@ watch(() => route.path, () => (drawerOpen.value = false));
           <span class="wb-user-avatar mono">{{ operatorInitial }}</span>
           <div class="wb-user-meta">
             <span class="wb-user-name truncate">{{ auth.user.username }}</span>
-            <span class="wb-user-role mono">
-              {{ auth.isSuperadmin ? t('admin.shell.roleSuperadmin') : t('admin.shell.roleAdmin') }}
+            <span v-if="!auth.isSuperadmin" class="wb-user-role mono">
+              {{ t('admin.shell.roleAdmin') }}
             </span>
           </div>
         </div>

@@ -1,7 +1,7 @@
 /** 实盘矩阵：KPI 带 / 持仓 / 挂单 / K线工作站 / 因子矩阵 */
 export const zhMatrix = {
-  title: '实盘矩阵',
-  desc: '账户、持仓、挂单与因子矩阵同屏监控',
+  title: '实盘看板',
+  desc: '账户、持仓、挂单与行情指标',
 
   kpi: {
     equity: '账户总权益',
@@ -16,8 +16,8 @@ export const zhMatrix = {
     todayTip: '今日 00:00（UTC+8）以来平仓实现的净盈亏',
     floatTip: '在途持仓按标记价计算的未实现盈亏',
     marginTip: '已用保证金 / 账户总权益',
-    ocoTip: '止损止盈保护覆盖率',
-    allCovered: '全覆盖',
+    ocoTip: '止损止盈覆盖率',
+    allCovered: '正常',
     missN: '{n} 笔缺失',
     day14: '近 14 日',
     vsYesterday: '较昨日',
@@ -106,7 +106,7 @@ export const zhMatrix = {
   },
 
   chart: {
-    title: 'K 线工作站',
+    title: 'K 线图表',
     perp: '永续',
     holding: '持仓',
     overlays: '主图叠加',
@@ -136,31 +136,29 @@ export const zhMatrix = {
     indicatorHint: '点击切换显示，最多同时 4 组',
     sim: {
       simulate: '试算',
-      enter: '进入 R:R 试算',
+      enter: 'R:R 试算',
       exit: '退出试算',
-      title: 'R:R 试算台',
+      title: '盈亏比试算',
       linked: '联动实盘持仓',
       spec: '假设测算',
       rrOk: '期望盈亏比',
       rrLow: '盈亏比不足',
       rrMin: '底线 2.0R',
-      atr: '止损呼吸空间',
-      atrOk: '防插针区间',
+      atr: '止损缓冲空间',
+      atrOk: '合理区间',
       atrDev: '偏离 1.8~2.2x',
       tp: '预期收益',
       sl: '最大风险',
-      reset: '复位',
+      reset: '重置',
       copy: '复制风控参数',
-      /* 批 77：剪贴板文案此前硬编码中文（`【ASTRA 风控测算】` / `入场:` / `SL:` / `TP:`），
-         英文界面下用户复制出来是一段中英混排。 */
       copySummary: '【AstraQuant 风控测算】{sym} 入场:{entry} SL:{sl} TP:{tp} R:R={rr}:1',
     },
   },
 
   matrix: {
-    title: '因子动能矩阵',
-    desc: '点击任意行查看完整证据链',
-    empty: '等待首个因子快照',
+    title: '行情与指标',
+    desc: '点击任意行查看详细指标',
+    empty: '等待行情快照',
     col: {
       symbol: '标的',
       price: '现价',
@@ -229,20 +227,19 @@ export const zhMatrix = {
   colActions: '工位操作',
   chartTip: '在主图切换到该标的',
   chartBtn: '看主图',
-  focusTip: '进入沉浸模式',
-  focusRestoreTip: '恢复常规看板',
+  focusTip: '进入全屏看盘',
+  focusRestoreTip: '退出全屏模式',
   hudProdDynamics: '15M 周期',
-  focusEnter: '沉浸模式',
-  focusExit: '退出沉浸',
-  // ── 批 41：本地化写死文案（FactorMatrix 搜索框）──
+  focusEnter: '全屏模式',
+  focusExit: '退出全屏',
   searchPlaceholder: '搜索标的 (BTC/ETH)...',
   councilRail: {
-    title: 'AI 投委会裁决',
-    empty: '等待本轮 AI 投委会推演快照',
-    inspect: '推演详情',
-    allCycles: '完整序列',
-    waitMode: '全市场观望 · 空仓防御',
-    councilOn: '投委会开启',
-    councilOff: '单模推演',
+    title: 'AI 最新决策',
+    empty: '等待新一轮 AI 决策',
+    inspect: '详情',
+    allCycles: '全部',
+    waitMode: '当前观望 · 无开仓信号',
+    councilOn: '多模型',
+    councilOff: '单模型',
   },
 };

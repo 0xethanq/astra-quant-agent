@@ -4,7 +4,6 @@
  * 纯净低饱和黑白/深灰主题，分层卡片结构，呈现 OKX 账户总权益、走势、浮亏与防线
  */
 import { computed } from 'vue';
-import { ShieldCheck } from 'lucide-vue-next';
 import { useDashboardStore } from '../../stores/dashboard';
 import { useI18n } from '../../composables/useI18n';
 import { fmtNum, fmtSigned, fmtPct, arrow } from '../../utils/format';
@@ -133,14 +132,10 @@ const ocoCoverage = computed(() => {
         :bare="true"
         :label="t('dash.matrix.kpi.oco')"
         :value="`${ocoCoverage.pct}%`"
-        :delta="ocoCoverage.missing ? t('dash.matrix.kpi.missN', undefined, { n: ocoCoverage.missing }) : t('dash.matrix.kpi.allCovered')"
-        :delta-tone="ocoCoverage.pct === 100 ? 'up' : 'warn'"
+        :delta="ocoCoverage.missing ? t('dash.matrix.kpi.missN', undefined, { n: ocoCoverage.missing }) : undefined"
+        :delta-tone="ocoCoverage.missing ? 'warn' : 'muted'"
         :hint="t('dash.matrix.kpi.ocoTip')"
-      >
-        <template #extra>
-          <ShieldCheck class="h-3.5 w-3.5 shrink-0" :style="{ color: ocoCoverage.pct === 100 ? 'var(--up)' : 'var(--warn)' }" />
-        </template>
-      </BaseStat>
+      />
     </div>
   </section>
 </template>

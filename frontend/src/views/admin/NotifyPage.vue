@@ -399,9 +399,6 @@ onBeforeUnmount(() => {
   <div class="nf">
     <PageHeader :title="t('nav.admin.notify')">
       <template #actions>
-        <span class="badge badge-accent mono">
-          {{ t('admin.notify.channelsChip') }} {{ enabledChannelsCount }}/6
-        </span>
         <button type="button" class="btn btn-ghost btn-sm" :disabled="loading" @click="loadConfig()">
           <Loader2 v-if="loading && config" :size="14" class="animate-spin shrink-0" />
           <RefreshCw v-else :size="14" />

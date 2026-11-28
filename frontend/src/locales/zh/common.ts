@@ -42,7 +42,7 @@ export const zhCommon = {
     requestFailed: '请求失败',
     networkRetry: '网络错误，请稍后重试',
     loginFailed: '登录失败',
-    dashboardScanning: '全市场宏观多周期多因子矩阵扫描中...',
+    dashboardScanning: '正在加载市场数据...',
     dashboardLoadFailed: '获取数据失败',
     errorBoundary: {
       title: '界面加载中断或系统已更新',
@@ -80,7 +80,7 @@ export const zhCommon = {
     total: '合计',
     reset: '重置',
     apply: '应用',
-    applyAll: '一键应用',
+    applyAll: '全部应用',
     ok: '完成',
     dir: { long: '做多', short: '做空', flat: '观望' },
     conf: { high: '高置信', mid: '中置信', low: '低置信' },
@@ -136,7 +136,7 @@ export const zhCommon = {
   brand: {
     name: 'AstraQuant',
     nameEn: 'AstraQuant',
-    tagline: '机构级自主量化交易操作系统（多模型对抗质询 · 7梯队微观结构因子 · 确定性物理风控）',
+    tagline: '加密货币量化决策与风控交易系统',
     official: 'Official',
     license: 'AGPL-3.0 + Commons Clause',
   },

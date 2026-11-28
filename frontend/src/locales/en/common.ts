@@ -41,7 +41,7 @@ export const enCommon = {
     requestFailed: 'Request failed',
     networkRetry: 'Network error, please retry later',
     loginFailed: 'Sign-in failed',
-    dashboardScanning: 'Scanning the whole-market multi-timeframe factor matrix...',
+    dashboardScanning: 'Loading market data...',
     dashboardLoadFailed: 'Failed to load data',
     errorBoundary: {
       title: 'UI Interrupted or System Updated',
@@ -137,7 +137,7 @@ export const enCommon = {
   brand: {
     name: 'AstraQuant',
     nameEn: 'AstraQuant',
-    tagline: 'Institutional Autonomous Quant Trading OS (Adversarial Council · 7-Tier Microstructure Factors · Physical Risk)',
+    tagline: 'Crypto Quantitative Decision & Risk Control System',
     official: 'Official',
     license: 'AGPL-3.0 + Commons Clause',
   },
