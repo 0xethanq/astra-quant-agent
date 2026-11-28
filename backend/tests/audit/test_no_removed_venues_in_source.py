@@ -91,6 +91,10 @@ ALLOWLIST: dict[tuple[str, str], str] = {
         "同上：`CRYPTO_PLATFORMS` / `CRYPTO_SPECIFIC_KEYWORDS` 是新闻**来源白名单与"
         "主题词表**（判断一条快讯是不是币圈新闻），不是交易所集成面。"
         "Binance 仍是加密行业的新闻主体，保留该关键词是内容判定，不是回潮。",
+    ("scripts/news_sentiment_harvester.py", "binance"):
+        "黑天鹅新闻熔断正则 `BLACK_SWAN_PATTERNS`：用于识别英文新闻中主流交易所暂停提现/"
+        "破产挤兑的系统性黑天鹅事件，与 `scripts/news/{importance,selection}.py` 同属新闻"
+        "关键词过滤，不含任何交易所适配或下单逻辑。",
     ("astra_backend/config.py", "binance"):
         "生态合作推广返佣链接设置（BINANCE_INVITE_URL / binance_invite_url），"
         "仅供关于页与落地页展示，系统不包含该平台的 API 直连与执行适配器。",

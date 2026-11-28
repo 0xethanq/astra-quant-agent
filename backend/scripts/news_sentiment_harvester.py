@@ -99,7 +99,7 @@ TARGET_COINS = [item["name"] for item in load_instruments()]
 # Only trigger circuit breaker for existential, catastrophic, systemic market shocks
 BLACK_SWAN_PATTERNS = [
     (r"(USDT|USDC|DAI).*(严重脱锚|脱锚幅度|depeg|loses?\s+peg|跌破\s*0\.9[0-8]|below\s+0\.9[0-8])", "头部稳定币恶性脱锚危机"),
-    (r"(币安|主流交易所|OKX|Coinbase|Kraken).*(暂停全部提现|停止提币|申请破产重组|破产倒闭|发生严重挤兑|halt\w*\s+withdrawals?|suspend\w*\s+withdrawals?|insolvenc\w*|bankrupt\w*|bank\s+run)", "主流中心化交易所崩盘挤兑"),
+    (r"(币安|Binance|主流交易所|major\s+exchange|crypto\s+exchange|OKX|Coinbase|Kraken).*(暂停全部提现|停止提币|申请破产重组|破产倒闭|发生严重挤兑|halt\w*\s+withdrawals?|suspend\w*\s+withdrawals?|insolvenc\w*|bankrupt\w*|bank\s+run)", "主流中心化交易所崩盘挤兑"),
     (r"(以太坊主网|比特币网络|Solana网络|BNB Chain|Ethereum|Bitcoin|Solana).*(遭遇51%攻击|全网瘫痪停机|紧急硬分叉回滚|51%\s+attack|chain\s+halt\w*|network\s+outage)", "顶级底层公链系统性故障/51%攻击"),
     (r"(全面取缔所有加密|宣布比特币非法|宣布数字货币交易非法|爆发核危机|宣战|SEC\s+emergency\s+freeze|exchange\s+halted|major\s+hack.*\$[0-9]{2,}[MB]|protocol\s+exploit.*\$[0-9]{2,}[MB])", "国家级极端不可抗力/重大安全黑天鹅")
 ]
