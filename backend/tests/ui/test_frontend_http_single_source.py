@@ -52,6 +52,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 import os
@@ -236,7 +237,8 @@ class FrontendGateTest(unittest.TestCase):
                          f"vue-tsc 类型检查失败:\n{(r.stdout + r.stderr)[-2500:]}")
 
     def test_vite_build_passes(self):
-        r = self._run(["vite", "build"], timeout=600)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            r = self._run(["vite", "build", "--outDir", tmpdir], timeout=600)
         self.assertEqual(r.returncode, 0,
                          f"vite build 失败:\n{(r.stdout + r.stderr)[-2500:]}")
 
