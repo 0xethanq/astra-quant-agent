@@ -1327,7 +1327,11 @@ def run_self_evolution(force: bool = False):
     change_status, long_term_memory, preserve_existing_memory = resolve_memory_update(
         change_status, llm_review.get("ai_long_term_memory", []), existing_core_lessons
     )
-    if not preserve_existing_memory:
+    _has_obs_trades = any(
+        isinstance(t, dict) and str(t.get("snapshot_observability") or "") in ("DYNAMICS_OBSERVED", "PARTIAL")
+        for t in (closed_trades or [])
+    )
+    if not preserve_existing_memory and (_has_obs_trades or len(closed_trades or []) >= MIN_LLM_LESSON_SAMPLE):
         change_status, long_term_memory = filter_lessons_by_observable_cohort(
             change_status,
             long_term_memory,
