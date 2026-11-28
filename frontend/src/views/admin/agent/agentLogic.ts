@@ -243,3 +243,24 @@ export function formatDiffValue(value: any): string {
     return String(value);
   }
 }
+
+export interface StagedPromptContext {
+  label: string;
+  prompt: string;
+}
+
+/**
+ * Compose the final prompt sent to the Agent from an optional staged sidebar topic
+ * and the user's own preference note typed in the composer.
+ */
+export function composeStagedMessage(
+  staged: StagedPromptContext | null,
+  userNote: string,
+  labels: { refPrefix: string; notePrefix: string },
+): string {
+  const note = String(userNote || '').trim();
+  if (!staged) return note;
+  const base = String(staged.prompt || '').trim();
+  if (!note) return base;
+  return `[${labels.refPrefix}: ${staged.label}]\n${base}\n\n${labels.notePrefix}:\n${note}`;
+}

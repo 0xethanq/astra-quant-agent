@@ -51,7 +51,7 @@ defineProps<{
   flex-wrap: wrap;
 }
 .ph-badge {
-  font-size: var(--text-4xs);
+  font-size: var(--text-xs);
 }
 @media (min-width: 640px) {
   .ph:not(.is-stacked) {
@@ -68,15 +68,15 @@ defineProps<{
   min-width: 0;
 }
 .ph-title {
-  font-size: var(--text-xl);
+  font-size: var(--text-2xl);
   font-weight: 600;
   letter-spacing: var(--track-display);
   color: var(--ds-color-text-primary);
 }
 .ph-desc {
-  margin-top:6px;
+  margin-top: 6px;
   max-width: 80ch;
-  font-size: var(--text-xs);
+  font-size: var(--text-base);
   line-height: var(--leading-body);
   color: var(--ds-color-text-description);
 }
@@ -85,7 +85,7 @@ defineProps<{
   gap: var(--ds-space-2);
 }
 .ph.is-embedded .ph-title {
-  font-size: var(--text-sm);
+  font-size: var(--text-lg);
   color: var(--ds-color-text-secondary);
 }
 

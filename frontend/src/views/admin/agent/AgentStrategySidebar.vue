@@ -10,10 +10,11 @@ import {
   Sparkles,
   AlertTriangle,
   CheckCircle2,
+  MessageSquarePlus,
 } from 'lucide-vue-next';
 import BaseSegmented from '../../../components/base/BaseSegmented.vue';
 import { useI18n } from '../../../composables/useI18n';
-import type { AgentInspectorPayload } from './agentLogic';
+import type { AgentInspectorPayload, StagedPromptContext } from './agentLogic';
 
 type InspectorTab = 'overview' | 'risk' | 'prompt' | 'council' | 'snapshots';
 
@@ -25,7 +26,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'refresh'): void;
-  (e: 'ask', promptText: string): void;
+  (e: 'stage', payload: StagedPromptContext): void;
 }>();
 
 const { t } = useI18n();
@@ -87,8 +88,8 @@ const archiveList = computed<any[]>(() => {
   return ov.value?.policy?.latest_archive ? [ov.value.policy.latest_archive] : [];
 });
 
-function askQuick(key: string) {
-  emit('ask', t(key));
+function stageQuick(labelKey: string, promptKey: string) {
+  emit('stage', { label: t(labelKey), prompt: t(promptKey) });
 }
 </script>
 
@@ -120,7 +121,7 @@ function askQuick(key: string) {
       <template v-if="activeTab === 'overview'">
         <section class="ag-sum-block">
           <div class="ag-sum-head">
-            <span class="ag-sum-label"><ShieldCheck :size="12" />{{ t('admin.agent.summaryRisk') }}</span>
+            <span class="ag-sum-label"><ShieldCheck :size="14" />{{ t('admin.agent.summaryRisk') }}</span>
             <span class="badge mono">{{ ov.risk?.active_suite_id || 'custom' }}</span>
           </div>
           <div class="ag-kv-list mono num">
@@ -144,30 +145,40 @@ function askQuick(key: string) {
           <div class="ag-sum-head">
             <span class="ag-sum-meta">{{ t('admin.agent.inspectorRiskAudit') }}</span>
             <span class="badge mono" :class="auditBadgeClass">
-              <AlertTriangle v-if="riskAudit?.status === 'critical' || riskAudit?.status === 'warning'" :size="11" />
-              <CheckCircle2 v-else :size="11" />
+              <AlertTriangle v-if="riskAudit?.status === 'critical' || riskAudit?.status === 'warning'" :size="13" />
+              <CheckCircle2 v-else :size="13" />
               <span>{{ auditBadgeLabel }}</span>
             </span>
           </div>
-          <button type="button" class="btn btn-ghost btn-sm ag-ask-btn" @click="askQuick('admin.agent.summaryAskRiskPrompt')">
-            {{ t('admin.agent.summaryAskRisk') }}
+          <button
+            type="button"
+            class="btn btn-ghost ag-ask-btn"
+            @click="stageQuick('admin.agent.summaryAskRisk', 'admin.agent.summaryAskRiskPrompt')"
+          >
+            <MessageSquarePlus :size="15" />
+            <span>{{ t('admin.agent.summaryAskRisk') }}</span>
           </button>
         </section>
 
         <section class="ag-sum-block">
           <div class="ag-sum-head">
-            <span class="ag-sum-label"><Layers :size="12" />{{ t('admin.agent.summaryInstruments') }}</span>
+            <span class="ag-sum-label"><Layers :size="14" />{{ t('admin.agent.summaryInstruments') }}</span>
             <span class="badge mono num">{{ ov.instruments?.count ?? 0 }}/{{ ov.instruments?.max_pool_size ?? 20 }}</span>
           </div>
           <div class="ag-sum-head">
-            <span class="ag-sum-label"><Sparkles :size="12" />{{ t('admin.agent.summaryEvolution') }}</span>
+            <span class="ag-sum-label"><Sparkles :size="14" />{{ t('admin.agent.summaryEvolution') }}</span>
             <span class="badge mono num">{{ ov.evolution?.enabled_lessons ?? 0 }}/{{ ov.evolution?.total_lessons ?? 0 }}</span>
           </div>
           <div class="ag-sum-meta mono">
             {{ t('admin.agent.summarySessionWindow') }}: {{ ov.trading_session?.enabled ? t('admin.agent.summaryEnabled') : t('admin.agent.summaryDisabled') }}
           </div>
-          <button type="button" class="btn btn-ghost btn-sm ag-ask-btn" @click="askQuick('admin.agent.summaryAskSessionPrompt')">
-            {{ t('admin.agent.summaryAskSession') }}
+          <button
+            type="button"
+            class="btn btn-ghost ag-ask-btn"
+            @click="stageQuick('admin.agent.summaryAskSession', 'admin.agent.summaryAskSessionPrompt')"
+          >
+            <MessageSquarePlus :size="15" />
+            <span>{{ t('admin.agent.summaryAskSession') }}</span>
           </button>
         </section>
       </template>
@@ -176,7 +187,7 @@ function askQuick(key: string) {
       <template v-else-if="activeTab === 'risk'">
         <section class="ag-sum-block">
           <div class="ag-sum-head">
-            <span class="ag-sum-label"><ShieldCheck :size="12" />{{ t('admin.agent.inspectorRiskAudit') }}</span>
+            <span class="ag-sum-label"><ShieldCheck :size="14" />{{ t('admin.agent.inspectorRiskAudit') }}</span>
             <span class="badge mono" :class="auditBadgeClass">{{ auditBadgeLabel }}</span>
           </div>
           <div class="ag-kv-list mono num">
@@ -203,8 +214,13 @@ function askQuick(key: string) {
               <span>{{ iss.detail }}</span>
             </li>
           </ul>
-          <button type="button" class="btn btn-ghost btn-sm ag-ask-btn" @click="emit('ask', t('admin.agent.inspectorAskCancelCheck'))">
-            {{ t('admin.agent.inspectorAskCancelCheck') }}
+          <button
+            type="button"
+            class="btn btn-ghost ag-ask-btn"
+            @click="stageQuick('admin.agent.inspectorAskCancelCheck', 'admin.agent.inspectorAskCancelCheckPrompt')"
+          >
+            <MessageSquarePlus :size="15" />
+            <span>{{ t('admin.agent.inspectorAskCancelCheck') }}</span>
           </button>
         </section>
       </template>
@@ -213,7 +229,7 @@ function askQuick(key: string) {
       <template v-else-if="activeTab === 'prompt'">
         <section class="ag-sum-block">
           <div class="ag-sum-head">
-            <span class="ag-sum-label"><FileText :size="12" />{{ t('admin.agent.summaryPrompt') }}</span>
+            <span class="ag-sum-label"><FileText :size="14" />{{ t('admin.agent.summaryPrompt') }}</span>
             <span class="badge mono">{{ ov.prompt?.active_profile_id || '—' }}</span>
           </div>
           <div class="ag-sum-val truncate">
@@ -236,8 +252,13 @@ function askQuick(key: string) {
               <p v-if="m.preview" class="ag-mod-prev">{{ m.preview }}</p>
             </div>
           </div>
-          <button type="button" class="btn btn-ghost btn-sm ag-ask-btn" @click="askQuick('admin.agent.summaryAskPromptPrompt')">
-            {{ t('admin.agent.summaryAskPrompt') }}
+          <button
+            type="button"
+            class="btn btn-ghost ag-ask-btn"
+            @click="stageQuick('admin.agent.summaryAskPrompt', 'admin.agent.summaryAskPromptPrompt')"
+          >
+            <MessageSquarePlus :size="15" />
+            <span>{{ t('admin.agent.summaryAskPrompt') }}</span>
           </button>
         </section>
       </template>
@@ -246,7 +267,7 @@ function askQuick(key: string) {
       <template v-else-if="activeTab === 'council'">
         <section class="ag-sum-block">
           <div class="ag-sum-head">
-            <span class="ag-sum-label"><Users :size="12" />{{ t('admin.agent.summaryCouncil') }}</span>
+            <span class="ag-sum-label"><Users :size="14" />{{ t('admin.agent.summaryCouncil') }}</span>
             <span class="badge" :class="ov.council?.enabled ? 'badge-up' : ''">
               {{ ov.council?.enabled ? t('admin.agent.summaryEnabled') : t('admin.agent.summaryDisabled') }}
             </span>
@@ -265,8 +286,13 @@ function askQuick(key: string) {
               <span class="ag-sum-meta mono truncate">{{ role.model_id || 'auto-brain' }}</span>
             </div>
           </div>
-          <button type="button" class="btn btn-ghost btn-sm ag-ask-btn" @click="askQuick('admin.agent.summaryAskCouncilPrompt')">
-            {{ t('admin.agent.summaryAskCouncil') }}
+          <button
+            type="button"
+            class="btn btn-ghost ag-ask-btn"
+            @click="stageQuick('admin.agent.summaryAskCouncil', 'admin.agent.summaryAskCouncilPrompt')"
+          >
+            <MessageSquarePlus :size="15" />
+            <span>{{ t('admin.agent.summaryAskCouncil') }}</span>
           </button>
         </section>
       </template>
@@ -275,7 +301,7 @@ function askQuick(key: string) {
       <template v-else>
         <section class="ag-sum-block">
           <div class="ag-sum-head">
-            <span class="ag-sum-label"><History :size="12" />{{ t('admin.agent.summaryPolicy') }}</span>
+            <span class="ag-sum-label"><History :size="14" />{{ t('admin.agent.summaryPolicy') }}</span>
           </div>
           <div v-if="archiveList.length" class="ag-mod-list">
             <div v-for="arch in archiveList" :key="arch.policy_hash || arch.name" class="ag-mod-row">
@@ -298,6 +324,9 @@ function askQuick(key: string) {
 .ag-side {
   display: flex;
   flex-direction: column;
+  flex: 0 0 348px;
+  width: 348px;
+  min-height: 0;
   border: 1px solid var(--ds-color-border-default);
   border-radius: var(--r-card);
   background-color: var(--ds-color-bg-surface-1);
@@ -306,7 +335,7 @@ function askQuick(key: string) {
 }
 .ag-side-title {
   margin: 0;
-  font-size: var(--text-3xs);
+  font-size: var(--text-md);
   font-weight: 600;
   color: var(--ds-color-text-primary);
 }
@@ -325,7 +354,7 @@ function askQuick(key: string) {
 .ag-sum-block {
   display: flex;
   flex-direction: column;
-  gap: var(--ds-space-2);
+  gap: var(--ds-space-3);
   padding: var(--ds-space-3);
   border: 1px solid var(--ds-color-border-default);
   border-radius: var(--r-ctl);
@@ -340,43 +369,45 @@ function askQuick(key: string) {
 .ag-sum-label {
   display: inline-flex;
   align-items: center;
-  gap: var(--ds-space-1);
-  font-size: var(--text-4xs);
+  gap: var(--ds-space-2);
+  font-size: var(--text-base);
   font-weight: 600;
-  color: var(--ds-color-text-description);
+  color: var(--ds-color-text-primary);
 }
 .ag-sum-val {
-  font-size: var(--text-3xs);
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--ds-color-text-primary);
 }
 .ag-sum-meta {
-  font-size: var(--text-4xs);
-  color: var(--ds-color-text-placeholder);
+  font-size: var(--text-xs);
+  color: var(--ds-color-text-description);
 }
 .ag-kv-list {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--ds-space-2);
-  font-size: var(--text-4xs);
+  font-size: var(--text-xs);
 }
 .ag-kv-list > div {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--ds-space-1) var(--ds-space-2);
+  gap: var(--ds-space-2);
+  padding: var(--ds-space-2) var(--ds-space-3);
   border-radius: var(--r-ctl);
   background-color: var(--ds-color-bg-surface-1);
-  color: var(--ds-color-text-placeholder);
+  color: var(--ds-color-text-description);
 }
 .ag-kv-list strong {
+  font-size: var(--text-base);
   color: var(--ds-color-text-primary);
 }
 .ag-issue-list,
 .ag-mod-list {
   display: flex;
   flex-direction: column;
-  gap: var(--ds-space-1);
+  gap: var(--ds-space-2);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -385,25 +416,27 @@ function askQuick(key: string) {
 .ag-mod-row {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: var(--ds-space-2);
+  gap: var(--ds-space-1);
+  padding: var(--ds-space-2) var(--ds-space-3);
   border-radius: var(--r-ctl);
   border: 1px solid var(--ds-color-border-subtle);
   background: var(--ds-color-bg-surface-1);
-  font-size: var(--text-4xs);
+  font-size: var(--text-xs);
 }
 .ag-mod-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--ds-space-1);
+  gap: var(--ds-space-2);
 }
 .ag-mod-name {
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--ds-color-text-primary);
 }
 .ag-mod-prev {
   margin: 0;
+  line-height: 1.5;
   color: var(--ds-color-text-description);
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -413,5 +446,11 @@ function askQuick(key: string) {
 .ag-ask-btn {
   width: 100%;
   justify-content: center;
+}
+@media (max-width: 1120px) {
+  .ag-side {
+    flex: none;
+    width: 100%;
+  }
 }
 </style>

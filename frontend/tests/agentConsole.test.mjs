@@ -115,3 +115,36 @@ test('parseUnifiedDiff classifies hunk, add, del and context lines', () => {
   assert.equal(parsed[4].text, '-old rule');
   assert.equal(parsed[5].text, '+new rule');
 });
+
+test('composeStagedMessage composes standalone, default-staged, and staged-plus-user-note prompts', () => {
+  const labels = { refPrefix: 'Ref', notePrefix: 'Note' };
+  assert.equal(logic.composeStagedMessage(null, '  check btc  ', labels), 'check btc');
+  assert.equal(
+    logic.composeStagedMessage({ label: 'Tune risk', prompt: 'Inspect risk limits.' }, '', labels),
+    'Inspect risk limits.',
+  );
+  assert.equal(
+    logic.composeStagedMessage(
+      { label: 'Tune risk', prompt: 'Inspect risk limits.' },
+      'cap leverage at 3x',
+      labels,
+    ),
+    '[Ref: Tune risk]\nInspect risk limits.\n\nNote:\ncap leverage at 3x',
+  );
+});
+
+test('AgentStrategySidebar stages into composer instead of auto-sending and has zero hardcoded CJK', () => {
+  const sidebar = readFileSync(path.join(SRC, 'views', 'admin', 'agent', 'AgentStrategySidebar.vue'), 'utf8');
+  assert.match(sidebar, /\(e:\s*'stage'/, 'Sidebar should emit stage rather than ask');
+  assert.match(sidebar, /stageQuick\(/, 'Sidebar buttons should stage prompts via stageQuick');
+  assert.doesNotMatch(sidebar, /emit\('ask'/, 'Sidebar must not auto-send via ask emit');
+  assert.doesNotMatch(
+    sidebar.replace(/<!--[\s\S]*?-->/g, '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/(?<!:)\/\/[^\n]*/g, ''),
+    /[\u4e00-\u9fff]+/,
+    'No hardcoded CJK allowed outside comments in AgentStrategySidebar.vue',
+  );
+
+  const page = readFileSync(path.join(SRC, 'views', 'admin', 'AgentConsolePage.vue'), 'utf8');
+  assert.match(page, /@stage="stagePrompt"/, 'AgentConsolePage must wire @stage to stagePrompt');
+  assert.match(page, /ag-staged-bar/, 'AgentConsolePage must render staged composer bar');
+});

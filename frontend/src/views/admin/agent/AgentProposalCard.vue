@@ -315,13 +315,13 @@ function isPhraseInvalid(phrase: string): boolean {
   display: inline-flex;
   align-items: center;
   gap: var(--ds-space-1);
-  font-size: var(--text-4xs);
+  font-size: var(--text-xs);
   color: var(--accent);
   font-weight: 600;
 }
 .ap-title {
   margin: 0;
-  font-size: var(--text-2xs);
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--ds-color-text-primary);
 }
@@ -346,7 +346,7 @@ function isPhraseInvalid(phrase: string): boolean {
   border-bottom: 1px solid var(--ds-color-border-default);
 }
 .ap-count {
-  font-size: var(--text-3xs);
+  font-size: var(--text-xs);
   color: var(--ds-color-text-description);
 }
 .ap-toolbar-actions {
@@ -376,14 +376,14 @@ function isPhraseInvalid(phrase: string): boolean {
   cursor: pointer;
 }
 .ap-item-title {
-  font-size: var(--text-3xs);
+  font-size: var(--text-md);
   font-weight: 600;
   color: var(--ds-color-text-primary);
 }
 .ap-item-reason {
   margin: 0;
-  font-size: var(--text-4xs);
-  color: var(--ds-color-text-description);
+  font-size: var(--text-base);
+  color: var(--ds-color-text-secondary);
   line-height: var(--leading-body);
 }
 .ap-warnings {
@@ -393,7 +393,7 @@ function isPhraseInvalid(phrase: string): boolean {
   border-radius: var(--r-ctl);
   background-color: var(--warn-bg);
   color: var(--warn);
-  font-size: var(--text-4xs);
+  font-size: var(--text-base);
   list-style: none;
 }
 .ap-kv-table {
@@ -406,10 +406,10 @@ function isPhraseInvalid(phrase: string): boolean {
   grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   gap: var(--ds-space-2);
-  padding: var(--ds-space-1) var(--ds-space-2);
+  padding: var(--ds-space-2) var(--ds-space-3);
   border-radius: var(--r-ctl);
   background-color: var(--ds-color-bg-surface);
-  font-size: var(--text-4xs);
+  font-size: var(--text-base);
 }
 .ap-kv-key {
   color: var(--ds-color-text-primary);
@@ -431,7 +431,7 @@ function isPhraseInvalid(phrase: string): boolean {
 }
 .ap-empty-diff {
   margin: 0;
-  font-size: var(--text-4xs);
+  font-size: var(--text-xs);
   color: var(--ds-color-text-placeholder);
 }
 .ap-phrases {
@@ -450,7 +450,7 @@ function isPhraseInvalid(phrase: string): boolean {
   flex-wrap: wrap;
   padding-top: var(--ds-space-2);
   border-top: 1px solid var(--ds-color-border-default);
-  font-size: var(--text-4xs);
+  font-size: var(--text-xs);
   color: var(--ds-color-text-description);
 }
 .ap-snap-label {
@@ -468,7 +468,7 @@ function isPhraseInvalid(phrase: string): boolean {
 }
 .ap-readonly {
   margin: 0;
-  font-size: var(--text-3xs);
+  font-size: var(--text-xs);
   color: var(--ds-color-text-placeholder);
 }
 @media (max-width: 720px) {

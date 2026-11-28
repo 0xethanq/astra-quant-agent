@@ -124,7 +124,7 @@ watch(() => route.path, () => (drawerOpen.value = false));
             :aria-current="currentKey === item.key ? 'page' : undefined"
             @click="go(item.path)"
           >
-            <component :is="item.icon" :size="15" class="wb-item-icon" />
+            <component :is="item.icon" :size="16" class="wb-item-icon" />
             <span v-if="!collapsed" class="wb-item-text">{{ t(item.labelKey) }}</span>
           </button>
         </div>
@@ -140,10 +140,10 @@ watch(() => route.path, () => (drawerOpen.value = false));
           :aria-controls="'admin-desktop-sidebar'"
           @click="collapsed = false"
         >
-          <PanelLeftOpen :size="15" />
+          <PanelLeftOpen :size="16" />
         </button>
         <button type="button" class="wb-item wb-item-danger" :title="t('nav.actions.logout')" @click="logout">
-          <LogOut :size="15" class="wb-item-icon" />
+          <LogOut :size="16" class="wb-item-icon" />
           <span v-if="!collapsed" class="wb-item-text">{{ t('nav.actions.logout') }}</span>
         </button>
       </div>
@@ -238,14 +238,14 @@ watch(() => route.path, () => (drawerOpen.value = false));
               :aria-current="currentKey === item.key ? 'page' : undefined"
               @click="go(item.path)"
             >
-              <component :is="item.icon" :size="15" class="wb-item-icon" />
+              <component :is="item.icon" :size="16" class="wb-item-icon" />
               <span class="wb-item-text">{{ t(item.labelKey) }}</span>
             </button>
           </div>
         </nav>
         <div class="wb-rail-foot">
           <button type="button" class="wb-item wb-item-danger" @click="logout">
-            <LogOut :size="15" class="wb-item-icon" />
+            <LogOut :size="16" class="wb-item-icon" />
             <span class="wb-item-text">{{ t('nav.actions.logout') }}</span>
           </button>
         </div>
@@ -294,8 +294,8 @@ watch(() => route.path, () => (drawerOpen.value = false));
   flex-shrink: 0;
 }
 .wb-logo {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   border-radius: var(--r-xs);
   flex-shrink: 0;
 }
@@ -307,7 +307,7 @@ watch(() => route.path, () => (drawerOpen.value = false));
   flex: 1;
 }
 .wb-brand-name {
-  font-size: var(--text-xs);
+  font-size: var(--text-md);
   font-weight: 600;
   letter-spacing: var(--track-title);
   color: var(--ds-color-text-primary);
@@ -341,7 +341,7 @@ watch(() => route.path, () => (drawerOpen.value = false));
 }
 .wb-group-label {
   padding: 0 var(--ds-space-2) 6px;
-  font-size: var(--text-2xs);
+  font-size: var(--text-xs);
   font-weight: 500;
   letter-spacing: var(--track-label);
   text-transform: uppercase;
@@ -358,14 +358,14 @@ watch(() => route.path, () => (drawerOpen.value = false));
   align-items: center;
   gap: 10px;
   width: 100%;
-  height: 32px;
-  padding: 0 var(--ds-space-2);
+  height: 36px;
+  padding: 0 var(--ds-space-3);
   border: 1px solid transparent;
   border-radius: var(--r-ctl);
   background-color: transparent;
   color: var(--ds-color-text-description);
   font-family: inherit;
-  font-size: var(--text-xs);
+  font-size: var(--text-base);
   font-weight: 400;
   text-align: left;
   cursor: pointer;
@@ -481,7 +481,7 @@ watch(() => route.path, () => (drawerOpen.value = false));
   align-items: center;
   gap: var(--ds-space-2);
   min-width: 0;
-  font-size: var(--text-xs);
+  font-size: var(--text-base);
 }
 .wb-crumb-root {
   font-weight: 600;
@@ -534,8 +534,8 @@ watch(() => route.path, () => (drawerOpen.value = false));
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: var(--ds-space-4);
-  padding-bottom: var(--ds-space-5);
+  padding: var(--ds-space-5) var(--ds-space-6);
+  padding-bottom: var(--ds-space-6);
 }
 .wb-main.is-immersive {
   overflow: hidden;
@@ -552,7 +552,8 @@ watch(() => route.path, () => (drawerOpen.value = false));
   gap: var(--ds-space-4);
 }
 .wb-main.is-immersive .wb-content {
-  max-width: 1760px;
+  max-width: 100%;
+  gap: var(--ds-space-2);
 }
 
 /* ══ 移动端抽屉 ══ */
