@@ -67,6 +67,7 @@ def evaluate_asset_signal(f, *, asset_class_profiles, is_in_stop_cooldown, load_
 
     # Intervene 1: Cooldown Blacklist
     if inst_name in cooldown_assets or inst_id in cooldown_assets:
+        f["_stop_cooldown"] = {"long": True, "short": True}
         return 0.0, "HOLD", ["⛔ 标的处于AI避险冷却池中，自进化系统禁止开仓"], "⚪ 避险冷却", f"【自进化干预】{inst_name} 胜率不足或连续止损，已被自动关入冷却池避险"
 
     px = f["price"]
@@ -108,6 +109,7 @@ def evaluate_asset_signal(f, *, asset_class_profiles, is_in_stop_cooldown, load_
 
     cooldown_long = is_in_stop_cooldown(inst_id, "long")
     cooldown_short = is_in_stop_cooldown(inst_id, "short")
+    f["_stop_cooldown"] = {"long": bool(cooldown_long), "short": bool(cooldown_short)}
 
     # -------------------------------------------------------------------------
     # 📊 Sub-Factor 1: Trend & Slope Momentum (-1.5 ~ +1.5)

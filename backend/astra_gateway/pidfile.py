@@ -31,11 +31,27 @@
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 from typing import Union
 
 ROOT = Path(__file__).resolve().parents[1]
 PID_FILE = ROOT / "data" / "astra_gateway.pid"
+_REAL_OS_KILL = os.kill
+
+if sys.platform == "win32":
+    import ctypes
+    from ctypes import wintypes
+
+    _PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+    _STILL_ACTIVE = 259
+    _kernel32 = ctypes.WinDLL("kernel32", use_last_error=False)
+    _kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+    _kernel32.OpenProcess.restype = wintypes.HANDLE
+    _kernel32.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+    _kernel32.GetExitCodeProcess.restype = wintypes.BOOL
+    _kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+    _kernel32.CloseHandle.restype = wintypes.BOOL
 
 __all__ = ["PID_FILE", "read_pid", "process_running"]
 
@@ -50,10 +66,28 @@ def read_pid(path: Union[str, Path, None] = None) -> int:
     return int(text) if text.isdigit() else 0
 
 
+def _win32_process_running(pid: int) -> bool:
+    """Windows 探活：避免 `os.kill(pid, 0)` 误发 `CTRL_C_EVENT` 中断整个控制台。"""
+    if pid <= 0:
+        return False
+    handle = _kernel32.OpenProcess(_PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+    if not handle:
+        return False
+    try:
+        exit_code = wintypes.DWORD()
+        if not _kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
+            return False
+        return exit_code.value == _STILL_ACTIVE
+    finally:
+        _kernel32.CloseHandle(handle)
+
+
 def process_running(pid: int) -> bool:
     """`os.kill(pid, 0)` 探活；pid 为 0 或信号失败（含无权限）一律 False。"""
     if not pid:
         return False
+    if sys.platform == "win32" and os.kill is _REAL_OS_KILL:
+        return _win32_process_running(pid)
     try:
         os.kill(pid, 0)
         return True

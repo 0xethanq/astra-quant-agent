@@ -108,8 +108,8 @@ def ratcheted_trailing_stop(*, is_long, entry_px, atr, prec, peak_profit_px,
         dynamic_floor_sl = max(dynamic_floor_sl, locked) if is_long else min(dynamic_floor_sl, locked)
         stage_desc = f"锁定大波段利润 (保底止损 {dynamic_floor_sl})"
     elif peak_profit_px >= tier1_breakeven_trigger:
-        breakeven = round(entry_px + 0.0020 * entry_px, prec) if is_long \
-            else round(entry_px - 0.0020 * entry_px, prec)
+        breakeven = round(entry_px + 0.0030 * entry_px, prec) if is_long \
+            else round(entry_px - 0.0030 * entry_px, prec)
         dynamic_floor_sl = max(dynamic_floor_sl, breakeven) if is_long else min(dynamic_floor_sl, breakeven)
         stage_desc = f"已推保本无风险 (保底止损 {dynamic_floor_sl})"
     return dynamic_floor_sl, stage_desc

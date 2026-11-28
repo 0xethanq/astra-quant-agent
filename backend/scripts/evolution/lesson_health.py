@@ -42,11 +42,12 @@ from typing import Any, Dict, List, Optional, Tuple
 #: 与 `self_improvement_engine.DETERMINISTIC_MIN_SAMPLE` 同一量级。
 MIN_HEALTH_SAMPLE = 10
 
-#: 归档阈值：健康分低于此值**且**样本达标**且**非基准 ⇒ 归档（停用留痕）。
-ARCHIVE_HEALTH_THRESHOLD = 70.0
+#: 归档阈值：健康分低于此值**且**样本达标 ⇒ 归档（停用留痕）。
+#: 设在 52.0（50.0 为盈亏平衡收缩锚点），避免 n=10~15 时因向 50 收缩误杀 60% 胜率正期望规则。
+ARCHIVE_HEALTH_THRESHOLD = 52.0
 
-#: 归档判定所需的更高样本门槛（比"能打分"更严：改状态比只改数字后果重）。
-ARCHIVE_MIN_SAMPLE = 10
+#: 归档判定所需的更高样本门槛（需至少 15 笔规则生效后的独立样本）。
+ARCHIVE_MIN_SAMPLE = 15
 
 #: 方向词 → long / short（心法正文是中文散文，故按词表析出）。
 _LONG_WORDS = ("做多", "多头", "追多", "低吸", "回踩买", "买入", "看涨")
@@ -116,15 +117,40 @@ def _side_of(row) -> str:
     return _SIDE_ALIASES.get(str(row.get("side") or "").strip().lower(), "")
 
 
-def select_cohort(closed_trades, cohort) -> List[Dict[str, Any]]:
-    """按 cohort 过滤平仓样本（各维度 AND）。"""
+def _parse_ts(val: Any) -> Optional[float]:
+    """解析 ISO UTC 或北京时间 `YYYY-MM-DD HH:MM:SS` 时间戳；无有效时间返回 None。"""
+    s = str(val or "").strip()
+    if not s:
+        return None
+    if s.endswith("Z"):
+        s = s[:-1] + "+00:00"
+    try:
+        dt = datetime.datetime.fromisoformat(s)
+        if dt.tzinfo is None:
+            # 台账 `YYYY-MM-DD HH:MM:SS` 默认北京时间 (UTC+8)，纯日期按 UTC 零点
+            if len(s) > 10:
+                dt = dt.replace(tzinfo=datetime.timezone(datetime.timedelta(hours=8)))
+            else:
+                dt = dt.replace(tzinfo=datetime.timezone.utc)
+        return dt.timestamp()
+    except ValueError:
+        return None
+
+
+def select_cohort(closed_trades, cohort, *, created_after: Any = None) -> List[Dict[str, Any]]:
+    """按 cohort 过滤平仓样本（各维度 AND）；有 `created_after` 时排除规则生效前开仓的历史单。"""
     insts = {str(i) for i in (cohort.get("insts") or [])}
     side = str(cohort.get("side") or "")
     causes = {str(c) for c in (cohort.get("exit_causes") or [])}
+    after_ts = _parse_ts(created_after)
     out = []
     for row in closed_trades or []:
         if not isinstance(row, dict):
             continue
+        if after_ts is not None:
+            trade_ts = _parse_ts(row.get("open_time") or row.get("time"))
+            if trade_ts is not None and trade_ts < after_ts:
+                continue
         if insts and str(row.get("inst") or "") not in insts:
             continue
         if side and _side_of(row) != side:
@@ -170,6 +196,7 @@ def score_cohort(rows) -> Optional[Dict[str, Any]]:
 
     return {
         "health_score": round(max(0.0, min(100.0, health)), 1),
+        "raw_score": round(max(0.0, min(100.0, raw)), 1),
         "sample_size": n,
         "win_rate_pct": round(win_rate, 1),
         "net_pnl": round(total, 2),
@@ -178,8 +205,8 @@ def score_cohort(rows) -> Optional[Dict[str, Any]]:
     }
 
 
-def score_lesson_against_trades(rule_text, *, closed_trades, min_sample: int = MIN_HEALTH_SAMPLE
-                                ) -> Optional[Dict[str, Any]]:
+def score_lesson_against_trades(rule_text, *, closed_trades, min_sample: int = MIN_HEALTH_SAMPLE,
+                                created_at: Any = None) -> Optional[Dict[str, Any]]:
     """给一条心法算健康分；**证据不足返回 `None`**（调用方必须保留原分）。
 
     `None` 的三种情况：没有平仓样本、析不出任何 cohort、cohort 样本 < `min_sample`。
@@ -191,7 +218,7 @@ def score_lesson_against_trades(rule_text, *, closed_trades, min_sample: int = M
         return None
     insts = {str(r.get("inst") or "") for r in rows if r.get("inst")}
     cohort = extract_cohort(rule_text, available_insts=insts)
-    subset = select_cohort(rows, cohort)
+    subset = select_cohort(rows, cohort, created_after=created_at)
     if len(subset) < max(1, int(min_sample or 1)):
         return None
     scored = score_cohort(subset)
@@ -252,7 +279,8 @@ def decide_archive(item, scored) -> Tuple[bool, str]:
     health = _num(scored.get("health_score"))
     if health is None:
         return False, "无健康分，不改变状态"
-    if health >= ARCHIVE_HEALTH_THRESHOLD:
+    raw_score = _num(scored.get("raw_score"))
+    if health >= ARCHIVE_HEALTH_THRESHOLD or (raw_score is not None and raw_score >= ARCHIVE_HEALTH_THRESHOLD):
         return False, f"健康分 {health} ≥ {ARCHIVE_HEALTH_THRESHOLD}，保持启用"
     return True, (f"健康分 {health} < {ARCHIVE_HEALTH_THRESHOLD}（样本 "
                   f"{scored.get('sample_size')} 笔，依据 {scored.get('basis')}）："
@@ -278,7 +306,8 @@ def refresh_lesson_health(lessons, *, closed_trades,
             continue
         fresh = copy.deepcopy(item)
         scored = score_lesson_against_trades(
-            fresh.get("rule_text"), closed_trades=closed_trades, min_sample=min_sample)
+            fresh.get("rule_text"), closed_trades=closed_trades, min_sample=min_sample,
+            created_at=fresh.get("created_at"))
         if scored:
             old_health = _num(fresh.get("health_score"))
             fresh["health_score"] = scored["health_score"]

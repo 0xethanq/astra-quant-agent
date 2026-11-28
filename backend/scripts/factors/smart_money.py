@@ -103,23 +103,27 @@ def _fetch_from_okx_rubik(ccy: str, price: float = 0.0, timeout: float = 3.5) ->
 
     try:
         pos_rows: Optional[List[Any]] = None
+        inst_swap = f"{ccy}-USDT-SWAP"
         skip_pos_fetch = False
         if cache_mod is not None:
-            pos_cached = cache_mod._cache_get(f"sm-pos-ratio:{ccy}", 3600.0)
+            pos_cached = cache_mod._cache_get(f"elite-pos:{inst_swap}", 300.0)
             if pos_cached == "__404__":
                 skip_pos_fetch = True
             elif isinstance(pos_cached, list) and pos_cached:
                 pos_rows = pos_cached
         if pos_rows is None and not skip_pos_fetch:
-            url = f"https://www.okx.com/api/v5/rubik/stat/contracts/long-short-pos-ratio?ccy={ccy}&period=5m"
+            url = (
+                "https://www.okx.com/api/v5/rubik/stat/contracts/"
+                f"long-short-position-ratio-contract-top-trader?instId={inst_swap}&period=5m"
+            )
             st_codes: List[int] = []
             d = _okx_rubik_get(url, timeout=timeout, out_status=st_codes)
             if st_codes and 404 in st_codes and cache_mod is not None:
-                cache_mod._cache_put(f"sm-pos-ratio:{ccy}", "__404__")
+                cache_mod._cache_put(f"elite-pos:{inst_swap}", "__404__")
             elif d and d.get("code") == "0" and d.get("data") and len(d["data"]) > 0:
                 pos_rows = d["data"]
                 if cache_mod is not None:
-                    cache_mod._cache_put(f"sm-pos-ratio:{ccy}", pos_rows)
+                    cache_mod._cache_put(f"elite-pos:{inst_swap}", pos_rows)
         if pos_rows and len(pos_rows) > 0:
             raw_ratio = float(pos_rows[0][1])
             ls_ratio = raw_ratio
@@ -128,21 +132,26 @@ def _fetch_from_okx_rubik(ccy: str, price: float = 0.0, timeout: float = 3.5) ->
         pass
 
     if w_long is None:
+        # 仅回退至官方顶级交易员账户多空比，绝不用全网散户比冒充聪明钱
         try:
-            ls_rows: Optional[List[Any]] = None
+            inst_swap = f"{ccy}-USDT-SWAP"
+            acct_rows: Optional[List[Any]] = None
             if cache_mod is not None:
-                ls_cached = cache_mod._cache_get(f"lsratio:{ccy}", 300.0)
-                if isinstance(ls_cached, list) and ls_cached:
-                    ls_rows = ls_cached
-            if ls_rows is None:
-                url2 = f"https://www.okx.com/api/v5/rubik/stat/contracts/long-short-account-ratio?ccy={ccy}&period=5m"
+                acct_cached = cache_mod._cache_get(f"elite-acct:{inst_swap}", 300.0)
+                if isinstance(acct_cached, list) and acct_cached:
+                    acct_rows = acct_cached
+            if acct_rows is None:
+                url2 = (
+                    "https://www.okx.com/api/v5/rubik/stat/contracts/"
+                    f"long-short-account-ratio-contract-top-trader?instId={inst_swap}&period=5m"
+                )
                 d2 = _okx_rubik_get(url2, timeout=timeout)
                 if d2 and d2.get("code") == "0" and d2.get("data") and len(d2["data"]) > 0:
-                    ls_rows = d2["data"]
+                    acct_rows = d2["data"]
                     if cache_mod is not None:
-                        cache_mod._cache_put(f"lsratio:{ccy}", ls_rows)
-            if ls_rows and len(ls_rows) > 0:
-                raw_ratio2 = float(ls_rows[0][1])
+                        cache_mod._cache_put(f"elite-acct:{inst_swap}", acct_rows)
+            if acct_rows and len(acct_rows) > 0:
+                raw_ratio2 = float(acct_rows[0][1])
                 ls_ratio = raw_ratio2
                 w_long = round(raw_ratio2 / (1.0 + raw_ratio2), 4)
         except Exception:

@@ -232,7 +232,7 @@ def assemble_decision_cache(
                 "take_profit_price": final_tp,
                 "stop_loss_price": final_sl,
                 "risk_reward_ratio": f"{rr:.2f} : 1" if rr > 0 else "--",
-                "summary_reason": rejection_reason or str(d_item.get("summary_reason", "全市场矩阵综合评估中"))[:120],
+                "summary_reason": rejection_reason or str(d_item.get("summary_reason") or d_item.get("reasoning") or "全市场矩阵综合评估中")[:120],
                 # ── 三态可观测性（2026-10）────────────────────────────────────
                 # 旧实现把「模型主动观望 / 物理层拦单 / 模型漏答」三种情况**全塞进
                 # `summary_reason`**（`rejection_reason or model_summary`），于是看板与
@@ -241,7 +241,7 @@ def assemble_decision_cache(
                 "decision_source": "omitted" if inst_id in omitted_inst_ids else "model",
                 "gate_blocked": bool(rejection_reason),
                 "gate_reason": rejection_reason,
-                "model_reason": str(d_item.get("summary_reason", ""))[:120],
+                "model_reason": str(d_item.get("summary_reason") or d_item.get("reasoning") or "")[:120],
             },
             "data_quality": p.get("data_quality", "invalid"),
             "raw_ticker": {
@@ -251,7 +251,10 @@ def assemble_decision_cache(
                 "chg24h": p.get("chg24h"),
                 "vol24h": p.get("vol24h", 0.0)
             },
-            "raw_funding_rate": f"{p['fundingRate']}%" if p.get('fundingRate') else "--",
+            "raw_funding_rate": (
+                "--" if p.get("fundingRate") in (None, "", "--", "N/A", 0, 0.0)
+                else (str(p["fundingRate"]) if str(p["fundingRate"]).endswith("%") else f"{p['fundingRate']}%")
+            ),
             "raw_oi": p.get('oiUsd') or "--",
             "raw_taker_vol": p.get('takerNetUsd') or "--",
             "raw_ls_ratio": str(p.get('lsRatio')) if p.get('lsRatio') is not None else "--",

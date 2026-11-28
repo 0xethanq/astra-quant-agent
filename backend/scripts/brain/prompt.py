@@ -285,6 +285,53 @@ def construct_full_market_prompt(packages: List[Dict[str, Any]], pos_summary: st
             f"\n- 💰 T2 期限与资金成本: 季度基差年化={_t2_basis}% | 杠杆借贷利率={_t2_loan}%"
             if (_t2_basis != "--" or _t2_loan != "--") else ""
         )
+        _sa = p.get("structural_anchors") if isinstance(p.get("structural_anchors"), dict) else {}
+        _rs = p.get("relative_strength") if isinstance(p.get("relative_strength"), dict) else {}
+        _struct_parts = []
+        if _sa.get("ema21_1h") is not None:
+            _d21 = _sa.get("ema21_1h_dev_pct")
+            _struct_parts.append(f"1H EMA21={_sa['ema21_1h']}" + (f"({_d21:+.2f}%)" if _d21 is not None else ""))
+        if _sa.get("ema55_1h") is not None:
+            _d55 = _sa.get("ema55_1h_dev_pct")
+            _struct_parts.append(f"EMA55={_sa['ema55_1h']}" + (f"({_d55:+.2f}%)" if _d55 is not None else ""))
+        if _sa.get("ema200_1h") is not None:
+            _struct_parts.append(f"EMA200={_sa['ema200_1h']}")
+        if _sa.get("ema21_4h") is not None:
+            _struct_parts.append(f"4H EMA21={_sa['ema21_4h']}")
+        if _sa.get("swing_low_1h_15") is not None and _sa.get("swing_high_1h_15") is not None:
+            _struct_parts.append(f"1H摆动15=[{_sa['swing_low_1h_15']}, {_sa['swing_high_1h_15']}]")
+        if _sa.get("swing_low_1h_48") is not None and _sa.get("swing_high_1h_48") is not None:
+            _struct_parts.append(f"1H摆动48=[{_sa['swing_low_1h_48']}, {_sa['swing_high_1h_48']}]")
+        if _sa.get("swing_low_4h") is not None and _sa.get("swing_high_4h") is not None:
+            _struct_parts.append(f"4H摆动=[{_sa['swing_low_4h']}, {_sa['swing_high_4h']}]")
+        if _sa.get("bar_summary_1h"):
+            _struct_parts.append(f"1H近3闭合={_sa['bar_summary_1h']}")
+        if _sa.get("bar_summary_15m"):
+            _struct_parts.append(f"15M近3闭合={_sa['bar_summary_15m']}")
+        _anchor_notes = []
+        _la = _sa.get("long_anchor")
+        if isinstance(_la, dict) and _la.get("entry") and _la.get("sl") and _la.get("tp"):
+            _anchor_notes.append(f"多参考[入={_la['entry']}/SL={_la['sl']}/TP={_la['tp']}]")
+        _sha = _sa.get("short_anchor")
+        if isinstance(_sha, dict) and _sha.get("entry") and _sha.get("sl") and _sha.get("tp"):
+            _anchor_notes.append(f"空参考[入={_sha['entry']}/SL={_sha['sl']}/TP={_sha['tp']}]")
+        if _anchor_notes:
+            _struct_parts.append("结构锚定(供直引):" + " ".join(_anchor_notes))
+        _struct_line = f"\n- 🧭 结构参考位与闭合形态: " + " | ".join(_struct_parts) if _struct_parts else ""
+
+        _rs_parts = []
+        if _rs.get("btc_beta") is not None:
+            _rs_parts.append(f"BTC_Beta={_rs['btc_beta']}")
+        if _rs.get("residual_ret_4h_pct") is not None:
+            _rs_parts.append(f"4H特质残差={_rs['residual_ret_4h_pct']:+.2f}%")
+        if _rs.get("rs_rank") is not None and _rs.get("pool_size"):
+            _rs_parts.append(f"RS排名={_rs['rs_rank']}/{_rs['pool_size']}")
+        if _rs.get("perp_spot_basis_bps") is not None:
+            _rs_parts.append(f"期现基差={_rs['perp_spot_basis_bps']:+.1f}bps")
+        if _rs.get("rv_ratio_6h_72h") is not None:
+            _rs_parts.append(f"6H/72H波动比={_rs['rv_ratio_6h_72h']}")
+        _rs_line = f"\n- 📈 横截面Alpha与基差: " + " | ".join(_rs_parts) if _rs_parts else ""
+
         if sm.get('available'):
             _sm_parts = [
                 f"加权做多占比={sm.get('weighted_long_pct')}%",
@@ -307,7 +354,7 @@ def construct_full_market_prompt(packages: List[Dict[str, Any]], pos_summary: st
         info = f"""---------------------------------------------------------
 【{p['name']} ({p['instId']})】| 数据质量: {quality} | 现价: {p['price']} | 24H涨跌: {p['chg24h']}% | 盘口买/卖: {p['bidPx']}/{p['askPx']}
 - 🏛️ 三重滤网宏观结构: 4H宏观大势={(p.get('macro_4h') or '--')} | 1H波段结构={(p.get('structure_1h') or '--')} | 标的体制={regime_desc}{_alpha_tag}
-{tier_block}{_t2_line}
+{tier_block}{_t2_line}{_struct_line}{_rs_line}
 - 👑 顶级聪明钱 (SmartMoney Top100 加权流): {_sm_line_body}"""
         _ri_list = _recent_intents_by_inst.get(p.get("instId", ""))
         if _ri_list:

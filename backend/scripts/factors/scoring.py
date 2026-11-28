@@ -128,24 +128,25 @@ def score_composite_alpha(factors: Dict[str, Any]) -> float:
     sm = factors.get("smart_money_derivatives") if isinstance(factors.get("smart_money_derivatives"), dict) else {}
     vp = factors.get("volume_profile") if isinstance(factors.get("volume_profile"), dict) else {}
 
-    adx = _num(_pick(tm, "adx_1h"))
+    adx_raw = _pick(tm, "adx_1h")
+    adx = _num(adx_raw)
     # ★ 2026-10「不许假数据」：RSI 缺失时**不许**用 50.0 兜底 ——
-    #   50.0 会让下面 `rsi >= 50 ⇒ +15` 凭空加分（趋势分本来就是在判方向，
+    #   50.0 会让下面趋势项凭空加分（趋势分本来就是在判方向，
     #   拿"中性=50"当方向证据是编造）。缺失 ⇒ 本项不计分。
     rsi = _pick(tm, "rsi_14")
 
     # ---------------------------------------------------------------------
     # 1. 趋势结构 (盘面) —— ±15
-    # ⚠️ 这里刻意**不读** `macd_hist`：动量项（第 2 项）已经用它，
-    #    两处都读会把同一个 MACD 柱人为放大一倍。
+    #    连续斜坡消除 RSI=50 处的 ±30 分二元断崖（50 分归零，50±8 线性饱和到 ±15）；
+    #    ADX 缺失单独标 `INSUFFICIENT_DATA`，不冒充震荡市 `CHOP_RANGE`。
     # ---------------------------------------------------------------------
     score_trend = 0.0
-    if adx >= ADX_TREND_THRESHOLD:
-        # ⚠️ 必须同时判 `_MISSING` 与 `None`：`_pick` 对**值为 None** 的键也返回
-        # `_MISSING` 哨兵，而哨兵不是 None —— 只判 `is not None` 会漏过去，
-        # 再经 `_num(哨兵)→0.0` 变成"RSI<50"⇒ **−15 分**（2026-10 自查抓到）。
+    if adx_raw is _MISSING:
+        tm["trend_regime"] = "INSUFFICIENT_DATA"
+    elif adx >= ADX_TREND_THRESHOLD:
         if rsi is not _MISSING and rsi is not None:
-            score_trend += 15.0 if _num(rsi) >= 50.0 else -15.0
+            rsi_slope = max(-1.0, min(1.0, (_num(rsi) - 50.0) / 8.0))
+            score_trend += TREND_ITEM_CAP * rsi_slope
         tm["trend_regime"] = "STRONG_TREND"
     else:
         tm["trend_regime"] = "CHOP_RANGE"
@@ -295,13 +296,31 @@ def score_composite_alpha(factors: Dict[str, Any]) -> float:
     score += _cap(score_depth, DEPTH_ITEM_CAP)
 
     # ---------------------------------------------------------------------
-    # 阻尼：波动冲击（1H ATR% ≥ 4.0）或流动性恶化（点差 > 15bps）⇒ ×0.8。
+    # 7. 横截面 BTC Beta 残差动量与期现基差（存在才计分，缺失不影响旧基线）—— ±8
+    # ---------------------------------------------------------------------
+    rs = factors.get("relative_strength") if isinstance(factors.get("relative_strength"), dict) else {}
+    score_rs = 0.0
+    res_ret = _pick(rs, "residual_ret_4h_pct")
+    if res_ret is not _MISSING:
+        rr = _num(res_ret)
+        score_rs += _cap((rr / 1.5) * 5.0, 5.0)
+    sp_bps = _pick(rs, "perp_spot_basis_bps")
+    if sp_bps is not _MISSING:
+        bps = _num(sp_bps)
+        # 温和正基差（现货强于合约倒挂时反向，合约轻微溢价确认需求；过高正基差拥挤反向）
+        if abs(bps) >= 3.0:
+            score_rs += -3.0 if bps >= 25.0 else (3.0 if bps <= -25.0 else _cap(bps / 10.0, 3.0))
+    score += _cap(score_rs, 8.0)
+
+    # ---------------------------------------------------------------------
+    # 阻尼：波动冲击（1H ATR% ≥ 4.0 或短长实现波动率陡增 ≥ 2.2）或流动性恶化（点差 > 15bps）⇒ ×0.8。
     # 两者同时命中连乘。**费率拥挤不参与阻尼** —— 它走下面的方向性闸门，
     # 否则"反拥挤"那笔最该做的交易会被连分一起缩掉。
     # ---------------------------------------------------------------------
     atr_pct_1h = _num(_pick(vc, "atr_1h_pct"))
     spread_bps = _num(_pick(ms, "spread_bps"))
-    if atr_pct_1h >= ATR_SHOCK_PCT or spread_bps > SPREAD_WIDE_BPS:
+    rv_ratio = _num(_pick(rs, "rv_ratio_6h_72h"))
+    if atr_pct_1h >= ATR_SHOCK_PCT or spread_bps > SPREAD_WIDE_BPS or rv_ratio >= 2.2:
         score *= SHOCK_DAMPEN
 
     factors["composite_alpha_score"] = round(score, 1)

@@ -246,12 +246,45 @@ def parse_review_json(*,
 def normalize_asset_multipliers(*,
         TARGET_INSTRUMENTS,
         clamp,
-        llm_review):
+        llm_review,
+        closed_trades=None):
     raw_asset_mults = llm_review.get("asset_multipliers", {})
     if not isinstance(raw_asset_mults, dict):
         raw_asset_mults = {}
-    asset_mults = {
-        asset: clamp(raw_asset_mults.get(asset, 1.0), 0.5, 1.5, 1.0)
-        for asset in TARGET_INSTRUMENTS
-    }
+
+    if closed_trades is None:
+        return {
+            asset: clamp(raw_asset_mults.get(asset, 1.0), 0.5, 1.5, 1.0)
+            for asset in TARGET_INSTRUMENTS
+        }
+
+    min_sample = 8
+    full_sample = 20.0
+    # 只统计 DYNAMICS_OBSERVED 下的**完整归并持仓**（scale_out 拆腿与余仓按同开仓时间+方向去重）
+    merged_positions: Dict[str, set] = {}
+    for idx, trade in enumerate(closed_trades or []):
+        if not isinstance(trade, dict):
+            continue
+        if str(trade.get("snapshot_observability") or "") != "DYNAMICS_OBSERVED":
+            continue
+        raw_inst = str(trade.get("inst") or trade.get("symbol") or trade.get("instId") or "").strip().upper()
+        if not raw_inst:
+            continue
+        base = raw_inst.split("-")[0]
+        pos_key = (
+            str(trade.get("position_id") or trade.get("trace_id") or trade.get("open_time") or trade.get("time") or f"idx-{idx}"),
+            str(trade.get("side") or "").strip().lower(),
+        )
+        merged_positions.setdefault(base, set()).add(pos_key)
+
+    asset_mults: Dict[str, float] = {}
+    for asset in TARGET_INSTRUMENTS:
+        sym = str(asset).split("-")[0].strip().upper()
+        n_sym = len(merged_positions.get(sym, set()))
+        if n_sym < min_sample:
+            asset_mults[asset] = 1.0
+            continue
+        raw_val = clamp(raw_asset_mults.get(asset, 1.0), 0.5, 1.5, 1.0)
+        shrunk = 1.0 + (float(raw_val) - 1.0) * min(1.0, float(n_sym) / full_sample)
+        asset_mults[asset] = round(float(clamp(shrunk, 0.5, 1.5, 1.0)), 4)
     return asset_mults

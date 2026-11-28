@@ -74,13 +74,14 @@ def _legacy_tightens_stop(instruction, position):
 
 def _legacy_ratchet_long(entry_px, atr, prec, peak_profit_px, old_sl,
                          tier1_breakeven_trigger, tier2_lock_trigger):
+    # 2026-11 手续费实证修复：0.0020 低于双边 Taker+滑点，导致 48% 保本退出净亏；同步抬升至 0.0030
     stage_desc = None
     dynamic_floor_sl = old_sl
     if peak_profit_px >= tier2_lock_trigger:
         dynamic_floor_sl = max(dynamic_floor_sl, round(entry_px + 1.0 * atr, prec))
         stage_desc = f"锁定大波段利润 (保底止损 {dynamic_floor_sl})"
     elif peak_profit_px >= tier1_breakeven_trigger:
-        dynamic_floor_sl = max(dynamic_floor_sl, round(entry_px + 0.0020 * entry_px, prec))
+        dynamic_floor_sl = max(dynamic_floor_sl, round(entry_px + 0.0030 * entry_px, prec))
         stage_desc = f"已推保本无风险 (保底止损 {dynamic_floor_sl})"
     return dynamic_floor_sl, stage_desc
 
@@ -93,7 +94,7 @@ def _legacy_ratchet_short(entry_px, atr, prec, peak_profit_px, old_sl,
         dynamic_floor_sl = min(dynamic_floor_sl, round(entry_px - 1.0 * atr, prec))
         stage_desc = f"锁定大波段利润 (保底止损 {dynamic_floor_sl})"
     elif peak_profit_px >= tier1_breakeven_trigger:
-        dynamic_floor_sl = min(dynamic_floor_sl, round(entry_px - 0.0020 * entry_px, prec))
+        dynamic_floor_sl = min(dynamic_floor_sl, round(entry_px - 0.0030 * entry_px, prec))
         stage_desc = f"已推保本无风险 (保底止损 {dynamic_floor_sl})"
     return dynamic_floor_sl, stage_desc
 

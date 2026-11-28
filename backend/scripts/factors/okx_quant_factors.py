@@ -102,6 +102,8 @@ __all__ = [
     "fetch_derivatives_snapshot", "fetch_option_snapshot", "fetch_loan_rate_snapshot",
     "fetch_quarterly_basis_inputs", "apply_derivatives_tier", "apply_orderflow_tier",
     "apply_microstructure_tier", "apply_volume_profile_tier", "apply_momentum_tier",
+    "compute_btc_beta_and_residual", "compute_rv_compression",
+    "compute_spot_perp_basis_bps", "assign_cross_sectional_rs_rank",
 ]
 
 # ---------------------------------------------------------------------------
@@ -372,12 +374,12 @@ def _public_get(path: str, params: Optional[Dict[str, Any]] = None,
         # （实盘已观测到 1H taker 长期取空）。三次尝试后仍失败才走下一个主机。
         # `_call_lock` 仅序列化发车槽位分配，HTTP RTT 在锁外执行以避免叠加超时。
         _is_rubik = "/rubik/" in path
-        _call_lock = _RUBIK_CALL_LOCK if _is_rubik else _NOOP_LOCK
         for attempt, backoff in enumerate((0.0, 0.6, 1.5, 3.0)):
             if backoff:
                 time.sleep(backoff)
-            with _call_lock:
-                _throttle_rubik(path)
+            # `_throttle_rubik` 内部只在 `_RUBIK_LOCK` 下原子分配发车时间戳并释放锁，再在锁外 sleep，
+            # 不再用外层互斥锁阻塞并发线程互相等待 sleep。
+            _throttle_rubik(path)
             try:
                 req = urllib.request.Request(url, headers=_HEADERS)
                 with urllib.request.urlopen(req, timeout=timeout) as resp:
@@ -385,7 +387,7 @@ def _public_get(path: str, params: Optional[Dict[str, Any]] = None,
                 _mark_rubik_called(path)      # 服务器确实收到了这次请求
                 if str(payload.get("code")) == "0":
                     data = payload.get("data")
-                    if isinstance(data, list) and cache_key:
+                    if isinstance(data, list) and data and cache_key:
                         _cache_put(cache_key, data)
                     return data if isinstance(data, list) else None
                 break
@@ -458,13 +460,8 @@ def detect_divergence(closes: Sequence[float], oscillator: Sequence[float],
                       lookback: int = DIVERGENCE_LOOKBACK, *, eps: float = 1e-9) -> str:
     """窗口内价格与振荡器（MACD 柱 / RSI）的**顶底背离**。
 
-    算法（刻意简单、可解释、无参数魔法）：把最近 `lookback` 根二分，
-    比较两半的极值点及其对应的振荡器值 ——
-
-    - 价格**创更低低点**、振荡器低点却**抬高** ⇒ `BULLISH`（空头动能衰竭）；
-    - 价格**创更高高点**、振荡器高点却**走低** ⇒ `BEARISH`（多头动能衰竭）。
-
-    样本不足或数值退化一律返回 `NONE`（不猜）。
+    优先识别 3-bar 局部波段枢轴极值（避免固定二分中点切断跨中点摆动）；
+    若局部枢轴不足 2 个，退回前后两半极值比较。样本不足或退化返回 `NONE`。
     """
     eff_lb = max(1, int(lookback)) if lookback is not None else DIVERGENCE_LOOKBACK
     n = min(len(closes), len(oscillator), eff_lb)
@@ -474,16 +471,23 @@ def detect_divergence(closes: Sequence[float], oscillator: Sequence[float],
     osc = [_sf(v) for v in oscillator[-n:]]
     half = n // 2
 
-    first_px, second_px = px[:half], px[half:]
-    first_osc, second_osc = osc[:half], osc[half:]
-
-    i_low_1 = min(range(len(first_px)), key=lambda i: first_px[i])
-    i_low_2 = half + min(range(len(second_px)), key=lambda i: second_px[i])
+    swing_lows = [i for i in range(1, n - 1) if px[i] <= px[i - 1] and px[i] <= px[i + 1]
+                  and (px[i] < px[i - 1] or px[i] < px[i + 1])]
+    if len(swing_lows) >= 2:
+        i_low_1, i_low_2 = swing_lows[-2], swing_lows[-1]
+    else:
+        i_low_1 = min(range(half), key=lambda i: px[i])
+        i_low_2 = half + min(range(n - half), key=lambda i: px[half + i])
     if px[i_low_2] < px[i_low_1] - eps and osc[i_low_2] > osc[i_low_1] + eps:
         return "BULLISH"
 
-    i_high_1 = max(range(len(first_px)), key=lambda i: first_px[i])
-    i_high_2 = half + max(range(len(second_px)), key=lambda i: second_px[i])
+    swing_highs = [i for i in range(1, n - 1) if px[i] >= px[i - 1] and px[i] >= px[i + 1]
+                   and (px[i] > px[i - 1] or px[i] > px[i + 1])]
+    if len(swing_highs) >= 2:
+        i_high_1, i_high_2 = swing_highs[-2], swing_highs[-1]
+    else:
+        i_high_1 = max(range(half), key=lambda i: px[i])
+        i_high_2 = half + max(range(n - half), key=lambda i: px[half + i])
     if px[i_high_2] > px[i_high_1] + eps and osc[i_high_2] < osc[i_high_1] - eps:
         return "BEARISH"
     return "NONE"
@@ -573,13 +577,17 @@ def mark_momentum_missing(factors: Dict[str, Any]) -> None:
 
 
 def mark_volume_profile_missing(factors: Dict[str, Any]) -> None:
-    """T3 输入缺失时把筹码分布键显式标缺失（同理：别让 0.0 假装"价格就在 VWAP 上"）。"""
+    """T3 输入缺失时把筹码分布键显式标缺失（同理：别让 0.0/NEUTRAL 假装"价格就在 VWAP 上"）。"""
     vp = factors.setdefault("volume_profile", {})
-    for key in ("vwap_24h", "vwap_upper_1", "vwap_lower_1", "vwap_upper_2",
-                "vwap_lower_2", "vwap_bias_pct", "poc_price", "poc_distance_pct",
+    for key in ("vwap_24h", "vwap_sigma_pct", "vah", "val", "vpvr_poc",
+                "vwap_upper_1", "vwap_lower_1", "vwap_upper_2", "vwap_lower_2",
+                "vwap_bias_pct", "poc_price", "poc_distance_pct",
                 "value_area_high", "value_area_low"):
         if key in vp:
             vp[key] = None
+    for state_key in ("value_area_position", "vwap_extreme_band"):
+        if state_key in vp:
+            vp[state_key] = "INSUFFICIENT_DATA"
 
 
 def classify_rsi_zone(rsi: float, trend: str) -> str:
@@ -865,11 +873,16 @@ def classify_elite_divergence(retail_ratio: Optional[float],
 
 
 def summarize_liquidations(liq_details: Optional[Sequence[Dict[str, Any]]],
-                           ct_val: float) -> Tuple[float, float, str]:
+                           ct_val: float,
+                           *,
+                           window_hours: float = 4.0,
+                           oi_usd: Optional[float] = None) -> Tuple[Optional[float], Optional[float], str]:
     """清算明细 → `(long_liq_usd, short_liq_usd, bias)`。
 
     `posSide=long` 表示**多头被清算**（强制卖出，利空踩踏）；
     `posSide=short` 表示**空头被清算**（强制买入，轧空反抽）。
+    若明细包含时间戳，默认仅统计最近 `window_hours`（4 小时）内的清算事件，避免冷门山寨币把多天历史算作单轮级联；
+    若传入 `oi_usd > 0`，要求强平额至少占 OI 的 0.02% 才触发级联倾向。
     """
     long_usd = 0.0
     short_usd = 0.0
@@ -877,9 +890,22 @@ def summarize_liquidations(liq_details: Optional[Sequence[Dict[str, Any]]],
         # 合约面值未知 ⇒ 张→U 的折算会**整体错一个倍数**，宁可显式缺失
         return None, None, "INSUFFICIENT_DATA"
     cv = _sf(ct_val)
-    for row in (liq_details or []):
-        if not isinstance(row, dict):
-            continue
+    rows = [r for r in (liq_details or []) if isinstance(r, dict)]
+    if window_hours and window_hours > 0 and rows:
+        ts_vals = []
+        for r in rows:
+            t_raw = r.get("time") or r.get("ts")
+            if t_raw is not None:
+                t_val = _sf(t_raw)
+                if t_val > 0:
+                    ts_vals.append(t_val)
+        if ts_vals:
+            cutoff_ms = max(ts_vals) - float(window_hours) * 3600.0 * 1000.0
+            rows = [
+                r for r in rows
+                if (_sf(r.get("time") or r.get("ts")) <= 0 or _sf(r.get("time") or r.get("ts")) >= cutoff_ms)
+            ]
+    for row in rows:
         sz = _sf(row.get("sz"))
         px = _sf(row.get("bkPx"))
         notional = abs(sz) * cv * px
@@ -887,9 +913,12 @@ def summarize_liquidations(liq_details: Optional[Sequence[Dict[str, Any]]],
             long_usd += notional
         elif str(row.get("posSide")).lower() == "short":
             short_usd += notional
-    if long_usd > short_usd * 1.5 and long_usd > 0:
+    min_abs = 0.0
+    if oi_usd is not None and _sf(oi_usd) > 0:
+        min_abs = _sf(oi_usd) * 0.0002
+    if long_usd > short_usd * 1.5 and long_usd > min_abs:
         bias = "LONG_CASCADE"
-    elif short_usd > long_usd * 1.5 and short_usd > 0:
+    elif short_usd > long_usd * 1.5 and short_usd > min_abs:
         bias = "SHORT_SQUEEZE"
     else:
         bias = "BALANCED"
@@ -1384,7 +1413,8 @@ def fetch_quarterly_basis_inputs(ccy: str, *, timeout: float = 4.0) -> Dict[str,
                     "index_px": _sf(idx[0].get("idxPx")),
                     "exp_time_ms": _sf(contract.get("expTime")),
                 }
-    _cache_put(cache_key, result)
+    if result:
+        _cache_put(cache_key, result)
     return result
 
 
@@ -1414,7 +1444,8 @@ def fetch_option_snapshot(inst_family: str, ccy: str = "", *,
                           {"instType": "OPTION", "instFamily": family}, timeout)
     if oi_rows:
         out["opt_oi_rows"] = oi_rows
-    _cache_put(cache_key, out)
+    if out:
+        _cache_put(cache_key, out)
     return out
 
 
@@ -1432,7 +1463,8 @@ def fetch_loan_rate_snapshot(*, timeout: float = 4.0) -> Dict[str, Any]:
                 if isinstance(row, dict) and str(row.get("ccy")) in ("USDT", "USD"):
                     out["loan_rate_usdt"] = _sf(row.get("rate"))
                     break
-    _cache_put("loan", out)
+    if out:
+        _cache_put("loan", out)
     return out
 
 
@@ -1532,7 +1564,7 @@ def apply_derivatives_tier(factors: Dict[str, Any], *, snapshot: Dict[str, Any],
     sm["elite_divergence"] = classify_elite_divergence(lsr, elite_acct)
 
     long_liq, short_liq, bias = summarize_liquidations(
-        snapshot.get("liquidation_details"), ct_val)
+        snapshot.get("liquidation_details"), ct_val, oi_usd=oi_usd)
     if long_liq or short_liq:
         sm["liquidation_long_usd"] = long_liq
         sm["liquidation_short_usd"] = short_liq
@@ -1559,3 +1591,302 @@ def apply_derivatives_tier(factors: Dict[str, Any], *, snapshot: Dict[str, Any],
                                     options_block.get("forward_px", 0.0),
                                     options_block.get("put_call_oi_ratio"),
                                     options_block.get("opt_oi_rows")))
+
+
+# ---------------------------------------------------------------------------
+# 横截面相对强弱、波动率压缩与期现基差（纯计算）
+# ---------------------------------------------------------------------------
+
+def compute_btc_beta_and_residual(
+    asset_closes_1h: Sequence[float],
+    btc_closes_1h: Sequence[float],
+    *,
+    lookback_beta: int = 72,
+    horizon_ret: int = 4,
+) -> Dict[str, Any]:
+    """计算标的相对 BTC 的 1H 滚动 OLS Beta 与正交 4H 残差动量（已收盘口径）。
+
+    - `beta = clamp(cov(r_i, r_btc) / var(r_btc), 0.0, 2.5)`
+    - `residual_ret_4h_pct = r_asset_4h_pct - beta * r_btc_4h_pct`
+    """
+    out: Dict[str, Any] = {
+        "btc_beta": None,
+        "ret_4h_pct": None,
+        "residual_ret_4h_pct": None,
+    }
+    a = [_sf(c) for c in (asset_closes_1h or []) if _sf(c) > 0]
+    b = [_sf(c) for c in (btc_closes_1h or []) if _sf(c) > 0]
+    if len(a) <= horizon_ret:
+        return out
+    ret_a_4h = (a[-1] - a[-1 - horizon_ret]) / a[-1 - horizon_ret] * 100.0
+    out["ret_4h_pct"] = round(ret_a_4h, 3)
+
+    if len(b) <= horizon_ret:
+        out["btc_beta"] = 1.0
+        out["residual_ret_4h_pct"] = round(ret_a_4h, 3)
+        return out
+
+    # BTC 自身残差动量固定为 0.0（Beta = 1.0）
+    if len(a) == len(b) and all(abs(x - y) <= 1e-12 for x, y in zip(a[-6:], b[-6:])):
+        out["btc_beta"] = 1.0
+        out["residual_ret_4h_pct"] = 0.0
+        return out
+
+    ra = [(a[i] - a[i - 1]) / a[i - 1] for i in range(1, len(a))]
+    rb = [(b[i] - b[i - 1]) / b[i - 1] for i in range(1, len(b))]
+    m = min(len(ra), len(rb), max(10, int(lookback_beta)))
+    if m < 10:
+        beta = 1.0
+    else:
+        sa = ra[-m:]
+        sb = rb[-m:]
+        mean_a = sum(sa) / m
+        mean_b = sum(sb) / m
+        var_b = sum((x - mean_b) ** 2 for x in sb)
+        if var_b <= 1e-14:
+            beta = 1.0
+        else:
+            cov = sum((sa[i] - mean_a) * (sb[i] - mean_b) for i in range(m))
+            beta = max(0.0, min(2.5, cov / var_b))
+
+    ret_b_4h = (b[-1] - b[-1 - horizon_ret]) / b[-1 - horizon_ret] * 100.0
+    out["btc_beta"] = round(beta, 3)
+    out["residual_ret_4h_pct"] = round(ret_a_4h - beta * ret_b_4h, 3)
+    return out
+
+
+def compute_rv_compression(
+    closes_1h: Sequence[float],
+    *,
+    short_win: int = 6,
+    long_win: int = 72,
+) -> Optional[float]:
+    """计算短长实现波动率比（`RV_6h / RV_72h`）：<0.70 波动收缩蓄势，>=2.2 极端脉冲冲击。"""
+    vals = [_sf(c) for c in (closes_1h or []) if _sf(c) > 0]
+    if len(vals) < max(short_win + 2, 24):
+        return None
+    rets = [(vals[i] - vals[i - 1]) / vals[i - 1] for i in range(1, len(vals))]
+    l_seg = rets[-min(len(rets), int(long_win)):]
+    s_seg = rets[-int(short_win):]
+    if len(l_seg) < 12 or len(s_seg) < 4:
+        return None
+    mean_l = sum(l_seg) / len(l_seg)
+    mean_s = sum(s_seg) / len(s_seg)
+    std_l = (sum((r - mean_l) ** 2 for r in l_seg) / len(l_seg)) ** 0.5
+    std_s = (sum((r - mean_s) ** 2 for r in s_seg) / len(s_seg)) ** 0.5
+    if std_l <= 1e-10:
+        return None
+    return round(std_s / std_l, 3)
+
+
+def compute_spot_perp_basis_bps(swap_px: float, spot_or_index_px: float) -> Optional[float]:
+    """永续合约相对现货/指数基差（bps）：`(swap - spot) / spot * 10000`。"""
+    s = _sf(swap_px)
+    i = _sf(spot_or_index_px)
+    if s <= 0 or i <= 0:
+        return None
+    return round((s - i) / i * 10000.0, 2)
+
+
+def assign_cross_sectional_rs_rank(
+    instruments_factors: Sequence[Dict[str, Any]],
+    *,
+    btc_closes_1h: Optional[Sequence[float]] = None,
+) -> None:
+    """对标的池统一补充 BTC Beta、4H 残差动量及横截面 RS 排名（1 = 最强）。"""
+    btc_series = list(btc_closes_1h or [])
+    if not btc_series:
+        for f in instruments_factors:
+            nm = str(f.get("name") or f.get("instId") or "").upper()
+            if nm == "BTC" or nm.startswith("BTC-"):
+                rs_blk = f.get("relative_strength") or {}
+                if isinstance(rs_blk, dict) and rs_blk.get("_closes_1h"):
+                    btc_series = list(rs_blk["_closes_1h"])
+                    break
+
+    scored_entries: List[Tuple[float, Dict[str, Any]]] = []
+    for f in instruments_factors:
+        rs = f.setdefault("relative_strength", {})
+        closes_raw = rs.pop("_closes_1h", None) or []
+        if closes_raw:
+            rv_ratio = compute_rv_compression(closes_raw)
+            if rv_ratio is not None:
+                rs["rv_ratio_6h_72h"] = rv_ratio
+            beta_res = compute_btc_beta_and_residual(closes_raw, btc_series)
+            for k, v in beta_res.items():
+                if v is not None:
+                    rs[k] = v
+        res_ret = rs.get("residual_ret_4h_pct")
+        if res_ret is not None:
+            scored_entries.append((_sf(res_ret), f))
+
+    scored_entries.sort(key=lambda kv: kv[0], reverse=True)
+    total = len(scored_entries)
+    for idx, (_val, f) in enumerate(scored_entries, start=1):
+        rs = f.setdefault("relative_strength", {})
+        rs["rs_rank"] = idx
+        rs["pool_size"] = total
+
+
+def _calc_ema_last(values: Sequence[float], period: int) -> Optional[float]:
+    """计算指数移动平均最后一个值；样本不足 period 时返回 None。"""
+    vals = [_sf(v) for v in (values or []) if _sf(v) > 0]
+    if len(vals) < max(2, int(period)):
+        return None
+    k = 2.0 / (period + 1.0)
+    ema = sum(vals[:period]) / period
+    for v in vals[period:]:
+        ema = v * k + ema * (1.0 - k)
+    return ema
+
+
+def _summarize_closed_bars(
+    raw_bars_newest_first: Sequence[Sequence[Any]],
+    *,
+    max_bars: int = 3,
+    label: str = "1H",
+) -> str:
+    """将最近已闭合 3 根柱子压成紧凑形态摘要（不含完整 OHLCV 数组，节省 Token）。"""
+    rows = [r for r in (raw_bars_newest_first or []) if isinstance(r, (list, tuple)) and len(r) >= 5]
+    if not rows:
+        return ""
+    # OKX 返回新->旧：若第 0 根明确标未闭合(confirm=="0")或未确定，跳过第 0 根取已闭合柱
+    start_idx = 0
+    if len(rows) > max_bars:
+        if len(rows[0]) > 8 and str(rows[0][8]) == "0":
+            start_idx = 1
+        elif len(rows[0]) <= 8:
+            # 标准 [o,h,l,c,v] / recent_* 列表最前一项通常是实时未收盘柱
+            start_idx = 1
+    closed = rows[start_idx:start_idx + max_bars]
+    if not closed:
+        return ""
+
+    vols = []
+    for r in rows[start_idx:start_idx + max_bars + 5]:
+        v = _sf(r[5] if len(r) > 5 else (r[4] if len(r) == 5 else 0.0))
+        if v > 0:
+            vols.append(v)
+    base_vol = (sum(vols[-5:]) / len(vols[-5:])) if vols else 0.0
+
+    parts: List[str] = []
+    # 输出时间顺序：从远到近 [-3, -2, -1]
+    ordered = list(reversed(closed))
+    total_b = len(ordered)
+    for idx, r in enumerate(ordered):
+        # 兼容两种列序:
+        #   6+列 OKX 原始: [ts, o, h, l, c, v, ...]
+        #   5列 recent_*:  [o, h, l, c, v]
+        if len(r) >= 6:
+            o, h, l, c = _sf(r[1]), _sf(r[2]), _sf(r[3]), _sf(r[4])
+            v = _sf(r[5])
+        else:
+            o, h, l, c = _sf(r[0]), _sf(r[1]), _sf(r[2]), _sf(r[3])
+            v = _sf(r[4])
+        if o <= 0 or c <= 0 or h < l:
+            continue
+        chg = (c - o) / o * 100.0
+        span = max(h - l, 1e-12)
+        body_pct = int(round(abs(c - o) / span * 100.0))
+        upper_wick = int(round(max(0.0, h - max(o, c)) / span * 100.0))
+        lower_wick = int(round(max(0.0, min(o, c) - l) / span * 100.0))
+        wick_tag = f"下影{lower_wick}%" if lower_wick >= upper_wick else f"上影{upper_wick}%"
+        vol_tag = f",量{v / base_vol:.1f}x" if base_vol > 0 and v > 0 else ""
+        offset = -(total_b - idx)
+        parts.append(f"{label}[{offset}]:{chg:+.2f}%(体{body_pct}%,{wick_tag}{vol_tag})")
+    return " | ".join(parts)
+
+
+def compute_structural_anchors(
+    *,
+    closes_1h: Optional[Sequence[float]] = None,
+    highs_1h: Optional[Sequence[float]] = None,
+    lows_1h: Optional[Sequence[float]] = None,
+    raw_1h: Optional[Sequence[Sequence[Any]]] = None,
+    raw_15m: Optional[Sequence[Sequence[Any]]] = None,
+    closes_4h: Optional[Sequence[float]] = None,
+    highs_4h: Optional[Sequence[float]] = None,
+    lows_4h: Optional[Sequence[float]] = None,
+    price: float = 0.0,
+    atr_1h: float = 0.0,
+    sl_atr_mult: float = 2.0,
+    min_rr: float = 2.0,
+    max_rr: float = 3.5,
+) -> Dict[str, Any]:
+    """计算提示词所需真实结构位（EMA21/55/200、1H/4H摆动高低、近3柱摘要、候选锚定区间）。"""
+    out: Dict[str, Any] = {}
+    px = _sf(price)
+    c1 = [_sf(v) for v in (closes_1h or []) if _sf(v) > 0]
+    h1 = [_sf(v) for v in (highs_1h or []) if _sf(v) > 0]
+    l1 = [_sf(v) for v in (lows_1h or []) if _sf(v) > 0]
+
+    for period, key in ((21, "ema21_1h"), (55, "ema55_1h"), (200, "ema200_1h")):
+        val = _calc_ema_last(c1, period)
+        if val is not None:
+            out[key] = round(val, 6)
+            if px > 0 and period in (21, 55):
+                out[f"{key}_dev_pct"] = round((px - val) / val * 100.0, 2)
+
+    if len(h1) >= 10 and len(l1) >= 10:
+        w15 = min(len(h1), 15)
+        out["swing_high_1h_15"] = round(max(h1[-w15:]), 6)
+        out["swing_low_1h_15"] = round(min(l1[-w15:]), 6)
+    if len(h1) >= 30 and len(l1) >= 30:
+        w48 = min(len(h1), 48)
+        out["swing_high_1h_48"] = round(max(h1[-w48:]), 6)
+        out["swing_low_1h_48"] = round(min(l1[-w48:]), 6)
+
+    c4 = [_sf(v) for v in (closes_4h or []) if _sf(v) > 0]
+    h4 = [_sf(v) for v in (highs_4h or []) if _sf(v) > 0]
+    l4 = [_sf(v) for v in (lows_4h or []) if _sf(v) > 0]
+    ema21_4h = _calc_ema_last(c4, 21)
+    if ema21_4h is not None:
+        out["ema21_4h"] = round(ema21_4h, 6)
+        if px > 0:
+            out["ema21_4h_dev_pct"] = round((px - ema21_4h) / ema21_4h * 100.0, 2)
+    if len(h4) >= 6 and len(l4) >= 6:
+        out["swing_high_4h"] = round(max(h4[-min(len(h4), 24):]), 6)
+        out["swing_low_4h"] = round(min(l4[-min(len(l4), 24):]), 6)
+
+    if raw_1h:
+        s1h = _summarize_closed_bars(raw_1h, max_bars=3, label="1H")
+        if s1h:
+            out["bar_summary_1h"] = s1h
+    if raw_15m:
+        s15 = _summarize_closed_bars(raw_15m, max_bars=3, label="15M")
+        if s15:
+            out["bar_summary_15m"] = s15
+
+    atr_v = _sf(atr_1h)
+    sl_m = max(0.8, _sf(sl_atr_mult, 2.0))
+    rr_target = max(1.5, min(_sf(max_rr, 3.5), _sf(min_rr, 2.0) + 0.3))
+    if px > 0 and atr_v > 0:
+        sl_dist = atr_v * sl_m
+        tp_dist = sl_dist * rr_target
+        ema21 = _sf(out.get("ema21_1h"))
+        sw_lo = _sf(out.get("swing_low_1h_15"))
+        sw_hi = _sf(out.get("swing_high_1h_15"))
+
+        long_entry = round(ema21 if (ema21 > 0 and abs(px - ema21) <= atr_v * 1.2) else max(px - atr_v * 0.25, px * 0.996), 6)
+        long_sl_cand = long_entry - sl_dist
+        if sw_lo > 0 and sw_lo < long_entry and (long_entry - sw_lo) <= sl_dist * 1.35:
+            long_sl_cand = min(long_sl_cand, sw_lo - atr_v * 0.25)
+        long_tp_cand = long_entry + max(tp_dist, (long_entry - long_sl_cand) * _sf(min_rr, 2.0))
+        out["long_anchor"] = {
+            "entry": long_entry,
+            "sl": round(long_sl_cand, 6),
+            "tp": round(long_tp_cand, 6),
+        }
+
+        short_entry = round(ema21 if (ema21 > 0 and abs(px - ema21) <= atr_v * 1.2) else min(px + atr_v * 0.25, px * 1.004), 6)
+        short_sl_cand = short_entry + sl_dist
+        if sw_hi > 0 and sw_hi > short_entry and (sw_hi - short_entry) <= sl_dist * 1.35:
+            short_sl_cand = max(short_sl_cand, sw_hi + atr_v * 0.25)
+        short_tp_cand = short_entry - max(tp_dist, (short_sl_cand - short_entry) * _sf(min_rr, 2.0))
+        if short_tp_cand > 0:
+            out["short_anchor"] = {
+                "entry": short_entry,
+                "sl": round(short_sl_cand, 6),
+                "tp": round(short_tp_cand, 6),
+            }
+    return out

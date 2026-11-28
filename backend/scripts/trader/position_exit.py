@@ -35,12 +35,16 @@ except Exception:                       # pragma: no cover
 
 
 def _freeze_tp1_from_entry(
-    entry_px: float, atr: float, is_long: bool, prec: int, initial_stop_px: Any = None
+    entry_px: float, atr: float, is_long: bool, prec: int,
+    initial_stop_px: Any = None, tp2_px: Any = None,
 ) -> Optional[float]:
     """建仓瞬间冻结首批止盈价（双腿挂单与软件判定共用同一价格）。"""
     try:
         from scripts.trader.tp1 import compute_tp1
-        return compute_tp1(entry_px, atr, is_long, prec, initial_stop_px=initial_stop_px)
+        return compute_tp1(
+            entry_px, atr, is_long, prec,
+            initial_stop_px=initial_stop_px, tp2_px=tp2_px,
+        )
     except Exception:
         return None
 
@@ -272,8 +276,21 @@ def manage_position_tp_and_trailing(f, curr_pos, trackers, timestamp_full, execu
     _split_enabled = False
     if _tp1_px > 0 and int(t.get("scale_out_phase", 0) or 0) < 1:
         try:
-            from scripts.trader.tp1 import tp1_geometry_ok
+            from scripts.trader.tp1 import tp1_geometry_ok, compute_tp1 as _compute_tp1_checked
             _split_enabled = tp1_geometry_ok(_tp1_px, _tp2_px, cur_px, is_long)
+            if not _split_enabled and _tp2_px > 0:
+                _reclamped = _compute_tp1_checked(
+                    entry_px, atr, is_long, prec,
+                    initial_stop_px=t.get("initialStopPx"), tp2_px=_tp2_px,
+                )
+                if _reclamped and tp1_geometry_ok(_reclamped, _tp2_px, cur_px, is_long):
+                    _tp1_px = _reclamped
+                    t["scale_out_tp"] = _reclamped
+                    _split_enabled = True
+                elif (is_long and _tp1_px >= _tp2_px) or ((not is_long) and _tp1_px <= _tp2_px):
+                    # TP2 与入场过近或 TP1 已越过 TP2，退化为整仓 TP2 退出而非错挂双腿
+                    t["scale_out_tp"] = None
+                    t["scale_out_phase"] = -1
         except Exception:
             _split_enabled = False
     _pos_min = curr_pos.get("minSz")
@@ -341,8 +358,8 @@ def manage_position_tp_and_trailing(f, curr_pos, trackers, timestamp_full, execu
     _init_sl = float(t.get("initialStopPx") or 0.0)
     _raw_r = abs(entry_px - _init_sl) if (_init_sl > 0 and entry_px > 0) else 0.0
     _r_unit = min(_raw_r, 3.0 * atr) if _raw_r > 0 else 0.0
-    tier1_breakeven_trigger = (0.9 * atr) if is_chop_pos else max(1.5 * atr, 1.0 * _r_unit)
-    tier2_lock_trigger = max(2.2 * atr, 1.6 * _r_unit)
+    tier1_breakeven_trigger = max(1.25 * atr, 0.9 * _r_unit) if is_chop_pos else max(1.5 * atr, 1.0 * _r_unit)
+    tier2_lock_trigger = max(2.3 * atr, 1.6 * _r_unit)
     momentum_tp_trigger = max(2.0 * atr, 1.5 * _r_unit)
     momentum_pullback_buffer = max(0.75 * atr, 0.5 * _r_unit)
     

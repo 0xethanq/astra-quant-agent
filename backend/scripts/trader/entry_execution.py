@@ -292,7 +292,24 @@ def execute_entry_scan(*,
         f["policy_hash"] = ai_info.get("policy_hash", "")
 
         # Direct Action Assignment from LLM
-        if ai_act in ["BUY_LONG", "SELL_SHORT"]:
+        _cooldown_map = f.get("_stop_cooldown") or {}
+        _cd_hit = (
+            (ai_act == "BUY_LONG" and bool(_cooldown_map.get("long")))
+            or (ai_act == "SELL_SHORT" and bool(_cooldown_map.get("short")))
+        )
+        if ai_act in ["BUY_LONG", "SELL_SHORT"] and _cd_hit:
+            action = "HOLD"
+            strat_tag = f"⏸️ 止损冷却拦截({ai_act})"
+            strat_desc = f"【风控冷却拦截】标的发生硬止损尚在冷却期内，拦截 LLM {ai_act}"
+            print(f"[止损冷却拦截] {f['name']} {ai_act} 尚在止损冷却期内，强行置为 HOLD")
+            _record_entry_diagnostic(
+                f.get("name"),
+                "gate",
+                ai_conf,
+                strat_desc,
+            )
+            continue
+        elif ai_act in ["BUY_LONG", "SELL_SHORT"]:
             action = ai_act
             strat_tag = f"🧠 AI大脑({ai_act})"
             strat_desc = f"【AI全权决策】{ai_reason}"
@@ -407,9 +424,15 @@ def execute_entry_scan(*,
                 #    原「微积分加速度 a >= -0.25 且 延续概率 >= 40%」；数理链退场后
                 #    改用 **T4 MACD 柱加速度** ＋ **T0 的 OI 四象限**（可观测、可复核）。
                 t4 = f.get("trend_momentum", {}) or {}
-                c_accel = float(t4.get("macd_accel", 0.0) or 0.0)
+                _raw_pct = t4.get("macd_accel_pct") if t4.get("macd_accel_pct") is not None else f.get("macd_accel_pct")
+                _px_ref = float(f.get("price", 0.0) or 0.0)
+                c_accel = (
+                    float(_raw_pct or 0.0)
+                    if _raw_pct is not None
+                    else ((float(t4.get("macd_accel", f.get("macd_accel", 0.0)) or 0.0) / _px_ref * 100.0) if _px_ref > 0 else 0.0)
+                )
                 oi_quadrant = str((f.get("smart_money_derivatives", {}) or {})
-                                  .get("oi_price_quadrant", "") or "")
+                                  .get("oi_price_quadrant") or f.get("oi_price_quadrant") or "")
 
                 allow_entry, is_scale_in = pyramiding_gate(
                     is_long=True, f=f, pos_upl=pos_upl, pos_upl_ratio=pos_upl_ratio,
@@ -556,9 +579,15 @@ def execute_entry_scan(*,
                 trailing_sl = float(tracker.get("trailingStopPx", 0.0) or 0.0)
 
                 t4 = f.get("trend_momentum", {}) or {}
-                c_accel = float(t4.get("macd_accel", 0.0) or 0.0)
+                _raw_pct = t4.get("macd_accel_pct") if t4.get("macd_accel_pct") is not None else f.get("macd_accel_pct")
+                _px_ref = float(f.get("price", 0.0) or 0.0)
+                c_accel = (
+                    float(_raw_pct or 0.0)
+                    if _raw_pct is not None
+                    else ((float(t4.get("macd_accel", f.get("macd_accel", 0.0)) or 0.0) / _px_ref * 100.0) if _px_ref > 0 else 0.0)
+                )
                 oi_quadrant = str((f.get("smart_money_derivatives", {}) or {})
-                                  .get("oi_price_quadrant", "") or "")
+                                  .get("oi_price_quadrant") or f.get("oi_price_quadrant") or "")
 
                 allow_entry, is_scale_in = pyramiding_gate(
                     is_long=False, f=f, pos_upl=pos_upl, pos_upl_ratio=pos_upl_ratio,

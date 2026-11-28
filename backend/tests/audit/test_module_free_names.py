@@ -62,7 +62,7 @@ class ModuleFreeNamesTest(unittest.TestCase):
                 if "__pycache__" in str(path):
                     continue
                 scanned += 1
-                rel = str(path.relative_to(ROOT))
+                rel = path.relative_to(ROOT).as_posix()
                 try:
                     missing = set(free_names(path))
                 except SyntaxError as exc:      # 语法错另有门管，这里只报不炸

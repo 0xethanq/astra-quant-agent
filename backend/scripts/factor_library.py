@@ -97,10 +97,12 @@ def compute_instrument_factors(item: Dict[str, Any], smart_money_pool: Dict[str,
 
     # 3. 15M Candles -> ATR, RSI, VWAP Bias, Vol Ratio, OBV（+ T3 筹码分布）
     closes_15m: List[float] = []
+    raw_candles_15m: List[Any] = []
     try:
         d = {"data": fetch_candles(inst_id, bar="15m", limit=24)}
         if d["data"] and len(d["data"]) >= 15:
             raw_candles = d["data"]
+            raw_candles_15m = list(raw_candles)
             # 15M 派生序列 + 指标（阶段 4·B3 第三十二刀：
             # 迁至 scripts/factors/candles_15m.py）。取数仍在本门面内，
             # 故对 fetch_candles 的 patch.object 缝不受影响。
@@ -114,14 +116,21 @@ def compute_instrument_factors(item: Dict[str, Any], smart_money_pool: Dict[str,
         print(f"[Factor] ⚠️ {inst_id} 15m K线处理异常: {exc}")
         mark_15m_missing(factors)
 
-    # 4. 1H Candles -> 1H ATR（+ T4 动量源序列）
+    # 4. 1H Candles -> 1H ATR（+ T4 动量源序列，自动剔除未收盘 confirm="0" 跳动 K 线）
     #    ⚠️ `limit=100` 而不是 24：MACD(12,26,9) 需要 **35 根**收盘价，
     #    只取 24 根会让 MACD 块静默退化成 0/中性（实盘已观测到）。
     closes_1h: List[float] = []
+    highs_1h: List[float] = []
+    lows_1h: List[float] = []
+    raw_1h_closed: List[Any] = []
     try:
         d = {"data": fetch_candles(inst_id, bar="1H", limit=100)}
         if d["data"] and len(d["data"]) >= 15:
-            raw_1h = d["data"]
+            raw_1h = list(d["data"])
+            if (len(raw_1h) > 36 and len(raw_1h[0]) > 8 and str(raw_1h[0][8]) == "0"
+                    and any(len(c) > 8 and str(c[8]) == "1" for c in raw_1h[1:])):
+                raw_1h = raw_1h[1:]
+            raw_1h_closed = raw_1h
             closes_1h = [safe_float(c[4]) for c in reversed(raw_1h)]
             highs_1h = [safe_float(c[2]) for c in reversed(raw_1h)]
             lows_1h = [safe_float(c[3]) for c in reversed(raw_1h)]
@@ -266,6 +275,55 @@ def compute_instrument_factors(item: Dict[str, Any], smart_money_pool: Dict[str,
         elif w_long <= 35.0 and net_usdt < 0:
             factors["smart_money_derivatives"]["signal"] = "BEAR_DISTRIBUTION"
 
+    # 横截面相对强弱 & 期现基差暂存字段（在池聚合完毕后由 assign_cross_sectional_rs_rank 统一排名再重算打分）
+    rs_blk = factors.setdefault("relative_strength", {})
+    if closes_1h:
+        rs_blk["_closes_1h"] = closes_1h[-80:]
+    if ccy and safe_float(factors.get("price")) > 0:
+        try:
+            idx_rows = qf._public_get("/api/v5/market/index-tickers", {"instId": f"{ccy}-USD"}, 3.0)
+            idx_px = safe_float(idx_rows[0].get("idxPx")) if (idx_rows and isinstance(idx_rows[0], dict)) else 0.0
+            sp_bps = qf.compute_spot_perp_basis_bps(factors["price"], idx_px)
+            if sp_bps is not None:
+                rs_blk["perp_spot_basis_bps"] = sp_bps
+        except Exception:
+            pass
+
+    # 结构位锚定信息（EMA21/55/200、摆动高低、近3根闭合摘要、候选止损止盈参考区间）
+    try:
+        closes_4h: List[float] = []
+        highs_4h: List[float] = []
+        lows_4h: List[float] = []
+        if closes_1h:
+            try:
+                raw_4h = fetch_candles(inst_id, bar="4H", limit=36) or []
+                if len(raw_4h) >= 6:
+                    if (len(raw_4h) > 12 and len(raw_4h[0]) > 8 and str(raw_4h[0][8]) == "0"
+                            and any(len(c) > 8 and str(c[8]) == "1" for c in raw_4h[1:])):
+                        raw_4h = raw_4h[1:]
+                    closes_4h = [safe_float(c[4]) for c in reversed(raw_4h)]
+                    highs_4h = [safe_float(c[2]) for c in reversed(raw_4h)]
+                    lows_4h = [safe_float(c[3]) for c in reversed(raw_4h)]
+            except Exception:
+                pass
+        anchors = qf.compute_structural_anchors(
+            closes_1h=closes_1h,
+            highs_1h=highs_1h,
+            lows_1h=lows_1h,
+            raw_1h=raw_1h_closed,
+            raw_15m=raw_candles_15m,
+            closes_4h=closes_4h,
+            highs_4h=highs_4h,
+            lows_4h=lows_4h,
+            price=safe_float(factors.get("price")),
+            atr_1h=safe_float(factors.get("volatility_channel", {}).get("atr_1h")),
+            sl_atr_mult=safe_float(item.get("sl_atr_mult"), 2.0),
+        )
+        if anchors:
+            factors["structural_anchors"] = anchors
+    except Exception:
+        pass
+
     # ★ 2026-10 用户拍板：预估型强平热力图**已整块移除**（构建/透传/渲染/看板卡片）。
     # 复合 alpha 打分与信号建议（-100~+100）
     # 阶段 4·B3 第二十九刀：整段迁至 scripts/factors/scoring.py::score_composite_alpha，
@@ -292,6 +350,14 @@ def update_factor_library() -> Dict[str, Any]:
     # 2. Parallel Factor Computations
     with ThreadPoolExecutor(max_workers=6) as executor:
         results = list(executor.map(lambda item: compute_instrument_factors(item, smart_money_pool), TARGET_INSTRUMENTS))
+
+    # 3. 横截面 BTC Beta 残差动量 + RS 排名，随后重新计算综合打分
+    try:
+        qf.assign_cross_sectional_rs_rank(results)
+        for _inst_f in results:
+            score_composite_alpha(_inst_f)
+    except Exception as e:
+        print(f"[Factor Library] Cross-sectional RS rank warning: {e}")
 
     snapshot = {
         "timestamp": int(time.time()),

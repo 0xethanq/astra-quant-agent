@@ -298,10 +298,10 @@ class OkxDirectTest(unittest.TestCase):
         self.assertIsNone(kw["px"])
 
     def test_smart_mode_high_confidence_within_1_2_pct_submits_market(self):
-        """smart 模式：高置信度（>= 78%）且距离 <= 1.2% 时即时走市价。"""
+        """smart 模式：高置信度（>= 82%）且距离 <= 0.6% 时走市价；1.0% 以上保持限价节省手续费滑点。"""
         okx = _Okx()
-        rig = Rig(okx=okx, price=99100.0, tp=104100.0, sl=94100.0, ticker="100000")
-        ctx = {"notional_usdt": 1, "margin_usdt": 1, "confidence": 82.0}
+        rig = Rig(okx=okx, price=99500.0, tp=104500.0, sl=94500.0, ticker="100000")
+        ctx = {"notional_usdt": 1, "margin_usdt": 1, "confidence": 85.0}
         with patch.dict(os.environ, {"ASTRA_ORDER_MODE": "smart"}):
             with patch("scripts.order_risk.validate_quote_geometry_and_rr",
                        return_value=(True, "", 1.0)):
@@ -309,6 +309,15 @@ class OkxDirectTest(unittest.TestCase):
         self.assertTrue(ok, why)
         _, _, _, kw = okx.orders[0]
         self.assertEqual(kw["ord_type"], "market")
+
+        okx2 = _Okx()
+        rig2 = Rig(okx=okx2, price=99100.0, tp=104100.0, sl=94100.0, ticker="100000")
+        with patch.dict(os.environ, {"ASTRA_ORDER_MODE": "smart"}):
+            with patch("scripts.order_risk.validate_quote_geometry_and_rr",
+                       return_value=(True, "", 1.0)):
+                ok2, why2 = rig2.run(venue_ctx={"notional_usdt": 1, "margin_usdt": 1, "confidence": 85.0})
+        self.assertTrue(ok2, why2)
+        self.assertEqual(okx2.orders[0][3]["ord_type"], "limit")
 
     def test_smart_mode_deep_pullback_places_limit_order(self):
         """smart 模式：深回踩（> 1.2%）挂 Maker 限价单等待打折成交。"""

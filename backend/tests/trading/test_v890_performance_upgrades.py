@@ -111,7 +111,7 @@ class RubikPacingAndDiskCacheTests(unittest.TestCase):
             def fake_urlopen(req, timeout=3.5):
                 url = req.full_url
                 seen_urls.append(url)
-                if "long-short-pos-ratio" in url:
+                if "long-short-pos-ratio" in url or "long-short-position-ratio" in url:
                     raise urllib.error.HTTPError(url, 404, "Not Found", {}, io.BytesIO(b""))
                 if "long-short-account-ratio" in url:
                     return _JsonResp({"code": "0", "data": [["t", "2.5"]]})
@@ -132,10 +132,10 @@ class RubikPacingAndDiskCacheTests(unittest.TestCase):
                 self.assertEqual(first["takerNetUsd"], "500.0 U")
                 self.assertEqual(len(seen_urls), 3)
 
-                # okx_quant_factors hits shared taker:5m and lsratio caches without HTTP
+                # okx_quant_factors hits shared taker:5m and elite-acct caches without HTTP
                 seen_urls.clear()
                 self.assertEqual(qf.fetch_taker_volume("SOL", "5m"), [["t", "100", "600"]])
-                self.assertEqual(qf._cache_get("lsratio:SOL", 300.0), [["t", "2.5"]])
+                self.assertEqual(qf._cache_get("elite-acct:SOL-USDT-SWAP", 300.0), [["t", "2.5"]])
                 self.assertEqual(seen_urls, [])
 
                 # Simulate fresh process: zero HTTP calls needed even for 404 endpoint

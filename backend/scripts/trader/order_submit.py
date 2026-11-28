@@ -307,11 +307,11 @@ def submit_protected_limit_order(inst_id: str, side: str, pos_side: str, size: f
                 _tp_atr = 0.0
         _ai_conf = float(venue_ctx.get("confidence", 0.0) or 0.0) if isinstance(venue_ctx, dict) else 0.0
         try:
-            from scripts.risk_constants import MIN_ENTRY_CONFIDENCE
-            _min_entry_conf = float(MIN_ENTRY_CONFIDENCE)
+            from scripts.risk_constants import COUNTER_4H_MIN_CONFIDENCE
+            _high_conf_gate = float(COUNTER_4H_MIN_CONFIDENCE)
         except Exception:
-            _min_entry_conf = 80.0
-        _effective_min_rr = 1.2 if _ai_conf >= _min_entry_conf else None
+            _high_conf_gate = 80.0
+        _effective_min_rr = 1.2 if _ai_conf >= _high_conf_gate else None
         effective_tp = clamp_take_profit_width(
             is_long=(pos_side == "long"),
             limit_px=effective_px, sl_px=effective_sl, tp_px=effective_tp,
@@ -329,13 +329,13 @@ def submit_protected_limit_order(inst_id: str, side: str, pos_side: str, size: f
     action_type = "BUY_LONG" if pos_side == "long" else "SELL_SHORT"
     _ai_conf = float(venue_ctx.get("confidence", 0.0) or 0.0) if isinstance(venue_ctx, dict) else 0.0
     try:
-        from scripts.risk_constants import MIN_ENTRY_CONFIDENCE
-        _min_entry_conf = float(MIN_ENTRY_CONFIDENCE)
+        from scripts.risk_constants import COUNTER_4H_MIN_CONFIDENCE
+        _high_conf_gate = float(COUNTER_4H_MIN_CONFIDENCE)
     except Exception:
-        _min_entry_conf = 80.0
+        _high_conf_gate = 80.0
     is_valid, reason, _ = validate_quote_geometry_and_rr(
         action_type, effective_px, effective_tp, effective_sl,
-        confidence=_ai_conf, min_rr_floor=(1.2 if _ai_conf >= _min_entry_conf else 0.0))
+        confidence=_ai_conf, min_rr_floor=(1.2 if _ai_conf >= _high_conf_gate else 0.0))
     if not is_valid:
         print(f"[Order Rejected] 最终有效开仓报价未通过核心安全复验: {reason} (px={effective_px}, tp={effective_tp}, sl={effective_sl})")
         release_signal_reservation(_reservation, "核心安全复验拒绝")

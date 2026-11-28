@@ -144,7 +144,12 @@ def execute_scale_out_if_eligible(
     #    TP1"随 ATR 漂移而分叉；双腿方案要求两者逐位相同。详见 `tp1.py`。
     from scripts.trader.tp1 import freeze_tp1, format_trigger_text
     tp1_px = freeze_tp1(t, entry_px=entry_px, atr=f.get("atr", 0.0), is_long=is_long,
-                        prec=px_prec, multiple=float(SCALE_OUT_TRIGGER_ATR or 1.20))
+                        prec=px_prec, multiple=float(SCALE_OUT_TRIGGER_ATR or 1.20),
+                        initial_stop_px=t.get("initialStopPx"), tp2_px=t.get("takeProfitPx"))
+    if not tp1_px or tp1_px <= 0:
+        t["scale_out_tp"] = None
+        t["scale_out_phase"] = -1
+        return False, "TP2空间不足以拆分TP1"
     trigger_threshold = abs(tp1_px - entry_px)
 
     # 3. 浮盈判定
@@ -169,11 +174,12 @@ def execute_scale_out_if_eligible(
 
     # `ratio` 已在上方（TP1 冻结段）解析，此处直接复用，避免同一函数两处口径。
     raw_close_sz = pos_sz * ratio
-    close_sz = round(raw_close_sz, prec)
+    sz_prec = _size_precision_of(min_sz)
+    close_sz = round(raw_close_sz, sz_prec)
     # 按 minSz 步长向下夹取对齐
     if min_sz > 0:
         close_sz = math.floor(close_sz / min_sz + 1e-9) * min_sz
-        close_sz = round(close_sz, prec)
+        close_sz = round(close_sz, sz_prec)
 
     remaining_sz = round(pos_sz - close_sz, prec)
     if close_sz < min_sz or remaining_sz < min_sz:
@@ -239,7 +245,7 @@ def execute_scale_out_if_eligible(
             print(f"[Scale-Out] 清理 {inst_id} 旧OCO异常（由新保护单覆盖）: {cxl_exc}")
 
     # 6. 计算保本止损线并为剩余仓位重建云端 OCO
-    breakeven_cushion = 0.0025 * entry_px
+    breakeven_cushion = 0.0030 * entry_px
     breakeven_sl = round((entry_px + breakeven_cushion) if is_long else (entry_px - breakeven_cushion), prec)
     take_profit_px = float(t.get("takeProfitPx", 0.0) or 0.0)
 
@@ -393,7 +399,7 @@ def _finalize_scale_out_after_leg_fill(
     fee_val = (close_fee(close_sz, _cv, exit_px, TAKER_FEE_RATE) if close_fee
                else close_sz * _cv * exit_px * TAKER_FEE_RATE)
 
-    breakeven_cushion = 0.0025 * entry_px
+    breakeven_cushion = 0.0030 * entry_px
     breakeven_sl = round((entry_px + breakeven_cushion) if is_long else (entry_px - breakeven_cushion), px_prec)
     take_profit_px = float(t.get("takeProfitPx", 0.0) or 0.0)
     if ensure_cloud_position_protection and take_profit_px > 0:

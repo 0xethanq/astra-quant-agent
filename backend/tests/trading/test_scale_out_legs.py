@@ -487,7 +487,7 @@ class ScaleOutFillFinalizeTests(unittest.TestCase):
         self.assertEqual(mock_okx.amend_algo_sl.call_count, 1)
         args, kwargs = mock_okx.amend_algo_sl.call_args
         self.assertEqual(args[0], "leg2_runner")
-        self.assertAlmostEqual(args[1], 1.1391, places=4)
+        self.assertAlmostEqual(args[1], 1.1386, places=4)
         self.assertEqual(kwargs.get("inst_id"), "SUI-USDT-SWAP")
 
 

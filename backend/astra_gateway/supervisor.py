@@ -9,9 +9,10 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-from astra_gateway.pidfile import PID_FILE  # noqa: E402  (唯一定义处：pidfile.py)
+from astra_gateway.pidfile import PID_FILE, process_running  # noqa: E402  (唯一定义处：pidfile.py)
 LOCK_FILE = ROOT / "data" / ".astra_gateway.lock"
 LOG_FILE = ROOT / "logs" / "astra_gateway_supervisor.log"
+_REAL_OS_KILL = os.kill
 _stop = threading.Event()
 _thread: threading.Thread | None = None
 _owned_pid = 0
@@ -19,6 +20,8 @@ _owned_pid = 0
 
 def _alive(pid: int) -> bool:
     if pid <= 0: return False
+    if sys.platform == "win32" and os.kill is _REAL_OS_KILL:
+        return process_running(pid)
     try: os.kill(pid, 0); return True
     except OSError: return False
 

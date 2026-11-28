@@ -194,9 +194,9 @@ class ScaleOutExecutionTests(unittest.TestCase):
         # 验证旧 OCO 被撤销
         self.mock_okx.cancel_algo_orders.assert_called_once_with(["algo_1"], inst_id="BTC-USDT-SWAP")
 
-        # 验证新 OCO 重挂：剩余 6.5 张，保本止损价 80200 (80000 + 0.25%)
+        # 验证新 OCO 重挂：剩余 6.5 张，保本止损价 80240 (80000 + 0.30%)
         self.mock_ensure_oco.assert_called_once_with(
-            "BTC-USDT-SWAP", "long", 6.5, 85000.0, 80200.0
+            "BTC-USDT-SWAP", "long", 6.5, 85000.0, 80240.0
         )
 
         # 验证 tracker 状态变更与金字塔加仓互斥锁定
@@ -204,7 +204,7 @@ class ScaleOutExecutionTests(unittest.TestCase):
         self.assertEqual(t["scale_out_phase"], 1)
         self.assertEqual(t["currentSz"], 6.5)
         self.assertEqual(t["scale_count"], 999)
-        self.assertEqual(t["trailingStopPx"], 80200.0)
+        self.assertEqual(t["trailingStopPx"], 80240.0)
 
         # 验证台账写入；金额通知**不再**由本路径发布（改由台账路径，见其 docstring）
         self.mock_record_trade.assert_called_once()

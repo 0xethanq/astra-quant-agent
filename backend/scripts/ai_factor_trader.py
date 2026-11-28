@@ -935,6 +935,73 @@ def record_trade(trade_data):
         record_trade_sqlite=record_trade_sqlite,
         current_environment=current_environment,
         __version__=__version__)
+
+
+def _archive_snapshot_and_shadow_eval(
+    all_factors,
+    brain_cache,
+    timestamp_full: str = "",
+    *,
+    db_path: Optional[str] = None,
+    shadow_log_path: Optional[str] = None,
+) -> dict:
+    """Fail-soft point-in-time market snapshot archival and Layer-3 shadow evaluation."""
+    summary = {"archived": 0, "shadow_logged": 0}
+    try:
+        factors_list = [f for f in (all_factors or []) if isinstance(f, dict) and f.get("instId")]
+        if not factors_list:
+            return summary
+        import time as _time
+        from pathlib import Path as _Path
+        from astra_backend.sandbox.data_warehouse import MarketReplayWarehouse
+
+        ts_ms = int(_time.time() * 1000)
+        target_db = _Path(db_path) if db_path else (_Path(DATA_DIR) / "candle_warehouse.db")
+        wh = MarketReplayWarehouse(target_db)
+        cache = brain_cache if isinstance(brain_cache, dict) else {}
+        for f in factors_list:
+            inst_id = str(f.get("instId") or "")
+            if not inst_id:
+                continue
+            compact_payload = {
+                "timestamp": timestamp_full,
+                "price": f.get("price"),
+                "atr": f.get("atr"),
+                "regime": f.get("regime"),
+                "fundingRate": f.get("fundingRate"),
+                "oiChange24hPct": f.get("oiChange24hPct"),
+                "structural_anchors": f.get("structural_anchors"),
+                "relative_strength": f.get("relative_strength"),
+                "brain_decision": cache.get(inst_id),
+            }
+            wh.save_market_snapshot(ts_ms, inst_id, compact_payload)
+            summary["archived"] += 1
+
+        shadow_on = os.getenv("ASTRA_SHADOW_EVAL_ENABLED", "0").strip().lower() in ("1", "true", "yes", "on")
+        if shadow_on:
+            log_path = shadow_log_path or os.path.join(DATA_DIR, "shadow_eval_log.jsonl")
+            os.makedirs(os.path.dirname(log_path), exist_ok=True)
+            entries = []
+            for f in factors_list:
+                inst_id = str(f.get("instId") or "")
+                dec = cache.get(inst_id) if isinstance(cache.get(inst_id), dict) else {}
+                entries.append({
+                    "ts_ms": ts_ms,
+                    "timestamp": timestamp_full,
+                    "instId": inst_id,
+                    "price": f.get("price"),
+                    "regime": f.get("regime"),
+                    "brain_action": dec.get("action", "WAIT"),
+                    "brain_confidence": dec.get("confidence", 0),
+                    "baseline_score": f.get("score"),
+                })
+            with open(log_path, "a", encoding="utf-8") as fh:
+                for row in entries:
+                    fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+                    summary["shadow_logged"] += 1
+    except Exception as exc:
+        print(f"[SnapshotWarehouse] fail-soft skip: {exc}")
+    return summary
 # =============================================================================
 # 🧮 Enhanced Quantitative Technical Indicators Math Engine
 # =============================================================================
@@ -1413,6 +1480,9 @@ def execute_portfolio():
     # 失败计数/耗时/最近成功时刻落盘，供后端 `/metrics` 跨进程读取。
     # 只写一个 JSON、失败只返回 False（绝不抛异常、绝不改变交易行为）。
     write_market_data_health_snapshot(path=MARKET_DATA_HEALTH_FILE)
+
+    # 4c. Point-in-Time 快照归档与 Layer-3 Shadow Virtual Evaluator（fail-soft）
+    _archive_snapshot_and_shadow_eval(all_factors, brain_cache, timestamp_full)
 
     # 5. Persist Latest State for Web Monitoring Dashboard
     persist_state_and_sync_ledger(

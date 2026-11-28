@@ -446,7 +446,7 @@ READONLY_OUTPUT_SCHEMA = """==== 【严格 JSON 规范契约与完整输出骨�
 }
 
 ▍字段审计说明：
-- position_management.action 只允许: "HOLD" | "CLOSE_MARKET" | "UPDATE_SL" | "UPDATE_TP"；触发峰值回撤超 35% 或 1H 负功率衰竭时果断输出 CLOSE_MARKET 止盈；action 为 UPDATE_SL 时 suggested_sl_price 填目标价格、否则必须填 0.0；action 为 UPDATE_TP 时 suggested_tp1_price/suggested_tp2_price 填目标止盈价（分批已发生时只填 tp2）、否则两者必须填 0.0；
+- position_management.action 只允许: "HOLD" | "CLOSE_MARKET" | "UPDATE_SL" | "UPDATE_TP"；触发峰值回撤超 35% 或 1H 动能反转失效时果断输出 CLOSE_MARKET 止盈；action 为 UPDATE_SL 时 suggested_sl_price 填目标价格、否则必须填 0.0；action 为 UPDATE_TP 时 suggested_tp1_price/suggested_tp2_price 填目标止盈价（分批已发生时只填 tp2）、否则两者必须填 0.0；
 - pending_orders_management.action 只允许: "KEEP" | "CANCEL"；挂单已大幅偏离盘口或入场逻辑失效时必须 CANCEL；
 - decisions[标的].action 只允许: "BUY_LONG" | "SELL_SHORT" | "WAIT"；action 为 WAIT 时 entry_price/take_profit_price/stop_loss_price 填 0.0；
 - decisions **必须覆盖标的池全部标的**；无结论也要显式输出 WAIT 并写明缺什么

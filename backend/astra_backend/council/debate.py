@@ -27,6 +27,52 @@ from astra_backend.council.policy import (
 )
 
 
+def _load_council_risk_bounds() -> Dict[str, float]:
+    """实时读取后台风控口径，确保顾问提案、交叉质询与 CIO 终审使用同一 ATR/RR/杠杆基线。"""
+    max_lev, min_lev, min_rr, max_rr, sl_atr, max_tp_atr = 5.0, 2.0, 2.0, 3.5, 2.0, 4.2
+    try:
+        from risk_constants import (
+            MAX_LEVERAGE as _rc_max_lev,
+            MIN_LEVERAGE as _rc_min_lev,
+            MIN_RISK_REWARD_RATIO as _rc_min_rr,
+            MAX_RISK_REWARD_RATIO as _rc_max_rr,
+            STOP_LOSS_ATR_MULT as _rc_sl_atr,
+            MAX_TAKE_PROFIT_ATR as _rc_max_tp_atr,
+        )
+        max_lev, min_lev, min_rr, max_rr, sl_atr, max_tp_atr = (
+            _rc_max_lev, _rc_min_lev, _rc_min_rr, _rc_max_rr, _rc_sl_atr, _rc_max_tp_atr
+        )
+    except Exception:
+        try:
+            from scripts.risk_constants import (
+                MAX_LEVERAGE as _rc_max_lev,
+                MIN_LEVERAGE as _rc_min_lev,
+                MIN_RISK_REWARD_RATIO as _rc_min_rr,
+                MAX_RISK_REWARD_RATIO as _rc_max_rr,
+                STOP_LOSS_ATR_MULT as _rc_sl_atr,
+                MAX_TAKE_PROFIT_ATR as _rc_max_tp_atr,
+            )
+            max_lev, min_lev, min_rr, max_rr, sl_atr, max_tp_atr = (
+                _rc_max_lev, _rc_min_lev, _rc_min_rr, _rc_max_rr, _rc_sl_atr, _rc_max_tp_atr
+            )
+        except Exception:
+            pass
+    eff_max_lev = float(os.getenv("ASTRA_MAX_LEVERAGE", "") or max_lev or 5.0)
+    eff_min_lev = min(eff_max_lev, float(os.getenv("ASTRA_MIN_LEVERAGE", "") or min_lev or 2.0))
+    eff_min_rr = float(os.getenv("ASTRA_MIN_RISK_REWARD", "") or min_rr or 2.0)
+    eff_max_rr = max(eff_min_rr, float(os.getenv("ASTRA_MAX_RISK_REWARD", "") or max_rr or 3.5))
+    eff_sl_atr = float(os.getenv("ASTRA_STOP_LOSS_ATR_MULT", "") or sl_atr or 2.0)
+    eff_max_tp_atr = float(os.getenv("ASTRA_MAX_TAKE_PROFIT_ATR", "") or max_tp_atr or 4.2)
+    return {
+        "max_leverage": eff_max_lev,
+        "min_leverage": eff_min_lev,
+        "min_rr": eff_min_rr,
+        "max_rr": eff_max_rr,
+        "sl_atr_mult": eff_sl_atr,
+        "max_tp_atr": eff_max_tp_atr,
+    }
+
+
 def _render_seat_prompt(prompt: str, runtime_context: Optional[Dict[str, Any]]) -> str:
     """席位提示词变量渲染（审计 P1-4d）。
 
@@ -73,13 +119,16 @@ def _call_single_trader(resolve_seat: Callable[..., Any],
     role_name = role_spec.get("name", role_id)
     proposal_id = f"{role_id}_prop"
 
+    _bounds = _load_council_risk_bounds()
+    _sl_atr = _bounds["sl_atr_mult"]
+
     trader_system_prompt = (
         f"【最高交易宪法与策略纪律】\n"
         f"{master_constitutional_rules}\n\n"
         f"====================================================\n"
-        f"【你的交易员身份与操盘职责】\n"
+        f"【你的交易员身份与操盘职责（第一轮参谋提案阶段）】\n"
         f"{prompt_content}\n"
-        f"注意：你作为专业交易员，必须在上述【最高交易宪法】框架内提交实战作战提案（提案标识: {proposal_id}），"
+        f"说明：本轮你是投委会参谋席位（提案标识: {proposal_id}），请输出专业分析正文并在文末附标准化报价单表格（此阶段以本提示词表格格式为准，不由你输出最终 CIO JSON），"
         f"重点覆盖【账户可用余额】、【在途持仓动态处理】、【在途未成交挂单撤留】与【新标的点位规划】！"
     )
 
@@ -92,7 +141,7 @@ def _call_single_trader(resolve_seat: Callable[..., Any],
         f"   - 对在途持仓逐一给出管理建议：HOLD（波段完好继续持有）、CLOSE_MARKET（结构破位斩仓）或 UPDATE_SL（浮盈锁定移动止损）；\n"
         f"   - 对在途未成交限价挂单逐一给出建议：CANCEL（偏离盘口或动能失效立即撤单）或 KEEP（继续保留）；\n"
         f"2. 标的池全标的新开/加仓作战提案（以行情矩阵清单为准，逐标的）：\n"
-        f"   - 针对各标的输出明确方案：倾向（BUY_LONG / SELL_SHORT / WAIT）、结构入场参考价、1.8~2.2x 1H ATR 分层止损（结合【本周期风险预算】stop_loss_atr_mult）、满足【本周期风险预算】盈亏比底线的结构可达止盈、拟投入保证金与置信度；\n"
+        f"   - 针对各标的输出明确方案：倾向（BUY_LONG / SELL_SHORT / WAIT）、结构入场参考价、基准 {_sl_atr:g}x 1H ATR 结构止损（结合【本周期风险预算】与各标的 sl_atr_mult）、满足【本周期风险预算】盈亏比底线的结构可达止盈、拟投入保证金与置信度；\n"
         f"3. 质询与风控：简要指出其他交易员方案可能带来的资金过载或流动性风险（60字内/标的）。\n\n"
         f"【提案输出格式（强制）】正文分析之后，必须以标准报价单块收尾（每标的一行，无明确结论的标的也必须列 WAIT 行），供 CIO 与执行层逐项横向对比：\n"
         f"标的 | 倾向 | 限价 | 止损 | 止盈 | 拟用保证金(USDT) | 置信度(0-100) | 一句话依据\n"
@@ -219,6 +268,7 @@ def _call_single_trader_critique(resolve_seat: Callable[..., Any],
         f"注意：你现在进入第二轮「同行方案交叉漏洞质询（Cross-Examination）」。你的职责是站在你的专业立场，严肃审查同行交易员的方案，指出其盲区、追高风险或防插针止损不足！"
     )
 
+    _crit_sl_atr = _load_council_risk_bounds()["sl_atr_mult"]
     critique_user_prompt = (
         f"【你第一轮提交的作战提案】\n"
         f"{my_proposal}\n\n"
@@ -227,7 +277,7 @@ def _call_single_trader_critique(resolve_seat: Callable[..., Any],
         f"{peer_proposals}\n\n"
         f"====================================================\n"
         f"请以你「{role_name}」的专业视角，对同行的方案展开针对性质询（Cross-Examination）：\n"
-        f"1. 逐一质询同行方案在点位入场（是否追高）、2.0x ATR 止损距离、拟用保证金或假突破风险上的漏洞；\n"
+        f"1. 逐一质询同行方案在点位入场（是否追高）、{_crit_sl_atr:g}x ATR 止损距离、拟用保证金或假突破风险上的漏洞；\n"
         f"2. 明确论证为何你的方案在当前资金与市场环境下更安全或盈亏比更优；\n"
         f"3. 保持专业精炼，直击漏洞要害。"
     )
@@ -330,40 +380,13 @@ def execute_council_debate(load_config: Callable[[], Dict[str, Any]], resolve_se
     from astra_backend.llm_manager import execute_llm_request, get_active_llm_runtime, load_llm_config
 
     # 杠杆及盈亏比契约与后台风控页联动（避免委员会路径被静态数字钉死）
-    try:
-        from risk_constants import (
-            MAX_LEVERAGE as _ASTRA_MAX_LEVERAGE,
-            MIN_LEVERAGE as _ASTRA_MIN_LEVERAGE,
-            MIN_RISK_REWARD_RATIO as _ASTRA_MIN_RR,
-            MAX_RISK_REWARD_RATIO as _ASTRA_MAX_RR,
-            STOP_LOSS_ATR_MULT as _ASTRA_SL_ATR,
-            MAX_TAKE_PROFIT_ATR as _ASTRA_MAX_TP_ATR,
-        )
-    except Exception:
-        try:
-            from scripts.risk_constants import (
-                MAX_LEVERAGE as _ASTRA_MAX_LEVERAGE,
-                MIN_LEVERAGE as _ASTRA_MIN_LEVERAGE,
-                MIN_RISK_REWARD_RATIO as _ASTRA_MIN_RR,
-                MAX_RISK_REWARD_RATIO as _ASTRA_MAX_RR,
-                STOP_LOSS_ATR_MULT as _ASTRA_SL_ATR,
-                MAX_TAKE_PROFIT_ATR as _ASTRA_MAX_TP_ATR,
-            )
-        except Exception:
-            _ASTRA_MAX_LEVERAGE = 5.0
-            _ASTRA_MIN_LEVERAGE = 2.0
-            _ASTRA_MIN_RR = 1.6
-            _ASTRA_MAX_RR = 5.0
-            _ASTRA_SL_ATR = 1.8
-            _ASTRA_MAX_TP_ATR = 4.2
-    _ASTRA_MAX_LEVERAGE = float(os.getenv("ASTRA_MAX_LEVERAGE", "") or _ASTRA_MAX_LEVERAGE or 5.0)
-    _ASTRA_MIN_LEVERAGE = float(os.getenv("ASTRA_MIN_LEVERAGE", "") or _ASTRA_MIN_LEVERAGE or 2.0)
-    if _ASTRA_MIN_LEVERAGE > _ASTRA_MAX_LEVERAGE:
-        _ASTRA_MIN_LEVERAGE = _ASTRA_MAX_LEVERAGE
-    _ASTRA_MIN_RR = float(os.getenv("ASTRA_MIN_RISK_REWARD", "") or _ASTRA_MIN_RR or 1.6)
-    _ASTRA_MAX_RR = max(_ASTRA_MIN_RR, float(os.getenv("ASTRA_MAX_RISK_REWARD", "") or _ASTRA_MAX_RR or 5.0))
-    _ASTRA_SL_ATR = float(os.getenv("ASTRA_STOP_LOSS_ATR_MULT", "") or _ASTRA_SL_ATR or 1.8)
-    _ASTRA_MAX_TP_ATR = float(os.getenv("ASTRA_MAX_TAKE_PROFIT_ATR", "") or _ASTRA_MAX_TP_ATR or 4.2)
+    _bounds = _load_council_risk_bounds()
+    _ASTRA_MAX_LEVERAGE = _bounds["max_leverage"]
+    _ASTRA_MIN_LEVERAGE = _bounds["min_leverage"]
+    _ASTRA_MIN_RR = _bounds["min_rr"]
+    _ASTRA_MAX_RR = _bounds["max_rr"]
+    _ASTRA_SL_ATR = _bounds["sl_atr_mult"]
+    _ASTRA_MAX_TP_ATR = _bounds["max_tp_atr"]
 
     config = load_config()
     roles = config.get("roles", {})

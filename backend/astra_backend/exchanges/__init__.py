@@ -30,7 +30,6 @@ from .identity import (
     is_sandbox_environment,
 )
 from .okx import OKXAdapter, OKXPublicAdapter
-from astra_backend.sandbox.adapter import SandboxExchangeAdapter
 from .registry import (
     ADAPTER_EXECUTION_ENABLED,
     clear_instances,
@@ -55,3 +54,10 @@ __all__ = [
     "AccountKey", "ANON_CREDENTIAL", "credential_fingerprint",
     "is_sandbox_environment",
 ]
+
+
+def __getattr__(name: str):
+    if name == "SandboxExchangeAdapter":
+        from astra_backend.sandbox.adapter import SandboxExchangeAdapter
+        return SandboxExchangeAdapter
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

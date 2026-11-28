@@ -64,11 +64,11 @@ class RatchetedTrailingStopTest(unittest.TestCase):
         self.assertEqual(sl, 98.0, "空头锁利是**往下**推（min）")
 
     def test_tier1_moves_to_breakeven_plus_cost_buffer(self):
-        """保本要**加 0.20% 成本垫**（覆盖 taker 费），不是裸保本。"""
+        """保本要**加 0.30% 成本垫**（覆盖双边 taker 费+滑点），不是裸保本。"""
         sl, desc = ratcheted_trailing_stop(
             is_long=True, entry_px=100.0, atr=2.0, prec=2, peak_profit_px=3.5, old_sl=95.0,
             tier1_breakeven_trigger=3.0, tier2_lock_trigger=4.0)
-        self.assertEqual(sl, 100.2)
+        self.assertEqual(sl, 100.3)
         self.assertIn("保本", desc)
 
     def test_below_tier1_keeps_old_stop_and_no_stage(self):

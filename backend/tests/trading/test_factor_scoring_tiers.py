@@ -393,7 +393,9 @@ class MissingDataMustNotChangeDecisionsTest(unittest.TestCase):
             # ★ 背离状态：`NONE`（"已检测且无背离"）⇒ `INSUFFICIENT_DATA`（缺失）。
             #   打分侧只认 "BULLISH"/"BEARISH"，两者都不匹配 ⇒ 贡献同为 0（下一行就地证明）。
             "trend_momentum.macd_divergence", "trend_momentum.rsi_divergence",
-            "volume_profile.vwap_24h",
+            "volume_profile.vwap_24h", "volume_profile.vwap_sigma_pct",
+            "volume_profile.vah", "volume_profile.val", "volume_profile.vpvr_poc",
+            "volume_profile.value_area_position", "volume_profile.vwap_extreme_band",
         }
         self.assertTrue(changed <= allowed,
                         f"改动溢出到未预期的键（可能影响决策）：{sorted(changed - allowed)}")

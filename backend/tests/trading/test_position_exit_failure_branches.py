@@ -381,13 +381,18 @@ class ExitFailureBranchTest(unittest.TestCase):
         self.assertIn(key, trackers)
 
     def test_chop_regime_adaptive_breakeven_trigger(self):
-        """震荡市敏捷保本：浮盈达 0.9x ATR 提前锁定保本，防止微利回吐成巨亏。"""
-        # 现价 70000，avgPx 70000，ATR 800。浮盈 760 = 0.95*ATR
-        # 在震荡市（CHOP），0.95*ATR >= 0.9*ATR ⇒ 启动保本提损到 entry * 1.002
+        """震荡市敏捷保本：浮盈达 1.25x ATR 启动保本（高于 0.9x ATR 以防普通噪音扫保本）。"""
+        # 现价 70050，avgPx 70000，ATR 800。浮盈 0.95*ATR (760) 不应过早推保本
+        f_chop_noise = _f(price=70050.0, atr=800.0, market_regime="CHOP")
+        rig_noise = _Rig(floor=70210.0, stage_desc="🛡️ 保本一档(+0.3%)", old_sl=68000.0,
+                         high_water=70760.0)
+        ok_n, detail_n, _, _ = self._run(rig_noise, f_chop_noise)
+        self.assertFalse(ok_n)
+
+        # high_water 达 71040 (浮盈 1.30*ATR >= 1.25*ATR) 后回落穿保本线 → 触发锁利退出
         f_chop = _f(price=70050.0, atr=800.0, market_regime="CHOP")
-        # high_water 为 70760 (浮盈 760)，当前跌回 70050 (低于保本线 70140)
-        rig = _Rig(floor=70140.0, stage_desc="🛡️ 保本一档(+0.2%)", old_sl=68000.0,
-                    high_water=70760.0)
+        rig = _Rig(floor=70210.0, stage_desc="🛡️ 保本一档(+0.3%)", old_sl=68000.0,
+                    high_water=71040.0)
         ok, detail, trackers, key = self._run(rig, f_chop)
         self.assertTrue(ok)
         self.assertEqual(detail, "已阶梯锁利")

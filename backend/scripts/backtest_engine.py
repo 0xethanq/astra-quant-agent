@@ -357,6 +357,32 @@ def run_full_portfolio_backtest(bar: str = "1H", limit: int = 100, capital_per_a
     return full_payload
 
 
+def run_walk_forward_backtest(
+    symbols_candles_1h: Optional[Dict[str, List[List[Any]]]] = None,
+    *,
+    allow_synthetic: bool = False,
+    limit: int = 500,
+    n_folds: int = 3,
+) -> Dict[str, Any]:
+    """Layer 1 零前视 Walk-Forward 验证入口（禁止静默伪造正弦波数据）。"""
+    from scripts.backtest.llm_replay import run_deterministic_walk_forward
+
+    data: Dict[str, List[List[Any]]] = dict(symbols_candles_1h or {})
+    if not data:
+        from astra_backend.sandbox.data_warehouse import DEFAULT_DB_PATH, MarketReplayWarehouse
+        wh = MarketReplayWarehouse(DEFAULT_DB_PATH)
+        for sym in DEFAULT_SYMBOLS:
+            rows = wh.query_candles("okx", sym, "1H", limit=limit)
+            if not rows:
+                fetched = fetch_okx_candles(sym, bar="1H", limit=limit)
+                rows = [[c["ts_ms"], c["open"], c["high"], c["low"], c["close"], c["volume"]] for c in fetched]
+            if rows:
+                data[sym] = rows
+    if not data and not allow_synthetic:
+        raise RuntimeError("No historical OKX candles available in warehouse or public API (synthetic fallback disabled)")
+    return run_deterministic_walk_forward(data, n_folds=n_folds)
+
+
 def main():
     parser = argparse.ArgumentParser(description="ASTRA Multi-Asset Quantitative Backtesting & Statistical Engine")
     parser.add_argument("--symbol", default="ALL", help="Symbol or 'ALL' for portfolio")
@@ -364,15 +390,30 @@ def main():
     parser.add_argument("--limit", type=int, default=100, help="Candle count")
     parser.add_argument("--capital", type=float, default=10000.0, help="Initial capital per asset")
     parser.add_argument("--output", default="data/backtest_report.json", help="Path to output json")
+    parser.add_argument("--walk-forward", action="store_true", help="Run zero-lookahead walk-forward replay instead of legacy mock backtest")
+    parser.add_argument("--no-synthetic", action="store_true", help="Refuse synthetic fallback when warehouse lacks real history")
     args = parser.parse_args()
 
-    print(f"Executing quantitative backtest (mode={args.symbol}, bar={args.bar}, limit={args.limit}, capital={args.capital})...")
-    report = run_full_portfolio_backtest(bar=args.bar, limit=args.limit, capital_per_asset=args.capital)
+    if args.walk_forward:
+        print(f"Executing zero-lookahead walk-forward backtest (bar={args.bar}, allow_synthetic={not args.no_synthetic})...")
+        report = run_walk_forward_backtest(bar=args.bar, allow_synthetic=not args.no_synthetic)
+    else:
+        print(f"Executing quantitative backtest (mode={args.symbol}, bar={args.bar}, limit={args.limit}, capital={args.capital})...")
+        report = run_full_portfolio_backtest(bar=args.bar, limit=args.limit, capital_per_asset=args.capital)
 
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(report, f, ensure_ascii=False, indent=2)
+
+    if args.walk_forward:
+        oos = report.get("oos_summary", {})
+        print(
+            f"[WalkForward] folds={len(report.get('folds', []))} | trades={oos.get('total_trades', 0)} "
+            f"| win_rate={oos.get('win_rate_pct', 0)}% | rank_ic={oos.get('rank_ic', 0)} "
+            f"| E(R)={oos.get('expectancy_r', 0)} | fee_ratio={oos.get('fee_ratio_pct', 0)}%"
+        )
+        return
 
     p = report["portfolio"]
     print("\n==========================================================================")

@@ -105,15 +105,66 @@ def load_quant_factor_tiers(inst_id: str, *, path: str = None) -> Dict[str, Any]
 
 
 def load_quant_factor_meta(inst_id: str, *, path: str = None) -> Dict[str, Any]:
-    """按 `instId` 取出因子快照顶层元信息（composite_alpha_score / signal_recommendation）。"""
+    """按 `instId` 取出因子快照顶层元信息（composite_alpha_score / signal_recommendation / relative_strength / structural_anchors）。"""
     item = _load_quant_factor_entry(inst_id, path=path)
     if not item:
         return {}
     return {
         k: item[k]
-        for k in ("composite_alpha_score", "signal_recommendation")
+        for k in ("composite_alpha_score", "signal_recommendation",
+                  "relative_strength", "structural_anchors")
         if item.get(k) is not None
     }
+
+
+def _enrich_pkg_structural_anchors(pkg: Dict[str, Any]) -> None:
+    """用本地 recent_* 或快照结构位补齐 `pkg['structural_anchors']`，供提示词直引真实价位。"""
+    try:
+        try:
+            from scripts.factors.okx_quant_factors import compute_structural_anchors
+        except ImportError:
+            from factors.okx_quant_factors import compute_structural_anchors
+    except Exception:
+        return
+
+    existing = pkg.get("structural_anchors")
+    merged: Dict[str, Any] = dict(existing) if isinstance(existing, dict) else {}
+
+    def _bars_series(rows):
+        ordered = [r for r in reversed(rows or []) if isinstance(r, (list, tuple)) and len(r) >= 4]
+        return (
+            [float(r[3]) for r in ordered],
+            [float(r[1]) for r in ordered],
+            [float(r[2]) for r in ordered],
+        )
+
+    c1, h1, l1 = _bars_series(pkg.get("recent_1h"))
+    c4, h4, l4 = _bars_series(pkg.get("recent_4h"))
+    try:
+        px = float(pkg.get("price") or 0.0)
+        atr = float(pkg.get("atr_1h") or pkg.get("atr") or 0.0)
+        sl_mult = float(pkg.get("sl_atr_mult") or 2.0)
+    except (TypeError, ValueError):
+        px, atr, sl_mult = 0.0, 0.0, 2.0
+
+    computed = compute_structural_anchors(
+        closes_1h=c1,
+        highs_1h=h1,
+        lows_1h=l1,
+        raw_1h=pkg.get("recent_1h"),
+        raw_15m=pkg.get("recent_15m"),
+        closes_4h=c4,
+        highs_4h=h4,
+        lows_4h=l4,
+        price=px,
+        atr_1h=atr,
+        sl_atr_mult=sl_mult,
+    )
+    for k, v in (computed or {}).items():
+        if k not in merged or merged[k] in (None, "", {}):
+            merged[k] = v
+    if merged:
+        pkg["structural_anchors"] = merged
 
 
 def fetch_single_instrument_package(item: Dict[str, Any], *,
@@ -379,6 +430,7 @@ def fetch_single_instrument_package(item: Dict[str, Any], *,
     if _qf_meta:
         pkg.update(_qf_meta)
     pkg["data_quality"] = "valid" if required_market_data else "invalid"
+    _enrich_pkg_structural_anchors(pkg)
 
     # 标的体制状态（综合 4H 宏观、1H 结构与 1H ADX 趋势强度）
     m4h = str(pkg.get("macro_4h") or "")
@@ -599,7 +651,9 @@ def build_package_from_cached_sources(
         "data_quality": "valid",
         "source": "cached_prefetched_and_snapshot",
     }
-    for meta_key in ("composite_alpha_score", "signal_recommendation"):
+    for meta_key in ("composite_alpha_score", "signal_recommendation",
+                     "relative_strength", "structural_anchors"):
         if snapshot_entry.get(meta_key) is not None:
             pkg[meta_key] = snapshot_entry[meta_key]
+    _enrich_pkg_structural_anchors(pkg)
     return pkg

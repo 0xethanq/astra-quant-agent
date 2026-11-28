@@ -27,6 +27,8 @@
 """
 import json
 import os
+import sys
+import time
 import urllib
 import warnings
 
@@ -177,6 +179,7 @@ def fetch_single_instrument_data(item, all_positions, usdt_available, *,
         m_line, m_sig, m_hist, m_accel = calc_macd_histogram_acceleration(closes)
         f["macd_hist"] = round(m_hist, 4)
         f["macd_accel"] = round(m_accel, 4)
+        f["macd_accel_pct"] = (round(m_accel / f["price"] * 100.0, 4) if f["price"] > 0 else None)
 
         # OBV Flow
         _, obv_flow = calc_obv_trend(closes, vols)
@@ -391,5 +394,33 @@ def fetch_single_instrument_data(item, all_positions, usdt_available, *,
     f["market_data_valid"] = market_data_valid
     if not market_data_valid:
         f["sz"] = 0
+
+    # 仅在生产或显式沙箱 `ASTRA_DATA_DIR` 下安全透传最新因子库快照中的正交/衍生品字段
+    try:
+        _fl_mod = sys.modules.get("scripts.factor_library")
+        _fl_path = getattr(_fl_mod, "FACTOR_LIB_CACHE_FILE", None) if _fl_mod is not None else None
+        if not _fl_path and (os.environ.get("ASTRA_DATA_DIR") or ("pytest" not in sys.modules and "unittest" not in sys.modules)):
+            _fl_path = os.path.join(
+                os.environ.get("ASTRA_DATA_DIR") or os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data"),
+                "factor_library_snapshot.json",
+            )
+        if _fl_path and os.path.exists(_fl_path):
+            with open(_fl_path, "r", encoding="utf-8") as _fp:
+                _snap = json.load(_fp)
+            if abs(time.time() - float(_snap.get("timestamp") or 0)) <= 300.0:
+                for _item in (_snap.get("instruments") or []):
+                    if isinstance(_item, dict) and _item.get("instId") == inst_id:
+                        _tm = _item.get("trend_momentum") or {}
+                        _sm = _item.get("smart_money_derivatives") or {}
+                        _rs = _item.get("relative_strength") or {}
+                        if _tm.get("macd_accel_pct") is not None:
+                            f["macd_accel_pct"] = _tm.get("macd_accel_pct")
+                        if _sm.get("oi_price_quadrant"):
+                            f["oi_price_quadrant"] = _sm.get("oi_price_quadrant")
+                        if _rs:
+                            f["relative_strength"] = dict(_rs)
+                        break
+    except Exception:
+        pass
 
     return f

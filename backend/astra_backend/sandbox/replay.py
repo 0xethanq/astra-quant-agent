@@ -8,6 +8,17 @@ from typing import Any, Callable, Dict, List, Optional
 from astra_backend.sandbox.adapter import SandboxExchangeAdapter
 
 
+_BARS_PER_YEAR = {
+    "1m": 365 * 24 * 60,
+    "5m": 365 * 24 * 12,
+    "15m": 365 * 24 * 4,
+    "30m": 365 * 24 * 2,
+    "1h": 365 * 24,
+    "4h": 365 * 6,
+    "1d": 365,
+}
+
+
 @dataclass
 class ReplayMetrics:
     total_trades: int = 0
@@ -106,11 +117,14 @@ class PointInTimeReplayEngine:
             if signals:
                 for sig in signals:
                     sym = sig.get("symbol") or sig.get("asset")
-                    side = sig.get("side") or ("buy" if "BUY" in str(sig.get("action", "")) else "sell")
+                    act_u = str(sig.get("action", "")).upper()
+                    side = sig.get("side") or ("buy" if ("BUY" in act_u or "LONG" in act_u) else "sell")
                     contracts = float(sig.get("contracts") or sig.get("size") or 0.1)
                     price = float(sig.get("price") or sig.get("entry_price") or 0.0)
                     order_type = sig.get("order_type", "market")
                     pos_side = sig.get("pos_side") or ("long" if side == "buy" else "short")
+                    tp_px = sig.get("take_profit_price") or sig.get("tp_px")
+                    sl_px = sig.get("stop_loss_price") or sig.get("sl_px")
 
                     # Place virtual order
                     self.adapter.place_order(
@@ -120,10 +134,14 @@ class PointInTimeReplayEngine:
                         price=price if order_type == "limit" else None,
                         order_type=order_type,
                         pos_side=pos_side,
+                        atr=sig.get("atr", 0.0),
+                        initial_sl_px=float(sl_px) if sl_px else 0.0,
+                        tp1_px=float(sig.get("tp1_px") or 0.0),
+                        scale_out_ratio=float(sig.get("scale_out_ratio") or 0.35),
+                        be_offset_pct=float(sig.get("be_offset_pct") or 0.0030),
+                        time_stop_hours=float(sig.get("time_stop_hours") or 0.0),
                     )
                     # If protective prices attached, attach them
-                    tp_px = sig.get("take_profit_price") or sig.get("tp_px")
-                    sl_px = sig.get("stop_loss_price") or sig.get("sl_px")
                     if tp_px or sl_px:
                         self.adapter.attach_protective_orders(
                             symbol=sym,
@@ -156,7 +174,8 @@ class PointInTimeReplayEngine:
         gross_loss = abs(sum(t["net_pnl"] for t in losing))
         profit_factor = round(gross_profit / gross_loss, 2) if gross_loss > 0 else (99.0 if gross_profit > 0 else 0.0)
 
-        # Sharpe, Sortino, Calmar
+        # Sharpe, Sortino, Calmar (多周期年化 + 正确全样本 Sortino 分母 + 逐笔实现 avg_r)
+        periods_per_year = float(_BARS_PER_YEAR.get(str(bar).strip().lower(), 365 * 24 * 4))
         returns = []
         for i in range(1, len(equity_snapshots)):
             prev = equity_snapshots[i - 1]
@@ -169,14 +188,23 @@ class PointInTimeReplayEngine:
             var = sum((r - mean_ret) ** 2 for r in returns) / len(returns)
             std_dev = math.sqrt(var)
             if std_dev > 1e-9:
-                sharpe = round((mean_ret / std_dev) * math.sqrt(365 * 24 * 4), 2)
+                sharpe = round((mean_ret / std_dev) * math.sqrt(periods_per_year), 2)
 
-            downside_var = sum((r - mean_ret) ** 2 for r in returns if r < 0) / len(returns)
+            # Standard Sortino downside deviation: sum(min(0, r)^2) / N_total
+            downside_var = sum(min(0.0, r) ** 2 for r in returns) / len(returns)
             downside_std = math.sqrt(downside_var)
             if downside_std > 1e-9:
-                sortino = round((mean_ret / downside_std) * math.sqrt(365 * 24 * 4), 2)
+                sortino = round((mean_ret / downside_std) * math.sqrt(periods_per_year), 2)
 
         calmar = round(total_return_pct / max_drawdown, 2) if max_drawdown > 0 else (99.0 if total_return_pct > 0 else 0.0)
+
+        r_vals = [float(t["r_multiple"]) for t in trades if float(t.get("initial_risk_usd") or 0.0) > 0]
+        if r_vals:
+            avg_r = round(sum(r_vals) / len(r_vals), 2)
+        elif losing:
+            avg_r = round((gross_profit / (len(winning) or 1)) / (gross_loss / (len(losing) or 1)), 2)
+        else:
+            avg_r = 1.0 if winning else 0.0
 
         return ReplayMetrics(
             total_trades=total_trades,
@@ -191,7 +219,7 @@ class PointInTimeReplayEngine:
             sharpe_ratio=sharpe,
             sortino_ratio=sortino,
             calmar_ratio=calmar,
-            avg_r_multiple=round((gross_profit / (len(winning) or 1)) / (gross_loss / (len(losing) or 1)), 2) if losing else 1.0,
+            avg_r_multiple=avg_r,
             equity_curve=equity_curve,
             trades=trades,
         )

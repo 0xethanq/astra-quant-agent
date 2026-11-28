@@ -96,14 +96,15 @@ def compute_15m_indicators(raw_candles: List[Any], factors: Dict[str, Any], *,
         #   打分侧读成"中性偏多"（`rsi >= 50 ⇒ +15` 趋势分）—— 那 15 分是假的。
         factors["trend_momentum"]["rsi_14"] = None
 
-    # VWAP Bias
+    # VWAP Bias（price 缺失/为 0 时不得计算 `(0 - vwap)/vwap = -100%` 假偏离）
     pv_sum = sum(closes[i] * vols[i] for i in range(len(closes)))
     v_sum = sum(vols)
-    if v_sum > 0:
+    cur_px = float(factors.get("price") or 0.0)
+    if v_sum > 0 and cur_px > 0:
         vwap = pv_sum / v_sum
-        factors["trend_momentum"]["vwap_bias_pct"] = round((factors["price"] - vwap) / vwap * 100, 2)
+        factors["trend_momentum"]["vwap_bias_pct"] = round((cur_px - vwap) / vwap * 100, 2)
     else:
-        # ★ 成交量合计为 0 ⇒ 算不出 VWAP：显式缺失，不用默认 0.0 冒充"正好贴在 VWAP 上"
+        # ★ 成交量合计为 0 或现价无效 ⇒ 算不出 VWAP：显式缺失，不用默认 0.0 或 -100%
         factors["trend_momentum"]["vwap_bias_pct"] = None
 
     # Vol Ratio（最后一根已收盘的量 vs 它前面 5 根均量；杜绝 vols[-1] 跳动未收盘 K 线把量比拉至 0.03）
@@ -140,6 +141,7 @@ def mark_15m_missing(factors: Dict[str, Any]) -> None:
         vc[key] = None
     mf = factors.setdefault("volume_money_flow", {})
     mf["obv_flow"] = "INSUFFICIENT_DATA"
+    mf["vol_ratio_15m"] = None
 
 
 __all__ = ["derive_candle_series", "compute_15m_indicators", "mark_15m_missing"]

@@ -936,8 +936,129 @@ def _time_stop_hours_default() -> float:
 
 #: 低于这个样本量时，只报"样本不足"，不产出结构性结论（防小样本幻觉）。
 DETERMINISTIC_MIN_SAMPLE = 10
+#: 新增 LLM 自进化心法至少需命中的可观测完整持仓样本数（严禁全账本 total_trades 代替）
+MIN_LLM_LESSON_SAMPLE = 8
 #: 兜底认知每条前缀：一眼可辨"这条不是模型说的"。
 _DETERMINISTIC_PREFIX = "[本地台账推导]"
+
+
+def filter_lessons_by_observable_cohort(
+    change_status: str,
+    proposed_lessons: List[str],
+    existing_lessons: List[Dict[str, Any]],
+    closed_trades: List[Dict[str, Any]],
+    *,
+    min_sample: int = MIN_LLM_LESSON_SAMPLE,
+    log_fn=None,
+) -> Tuple[str, List[str]]:
+    """校验 LLM 新提出的规则是否命中足够多可观测 (`DYNAMICS_OBSERVED`/`PARTIAL`) 的归并持仓。"""
+    status = str(change_status or "NO_CHANGE").upper()
+    if status == "NO_CHANGE" or not proposed_lessons:
+        return status, list(proposed_lessons or [])
+
+    from scripts.evolution.lesson_health import extract_cohort, select_cohort
+
+    existing_texts = {
+        str(item.get("rule_text") or "").strip()
+        for item in (existing_lessons or [])
+        if isinstance(item, dict) and item.get("enabled")
+    }
+    observable = [
+        t for t in (closed_trades or [])
+        if isinstance(t, dict) and str(t.get("snapshot_observability") or "") in ("DYNAMICS_OBSERVED", "PARTIAL")
+    ]
+    avail_insts = {str(t.get("inst") or "") for t in observable if t.get("inst")}
+
+    kept: List[str] = []
+    dropped: List[str] = []
+    for text in proposed_lessons:
+        clean = str(text or "").strip()
+        if not clean:
+            continue
+        if clean in existing_texts:
+            kept.append(clean)
+            continue
+        cohort = extract_cohort(clean, available_insts=avail_insts)
+        matched = select_cohort(observable, cohort)
+        merged_keys = {
+            (
+                str(r.get("inst") or ""),
+                str(r.get("position_id") or r.get("trace_id") or r.get("open_time") or r.get("time") or idx),
+                str(r.get("side") or "").strip().lower(),
+            )
+            for idx, r in enumerate(matched)
+        }
+        if len(merged_keys) < max(1, int(min_sample)):
+            dropped.append(clean)
+            if log_fn:
+                log_fn(
+                    f"🛡️ 拒绝小样本自进化规则（命中可观测归并持仓 {len(merged_keys)} < {min_sample}）: {clean[:60]}"
+                )
+        else:
+            kept.append(clean)
+
+    if dropped and status == "ADD" and not [t for t in kept if t not in existing_texts]:
+        return "NO_CHANGE", list(t for t in existing_texts)
+    if dropped and not kept and existing_texts:
+        return "NO_CHANGE", list(existing_texts)
+    return status, kept
+
+
+def archive_and_reset_poisoned_evolution_state(
+    data_dir: Optional[str] = None,
+    *,
+    min_sample: int = MIN_LLM_LESSON_SAMPLE,
+) -> Dict[str, Any]:
+    """归档并重置未达标小样本心法与 asset_multipliers.json（全中性 1.0）。"""
+    target_dir = Path(data_dir or DATA_DIR)
+    archive_dir = target_dir / ".archive"
+    archive_dir.mkdir(parents=True, exist_ok=True)
+    ts_tag = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).strftime("%Y%m%d_%H%M%S")
+    report: Dict[str, Any] = {"archived_files": [], "removed_lessons": 0, "multipliers_reset": False}
+
+    mult_path = target_dir / "asset_multipliers.json"
+    if mult_path.is_file():
+        bak = archive_dir / f"asset_multipliers.{ts_tag}.json"
+        bak.write_bytes(mult_path.read_bytes())
+        report["archived_files"].append(str(bak))
+    neutral = {asset: 1.0 for asset in TARGET_INSTRUMENTS}
+    atomic_write_json(
+        str(mult_path),
+        {
+            "timestamp": datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).strftime("%Y-%m-%d %H:%M:%S"),
+            "multipliers": neutral,
+            "updated_by": "anti_poisoning_reset",
+        },
+    )
+    report["multipliers_reset"] = True
+
+    from scripts import evolution_shield as memory_service
+    orig_struct = memory_service.STRUCTURED_MEMORY_FILE
+    orig_md = memory_service.AI_MEMORY_MD_FILE
+    try:
+        memory_service.STRUCTURED_MEMORY_FILE = target_dir / "structured_trading_memory.json"
+        memory_service.AI_MEMORY_MD_FILE = target_dir / "AI_TRADING_MEMORY.md"
+        if memory_service.STRUCTURED_MEMORY_FILE.is_file():
+            bak_m = archive_dir / f"structured_trading_memory.{ts_tag}.json"
+            bak_m.write_bytes(memory_service.STRUCTURED_MEMORY_FILE.read_bytes())
+            report["archived_files"].append(str(bak_m))
+            snap = memory_service.read_memory_snapshot()
+            kept_lessons = [
+                item for item in snap.get("lessons", [])
+                if int(item.get("sample_size") or 0) >= int(min_sample)
+            ]
+            report["removed_lessons"] = len(snap.get("lessons", [])) - len(kept_lessons)
+            if report["removed_lessons"] > 0:
+                memory_service.save_structured_memory(kept_lessons, expected_version=snap["version"])
+        if memory_service.AI_MEMORY_MD_FILE.is_file():
+            bak_md = archive_dir / f"AI_TRADING_MEMORY.{ts_tag}.md"
+            bak_md.write_bytes(memory_service.AI_MEMORY_MD_FILE.read_bytes())
+            report["archived_files"].append(str(bak_md))
+        memory_service.sync_markdown_mirror()
+    finally:
+        memory_service.STRUCTURED_MEMORY_FILE = orig_struct
+        memory_service.AI_MEMORY_MD_FILE = orig_md
+    return report
 
 
 def derive_deterministic_insights(closed_trades: List[Dict[str, Any]],
@@ -1201,10 +1322,21 @@ def run_self_evolution(force: bool = False):
     asset_mults = normalize_asset_multipliers(
         TARGET_INSTRUMENTS=TARGET_INSTRUMENTS,
         clamp=clamp,
-        llm_review=llm_review    )
+        llm_review=llm_review,
+        closed_trades=closed_trades    )
     change_status, long_term_memory, preserve_existing_memory = resolve_memory_update(
         change_status, llm_review.get("ai_long_term_memory", []), existing_core_lessons
     )
+    if not preserve_existing_memory:
+        change_status, long_term_memory = filter_lessons_by_observable_cohort(
+            change_status,
+            long_term_memory,
+            memory_snapshot.get("lessons") or [],
+            closed_trades,
+            log_fn=log_msg,
+        )
+        if change_status == "NO_CHANGE":
+            preserve_existing_memory = True
 
     retired_lessons: List[str] = []
     (preserve_existing_memory, retired_lessons) = apply_memory_review(
@@ -1282,6 +1414,9 @@ def run_self_evolution(force: bool = False):
     return report_payload
 
 if __name__ == "__main__":
-    force_run = "--force" in sys.argv or "-f" in sys.argv
-    res = run_self_evolution(force=force_run)
+    if "--reset-poisoned" in sys.argv:
+        res = archive_and_reset_poisoned_evolution_state()
+    else:
+        force_run = "--force" in sys.argv or "-f" in sys.argv
+        res = run_self_evolution(force=force_run)
     print(json.dumps(res, indent=2, ensure_ascii=False))

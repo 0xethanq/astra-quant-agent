@@ -47,28 +47,60 @@ def effective_atr(atr: Any, cur_px: Any) -> float:
 
 def compute_tp1(entry_px: Any, atr: Any, is_long: bool, prec: int = 2,
                 cur_px: Any = None, multiple: Optional[float] = None,
-                initial_stop_px: Any = None) -> float:
+                initial_stop_px: Any = None, tp2_px: Any = None) -> Optional[float]:
     """首批止盈价（TP1）= 入场价 ± max(SCALE_OUT_TRIGGER_ATR × ATR, 1.0 × 初始止损距离 1R)。
 
+    当传入 `tp2_px` 时强制保证严格几何顺序：多单 `entry < TP1 < TP2`、空单 `entry > TP1 > TP2`。
+    若 TP2 空间不足 1.45R（或钳位后 TP1 退化至不足 0.9R / 与 TP2 重合），返回 None 以退回全仓止盈。
     `cur_px` 只在 ATR 无效时用来兜底（旧口径），冻结场景传 None 即可。
     """
     entry = float(entry_px or 0.0)
     mult = float(SCALE_OUT_TRIGGER_ATR if multiple is None else multiple)
-    threshold = mult * effective_atr(atr, cur_px if cur_px is not None else entry)
+    atr_eff = effective_atr(atr, cur_px if cur_px is not None else entry)
+    threshold = mult * atr_eff
+    r_dist = 0.0
     if initial_stop_px is not None:
         try:
             sl = float(initial_stop_px)
-            r_dist = (entry - sl) if is_long else (sl - entry)
-            if sl > 0 and r_dist > 0:
+            r_val = (entry - sl) if is_long else (sl - entry)
+            if sl > 0 and r_val > 0:
+                r_dist = r_val
                 threshold = max(threshold, r_dist)
         except (TypeError, ValueError):
             pass
-    return round(entry + threshold if is_long else entry - threshold, int(prec or 2))
+
+    p = int(prec or 2)
+    if tp2_px is not None:
+        try:
+            tp2 = float(tp2_px or 0.0)
+        except (TypeError, ValueError):
+            tp2 = 0.0
+        if tp2 <= 0 or entry <= 0:
+            return None
+        tp2_dist = (tp2 - entry) if is_long else (entry - tp2)
+        if tp2_dist <= 0:
+            return None
+        min_headroom = max(1.45 * r_dist, 1.35 * max(0.9 * atr_eff, entry * 0.004)) if r_dist > 0 else (1.35 * max(0.9 * atr_eff, entry * 0.004))
+        if tp2_dist < min_headroom:
+            return None
+        # 为 TP2 腿留出至少 20% 或 0.2% 价格空间，防止 TP1 >= TP2
+        max_tp1_dist = max(0.0, min(tp2_dist * 0.80, tp2_dist - entry * 0.002))
+        threshold = min(threshold, max_tp1_dist)
+        min_tp1_floor = max(0.9 * r_dist, entry * 0.003) if r_dist > 0 else max(0.9 * atr_eff, entry * 0.003)
+        if threshold < min_tp1_floor:
+            return None
+        cand = round(entry + threshold if is_long else entry - threshold, p)
+        tp2_round = round(tp2, p)
+        if (is_long and cand >= tp2_round) or ((not is_long) and cand <= tp2_round):
+            return None
+        return cand
+
+    return round(entry + threshold if is_long else entry - threshold, p)
 
 
 def freeze_tp1(tracker: Dict[str, Any], *, entry_px: Any, atr: Any, is_long: bool,
                prec: int = 2, multiple: Optional[float] = None,
-               initial_stop_px: Any = None) -> float:
+               initial_stop_px: Any = None, tp2_px: Any = None) -> float:
     """把 TP1 冻结进 tracker（幂等：已有值就用已有值，绝不重算覆盖）。
 
     ⚠️ 只在**没有值**时计算：一旦挂腿，TP1 就是交易所上的一个真实价格，
@@ -82,7 +114,13 @@ def freeze_tp1(tracker: Dict[str, Any], *, entry_px: Any, atr: Any, is_long: boo
                 return value
         except (TypeError, ValueError):
             pass
-    value = compute_tp1(entry_px, atr, is_long, prec, multiple=multiple, initial_stop_px=initial_stop_px)
+    value = compute_tp1(
+        entry_px, atr, is_long, prec,
+        multiple=multiple, initial_stop_px=initial_stop_px, tp2_px=tp2_px,
+    )
+    if value is None or value <= 0:
+        tracker["scale_out_tp"] = None
+        return 0.0
     tracker["scale_out_tp"] = value
     return value
 

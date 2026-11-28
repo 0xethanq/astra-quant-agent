@@ -10,6 +10,8 @@
 |---|---|---|
 | `lifecycle.py` | 持仓生命周期：保本锁定 / 止损止盈判定 / 结算（手续费、盈亏、`R` 倍数） | 无（纯计算；费率与滑点由调用方传参） |
 | `metrics.py` | 入场装配（方向 / ATR 止损 / `rr` 倍止盈 / 张数）+ 绩效统计（胜率 / 盈亏比 / 夏普 / 索提诺 / 卡玛 / 平均 `R`）+ **组合层等权汇总**（`aggregate_portfolio`） | 无（纯计算；资本与费率由调用方传参） |
+| `ingest_history.py` | OKX 90~180 天 `15m`/`1H`/`4H` K 线、资金费率与 OI 历史入库至 `MarketReplayWarehouse` | 可注入行情抓取与 warehouse 路径 |
+| `llm_replay.py` | Layer 1 确定性因子/出场 Walk-Forward 验证 + Layer 2 分层盲测 LLM Replay（`temp=0` + SQLite 响应缓存）与 A/B 对比 | 可注入 LLM 调用器、数据源与 warehouse |
 
 ## 约定
 

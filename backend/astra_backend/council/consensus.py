@@ -316,7 +316,7 @@ def format_consensus_docket(consensus_data: Dict[str, Any]) -> str:
             guidance = "全员强共识；若开仓应优先采纳，严格核准点位与止损止盈"
             tag = f"{pct_str} (强共识)"
         elif status == "CONFLICT_SPLIT":
-            guidance = "多空撕裂分歧；审阅攻防论据，无压倒性胜率时建议审慎观望 WAIT"
+            guidance = "多空分歧；客观比对结构参考位、1H动能与主力量价证据，优者独立采纳，证据互抵再观望 WAIT"
             tag = f"{pct_str} (严重分歧)"
         else:
             guidance = "偏向共识；参考主流倾向并核验反向交易员指出之风险"

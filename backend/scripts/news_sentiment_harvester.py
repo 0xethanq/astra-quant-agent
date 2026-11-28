@@ -98,10 +98,10 @@ TARGET_COINS = [item["name"] for item in load_instruments()]
 # Institutional-Grade Extreme Black-Swan Regular Expressions
 # Only trigger circuit breaker for existential, catastrophic, systemic market shocks
 BLACK_SWAN_PATTERNS = [
-    (r"(USDT|USDC|DAI).*(严重脱锚|脱锚幅度|depeg|脱锚超过|跌破0\.9[0-8])", "头部稳定币恶性脱锚危机"),
-    (r"(币安|OKX|Coinbase|Kraken).*(暂停全部提现|停止提币|申请破产重组|破产倒闭|发生严重挤兑)", "主流中心化交易所崩盘挤兑"),
-    (r"(以太坊主网|比特币网络|Solana网络|BNB Chain).*(遭遇51%攻击|全网瘫痪停机|紧急硬分叉回滚)", "顶级底层公链系统性故障/51%攻击"),
-    (r"(全面取缔所有加密|宣布比特币非法|宣布数字货币交易非法|爆发核危机|宣战)", "国家级极端不可抗力/战争")
+    (r"(USDT|USDC|DAI).*(严重脱锚|脱锚幅度|depeg|loses?\s+peg|跌破\s*0\.9[0-8]|below\s+0\.9[0-8])", "头部稳定币恶性脱锚危机"),
+    (r"(币安|Binance|OKX|Coinbase|Kraken).*(暂停全部提现|停止提币|申请破产重组|破产倒闭|发生严重挤兑|halt\w*\s+withdrawals?|suspend\w*\s+withdrawals?|insolvenc\w*|bankrupt\w*|bank\s+run)", "主流中心化交易所崩盘挤兑"),
+    (r"(以太坊主网|比特币网络|Solana网络|BNB Chain|Ethereum|Bitcoin|Solana).*(遭遇51%攻击|全网瘫痪停机|紧急硬分叉回滚|51%\s+attack|chain\s+halt\w*|network\s+outage)", "顶级底层公链系统性故障/51%攻击"),
+    (r"(全面取缔所有加密|宣布比特币非法|宣布数字货币交易非法|爆发核危机|宣战|SEC\s+emergency\s+freeze|exchange\s+halted|major\s+hack.*\$[0-9]{2,}[MB]|protocol\s+exploit.*\$[0-9]{2,}[MB])", "国家级极端不可抗力/重大安全黑天鹅")
 ]
 
 # （US-014 前置）OKX CLI 的 news 抓取通道（run_json_cmd/_news_env/subprocess）已随
@@ -567,17 +567,27 @@ def fetch_and_analyze_news_sentiment():
             }
         time.sleep(0.3)
 
-    # 3. Overall Macro Sentiment Synthesis
+    # 3. Overall Macro Sentiment Synthesis + numeric `overall_score` (0..100) for sentinel
     cb_active, cb_info = is_circuit_breaker_active()
     if cb_active:
         macro_env = "🚨 避险熔断中"
+        overall_score = 5.0
     elif cb_info.get("unknown"):
         # 不可判定 ≠ 安全（也不等于"平安"）：如实写"不可判"，绝不落进下面的"偏多震荡"
         macro_env = "熔断状态不可判（熔断文件损坏/读不到）"
+        overall_score = 35.0
     else:
         bull_count = sum(1 for c, s in coin_sentiments.items() if s["sentiment_factor_score"] > 0.15)
         bear_count = sum(1 for c, s in coin_sentiments.items() if s["sentiment_factor_score"] < -0.15)
         macro_env = "偏多震荡" if bull_count > bear_count else ("偏空承压" if bear_count > bull_count else "中性平衡")
+        avg_rubik = (sum(float(s.get("sentiment_factor_score", 0.0) or 0.0) for s in coin_sentiments.values()) / max(1, len(coin_sentiments)))
+        # 结合近期高危突发新闻压低宏观温度，不再把账户多空比直接等价于舆情
+        high_neg_hits = sum(
+            1 for n in parsed_news[:20]
+            if n.get("importance") == "high"
+            and re.search(r"(暴跌|爆仓|hack|exploit|outage|ban|sanction|lawsuit|crisis|crash|plunge)", f"{n.get('title', '')} {n.get('summary', '')}", re.IGNORECASE)
+        )
+        overall_score = round(max(10.0, min(90.0, 50.0 + avg_rubik * 20.0 - high_neg_hits * 8.0)), 1)
 
     payload = {
         "timestamp": now_str,
@@ -587,6 +597,7 @@ def fetch_and_analyze_news_sentiment():
         "source_reason": ("Cointelegraph/CoinDesk 加密快讯 + 金十数据宏观要闻 + OKX Rubik 账户多空比" if parsed_news
                           else "金十数据/宏观快讯拉取失败，显示缺失而非中性"),
         "macro_sentiment": macro_env,
+        "overall_score": overall_score,
         "circuit_breaker": (cb_info if (cb_active or cb_info.get("unknown"))
                             else {"active": False}),
         "coins_sentiment": coin_sentiments,

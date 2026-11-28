@@ -29,6 +29,8 @@ AI 可以自己给这三个价（`entry_price` / `take_profit_price` / `stop_los
 原实现用的是 `>=` / `<=`（不是 `>` / `<`）：`sl_px == limit_px` 同样会被掰开。
 `tests/` 里对拍用旧实现副本逐点覆盖等值情形，避免把 `>=` 顺手改成 `>`。
 """
+import os
+from typing import Optional
 
 
 def normalize_bracket_prices(*, is_long, limit_px, tp_px, sl_px, sl_dist, tp_dist,
@@ -223,18 +225,29 @@ def resolve_effective_order_mode(
     market_px: float,
     is_long: bool,
     confidence: float = 0.0,
-    smart_market_dist_pct: float = 0.0035,
-    smart_market_confidence: float = 78.0,
+    smart_market_dist_pct: Optional[float] = None,
+    smart_market_confidence: Optional[float] = None,
+    spread_pct: float = 0.0,
 ) -> str:
     """Resolve configured entry mode ('limit' | 'market' | 'smart') to concrete 'limit' or 'market'.
 
     In 'smart' mode:
-    - Crossing quotes (BUY >= market or SELL <= market) or near-market quotes (<= 0.35%)
-      or high-confidence signals (>= 78%) within 1.2% execute immediately as 'market'
+    - Crossing quotes (BUY >= market or SELL <= market) or near-market quotes (<= 0.18%)
+      or high-confidence signals (>= 82%) within 0.6% execute immediately as 'market'
       (and re-anchor TP/SL to live fill price).
     - Deeper pullback quotes fall back to 'limit' maker orders.
     - Missing/invalid live market price fails closed to 'limit'.
     """
+    if smart_market_dist_pct is None:
+        try:
+            smart_market_dist_pct = float(os.getenv("ASTRA_SMART_MARKET_DIST_PCT", "0.0020"))
+        except (TypeError, ValueError):
+            smart_market_dist_pct = 0.0020
+    if smart_market_confidence is None:
+        try:
+            smart_market_confidence = float(os.getenv("ASTRA_SMART_MARKET_CONFIDENCE", "82.0"))
+        except (TypeError, ValueError):
+            smart_market_confidence = 82.0
     mode = str(configured_mode or "limit").strip().lower()
     if mode == "market":
         return "market"
@@ -249,7 +262,10 @@ def resolve_effective_order_mode(
             return "limit"
         dist = abs(p_px - m_px) / m_px
         is_crossing = (is_long and p_px >= m_px) or (not is_long and p_px <= m_px)
-        if is_crossing or dist <= smart_market_dist_pct or (conf >= smart_market_confidence and dist <= 0.012):
+        spread = float(spread_pct or 0.0)
+        if spread > 0.0012 and not is_crossing:
+            return "limit"
+        if is_crossing or dist <= smart_market_dist_pct or (conf >= smart_market_confidence and dist <= 0.006):
             return "market"
         return "limit"
     return "limit"

@@ -21,7 +21,6 @@ from .base import BaseExchangeAdapter, ExchangeCapabilityError, canonical_base
 from .identity import (AccountKey, credential_fingerprint,
                        is_sandbox_environment)
 from .okx import OKXAdapter, OKXPublicAdapter
-from astra_backend.sandbox.adapter import SandboxExchangeAdapter
 
 _ADAPTERS: Dict[str, type] = {
     "okx": OKXAdapter,
@@ -109,6 +108,8 @@ def get_adapter(venue: str, environment: Optional[str] = None) -> BaseExchangeAd
     key = str(venue or "").strip().lower()
     if key == "sandbox":
         if "sandbox_instance" not in _INSTANCES:
+            from astra_backend.sandbox.adapter import SandboxExchangeAdapter
+
             _INSTANCES["sandbox_instance"] = SandboxExchangeAdapter(environment="sandbox")
         return _INSTANCES["sandbox_instance"]
     cls = _ADAPTERS.get(key)
