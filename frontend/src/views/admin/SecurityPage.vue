@@ -105,32 +105,35 @@ watch(activeTab, (next) => {
       </section>
 
       <div class="wb-tabs-wrap">
-        <BaseTabs v-model="activeTab" baseId="sc" :label="t('admin.security.tabsLabel')" :items="TABS">
-          <div
-            id="sc-panel-venues"
-            role="tabpanel"
-            aria-labelledby="sc-tab-venues"
-            v-show="activeTab === 'venues'"
-          >
-            <SecurityVenueTab />
-          </div>
-          <div
-            id="sc-panel-pool"
-            role="tabpanel"
-            aria-labelledby="sc-tab-pool"
-            v-show="activeTab === 'pool'"
-          >
-            <SecurityPortfolioTab />
-          </div>
-          <div
-            id="sc-panel-emergency"
-            role="tabpanel"
-            aria-labelledby="sc-tab-emergency"
-            v-show="activeTab === 'emergency'"
-          >
-            <SecurityEmergencyTab />
-          </div>
-        </BaseTabs>
+        <BaseTabs v-model="activeTab" baseId="sc" :label="t('admin.security.tabsLabel')" :items="TABS" />
+      </div>
+
+      <div
+        id="sc-panel-venues"
+        role="tabpanel"
+        aria-labelledby="sc-tab-venues"
+        tabindex="0"
+        v-show="activeTab === 'venues'"
+      >
+        <SecurityVenueTab />
+      </div>
+      <div
+        id="sc-panel-pool"
+        role="tabpanel"
+        aria-labelledby="sc-tab-pool"
+        tabindex="0"
+        v-show="activeTab === 'pool'"
+      >
+        <SecurityPortfolioTab />
+      </div>
+      <div
+        id="sc-panel-emergency"
+        role="tabpanel"
+        aria-labelledby="sc-tab-emergency"
+        tabindex="0"
+        v-show="activeTab === 'emergency'"
+      >
+        <SecurityEmergencyTab />
       </div>
     </template>
   </div>

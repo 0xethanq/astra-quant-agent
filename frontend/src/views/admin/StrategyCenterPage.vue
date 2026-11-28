@@ -108,10 +108,10 @@ onMounted(loadState);
           <div class="st-header-switch">
             <span class="st-switch-label">{{ t('admin.strategy.kpiEngineState') }}</span>
             <BaseSwitch
-              :modelValue="isPaused"
+              :modelValue="!isPaused"
               :disabled="!auth.isSuperadmin || togglingPause"
-              :label="t('admin.strategy.pauseBannerTitle')"
-              @update:modelValue="toggleGlobalPause"
+              :label="t('admin.strategy.kpiEngineState')"
+              @update:modelValue="(allow: boolean) => toggleGlobalPause(!allow)"
             />
           </div>
           <button type="button" class="btn btn-ghost btn-sm" @click="loadState">
@@ -155,48 +155,53 @@ onMounted(loadState);
     </section>
 
     <div class="wb-tabs-wrap">
-      <BaseTabs v-model="activeTab" baseId="st" :label="t('admin.strategy.title')" :items="tabItems">
-        <div
-          id="st-panel-risk"
-          role="tabpanel"
-          aria-labelledby="st-tab-risk"
-          v-show="activeTab === 'risk'"
-        >
-          <StrategyRiskTab :state="state" :isSuperadmin="auth.isSuperadmin" @refresh="loadState" />
-        </div>
-        <div
-          id="st-panel-council"
-          role="tabpanel"
-          aria-labelledby="st-tab-council"
-          v-show="activeTab === 'council'"
-        >
-          <StrategyCouncilTab :state="state" :isSuperadmin="auth.isSuperadmin" @refresh="loadState" />
-        </div>
-        <div
-          id="st-panel-prompt"
-          role="tabpanel"
-          aria-labelledby="st-tab-prompt"
-          v-show="activeTab === 'prompt'"
-        >
-          <StrategyPromptTab :state="state" :isSuperadmin="auth.isSuperadmin" @refresh="loadState" />
-        </div>
-        <div
-          id="st-panel-evolution"
-          role="tabpanel"
-          aria-labelledby="st-tab-evolution"
-          v-show="activeTab === 'evolution'"
-        >
-          <StrategyEvolutionTab :state="state" :isSuperadmin="auth.isSuperadmin" @refresh="loadState" />
-        </div>
-        <div
-          id="st-panel-schedule"
-          role="tabpanel"
-          aria-labelledby="st-tab-schedule"
-          v-show="activeTab === 'schedule'"
-        >
-          <StrategyScheduleTab :state="state" :isSuperadmin="auth.isSuperadmin" @refresh="loadState" />
-        </div>
-      </BaseTabs>
+      <BaseTabs v-model="activeTab" baseId="st" :label="t('admin.strategy.title')" :items="tabItems" />
+    </div>
+
+    <div
+      id="st-panel-risk"
+      role="tabpanel"
+      aria-labelledby="st-tab-risk"
+      tabindex="0"
+      v-show="activeTab === 'risk'"
+    >
+      <StrategyRiskTab :state="state" :isSuperadmin="auth.isSuperadmin" @refresh="loadState" />
+    </div>
+    <div
+      id="st-panel-council"
+      role="tabpanel"
+      aria-labelledby="st-tab-council"
+      tabindex="0"
+      v-show="activeTab === 'council'"
+    >
+      <StrategyCouncilTab :state="state" :isSuperadmin="auth.isSuperadmin" @refresh="loadState" />
+    </div>
+    <div
+      id="st-panel-prompt"
+      role="tabpanel"
+      aria-labelledby="st-tab-prompt"
+      tabindex="0"
+      v-show="activeTab === 'prompt'"
+    >
+      <StrategyPromptTab :state="state" :isSuperadmin="auth.isSuperadmin" @refresh="loadState" />
+    </div>
+    <div
+      id="st-panel-evolution"
+      role="tabpanel"
+      aria-labelledby="st-tab-evolution"
+      tabindex="0"
+      v-show="activeTab === 'evolution'"
+    >
+      <StrategyEvolutionTab :state="state" :isSuperadmin="auth.isSuperadmin" @refresh="loadState" />
+    </div>
+    <div
+      id="st-panel-schedule"
+      role="tabpanel"
+      aria-labelledby="st-tab-schedule"
+      tabindex="0"
+      v-show="activeTab === 'schedule'"
+    >
+      <StrategyScheduleTab :state="state" :isSuperadmin="auth.isSuperadmin" @refresh="loadState" />
     </div>
   </div>
 </template>

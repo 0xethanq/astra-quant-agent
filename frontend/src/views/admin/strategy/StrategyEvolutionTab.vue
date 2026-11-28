@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { onMounted, ref, watch } from 'vue';
 import { Loader2, Play, Plus, RotateCcw, Save, Sparkles, Trash2 } from 'lucide-vue-next';
 import BaseSwitch from '../../../components/base/BaseSwitch.vue';
 import { useApi } from '../../../composables/useApi';
@@ -40,13 +40,25 @@ const testing = ref(false);
 const addingLesson = ref(false);
 const togglingId = ref('');
 
+watch(
+  () => props.state?.evolution?.enabled,
+  (val) => {
+    if (typeof val === 'boolean') {
+      evoEnabled.value = val;
+    }
+  },
+  { immediate: true },
+);
+
 async function loadEvolutionAndMemory() {
   try {
     const [evoRes, memRes] = await Promise.all([
       api('/api/v1/admin/evolution/config'),
       api('/api/v1/admin/memory'),
     ]);
-    evoEnabled.value = props.state?.evolution?.enabled !== false;
+    evoEnabled.value = typeof evoRes?.enabled === 'boolean'
+      ? evoRes.enabled
+      : (props.state?.evolution?.enabled !== false);
     modelId.value = String(evoRes?.model_id || 'auto');
     reasoningEffort.value = String(evoRes?.reasoning_effort || 'high');
     thinkingTimeout.value = Number(evoRes?.thinking_timeout || 300);

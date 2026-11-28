@@ -38,7 +38,7 @@ const { setRef, onKeydown, roving } = useRovingTabs(
 
 <template>
   <div
-    class="flex items-center gap-1 overflow-x-auto"
+    class="flex items-center gap-1 overflow-x-auto overflow-y-hidden"
     style="border-bottom: 1px solid var(--line-1)"
     role="tablist"
     :aria-label="label"
@@ -66,7 +66,7 @@ const { setRef, onKeydown, roving } = useRovingTabs(
       <span v-if="it.count !== undefined" class="num ml-1 text-xs" style="color: var(--ink-3)">{{ it.count }}</span>
       <span
         v-if="modelValue === it.key"
-        class="absolute inset-x-2 -bottom-px h-0.5 rounded-full"
+        class="absolute inset-x-2 bottom-0 h-0.5 rounded-full"
         style="background-color: var(--accent)"
       />
     </button>

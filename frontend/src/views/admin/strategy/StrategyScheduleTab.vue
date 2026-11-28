@@ -301,9 +301,9 @@ onBeforeUnmount(() => {
                 <strong>{{ r.label || r.job_id }}</strong>
                 <span class="badge mono" :class="runStatusClass(r.status)">{{ runStatusLabel(r.status) }}</span>
                 <span class="st-muted mono num">{{ r.started_at }}</span>
-                <span v-if="r.duration_s !== null && r.duration_s !== undefined" class="st-muted mono num">{{ r.duration_s }}s</span>
+                <span v-if="typeof r.duration_ms === 'number'" class="st-muted mono num">{{ (r.duration_ms / 1000).toFixed(1) }}s</span>
               </div>
-              <pre v-if="r.stderr_tail || r.stdout_tail" tabindex="0" class="st-run-log mono">{{ r.stderr_tail || r.stdout_tail }}</pre>
+              <pre v-if="r.error || r.output_tail" tabindex="0" class="st-run-log mono">{{ r.error || r.output_tail }}</pre>
             </div>
           </div>
         </div>

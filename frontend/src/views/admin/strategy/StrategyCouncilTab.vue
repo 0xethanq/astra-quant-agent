@@ -20,7 +20,7 @@ const { t } = useI18n();
 const toast = useToast();
 
 const councilEnabled = ref(true);
-const consensusMode = ref('weighted_vote');
+const consensusMode = ref('standard');
 const timeoutSeconds = ref(240);
 const roleDrafts = reactive<Record<string, any>>({});
 
@@ -48,7 +48,7 @@ watch(
   (cfg) => {
     if (!cfg || typeof cfg !== 'object') return;
     councilEnabled.value = cfg.enabled !== false;
-    consensusMode.value = String(cfg.consensus_mode || 'weighted_vote');
+    consensusMode.value = String(cfg.consensus_mode || 'standard');
     timeoutSeconds.value = Number(cfg.timeout_seconds || 240);
     const roles = cfg.roles || {};
     for (const k of Object.keys(roleDrafts)) {
@@ -206,9 +206,9 @@ async function runTestDebate() {
           </div>
           <div class="st-inline-controls">
             <select id="st-consensus" v-model="consensusMode" class="field" :aria-label="t('admin.strategy.councilConsensusMode')" :disabled="!isSuperadmin">
-              <option value="weighted_vote">weighted_vote</option>
-              <option value="majority">majority</option>
-              <option value="cio_arbitrate">cio_arbitrate</option>
+              <option value="standard">standard</option>
+              <option value="cross_examination">cross_examination</option>
+              <option value="debate">debate</option>
             </select>
             <input
               v-model.number="timeoutSeconds"

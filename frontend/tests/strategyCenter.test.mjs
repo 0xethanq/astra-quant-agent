@@ -3,10 +3,19 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 
 const SRC = path.resolve(import.meta.dirname, '..', 'src');
+
+function walkVue(dir, out = []) {
+  for (const name of readdirSync(dir)) {
+    const p = path.join(dir, name);
+    if (statSync(p).isDirectory()) walkVue(p, out);
+    else if (name.endsWith('.vue')) out.push(p);
+  }
+  return out;
+}
 
 const STRATEGY_FILES = [
   'views/admin/StrategyCenterPage.vue',
@@ -52,4 +61,15 @@ test('StrategyRiskTab 对 HIGH RISK 确认口令门控并绑定 .is-bad 与 :ari
   assert.ok(risk.includes('HIGH RISK'), 'StrategyRiskTab 必须校验 HIGH RISK 短语');
   assert.ok(risk.includes('is-bad'), 'StrategyRiskTab 确认框必须绑定 .is-bad 状态');
   assert.ok(risk.includes(':aria-invalid'), 'StrategyRiskTab 确认框必须绑定 :aria-invalid');
+});
+
+test('BaseTabs 无默认插槽，全站 .vue 不得出现 </BaseTabs> 包裹 tabpanel', () => {
+  const offenders = [];
+  for (const file of walkVue(SRC)) {
+    const raw = stripComments(readFileSync(file, 'utf8'));
+    if (raw.includes('</BaseTabs>')) {
+      offenders.push(path.relative(SRC, file).replace(/\\/g, '/'));
+    }
+  }
+  assert.deepEqual(offenders, [], `BaseTabs 不支持默认 slot，请改用自闭合标签并将 tabpanel 移到外部: ${offenders.join(', ')}`);
 });
