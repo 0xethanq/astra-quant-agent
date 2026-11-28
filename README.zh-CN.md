@@ -10,7 +10,7 @@
 [![Website](https://img.shields.io/badge/官方网站-astraquant.top-f59e0b.svg?style=flat-square)](https://astraquant.top/)
 [![TradeSkill](https://img.shields.io/badge/技能中心-TradeSkill_103%2B-FF5E2B.svg?style=flat-square)](https://github.com/0xethanq/crypto-trading-skills)
 [![License](https://img.shields.io/badge/License-AGPLv3%20%2B%20Commons%20Clause-blue.svg?style=flat-square)](LICENSE)
-[![Python](https://img.shields.io/badge/Python-3.11-3776AB.svg?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/Python-3.14-3776AB.svg?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![Vue 3](https://img.shields.io/badge/Vue-3.5%2B-4FC08D.svg?style=flat-square&logo=vuedotjs&logoColor=white)](https://vuejs.org/)
 
 AstraQuant 将大语言模型多维度研判（宏观趋势、技术形态、盘口微结构）与 Python 确定性物理风控相结合，并通过 OKX 原生 API 实现限价入场与双腿云端止损止盈。
@@ -148,7 +148,7 @@ AstraQuant 摒弃简单滞后指标，结合高频衍生品微观数据进行综
 | 部署方式 | 宿主机依赖 | 特点与适用场景 | 推荐度 |
 |---|---|---|:---:|
 | **Docker 容器（推荐）** | 仅需 `Docker` 与 `Docker Compose` | 零宿主机依赖、多阶段自动打包前端、进程自愈看门狗 | ⭐⭐⭐⭐⭐ |
-| **Linux 裸机部署** | `Python 3.11+` (`python3-venv`), `Node.js 24+`, `Git` | 本地源码调试、二次开发与极低内存实例 | ⭐⭐⭐ |
+| **Linux 裸机部署** | `Python 3.14` (`python3-venv`), `Node.js 26+`, `Git` | 本地源码调试、二次开发与极低内存实例 | ⭐⭐⭐ |
 
 ### 选项 A：Docker 容器（推荐）
 
@@ -173,11 +173,11 @@ cd frontend && npm install && npm run build && cd ..
 
 ## 自动化测试
 
-**前置版本**：Python **3.11 / 3.12**（与 CI 矩阵一致），前端需要 Node.js **24**
+**前置版本**：Python **3.14**，前端需要 Node.js **26**
 （前端测试直接导入 TypeScript 源码，依赖 Node 原生类型剥离）。
 
-CI（[`.github/workflows/ci.yml`](.github/workflows/ci.yml)）在 Python 3.11/3.12 上运行
-**全量**后端套件，并以 Node 24 执行前端类型检查/构建/测试、`ruff check backend` 与
+CI（[`.github/workflows/ci.yml`](.github/workflows/ci.yml)）在 Python 3.14 上运行
+**全量**后端套件，并以 Node 26 执行前端类型检查/构建/测试、`ruff check backend` 与
 Docker 镜像构建。下面的 Tier 子集只用于本地快速反馈，不能替代全量套件。
 
 ```bash

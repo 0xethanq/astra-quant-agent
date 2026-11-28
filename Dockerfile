@@ -5,7 +5,7 @@
 # ------------------------------------------------------------------------------
 # Stage 1: Build Vue 3 Production Frontend
 # ------------------------------------------------------------------------------
-FROM node:24-slim AS frontend-builder
+FROM node:26-slim AS frontend-builder
 
 WORKDIR /build
 
@@ -25,9 +25,9 @@ COPY backend/docs/images/dashboard_preview.png ./public/images/dashboard_preview
 RUN npm run build
 
 # ------------------------------------------------------------------------------
-# Stage 2: Python 3.11 Runtime Container
+# Stage 2: Python 3.14 Runtime Container
 # ------------------------------------------------------------------------------
-FROM python:3.11-slim AS runtime
+FROM python:3.14-slim AS runtime
 
 WORKDIR /app
 

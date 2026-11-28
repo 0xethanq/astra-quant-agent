@@ -80,9 +80,9 @@ cd ..
 
 ### 1. 系统与基础依赖建议
 - **操作系统**：Linux (Ubuntu 22.04+ / Debian 12+)、macOS (Apple Silicon / Intel)、Windows WSL2
-- **Python 环境**：Python 3.11 或 3.12（推荐使用虚拟环境）
+- **Python 环境**：Python 3.14（推荐使用虚拟环境）
   - *macOS 用户提示*：若初次安装 C 扩展依赖报错，请先在终端运行 `xcode-select --install`
-- **Node.js**（仅在需要二次开发前端时需要）：Node.js 24.x，npm 10+
+- **Node.js**（仅在需要二次开发前端时需要）：Node.js 26.x，npm 10+
 
 ### 2. 初始化环境配置 (.env)
 由于项目本体不含任何私密凭据，首次启动前请基于模板创建个人配置文件：

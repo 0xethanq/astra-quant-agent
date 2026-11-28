@@ -10,7 +10,7 @@
 [![Website](https://img.shields.io/badge/Website-astraquant.top-f59e0b.svg?style=flat-square)](https://astraquant.top/)
 [![TradeSkill](https://img.shields.io/badge/Skills_Hub-TradeSkill_103%2B-FF5E2B.svg?style=flat-square)](https://github.com/0xethanq/crypto-trading-skills)
 [![License](https://img.shields.io/badge/License-AGPLv3%20%2B%20Commons%20Clause-blue.svg?style=flat-square)](LICENSE)
-[![Python](https://img.shields.io/badge/Python-3.11-3776AB.svg?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/Python-3.14-3776AB.svg?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![Vue 3](https://img.shields.io/badge/Vue-3.5%2B-4FC08D.svg?style=flat-square&logo=vuedotjs&logoColor=white)](https://vuejs.org/)
 
 AstraQuant combines large language models (macro, technical, and microstructure analysis) with deterministic Python risk management and OKX-native conditional order execution.
@@ -148,7 +148,7 @@ Risk rules are enforced strictly by Python code (`scripts/risk_constants.py`). B
 | Mode | Host Prerequisites | Highlights & Target | Recommendation |
 |---|---|---|:---:|
 | **Docker Compose (Recommended)** | `Docker` & `Docker Compose` | Zero host dependency, auto multi-stage build, supervised watchdog | ⭐⭐⭐⭐⭐ |
-| **Bare Metal Linux / macOS** | `Python 3.11+` (`python3-venv`), `Node.js 24+`, `Git` | Local source development and memory-constrained environments | ⭐⭐⭐ |
+| **Bare Metal Linux / macOS** | `Python 3.14` (`python3-venv`), `Node.js 26+`, `Git` | Local source development and memory-constrained environments | ⭐⭐⭐ |
 
 ### Docker (Recommended)
 
@@ -173,12 +173,12 @@ cd frontend && npm install && npm run build && cd ..
 
 ## Automated Testing
 
-**Prerequisites**: Python **3.11 or 3.12** (the CI test matrix) and Node.js **24** for the
+**Prerequisites**: Python **3.14** and Node.js **26** for the
 frontend (the frontend test suite imports TypeScript sources directly and relies on Node's
 native type stripping).
 
 CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs the **full** backend suite on
-both Python versions, frontend typecheck/build/tests on Node 24, `ruff check backend`, and a
+Python 3.14, frontend typecheck/build/tests on Node 26, `ruff check backend`, and a
 Docker image build. Use the Tier subsets below for fast local feedback; they are not a
 substitute for the full suite.
 
