@@ -48,7 +48,7 @@ const { updateAvailable, behindCount } = useUpdateNotice();
 const collapsed = useLocalStorage('astra_admin_sidebar', false);
 const drawerOpen = ref(false);
 
-const currentKey = computed(() => (route.name as string) || 'admin-overview');
+const currentKey = computed(() => (route.name as string) || 'admin-agent');
 const currentMeta = computed(() => {
   for (const g of adminGroups) {
     const hit = g.items.find((i) => i.key === currentKey.value);

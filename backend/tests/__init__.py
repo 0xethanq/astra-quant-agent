@@ -35,6 +35,8 @@ os.environ.setdefault("ASTRA_QUANT_DB", os.path.join(_TEST_SANDBOX, "astra_quant
 os.environ.setdefault("ASTRA_RISK_RESERVATION_DB",
                       os.path.join(_TEST_SANDBOX, "risk_reservation.db"))
 os.environ.setdefault("ASTRA_ADMIN_DB", os.path.join(_TEST_SANDBOX, "astra_admin.db"))
+os.environ.setdefault("ASTRA_AGENT_DB", os.path.join(_TEST_SANDBOX, "astra_agent.db"))
+os.environ.setdefault("ASTRA_AGENT_CONFIG_FILE", os.path.join(_TEST_SANDBOX, "agent_config.json"))
 os.environ.setdefault("ASTRA_GATEWAY_DB", os.path.join(_TEST_SANDBOX, "astra_gateway.db"))
 
 # 会话级沙箱必须在进程退出时清掉。
@@ -78,6 +80,7 @@ os.environ.setdefault("ASTRA_LEDGER_SYNC_DISABLED", "1")
 # 再永久关闭该进程内的 .env 回灌。真实 .env 的 OKX/LLM/QQ 等配置仍然照常加载。
 _SANDBOX_ENV_KEYS = (
     "ASTRA_QUANT_DB", "ASTRA_RISK_RESERVATION_DB", "ASTRA_ADMIN_DB",
+    "ASTRA_AGENT_DB", "ASTRA_AGENT_CONFIG_FILE",
     "ASTRA_GATEWAY_DB", "ASTRA_AUDIT_FILE", "ASTRA_SELF_IMPROVEMENT_LOG",
     "ASTRA_EVOLUTION_MODEL_COOLDOWN_FILE", "ASTRA_LEDGER_SYNC_DISABLED",
 )
@@ -163,6 +166,7 @@ _PROTECTED_CONFIG_FILES = {
     # 新写入目标同样必须硬保护 —— 它是用户提示词的**唯一落点**。
     (_PROJECT_ROOT / "data" / "prompt_library.local.json").resolve(),
     (_PROJECT_ROOT / "data" / "llm_models.json").resolve(),
+    (_PROJECT_ROOT / "data" / "agent_config.json").resolve(),
     (_PROJECT_ROOT / "data" / "account_baseline.json").resolve(),
     (_PROJECT_ROOT / "data" / "position_trackers.json").resolve(),
     # 「分批止盈是否真的发生」的**第一手证据**（只追加的事件流水）。2026-09-29 实测：

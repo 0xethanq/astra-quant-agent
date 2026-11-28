@@ -63,11 +63,11 @@ export const INLINE_PX_ALLOWED = {
   'border-width: 1px': '1px 发丝线是全站约定（CSS 里 1px solid 出现 135 次）',
 };
 
-/** 骨架形状类（值=应有的尺寸声明）。 */
+/** 骨架形状类（值=应有的尺寸声明）。
+ * 2026-11-28 后台 12→6 精简：唯一消费者退役后，零引用 `.skeleton-dot` / `.skeleton-avatar` 已从 components.css 移除。
+ */
 export const SKELETON_SHAPES = {
   '.skeleton-value': 'height: var(--ds-space-4);',
-  '.skeleton-dot': 'width: 6px;',
-  '.skeleton-avatar': 'width: 24px;',
 };
 
 function vueFiles(dir, out = []) {

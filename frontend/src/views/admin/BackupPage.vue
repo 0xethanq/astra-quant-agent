@@ -32,6 +32,7 @@ import PageHeader from '../../components/admin/PageHeader.vue'
 import BaseTabs from '../../components/base/BaseTabs.vue'
 import PolicySnapshotPage from './PolicySnapshotPage.vue'
 import AboutPage from './AboutPage.vue'
+import AdminSysPage from './AdminSysPage.vue'
 
 import BaseSwitch from '../../components/base/BaseSwitch.vue'
 import BaseEmpty from '../../components/base/BaseEmpty.vue'
@@ -47,11 +48,11 @@ const { t } = useI18n()
  * 三者同属"可恢复性"：数据能回来、策略能回滚、版本能退回。
  * 旧路径 /admin/policy → ?tab=policy，/admin/about → ?tab=version。
  */
-type BkTab = 'backup' | 'policy' | 'version';
+type BkTab = 'backup' | 'policy' | 'adminsys' | 'version';
 function resolveBkTab(raw: unknown): BkTab {
   const v = Array.isArray(raw) ? raw[0] : raw;
   const s = String(v);
-  return s === 'policy' || s === 'version' ? (s as BkTab) : 'backup';
+  return s === 'policy' || s === 'adminsys' || s === 'version' ? (s as BkTab) : 'backup';
 }
 const route = useRoute();
 const activeTab = ref<BkTab>(resolveBkTab(route.query.tab));
@@ -59,6 +60,7 @@ watch(() => route.query.tab, (v) => { activeTab.value = resolveBkTab(v); });
 const tabs = computed(() => [
   { key: 'backup', label: t('admin.backup.tabBackup') },
   { key: 'policy', label: t('admin.policySnapshot.title') },
+  { key: 'adminsys', label: t('admin.adminsys.title') },
   { key: 'version', label: t('admin.about.title') },
 ]);
 import { useApi } from '../../composables/useApi'
@@ -429,7 +431,8 @@ onMounted(load)
       <p class="state-title">{{ t('common.loadFailed') }}</p>
       <p class="state-desc">{{ loadError }}</p>
       <button type="button" class="btn btn-ghost btn-sm mt-1" :disabled="loading" @click="load">
-        <RefreshCw :size="14" />
+        <Loader2 v-if="loading" :size="14" class="animate-spin shrink-0" />
+        <RefreshCw v-else :size="14" />
         <span>{{ t('common.retry') }}</span>
       </button>
     </div>
@@ -657,6 +660,10 @@ onMounted(load)
 
     <div v-else-if="activeTab === 'policy'" id="bk-panel-policy" role="tabpanel" aria-labelledby="bk-tab-policy" tabindex="0" class="bk-panel">
       <PolicySnapshotPage embedded />
+    </div>
+
+    <div v-else-if="activeTab === 'adminsys'" id="bk-panel-adminsys" role="tabpanel" aria-labelledby="bk-tab-adminsys" tabindex="0" class="bk-panel">
+      <AdminSysPage embedded />
     </div>
 
     <div v-else id="bk-panel-version" role="tabpanel" aria-labelledby="bk-tab-version" tabindex="0" class="bk-panel">

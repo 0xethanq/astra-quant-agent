@@ -43,10 +43,8 @@ export const FLUSH_DECLS = ['border: 0;', 'border-radius: 0;', 'background-color
 
 /** 挂 `.is-flush` 的模板清册。 */
 export const FLUSH_USERS = {
-  'views/admin/AgentsPage.vue': 'ag-calls',
   'views/admin/AuditPage.vue': 'au-rows',
   'views/admin/llm/ProviderListView.vue': 'pv-audit',
-  'views/admin/EvolutionPage.vue': 'evo-insight-panel',
 };
 
 /** 保留原件外观的（不得挂 is-flush）。 */

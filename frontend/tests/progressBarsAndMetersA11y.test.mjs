@@ -26,7 +26,6 @@ const SRC = path.resolve(import.meta.dirname, '..', 'src');
 
 test('全站关键进度条与量规必须满足 role="progressbar" 规范', () => {
   const targets = [
-    { file: 'views/admin/OverviewPage.vue', labelMatch: /confidenceGauge/ },
     { file: 'components/dashboard/TrajectoryPanel.vue', labelMatch: /dash\.shell\.panel\.confidence/ },
     { file: 'views/dashboard/NewsView.vue', labelMatch: /dash\.news\.ratioLabel/ },
   ];

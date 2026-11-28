@@ -9,15 +9,13 @@
 
 | 组件 | 引用者数 | 说明 |
 | --- | --- | --- |
-| `DataTable.vue` | **1** | F1 之前只有 `AuditPage` 1 个消费者（"假共享"）。已升级为真原语。**批 7–8 计数下降**：`PluginsPage`（页已删）/ `AgentsPage` / `AboutPage` 的登记表先后改为行式清单，故 8 → 1（`SecurityPage`/`AuditPage`/`AdminSysPage`/`BackupPage` 的登记表先后改为行式清单，现仅剩 `GatewayPage`） |
-| `PageHeader.vue` | **16** | 一直是共享的（2026-09-30 后台精简：PluginsPage 删除后 18 → 17；2026-10 策略插件系统裁撤、InterceptorsPage 删除后 17 → 16）。嵌入宿主页页签时传 `embedded`，只收起标题与说明，动作插槽照渲染 |
+| `PageHeader.vue` | **10** | 一直是共享的（Agent-First 精简删除 `OverviewPage` / `GatewayPage` / `AgentsPage` / `CouncilPage` / `PromptStudioPage` / `EvolutionPage` / `RiskPage` 后由 16 → 10，并入新增的 `AgentConsolePage`；`DataTable.vue` 因唯一消费者 `GatewayPage` 退役已一并移除）。嵌入宿主页页签时传 `embedded`，只收起标题与说明，动作插槽照渲染 |
 
 ## `page-parts/` = 单页专用
 
 | 组件 | 唯一消费者 |
 | --- | --- |
 | `SettingsSection.vue` | `views/admin/SecurityPage.vue` |
-| `DangerZone.vue` | `views/admin/RiskPage.vue` |
 
 放进子目录是**刻意的**：让"单页专用"这件事写在路径上，而不是靠读者去数引用。
 F7 的另一种解法（推广）对这两个组件目前**不成立**，理由见下。
@@ -54,10 +52,10 @@ F7 的另一种解法（推广）对这两个组件目前**不成立**，理由�
 | 组件 | 消费者数 | 消费者 |
 | --- | --- | --- |
 | `base/BaseDrawer` | 4 | `dashboard/` 的 FactorDrawer · LedgerDrawer · PeekDrawer · RadarDrawer |
-| `base/CopyButton` | 8 | `base/BaseCodeBlock` · `dashboard/AboutModal` · `dashboard/FirstRunGuide` · `dashboard/PeekDrawer` · `dashboard/RebateModal` · `views/admin/AboutPage` · `views/admin/DecisionsPage` · `views/admin/PromptStudioPage` |
-| `base/BaseDialog` | 16 | `base/ConfirmHost` · `dashboard/AboutModal` · `dashboard/QuickSetupModal` · `dashboard/RebateModal` · `views/admin/AdminSysPage` · `views/admin/AuditPage` · `views/admin/GatewayPage` · `views/admin/CouncilPage` · `views/admin/PromptStudioPage` · `views/admin/PolicySnapshotPage` · `views/admin/EvolutionPage` · `views/admin/NotifyPage` · `views/admin/AboutPage` · `views/admin/llm/ModelEditDialog` · `views/admin/llm/RemoteFetchDialog` · `views/admin/SecurityPage` |
-| `base/BaseSwitch` | 10 | `dashboard/SettingsPopover` · `views/admin/CouncilPage` · `views/admin/PromptStudioPage` · `views/admin/EvolutionPage` · `views/admin/NotifyPage` · `views/admin/llm/ProviderListView` · `views/admin/llm/ProviderDetailView` · `views/admin/SecurityPage` · `views/admin/RiskPage` |
-| `base/BaseTabs` | 4 | `dashboard/RadarDrawer` · `views/admin/GatewayPage` · `views/admin/DecisionsPage` · `views/admin/BackupPage`（后三个是后台宿主页的页签栏） |
+| `base/CopyButton` | 8 | `base/BaseCodeBlock` · `dashboard/AboutModal` · `dashboard/FirstRunGuide` · `dashboard/PeekDrawer` · `dashboard/RebateModal` · `views/admin/agent/AgentProposalCard` · `views/admin/AboutPage` · `views/admin/DecisionsPage` |
+| `base/BaseDialog` | 12 | `base/ConfirmHost` · `dashboard/AboutModal` · `dashboard/QuickSetupModal` · `dashboard/RebateModal` · `views/admin/AdminSysPage` · `views/admin/AuditPage` · `views/admin/PolicySnapshotPage` · `views/admin/NotifyPage` · `views/admin/AboutPage` · `views/admin/llm/ModelEditDialog` · `views/admin/llm/RemoteFetchDialog` · `views/admin/SecurityPage` |
+| `base/BaseSwitch` | 6 | `dashboard/SettingsPopover` · `views/admin/NotifyPage` · `views/admin/BackupPage` · `views/admin/llm/ProviderListView` · `views/admin/llm/ProviderDetailView` · `views/admin/SecurityPage` |
+| `base/BaseTabs` | 3 | `dashboard/RadarDrawer` · `views/admin/DecisionsPage` · `views/admin/BackupPage`（后两个是后台宿主页的页签栏） |
 | `dashboard/DataStatus` | 1 | `dashboard/TopBar` |
 | `dashboard/SettingsPopover` | 1 | `dashboard/TopBar` |
 | `dashboard/FactorDrawer` | 1 | `dashboard/FactorMatrix` |

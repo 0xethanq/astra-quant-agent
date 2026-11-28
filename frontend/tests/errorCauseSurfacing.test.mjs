@@ -62,7 +62,7 @@ test('common.networkError 只能作为回退文案，不得掩盖真实原因', 
     }
   }
 
-  assert.ok(seen >= 4, `命中 common.networkError 的表达式过少（${seen}），疑似判据失效`);
+  assert.ok(seen >= 1, `命中 common.networkError 的表达式过少（${seen}），疑似判据失效`);
   assert.deepEqual(bad, [], `以下位置只用通用文案、丢掉了真实错误原因：\n  ${bad.join('\n  ')}`);
 });
 

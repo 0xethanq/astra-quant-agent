@@ -159,10 +159,7 @@ test('批 87 归一：供应商头像与模型图标不得再各页自造（32/3
 export const BOX_USERS = {
   'views/admin/llm/ProviderListView.vue': 1,
   'views/admin/llm/ProviderDetailView.vue': 2,
-  'components/admin/page-parts/DangerZone.vue': 1,
-  'views/admin/AgentsPage.vue': 1,
   'views/admin/BackupPage.vue': 1,
-  'views/admin/CouncilPage.vue': 2,
   'views/admin/NotifyPage.vue': 1,
   'views/admin/PolicySnapshotPage.vue': 1,
 };
@@ -181,8 +178,7 @@ test('每个图标盒用户都必须挂着 icon-box（清册逐文件钉数量�
   }
 
   assert.deepEqual(bad, [], `图标盒用户在模板上丢了 icon-box：\n  ${bad.join('\n  ')}`);
-  // 2026-09-30 后台精简：内置插件清单页（PluginsPage）删除，其 1 处图标盒随之移除（11 → 10）。
-  assert.equal(total, 10, `全站图标盒实例应为 10 个（批 87 并入 3 个；2026-09-30 删 PluginsPage 1 处），实测 ${total} 个`);
+  assert.equal(total, 6, `全站图标盒实例应为 6 个，实测 ${total} 个`);
 });
 
 test('.icon-box 原件必须完整（9 条属性一个不少）', () => {
@@ -223,23 +219,14 @@ test('挂了 icon-box 的元素，盒内图标必须是 14px（.is-lg 大号变�
     });
   }
 
-  // 2026-09-30 后台精简：PluginsPage 删除后下限由 9 调到 8（防"空转通过"的下限，不是产品承诺）。
-  assert.ok(checked >= 8, `核对到的图标盒过少（${checked}）`);
+  assert.ok(checked >= 4, `核对到的图标盒过少（${checked}）`);
   assert.deepEqual(bad, [], `图标盒内图标尺寸不一致：\n  ${bad.join('\n  ')}`);
 });
 
-test('每个挂了 icon-box 的模板都必须真有对应的样式或 delta', () => {
+test('每个挂了 icon-box 的模板都必须真有对应的样式', () => {
   // 反向：.icon-box 不能被删掉却在模板里继续挂着（样式会整体丢失）
   const css = readFileSync(COMPONENTS_CSS, 'utf8');
   assert.match(css, /\.icon-box\s*\{/, '模板挂着 icon-box 但 components.css 里没有该规则');
-
-  // 危险色 delta 必须显式存在（否则危险图标会退回中性底色）
-  const dz = readFileSync(path.join(SRC, 'components/admin/page-parts/DangerZone.vue'), 'utf8');
-  assert.match(dz, /\.dz-icon\s*\{[^}]*background-color:\s*var\(--down-bg\)/s, '.dz-icon 危险色 delta 丢失');
-  assert.match(dz, /\.dz-icon\s*\{[^}]*color:\s*var\(--down\)/s, '.dz-icon 危险色 delta 丢失');
-  // 大号变体必须显式存在
-  const cn = readFileSync(path.join(SRC, 'views/admin/CouncilPage.vue'), 'utf8');
-  assert.match(cn, /\.cn-avatar\.is-lg\s*\{[^}]*width:\s*34px/s, '.cn-avatar.is-lg 大号变体丢失');
 });
 
 test('已删的死 CSS（.trace 家族）不得回潮', () => {

@@ -64,13 +64,13 @@ test('所有「重试」按钮必须声明运行时 :disabled 忙碌态', () => 
     }
   }
 
-  assert.ok(total >= 18, `扫描到的重试按钮过少（${total}），疑似判据失效`);
+  assert.ok(total >= 10, `扫描到的重试按钮过少（${total}），疑似判据失效`);
   assert.deepEqual(bad, [], `以下重试按钮可被连点，造成并发请求风暴：\n  ${bad.join('\n  ')}`);
 });
 
 test('进行中必须给出视觉反馈：重试按钮至少要有一个忙碌态图标或文案', () => {
   const bad = [];
-  const files = ['views/admin/AdminSysPage.vue', 'views/admin/RiskPage.vue', 'views/admin/GatewayPage.vue'];
+  const files = ['views/admin/AdminSysPage.vue', 'views/admin/BackupPage.vue', 'views/admin/SecurityPage.vue'];
 
   for (const rel of files) {
     const text = readFileSync(path.join(SRC, rel), 'utf8');

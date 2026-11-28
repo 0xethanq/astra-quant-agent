@@ -76,3 +76,90 @@ export const patch = <T = any>(path: string, body?: unknown) =>
   http<T>(path, { method: 'PATCH', body: body === undefined ? undefined : JSON.stringify(body) });
 export const del = <T = any>(path: string) => http<T>(path, { method: 'DELETE' });
 
+export async function streamPost(
+  path: string,
+  body: unknown,
+  onEvent: (event: Record<string, any>) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  const auth = useAuthStore();
+  let resp: Response;
+  try {
+    resp = await fetch(path, {
+      method: 'POST',
+      signal,
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'text/event-stream',
+        ...(auth.token ? { 'X-Astra-Session': auth.token } : {}),
+      },
+      body: JSON.stringify(body ?? {}),
+    });
+  } catch (e: any) {
+    if (e?.name === 'AbortError') throw e;
+    throw new HttpError(useI18n().t('common.networkRetry'), 0);
+  }
+
+  if (resp.status === 401 && auth.token) {
+    auth.logout();
+    throw new HttpError(useI18n().t('common.sessionExpired'), 401);
+  }
+  if (!resp.ok) {
+    let data: any = null;
+    try {
+      data = await resp.json();
+    } catch {
+      /* ignore */
+    }
+    throw new HttpError(normalizeDetail(data, resp.status), resp.status);
+  }
+
+  if (!resp.body) {
+    throw new HttpError(useI18n().t('common.networkRetry'), 0);
+  }
+
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder('utf-8');
+  let buffer = '';
+
+  const dispatchFrame = (frame: string) => {
+    const lines = frame.split('\n');
+    const dataLines: string[] = [];
+    for (const line of lines) {
+      if (line.startsWith('data:')) {
+        dataLines.push(line.slice(5).trimStart());
+      }
+    }
+    if (!dataLines.length) return;
+    const raw = dataLines.join('\n').trim();
+    if (!raw) return;
+    try {
+      onEvent(JSON.parse(raw));
+    } catch {
+      /* ignore malformed SSE data frame */
+    }
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (value) {
+      buffer += decoder.decode(value, { stream: !done }).replace(/\r\n/g, '\n');
+      let boundary = buffer.indexOf('\n\n');
+      while (boundary !== -1) {
+        const frame = buffer.slice(0, boundary);
+        buffer = buffer.slice(boundary + 2);
+        dispatchFrame(frame);
+        boundary = buffer.indexOf('\n\n');
+      }
+    }
+    if (done) {
+      buffer += decoder.decode().replace(/\r\n/g, '\n');
+      if (buffer.trim()) {
+        dispatchFrame(buffer);
+      }
+      break;
+    }
+  }
+}
+
+

@@ -60,7 +60,7 @@ export const zhAdminSecurity = {
   scaleOutSwitchLabel: '启用分批止盈',
   scaleOutHint: '开启后，当持仓浮盈达到设定倍数 × 1H ATR 时，自动市价平仓指定比例锁定利润，并立即将剩余持仓止损拉至保本位（无风险奔跑）。',
   scaleOutCurrentPreset: '当前出场参数',
-  scaleOutCustomizeInRisk: '前往风控参数页自定义比例与 ATR 阈值',
+  scaleOutCustomizeInRisk: '前往 AI 指挥台调整比例与 ATR 阈值',
   scaleOutOnToast: '分批止盈策略已启用',
   scaleOutOffToast: '分批止盈策略已关闭',
   optDemo: 'DEMO',
@@ -261,4 +261,6 @@ export const zhAdminSecurity = {
   plazaRiskConfig: '风控配置',
   plazaRiskSummary: '{min}x~{max}x 杠杆 · {pct}% 保证金',
   plazaTestCopy: '一键复制测试',
+  poolReadonlyHint: '标的池增删已统一交由「AI 指挥台」对话编排与风控校验，此处仅展示当前生效的合约清单与持仓保护状态。',
+  goToAgent: '前往 AI 指挥台调整',
 };

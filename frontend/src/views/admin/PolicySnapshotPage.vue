@@ -197,7 +197,7 @@ const units = computed(() => {
       key: 'prompt',
       title: t(`${P}prompt.title`),
       icon: FileText,
-      to: '/admin/promptlib',
+      to: '/admin/agent',
       fields: [
         { label: t(`${P}prompt.profile`), value: v(u.prompt_profile?.active_profile_name || u.prompt_profile?.active_profile_id) },
         { label: t(`${P}prompt.layoutHash`), value: '#' + v(u.prompt_profile?.layout_hash), mono: true },
@@ -210,7 +210,7 @@ const units = computed(() => {
       key: 'evolution',
       title: t(`${P}evolution.title`),
       icon: Sparkles,
-      to: '/admin/evolution',
+      to: '/admin/agent',
       fields: [
         { label: t(`${P}evolution.version`), value: v(u.evolution_mind?.version), mono: true },
         { label: t(`${P}evolution.counts`), value: `${v(u.evolution_mind?.enabled_count)} / ${v(u.evolution_mind?.total_count)}` },
@@ -223,7 +223,7 @@ const units = computed(() => {
       key: 'council',
       title: t(`${P}council.title`),
       icon: Users,
-      to: '/admin/council',
+      to: '/admin/agent',
       fields: [
         {
           label: t(`${P}council.status`),

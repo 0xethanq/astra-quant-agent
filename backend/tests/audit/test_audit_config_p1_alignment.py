@@ -475,16 +475,17 @@ class UIEvidenceHonestyTests(_SandboxBase):
         return (ROOT.parent / "frontend" / "src" / Path(*parts)).read_text(encoding="utf-8")
 
     def test_evolution_page_does_not_fabricate_sample_and_shield(self):
-        src = self._read("views", "admin", "EvolutionPage.vue")
-        self.assertNotIn("item.sample_size || 10", src, "缺样本量时又在编「10 笔」")
-        self.assertNotIn("item.shield_status || 'PASSED'", src, "缺状态时又在编「PASSED」")
-        self.assertIn("typeof item.sample_size === 'number'", src)
-        self.assertIn("typeof item.shield_status === 'string'", src)
+        retired = ROOT.parent / "frontend" / "src" / "views" / "admin" / "EvolutionPage.vue"
+        self.assertFalse(retired.exists(), "EvolutionPage.vue 应已在 Agent-First 后台 12→6 精简中退役")
+        tools_read_src = (ROOT / "astra_backend" / "agent" / "tools_read.py").read_text(encoding="utf-8")
+        self.assertIn("evolution_shield.admin_memory_view()", tools_read_src)
+        self.assertNotIn("sample_size || 10", tools_read_src)
+        self.assertNotIn("'PASSED'", tools_read_src)
 
     def test_guardrail_badge_is_derived_from_backend_state(self):
-        src = self._read("views", "admin", "EvolutionPage.vue")
-        self.assertIn("legacy_read_only", src, "护栏状态必须有后端字段支撑")
-        self.assertIn("memoryStructured", src)
+        tools_verify_src = (ROOT / "astra_backend" / "agent" / "tools_verify.py").read_text(encoding="utf-8")
+        self.assertIn("meta[\"missing\"].append", tools_verify_src, "缺失实时快照时必须显式登记 missing，不得伪造数据")
+        self.assertNotIn("77200", tools_verify_src)
 
     def test_policy_snapshot_copy_matches_the_implementation(self):
         zh = self._read("locales", "zh", "admin", "policySnapshot.ts")

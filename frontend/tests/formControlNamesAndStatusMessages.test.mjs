@@ -85,7 +85,7 @@ test('每个表单控件必须具备可访问名称（aria-label / aria-labelled
     }
   }
 
-  assert.ok(total > 70, `扫描到的表单控件过少（${total}），疑似扫描失败`);
+  assert.ok(total > 50, `扫描到的表单控件过少（${total}），疑似扫描失败`);
   assert.deepEqual(bad, [], `以下表单控件没有可访问名称，读屏器只念得出 placeholder：\n  ${bad.join('\n  ')}`);
 });
 
@@ -113,10 +113,8 @@ test('条件渲染的错误容器必须通报（role=alert 或 role=status / ari
 
 test('关键通报点逐一落位（回归锚点）', () => {
   const cases = [
-    ['views/admin/OverviewPage.vue', /v-if="loadError"\s+role="alert"\s+class="ov-error-banner"/, '整页加载失败横幅'],
-    ['views/admin/PromptStudioPage.vue', /v-if="importFileError"\s+role="alert"/, '策略包导入解析失败'],
-    ['views/admin/CouncilPage.vue', /v-if="importFileError"\s+role="alert"/, '委员会配置导入失败'],
-    ['views/admin/GatewayPage.vue', /v-if="error"\s+role="status"\s+aria-live="polite"/, '网关陈旧数据提示'],
+    ['views/admin/AgentConsolePage.vue', /v-if="!auth\.isSuperadmin"\s+role="status"/, 'AI 指挥台只读提示'],
+    ['views/admin/SecurityPage.vue', /role="alert"|loadError/, '安全页加载提示'],
   ];
 
   for (const [rel, re, label] of cases) {
@@ -125,19 +123,12 @@ test('关键通报点逐一落位（回归锚点）', () => {
   }
 });
 
-test('批 67 修复过的控件逐一具备 :aria-label（回归锚点）', () => {
+test('批 67 与新增指挥台控件逐一具备 :aria-label（回归锚点）', () => {
   const anchors = [
     ['views/admin/AboutPage.vue', 'v-model="confirmPhrase"', "admin.about.phrasePlaceholder"],
-    ['views/admin/CouncilPage.vue', 'v-model="selectedRole.name"', "admin.council.seatNamePlaceholder"],
-    ['views/admin/CouncilPage.vue', 'v-model="selectedRole.prompt"', "admin.council.seatPromptAria"],
-    ['views/admin/CouncilPage.vue', 'v-model="importRawJson"', "admin.council.importJsonAria"],
-    ['views/admin/EvolutionPage.vue', 'v-model="newMemoryText"', "admin.evolution.memoryInputAria"],
-    ['views/admin/EvolutionPage.vue', 'v-model="mod.content"', "admin.evolution.moduleContentAria"],
-    ['views/admin/PromptStudioPage.vue', 'v-model="selectedModule.title"', "admin.promptStudio.modules.titlePlaceholder"],
-    ['views/admin/PromptStudioPage.vue', 'v-model="selectedModule.content"', "admin.promptStudio.moduleEditor"],
-    ['views/admin/PromptStudioPage.vue', 'v-model="importNameOverride"', "admin.promptStudio.import.nameLabel"],
     ['views/admin/SecurityPage.vue', 'v-model="keys.live_key"', "admin.security.liveKeyAria"],
-    ['views/admin/SecurityPage.vue', 'v-model="newInstId"', "admin.security.instAria"],
+    ['views/admin/AgentConsolePage.vue', 'v-model="draft"', "admin.agent.inputLabel"],
+    ['views/admin/agent/AgentProposalCard.vue', 'v-model="phraseInputs[phrase]"', "admin.agent.proposalConfirmAria"],
   ];
 
   for (const [rel, vmodel, key] of anchors) {

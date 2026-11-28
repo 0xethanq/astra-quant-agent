@@ -35,13 +35,11 @@ import path from 'node:path';
 const SRC = path.resolve(import.meta.dirname, '..', 'src');
 const COMPONENTS_CSS = path.join(SRC, 'styles', 'components.css');
 
-/** 原件提供的 5 个类（模板只允许用这些）。 */
-const PRIMITIVE = ['fact', 'fact-label', 'fact-value', 'fact-foot', 'fact-sub'];
+/** 原件提供的 4 个类（模板只允许用这些；`.fact-sub` 随 2026-11-28 后台精简零引用移除）。 */
+const PRIMITIVE = ['fact', 'fact-label', 'fact-value', 'fact-foot'];
 
 /** 允许自带 fact 规则的页面（值=理由）。 */
-export const FACT_EXEMPT = {
-  'views/admin/RiskPage.vue': '.rk-fact / .rk-fact-v 是另一种组件（常驻左框 + 单行省略，无断点网格）',
-};
+export const FACT_EXEMPT = {};
 
 /** `.fact` 必须有的结构属性。 */
 const FACT_STRUCT = [
@@ -133,12 +131,13 @@ test('模板只允许使用原件提供的 5 个 fact 类名', () => {
     }
   }
   assert.deepEqual(bad, [], `模板用了原件没有的 fact 类（会静默无样式）：\n  ${bad.join('\n  ')}`);
-  // 现状基线：44 个单元 / 34 组 label+value+foot（防"改着改着少了一片"）。
-  // 2026-09-30 后台精简：内置插件清单页（PluginsPage）删除，其 5 个统计单元随之移除
-  //（49 → 44；label/value/foot 38 → 34）。
-  assert.equal(counts.get('fact'), 44, `统计单元实例应为 44 个，实测 ${counts.get('fact')}`);
+  // 现状基线：19 个单元 / 14 组 label+value+foot（防"改着改着少了一片"）。
+  // 2026-09-30 后台精简：PluginsPage 删除（49 → 44；38 → 34）。
+  // 2026-11-28 Agent-First 后台 12→6 精简：OverviewPage / GatewayPage / AgentsPage / CouncilPage /
+  // PromptStudioPage / EvolutionPage / RiskPage 退役，基线随之更新为 19 / 14。
+  assert.equal(counts.get('fact'), 19, `统计单元实例应为 19 个，实测 ${counts.get('fact')}`);
   for (const k of ['fact-label', 'fact-value', 'fact-foot']) {
-    assert.equal(counts.get(k), 34, `${k} 应为 34 个，实测 ${counts.get(k)}`);
+    assert.equal(counts.get(k), 14, `${k} 应为 14 个，实测 ${counts.get(k)}`);
   }
 });
 

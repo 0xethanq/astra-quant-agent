@@ -43,15 +43,14 @@ const read = (rel) => readFileSync(path.join(SRC, rel), 'utf8');
 
 /** 宿主页 → 期望的页签数（含宿主自身那一个）。 */
 const HOSTS = {
-  'views/admin/GatewayPage.vue': 2,
   'views/admin/DecisionsPage.vue': 4,
-  'views/admin/BackupPage.vue': 3,
+  'views/admin/BackupPage.vue': 4,
 };
 
 /** 被吸收页 → 它必须被哪个宿主页渲染。 */
 const ABSORBED = {
-  'views/admin/AgentsPage.vue': 'views/admin/GatewayPage.vue',
   'views/admin/AuditPage.vue': 'views/admin/DecisionsPage.vue',
+  'views/admin/AdminSysPage.vue': 'views/admin/BackupPage.vue',
   'views/admin/PolicySnapshotPage.vue': 'views/admin/BackupPage.vue',
   'views/admin/AboutPage.vue': 'views/admin/BackupPage.vue',
 };
@@ -118,7 +117,7 @@ test('nav.ts 的每个后台项都必须给出真实存在的 component', () => 
   const navText = read('config/nav.ts');
   const items = [...navText.matchAll(/key:\s*'(admin-[^']+)'[^}]*?component:\s*'([A-Za-z0-9_]+)'/gs)]
     .map((m) => ({ key: m[1], component: m[2] }));
-  assert.ok(items.length >= 11, `带 component 的后台导航项不足：${items.length}`);
+  assert.ok(items.length >= 6, `带 component 的后台导航项不足：${items.length}`);
   const bad = [];
   for (const it of items) {
     if (!existsSync(path.join(SRC, 'views/admin', `${it.component}.vue`))) {

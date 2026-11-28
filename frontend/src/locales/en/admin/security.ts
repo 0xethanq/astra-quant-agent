@@ -59,7 +59,7 @@ export const enAdminSecurity = {
   scaleOutSwitchLabel: 'Enable Scale-Out',
   scaleOutHint: 'When active, once floating profit reaches target × 1H ATR, the system automatically closes the specified ratio to lock profit and ratchets remaining stop to breakeven.',
   scaleOutCurrentPreset: 'Current Exit Parameters',
-  scaleOutCustomizeInRisk: 'Customize ratio & ATR threshold in Risk Parameters',
+  scaleOutCustomizeInRisk: 'Customize ratio & ATR threshold in AI Console',
   scaleOutOnToast: 'Scale-Out strategy enabled',
   scaleOutOffToast: 'Scale-Out strategy disabled',
   optDemo: 'Demo',
@@ -258,4 +258,6 @@ export const enAdminSecurity = {
   plazaRiskConfig: 'Risk Setup',
   plazaRiskSummary: '{min}x~{max}x Leverage · {pct}% Margin',
   plazaTestCopy: 'Test Clone Parameters',
+  poolReadonlyHint: 'Symbol pool additions and removals are managed safely through the AI Console with risk verification; this view displays the active pool and protection status.',
+  goToAgent: 'Configure in AI Console',
 };

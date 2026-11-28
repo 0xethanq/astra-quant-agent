@@ -50,7 +50,7 @@ test('所有后台子路由在 nav.ts 中均有唯一的导航元数据匹配', 
   // ⚠️ 这个下限不是产品承诺，而是"防止空转通过"的下限：它曾钉在 17 是为了
   //    匹配旧的 18 项侧栏；现在钉在 11 匹配新的信息架构。判据本身仍是**双向相等** ——
   //    下面既查"每条命名路由都有 nav 元数据"，也查"每个 nav 项都有对应命名路由"。
-  assert.ok(adminChildMatches.length >= 11, `后台子路由数量不足：${adminChildMatches.length}`);
+  assert.ok(adminChildMatches.length >= 6, `后台子路由数量不足：${adminChildMatches.length}`);
 
   for (const m of adminChildMatches) {
     const subPath = m[1];
@@ -70,20 +70,25 @@ test('所有后台子路由在 nav.ts 中均有唯一的导航元数据匹配', 
   }
 });
 
-test('被吸收页面的旧路径必须保留重定向（书签不 404）', () => {
+test('被吸收页面及已退场页面的旧路径必须保留重定向（书签不 404）', () => {
   const routerText = readFileSync(path.join(SRC, 'router/index.ts'), 'utf8');
-  // 2026-09-30 后台精简与 2026-10 插件裁撤：这些历史别名必须仍然可用。
-  // 决策插件工位已整页删除 ⇒ 三条旧路径改指向风控页（不是 404）。
   const redirects = {
-    agents: '/admin/gateway',
-    interceptors: '/admin/risk',
+    overview: '/admin/agent',
+    risk: '/admin/agent',
+    promptlib: '/admin/agent',
+    council: '/admin/agent',
+    evolution: '/admin/agent',
+    gateway: '/admin/agent',
+    agents: '/admin/agent',
+    interceptors: '/admin/agent',
+    plugins: '/admin/agent',
+    'decision-plugins': '/admin/agent',
     audit: '/admin/decisions',
+    logs: '/admin/decisions',
+    adminsys: '/admin/backup',
+    accounts: '/admin/backup',
     policy: '/admin/backup',
     about: '/admin/backup',
-    plugins: '/admin/risk',
-    'decision-plugins': '/admin/risk',
-    logs: '/admin/decisions',
-    accounts: '/admin/adminsys',
   };
   // 逐行判定：同一行内必须同时出现 `path: '<旧路径>'`、`redirect:` 与目标路径。
   // （用行内查找而不是长正则：路由写法有字符串式与对象式两种，长正则容易漏。）
@@ -101,7 +106,7 @@ test('后台各页面标题在 locales/zh/nav.ts 与 locales/en/nav.ts 中均已
   const navText = readFileSync(path.join(SRC, 'config/nav.ts'), 'utf8');
 
   const labelKeys = [...navText.matchAll(/labelKey:\s*'nav\.admin\.([^']+)'/g)].map((m) => m[1]);
-  assert.ok(labelKeys.length >= 11, `labelKey 数量不足：${labelKeys.length}`);
+  assert.ok(labelKeys.length >= 6, `labelKey 数量不足：${labelKeys.length}`);
 
   for (const k of labelKeys) {
     assert.match(zhNavText, new RegExp(`\\b${k}:`), `zh/nav.ts 缺少 admin 标题键：${k}`);

@@ -93,12 +93,6 @@ test('不得硬编码与 --up / --down / --warn 同色的 rgba（会绕过 CVD �
 test('语义前景色必须与同名令牌的底/边配对使用', () => {
   // 回归锚点：批 74 修好的规则必须继续用令牌，而不是退回硬编码
   const cases = [
-    ['views/admin/OverviewPage.vue', /\.ov-live-pill\s*\{[^}]*background:\s*var\(--up-bg\)/, '.ov-live-pill 底'],
-    ['views/admin/OverviewPage.vue', /\.ov-live-pill\s*\{[^}]*border:\s*1px solid var\(--up-line\)/, '.ov-live-pill 边'],
-    ['views/admin/OverviewPage.vue', /\.ov-error-banner\s*\{[^}]*background:\s*var\(--down-bg\)/, '.ov-error-banner 底'],
-    ['views/admin/OverviewPage.vue', /\.ov-act-tag\.is-long\s*\{[^}]*background:\s*var\(--up-bg\)/, '.ov-act-tag.is-long 底'],
-    ['views/admin/OverviewPage.vue', /\.ov-act-tag\.is-short\s*\{[^}]*background:\s*var\(--down-bg\)/, '.ov-act-tag.is-short 底'],
-    ['views/admin/OverviewPage.vue', /\.ov-chip-status\.is-warn\s*\{[^}]*border:\s*1px solid var\(--warn-line\)/, '.ov-chip-status.is-warn 边'],
     ['views/admin/LoginPage.vue', /\.auth-alert\s*\{[^}]*background:\s*var\(--down-bg\)/, '.auth-alert 底'],
   ];
 

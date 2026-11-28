@@ -473,3 +473,34 @@ class SystemSetupRequest(BaseModel):
     # 它只影响累计盈亏/ROI 口径，不会改动已有交易台账的起算时间。
     initial_capital: float | None = Field(default=None, gt=0, le=1_000_000_000)
     admin_password: str = Field(default="")
+
+
+class AgentConfigUpdateRequest(BaseModel):
+    model_id: str | None = Field(default=None, max_length=120)
+    reasoning_effort: str | None = Field(default=None, pattern=r"^(none|minimal|low|medium|high)$")
+    max_tool_rounds: int | None = Field(default=None, ge=1, le=15)
+
+
+class AgentSessionCreateRequest(BaseModel):
+    title: str = Field(default="新会话", max_length=80)
+    model_id: str = Field(default="auto", max_length=120)
+
+
+class AgentSessionUpdateRequest(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=80)
+    model_id: str | None = Field(default=None, max_length=120)
+
+
+class AgentChatRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=8000)
+    model_id: str | None = Field(default=None, max_length=120)
+
+
+class AgentProposalApplyRequest(BaseModel):
+    selected_item_ids: list[str] | None = None
+    confirmations: dict[str, str] = Field(default_factory=dict)
+
+
+class AgentProposalRejectRequest(BaseModel):
+    reason: str = Field(default="", max_length=200)
+

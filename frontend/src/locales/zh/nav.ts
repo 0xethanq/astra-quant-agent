@@ -1,4 +1,4 @@
-/** 导航与页面标题文案（中文）—— 前台 5 tab + 后台 5 组 18 页，与路由一一对应 */
+/** 导航与页面标题文案（中文）—— 前台 5 tab + 后台 AI-First 2 组 6 项，与路由一一对应 */
 export const zhNav = {
   tabs: {
     matrix: '实盘矩阵',
@@ -19,25 +19,17 @@ export const zhNav = {
     promptPeek: '决策透视',
   },
   groups: {
-    observe: '观测与审计',
-    strategy: '策略与进化',
-    riskExec: '风控与执行',
-    platform: '平台接入',
-    system: '系统',
+    command: '智能指挥与审计',
+    platform: '平台与系统管理',
   },
   admin: {
-    overview: '运行总览',
-    gateway: '网关与调度',
+    agent: 'AI 指挥台',
     decisions: '系统日志',
-    council: '模型委员会',
-    prompts: '提示词工坊',
-    evolution: '自进化配置',
-    risk: '风险管理',
-    security: '账户与标的',
+    security: '账户与应急',
     llm: '模型连接',
     notify: '通知渠道',
     adminsys: '系统账号',
     audit: '操作审计',
-    backup: '系统与灾备',
+    backup: '系统管理',
   },
 };

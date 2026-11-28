@@ -30,17 +30,16 @@ const SRC = path.resolve(import.meta.dirname, '..', 'src');
 test('所有二次危险操作确认短语输入框必须禁用 autocomplete 与 spellcheck', () => {
   const targets = [
     { file: 'components/base/ConfirmHost.vue', vmodel: 'phraseInput' },
-    { file: 'components/admin/page-parts/DangerZone.vue', vmodel: 'typed' },
+    { file: 'views/admin/agent/AgentProposalCard.vue', vmodel: 'phraseInputs[phrase]' },
     { file: 'views/admin/AboutPage.vue', vmodel: 'confirmPhrase' },
     { file: 'views/admin/SecurityPage.vue', vmodel: 'capitalConfirm' },
     { file: 'views/admin/SecurityPage.vue', vmodel: 'closePhraseInput' },
-    { file: 'views/admin/EvolutionPage.vue', vmodel: 'runDialog.phrase' },
-    { file: 'views/admin/GatewayPage.vue', vmodel: 'replayPhrase' },
   ];
 
   for (const { file, vmodel } of targets) {
     const text = readFileSync(path.join(SRC, file), 'utf8');
-    const re = new RegExp(`<input[^>]*v-model="?${vmodel.replace('.', '\\.')}"?[^>]*>`);
+    const escaped = vmodel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(`<input[^>]*v-model="?${escaped}"?[^>]*>`);
     const match = text.match(re);
     assert.ok(match, `${file} 未找到 v-model="${vmodel}" 输入框`);
 

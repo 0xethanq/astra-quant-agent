@@ -117,13 +117,14 @@ class ReadmeClaimTest(unittest.TestCase):
         return int(m.group(1))
 
     def test_top_level_table_counts_match_reality(self):
-        """顶层表（`DataTable` / `PageHeader`）的引用者数必须与实测一致。"""
-        for label in ("DataTable.vue", "PageHeader.vue"):
+        """顶层表（`PageHeader`）的引用者数必须与实测一致；已退役 `DataTable` 不得有残留消费者。"""
+        for label in ("PageHeader.vue",):
             name = label[:-len(".vue")]
             with self.subTest(component=name):
                 got = len(consumers_of(name))
                 self.assertEqual(got, self._table_count(label),
                                  f"{name} 实测 {got} 个消费者，README 表格写的不是这个数")
+        self.assertEqual(consumers_of("DataTable"), [], "DataTable 已随 GatewayPage 退役，不应有残留消费者")
 
     def test_correction_table_counts_match_reality(self):
         """README 更正表里写的消费者数必须与实测一致（**从文档解析**）。"""

@@ -46,7 +46,6 @@ export const BOUNDARIES = {
   'views/docs/DocsView.vue': '整页中文长文文档，正文中文化是独立产品决策',
   'config/version.ts': '品牌名与官方仓库公告',
   'router/index.ts': 'SEO 文档标题，注释明写中文为主（后端钉扎 + CF 缓存语义）',
-  'views/admin/council/councilLogic.ts': 'CONSENSUS_MODES 是回落值，CouncilPage 有 MODE_TEXT_KEY 覆盖层；且内置席位 prompt 为中文',
 };
 
 export function codeOnly(src) {
@@ -125,30 +124,6 @@ test('豁免名单必须都是有理由的、且文件真实存在（防止静�
     assert.ok(why && why.length > 6, `豁免 ${rel} 缺少理由`);
   }
   assert.ok(Object.keys(BOUNDARIES).length <= 6, '豁免名单过长，应优先修代码而不是加豁免');
-});
-
-test('回落文案不得硬编码为某一种语言（中英都会翻车）', () => {
-  // 批 77：席位号位回落值写死英文 'Senior Trader' —— 中文界面下显示英文。
-  // 这是"硬编码中文"的镜像缺陷，同样属于 i18n 漏洞。
-  for (const rel of ['views/admin/CouncilPage.vue']) {
-    const text = readFileSync(path.join(SRC, rel), 'utf8');
-    for (const word of ['Senior Trader', 'Custom Trader']) {
-      assert.ok(
-        !new RegExp(`[:?]\\s*'${word}'`).test(text),
-        `${rel} 仍在把 '${word}' 硬编码为回落值（应为 t() 取值）`,
-      );
-    }
-  }
-  // 反向锚点：这三处必须走 t()
-  const cp = readFileSync(path.join(SRC, 'views/admin/CouncilPage.vue'), 'utf8');
-  assert.equal(
-    (cp.match(/t\('admin\.council\.seniorTrader'\)/g) || []).length,
-    3,
-    'CouncilPage 的 3 处席位号位回落必须都走 t(admin.council.seniorTrader)',
-  );
-  for (const key of ['customTraderName', 'customTraderRoleTitle', 'customTraderDesc']) {
-    assert.ok(cp.includes(`t('admin.council.${key}')`), `新席位缺少 ${key}`);
-  }
 });
 
 test('剪贴板文案必须整体走一个带参数的词条', () => {

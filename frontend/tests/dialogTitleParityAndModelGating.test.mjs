@@ -55,7 +55,7 @@ test('全仓全部 BaseDialog 必须 100% 具备显式 title 或 :title 属性',
 
   // 下限是"防止扫描路径写错导致什么都扫不到"的防空转护栏，不是产品承诺。
   // 2026-10：InterceptorsPage 随策略插件系统删除 ⇒ 全仓 BaseDialog 由 20 降为 19。
-  assert.ok(totalDialogs >= 19, `检索到的 BaseDialog 总数过少: ${totalDialogs}`);
+  assert.ok(totalDialogs >= 12, `检索到的 BaseDialog 总数过少: ${totalDialogs}`);
   assert.deepEqual(
     badDialogs,
     [],

@@ -75,7 +75,7 @@ test('全仓全部 53 个 Vue 文件内所有按钮必须显式声明 type 属�
     }
   }
 
-  assert.ok(totalButtonsChecked >= 250, `全仓检查的按钮总数过少: ${totalButtonsChecked}`);
+  assert.ok(totalButtonsChecked >= 200, `全仓检查的按钮总数过少: ${totalButtonsChecked}`);
   assert.deepEqual(
     violations,
     [],

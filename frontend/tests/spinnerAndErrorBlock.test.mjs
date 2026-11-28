@@ -151,7 +151,7 @@ test('模板里的错误状态块只允许挂"本页真有规则"的 delta 类',
       }
     }
   }
-  assert.ok(n >= 14, `识别到的错误状态块过少（${n}）`);
+  assert.ok(n >= 10, `识别到的错误状态块过少（${n}）`);
   assert.deepEqual(
     bad,
     [],

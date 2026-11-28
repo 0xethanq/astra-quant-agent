@@ -27,46 +27,6 @@ import path from 'node:path';
 
 const SRC = path.resolve(import.meta.dirname, '..', 'src');
 
-test('GatewayPage 重放确认对话框按钮必须受 replayMatched 门禁控制且输入框具备校验反馈', () => {
-  const vue = readFileSync(path.join(SRC, 'views/admin/GatewayPage.vue'), 'utf8');
-
-  assert.match(
-    vue,
-    /:disabled="!replayMatched\s*\|\|\s*replaying"/,
-    'GatewayPage 重放按钮未对 replayMatched 设置前置门禁',
-  );
-  assert.match(
-    vue,
-    /:class="\{\s*'is-bad':\s*!!replayPhrase\s*&&\s*!replayMatched\s*\}"/,
-    'GatewayPage replayPhrase 输入框缺少 is-bad 动态类',
-  );
-  assert.match(
-    vue,
-    /:aria-invalid="!!replayPhrase\s*&&\s*!replayMatched\s*\?\s*'true'\s*:\s*undefined"/,
-    'GatewayPage replayPhrase 输入框缺少 aria-invalid 动态无障碍状态',
-  );
-});
-
-test('EvolutionPage 复盘确认对话框按钮必须受 runPhraseOk 门禁控制且输入框具备校验反馈', () => {
-  const vue = readFileSync(path.join(SRC, 'views/admin/EvolutionPage.vue'), 'utf8');
-
-  assert.match(
-    vue,
-    /:disabled="!runPhraseOk\s*\|\|\s*busy\s*===\s*'run'"/,
-    'EvolutionPage 复盘按钮未对 runPhraseOk 设置前置门禁',
-  );
-  assert.match(
-    vue,
-    /:class="\{\s*'is-bad':\s*!!runDialog\.phrase\s*&&\s*!runPhraseOk\s*\}"/,
-    'EvolutionPage runDialog.phrase 输入框缺少 is-bad 动态类',
-  );
-  assert.match(
-    vue,
-    /:aria-invalid="!!runDialog\.phrase\s*&&\s*!runPhraseOk\s*\?\s*'true'\s*:\s*undefined"/,
-    'EvolutionPage runDialog.phrase 输入框缺少 aria-invalid 动态无障碍状态',
-  );
-});
-
 test('AboutPage 更新确认对话框输入框必须具备 is-bad 与 aria-invalid 校验反馈', () => {
   const vue = readFileSync(path.join(SRC, 'views/admin/AboutPage.vue'), 'utf8');
 

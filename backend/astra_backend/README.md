@@ -55,7 +55,7 @@
 ### L2 HTTP 边界 — `routers/`
 
 `auth` / `system` / `exchanges` / `risk` / `strategy` / `llm` / `gateway` /
-`dashboard`（含 `plaza` 实盘共享子路由）。**路由层只做参数校验与调用编排，不放业务逻辑。**
+`agent` / `dashboard`（含 `plaza` 实盘共享子路由）。**路由层只做参数校验与调用编排，不放业务逻辑。**
 路由瘦身的正确做法是把业务下沉到 `exchanges/`、`execution/`、
 `dashboard_payload/`，路由保留薄壳（与 `astra_backend/dashboard_cache.py` 降为纯库同一手法）。
 
@@ -91,7 +91,7 @@ council → policy → prompts；路由表对拍门 `tests/trading/test_strategy
 
 ### L4 纯计算/载荷子包（新代码的默认去处）
 
-`llm/`、`council/`、`policy/`、`dashboard_payload/`、`execution/`、`exchanges/`、
+`agent/`、`llm/`、`council/`、`policy/`、`dashboard_payload/`、`execution/`、`exchanges/`、
 `routers/`、`sandbox/`。
 
 #### `dashboard_payload/` 模块清单

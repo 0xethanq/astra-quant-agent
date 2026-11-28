@@ -361,9 +361,6 @@ textarea.input {
 .dsh-status-dot.brand {
   background-color: var(--brand);
 }
-.dsh-status-dot.idle {
-  background-color: var(--ds-color-text-placeholder);
-}
 
 /* =========================================================================
    5 · 分段控件与标签页
@@ -515,15 +512,6 @@ textarea.input {
    与已删的 `.page-head .page-desc` 是同角色同字号（`--text-xs` + `text-description`
    + `max-width: 80ch`），仅 margin-top 6px vs 4px —— 死掉的那份是旧设计的遗留。
    ========================================================================= */
-
-/* 工具栏：筛选 / 搜索 / 视图切换 */
-.toolbar {
-  display: flex;
-  align-items: center;
-  gap: var(--ds-space-2);
-  flex-wrap: wrap;
-  padding: var(--ds-space-2) 0;
-}
 
 /* =========================================================================
    8 · 数据展示
@@ -717,10 +705,6 @@ textarea.input {
 .fact-value.is-accent {
   color: var(--ds-color-brand);
 }
-.fact-sub {
-  font-size: var(--text-xs);
-  color: var(--ds-color-text-placeholder);
-}
 .fact-foot {
   font-size: var(--text-4xs);
   color: var(--ds-color-text-placeholder);
@@ -877,16 +861,6 @@ textarea.input {
    各页仍按需内联 `width: N%`（那是**有意的随机宽度**，不是 token）。 */
 .skeleton-value {
   height: var(--ds-space-4);
-}
-.skeleton-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: var(--r-pill);
-}
-.skeleton-avatar {
-  width: 24px;
-  height: 24px;
-  border-radius: var(--r-xs);
 }
 
 /* =========================================================================

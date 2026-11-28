@@ -53,6 +53,7 @@ MANAGED = {
     "scripts/factors": {"allowed_extra": {"factor_library.py"}},
     "scripts/ledger": {"allowed_extra": {"sync_full_ledger.py"}},
     "astra_backend/council": {"allowed_extra": {"council_manager.py"}},
+    "astra_backend/agent": {"allowed_extra": set()},
     # 第五十九刀补登记：本子包此前**不在受管名单**里（.py 文件靠 __init__ 的
     # 项目符号清单导航）。既然已有该约定，顺手纳入监管，防止新模块漏登记。
     "astra_backend/exchanges": {"allowed_extra": set()},
@@ -241,7 +242,7 @@ class RootLevelModulesRegisteredTest(unittest.TestCase):
             n for n in referenced
             if n not in on_disk and n not in self.ALLOWED_EXTRA
             and not any((ROOT / "astra_backend" / sub / n).exists()
-                        for sub in ("dashboard_payload", "council", "execution",
+                        for sub in ("agent", "dashboard_payload", "council", "execution",
                                     "exchanges", "routers", "llm", "policy",
                                     "sandbox")))
         self.assertEqual(

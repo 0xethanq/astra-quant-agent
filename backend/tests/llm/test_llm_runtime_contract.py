@@ -11,7 +11,7 @@ import unittest
 
 from astra_backend.llm_manager import get_active_llm_runtime
 
-# 前端 OverviewPage.vue / SelfEvolutionLab.vue / stores/dashboard.ts 实际读取的键
+# 前端 AgentConsolePage.vue / stores/dashboard.ts 实际读取的键
 FRONTEND_CONSUMED_KEYS = ("model", "provider_name", "reasoning_effort", "api_format")
 
 

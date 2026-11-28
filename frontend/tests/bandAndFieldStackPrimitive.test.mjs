@@ -47,13 +47,10 @@ const SRC = path.resolve(import.meta.dirname, '..', 'src');
 const COMPONENTS_CSS = path.join(SRC, 'styles', 'components.css');
 
 /** 允许自带 band 规则的页面（另一种刻度或另一种组件）。 */
-export const BAND_EXEMPT = {
-  'views/admin/RiskPage.vue': '.rk-band 是 1→2→3→6 列（6 个统计格），与默认 1→2→4 不同刻度',
-};
+export const BAND_EXEMPT = {};
 
 /** 允许保留的 field 规则（页面 delta / 复合选择器），值=理由。 */
 export const FIELD_ALLOWED = {
-  '.dz-field': 'danger 区字段需要 flex: 1（原件不含 flex）',
   '.nf-field.is-span': '跨列变体',
   '.me-field .field.is-readonly': '只读态微调',
   '.pd-field-hint': '另一个类（提示文字）',
@@ -96,7 +93,7 @@ test('页面不得再自带 band 规则（原件已覆盖；例外须登记）',
   assert.deepEqual(bad, [], `以下页面仍自带 band 规则：\n  ${bad.join('\n  ')}`);
 });
 
-test('统计带模板必须用 `card band`（14 处基线）', () => {
+test('统计带模板必须用 `card band`（9 处基线）', () => {
   const bad = [];
   let n = 0;
   for (const { rel, text } of FILES) {
@@ -110,8 +107,7 @@ test('统计带模板必须用 `card band`（14 处基线）', () => {
     n += (tpl.match(/class="card band"/g) || []).length;
   }
   assert.deepEqual(bad, [], `统计带仍用页面前缀类：\n  ${bad.join('\n  ')}`);
-  // 2026-09-30 后台精简：内置插件清单页（PluginsPage）删除，其 1 处统计带随之移除（15 → 14）。
-  assert.equal(n, 14, `\`card band\` 应为 14 处，实测 ${n}`);
+  assert.equal(n, 9, `\`card band\` 应为 9 处，实测 ${n}`);
 });
 
 test('.field-stack 原件：竖排 + gap 6px + min-width: 0', () => {
@@ -158,14 +154,10 @@ test('字段栈模板用法必须在白名单内（防漂移出新写法）', ()
     'field-stack me-field',
     'field-stack nf-field',
     'field-stack nf-field is-span',
-    'field-stack dz-field',
   ]);
   const bad = [...counts.keys()].filter((k) => !allowed.has(k));
   assert.deepEqual(bad, [], `出现未登记的字段栈写法：\n  ${bad.join('\n  ')}`);
-  // 2026-10：SecurityPage 凭证区随「全站收口 OKX」精简（44 → 42）；
-  // 随后 InterceptorsPage 随策略插件系统整套裁撤（其 `field-stack ip-field`
-  // 实例一并消失），再由 42 降为 40。
-  assert.equal(total, 40, `field-stack 实例应为 40 个，实测 ${total}`);
+  assert.equal(total, 34, `field-stack 实例应为 34 个，实测 ${total}`);
 });
 
 test('豁免/白名单必须都有理由，且文件真实存在', () => {

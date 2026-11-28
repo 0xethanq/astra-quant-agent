@@ -60,11 +60,11 @@ export const MICRO_TOKENS = {
   '--sp-10': '32px',
 };
 
-/** 4 处「推导几何」白名单：key = `文件 basename|选择器|声明`。 */
+/** 「推导几何」白名单：key = `文件 basename|选择器|声明`。
+ * 2026-11-28 后台精简：DangerZone.vue 与 RiskPage.vue 退役，移除对应历史豁免。
+ */
 export const DERIVED = new Set([
-  'DangerZone.vue|.dz-input|padding-left: 27px',
   'LoginPage.vue|.auth-input-pwd-wrap .auth-input|padding-right: 36px',
-  'RiskPage.vue|.rk|padding-bottom: 72px',
   'ProviderDetailView.vue|.pd-key .field|padding-right: 38px',
 ]);
 

@@ -62,20 +62,6 @@ test('所有状态点与脉冲标识必须具备 aria-hidden 或 aria-label/titl
   assert.deepEqual(badDots, [], `发现未配置无障碍语义的状态指示点：\n  ${badDots.join('\n  ')}`);
 });
 
-test('PromptStudio 激活方案指示点具备明确的无障碍名称与悬浮提示', () => {
-  const text = readFileSync(path.join(SRC, 'views/admin/PromptStudioPage.vue'), 'utf8');
-  assert.match(
-    text,
-    /<span[^>]*v-if="p\.id === lib\.active_profile_id"[^>]*:aria-label="t\('admin\.promptStudio\.profiles\.active'\)"/,
-    'PromptStudio 激活状态点缺失 :aria-label'
-  );
-  assert.match(
-    text,
-    /<span[^>]*v-if="p\.id === lib\.active_profile_id"[^>]*:title="t\('admin\.promptStudio\.profiles\.active'\)"/,
-    'PromptStudio 激活状态点缺失 :title'
-  );
-});
-
 test('闸自检：能准确拦截无语义状态点并放行合规状态点', () => {
   const badDot = '<span class="dsh-status-dot active" />';
   const goodDot1 = '<span class="dsh-status-dot active" aria-hidden="true" />';

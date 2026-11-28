@@ -225,7 +225,7 @@ test('目标落在 v-if 子树里的 aria-controls，必须做成条件输出', 
 
 test('全站 aria-controls 不得存在「目标在 v-if 子树里却无条件输出」', () => {
   const sites = allSites();
-  assert.ok(sites.length >= 15, `识别到的 aria-controls 站点过少（${sites.length}），判据可能失效`);
+  assert.ok(sites.length >= 10, `识别到的 aria-controls 站点过少（${sites.length}），判据可能失效`);
   const bad = sites.filter((s) => s.targetFound && s.vIfConds.length > 0 && !s.guarded);
   assert.deepEqual(bad.map((s) => `${s.rel} :: ${s.expr}`), []);
 });

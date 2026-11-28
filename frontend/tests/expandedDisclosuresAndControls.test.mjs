@@ -18,20 +18,17 @@ import path from 'node:path';
 
 const SRC = path.resolve(import.meta.dirname, '..', 'src');
 
-test('CouncilPage、PromptStudio、VenueAccounts 等局部展开触发器与受控目标 ID 严格对齐', () => {
+test('AgentConsole、AdminLayout、DashboardLayout 局部展开触发器与受控目标 ID 严格对齐', () => {
   const cases = [
-    // 批 85：这两个受控目标都是 v-if 渲染的（收起时不在 DOM），故 trigger 必须
-    // **条件输出**。此处断言「在 aria-controls 里引用了目标 id」，允许外层包条件式；
-    // 「必须是条件式且守卫同一状态」由 tests/ariaControlsTarget.test.mjs 结构性地强制。
     {
-      file: 'views/admin/CouncilPage.vue',
-      trigger: /:aria-controls="[^"]*cn-reasoning-[^"]*"/,
-      target: /:id="`cn-reasoning-\$\{key\}`"/,
+      file: 'views/admin/AgentConsolePage.vue',
+      trigger: /:aria-controls="showSessionsPanel \? 'ag-sessions-panel' : undefined"/,
+      target: /id="ag-sessions-panel"/,
     },
     {
-      file: 'views/admin/PromptStudioPage.vue',
-      trigger: /:aria-controls="[^"]*'ps-var-ribbon'[^"]*"/,
-      target: /id="ps-var-ribbon"/,
+      file: 'views/admin/AgentConsolePage.vue',
+      trigger: /:aria-controls="showSummaryPanel \? 'ag-summary-panel' : undefined"/,
+      target: /id="ag-summary-panel"/,
     },
     {
       file: 'layouts/AdminLayout.vue',

@@ -9,16 +9,11 @@ import {
   Newspaper,
   Dna,
   ReceiptText,
-  Gauge,
-  Workflow,
+  Bot,
   Terminal,
-  Landmark,
-  Braces,
-  ShieldCheck,
   KeyRound,
   Cpu,
   BellRing,
-  UserCog,
   DatabaseBackup,
 } from 'lucide-vue-next';
 
@@ -51,79 +46,72 @@ export const publicTabs: NavItem[] = [
 ];
 
 /**
- * 后台侧栏：**12 项 / 5 组**（2026-09-30 由 18 项精简；2026-10 裁撤策略插件工位再减 1）。
+ * 后台侧栏：**6 项 / 2 组**（Agent-First 精简架构）。
  *
  * ⚠️ 项数必须与命名路由数**双向相等** —— `frontend/tests/routeDocumentTitles.test.mjs`
  * 两个方向都断言（防"导航项指向空气"与"命名路由没有入口"）。
  *
- * 精简原则（证据见各 `alias` 与提交说明）：
- *   - 只做**页面级**重组：被吸收的页面保留为组件，作为宿主页的页签渲染，
- *     路径保留重定向 ⇒ 功能零删除、书签不 404；
- *   - 宿主页沿用原有 key 与 path（`admin-gateway` / `admin-risk` / `admin-audit`
- *     / `admin-backup`），只改显示名，避免无意义的迁移成本；
- *   - 被吸收能力的搜索词并入宿主页 `alias`，命令面板"日志/账号/版本"仍搜得到。
- *   - 2026-10：策略插件工位（`/admin/decision-plugins`）随决策插件系统整套裁撤而删除，
- *     导航项与命名路由一并移除；旧路径改为重定向到风控页（书签不 404）。
+ * 精简原则：
+ *   - 高频运维页保留为独立路由，策略/提示词/风控/投委会/自进化统一收口至「AI 指挥台」；
+ *   - `AdminSysPage` 并入 `BackupPage` 第四个页签（`?tab=adminsys`），所有历史路由平滑重定向不 404。
  */
 export const adminGroups: { key: string; labelKey: string; items: NavItem[] }[] = [
   {
-    key: 'observe',
-    labelKey: 'nav.groups.observe',
+    key: 'command',
+    labelKey: 'nav.groups.command',
     items: [
-      { key: 'admin-overview', labelKey: 'nav.admin.overview', path: '/admin/overview', icon: Gauge, alias: 'overview 总览', component: 'OverviewPage' },
       {
-        key: 'admin-gateway', labelKey: 'nav.admin.gateway', path: '/admin/gateway', icon: Workflow,
-        alias: 'gateway scheduler 调度 runtime units worker agents 运行单元 名册 遥测',
-        component: 'GatewayPage',
+        key: 'admin-agent',
+        labelKey: 'nav.admin.agent',
+        path: '/admin/agent',
+        icon: Bot,
+        alias: 'agent copilot overview risk prompt council evolution gateway 指挥台 总览 风控 提示词 委员会 自进化 网关',
+        component: 'AgentConsolePage',
       },
       {
-        key: 'admin-decisions', labelKey: 'nav.admin.decisions', path: '/admin/decisions', icon: Terminal,
+        key: 'admin-decisions',
+        labelKey: 'nav.admin.decisions',
+        path: '/admin/decisions',
+        icon: Terminal,
         alias: 'decisions logs errors audit 系统日志 运行日志 报错 异常 决策 审计 流水',
         component: 'DecisionsPage',
       },
     ],
   },
   {
-    key: 'strategy',
-    labelKey: 'nav.groups.strategy',
-    items: [
-      { key: 'admin-council', labelKey: 'nav.admin.council', path: '/admin/council', icon: Landmark, alias: 'council 委员会 投委会', component: 'CouncilPage' },
-      { key: 'admin-promptlib', labelKey: 'nav.admin.prompts', path: '/admin/promptlib', icon: Braces, alias: 'prompt studio 提示词', component: 'PromptStudioPage' },
-      { key: 'admin-evolution', labelKey: 'nav.admin.evolution', path: '/admin/evolution', icon: Dna, alias: 'evolution memory 心法', component: 'EvolutionPage' },
-    ],
-  },
-  {
-    key: 'riskExec',
-    labelKey: 'nav.groups.riskExec',
-    items: [
-      {
-        key: 'admin-risk', labelKey: 'nav.admin.risk', path: '/admin/risk', icon: ShieldCheck,
-        alias: 'risk 风控 fail-closed 门禁 预算 风险管理',
-        component: 'RiskPage',
-      },
-      { key: 'admin-security', labelKey: 'nav.admin.security', path: '/admin/security', icon: KeyRound, alias: 'account symbols 标的池 账户 接入', component: 'SecurityPage' },
-    ],
-  },
-  {
     key: 'platform',
     labelKey: 'nav.groups.platform',
     items: [
-      { key: 'admin-llm', labelKey: 'nav.admin.llm', path: '/admin/llm', icon: Cpu, alias: 'llm provider model 模型 供应商', component: 'LlmPage' },
-      { key: 'admin-notify', labelKey: 'nav.admin.notify', path: '/admin/notify', icon: BellRing, alias: 'notify qq telegram 通知 channel plugin 渠道', component: 'NotifyPage' },
-    ],
-  },
-  {
-    key: 'system',
-    labelKey: 'nav.groups.system',
-    items: [
       {
-        key: 'admin-adminsys', labelKey: 'nav.admin.adminsys', path: '/admin/adminsys', icon: UserCog,
-        alias: 'adminsys users password 账号 管理员 改密 建号 权限 会话',
-        component: 'AdminSysPage',
+        key: 'admin-security',
+        labelKey: 'nav.admin.security',
+        path: '/admin/security',
+        icon: KeyRound,
+        alias: 'account okx symbols capital emergency 账户 应急 平仓 标的池 接入 本金',
+        component: 'SecurityPage',
       },
       {
-        key: 'admin-backup', labelKey: 'nav.admin.backup', path: '/admin/backup', icon: DatabaseBackup,
-        alias: 'backup restore 备份 policy snapshot hash rollback 策略快照 指纹 回滚 version update 版本 更新 关于',
+        key: 'admin-llm',
+        labelKey: 'nav.admin.llm',
+        path: '/admin/llm',
+        icon: Cpu,
+        alias: 'llm provider model 模型 供应商',
+        component: 'LlmPage',
+      },
+      {
+        key: 'admin-notify',
+        labelKey: 'nav.admin.notify',
+        path: '/admin/notify',
+        icon: BellRing,
+        alias: 'notify qq telegram 通知 channel plugin 渠道',
+        component: 'NotifyPage',
+      },
+      {
+        key: 'admin-backup',
+        labelKey: 'nav.admin.backup',
+        path: '/admin/backup',
+        icon: DatabaseBackup,
+        alias: 'backup restore 备份 adminsys accounts 账号 改密 policy snapshot 回滚 version update 版本 更新 关于',
         component: 'BackupPage',
       },
     ],

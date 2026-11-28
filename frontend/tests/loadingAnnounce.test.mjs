@@ -94,7 +94,7 @@ test('播报点必须落在 v-if 分支里（绝不能是 v-else —— 那样�
       if (!a.opener.includes('v-if') || /v-else/.test(a.opener)) bad.push(rel(p) + ':' + a.line + '  ' + a.opener);
     }
   }
-  assert.ok(total >= 20, '播报点只有 ' + total + ' 处，像是被删掉了');
+  assert.ok(total >= 10, '播报点只有 ' + total + ' 处，像是被删掉了');
   assert.deepEqual(bad, [], '播报点不在 v-if 加载分支里：\n  ' + bad.join('\n  '));
 });
 

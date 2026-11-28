@@ -16,7 +16,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 const SRC = path.resolve(import.meta.dirname, '..', 'src');
@@ -40,19 +40,16 @@ test('FactorDrawer 选所决策与跨所区块已移除，且不得回潮', () =
   }
 });
 
-test('CouncilPage 六标的点位矩阵表格必须绑定 matrixTitle（严禁复制 seatsTitle）', () => {
-  const vue = readFileSync(path.join(SRC, 'views/admin/CouncilPage.vue'), 'utf8');
-  const matrixBlockMatch = vue.match(/<!-- 六标的点位矩阵 -->[\s\S]*?<table\b([^>]*)>/);
-  assert.ok(matrixBlockMatch, '找不到六标的点位矩阵表格');
-  const tableAttrs = matrixBlockMatch[1];
-  assert.doesNotMatch(
-    tableAttrs,
-    /:aria-label="t\('admin\.council\.seatsTitle'\)"/,
-    '六标的点位矩阵表格错误复制了席位表 seatsTitle 的 aria-label',
+test('CouncilPage 已随后台 12→6 精简退役，Agent 指挥台与提案卡各区域均绑定准确 aria-label', () => {
+  assert.equal(
+    existsSync(path.join(SRC, 'views/admin/CouncilPage.vue')),
+    false,
+    'CouncilPage.vue 应已在 Agent-First 精简中退役移除',
   );
-  assert.match(
-    tableAttrs,
-    /:aria-label="t\('admin\.council\.matrixTitle'\)"/,
-    '六标的点位矩阵表格缺少 matrixTitle 的 aria-label',
-  );
+  const consoleVue = readFileSync(path.join(SRC, 'views/admin/AgentConsolePage.vue'), 'utf8');
+  assert.match(consoleVue, /:aria-label="t\('admin\.agent\.runtimeStripAria'\)"/, 'AgentConsolePage 运行态条缺少 aria-label');
+  const sidebarVue = readFileSync(path.join(SRC, 'views/admin/agent/AgentStrategySidebar.vue'), 'utf8');
+  assert.match(sidebarVue, /:aria-label="t\('admin\.agent\.summaryTitle'\)"/, 'AgentStrategySidebar 缺少 aria-label');
+  const cardVue = readFileSync(path.join(SRC, 'views/admin/agent/AgentProposalCard.vue'), 'utf8');
+  assert.match(cardVue, /:aria-label="t\('admin\.agent\.proposalSelectItemAria'/, 'AgentProposalCard 勾选项缺少 aria-label');
 });

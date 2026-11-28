@@ -36,7 +36,8 @@ ENV/
 .env.lock
 .okx/
 .agents/
-agent/
+# Root-anchored so backend/astra_backend/agent/ and frontend/src/views/admin/agent/ stay tracked
+/agent/
 .claude/
 .qwenpaw/
 .mcp
@@ -150,7 +151,8 @@ checkpoints/
 digest/
 drivers/
 media/
-mem_agent/
+mem_# Root-anchored so backend/astra_backend/agent/ and frontend/src/views/admin/agent/ stay tracked
+/agent/
 mem_metadata/
 RELEASE_NOTES_*.md
 mem_session/

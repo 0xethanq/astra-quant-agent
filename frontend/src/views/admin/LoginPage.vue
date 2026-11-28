@@ -40,7 +40,7 @@ async function handleLogin() {
   loading.value = true;
   const ok = await auth.login(username.value, password.value);
   loading.value = false;
-  if (ok) router.push('/admin/overview');
+  if (ok) router.push('/admin/agent');
 }
 </script>
 

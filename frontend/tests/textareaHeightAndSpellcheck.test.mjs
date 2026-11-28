@@ -23,7 +23,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 const SRC = path.resolve(import.meta.dirname, '..', 'src');
@@ -39,35 +39,19 @@ test('components.css 必须为 textarea.field 声明 height: auto 与上下 padd
   );
 });
 
-test('提示词工坊与投委会规则编辑等技术文本域必须设置 spellcheck="false"', () => {
-  const promptStudio = readFileSync(path.join(SRC, 'views/admin/PromptStudioPage.vue'), 'utf8');
-  assert.match(
-    promptStudio,
-    /<textarea[^>]*v-model="selectedModule\.content"[^>]*spellcheck="false"/,
-    'PromptStudioPage 模块提示词编辑框缺少 spellcheck="false"',
-  );
-  assert.match(
-    promptStudio,
-    /<textarea[^>]*v-model="importRawJson"[^>]*spellcheck="false"/,
-    'PromptStudioPage 原始 JSON 导入框缺少 spellcheck="false"',
-  );
+test('旧独立编辑器已退役且 Agent 指挥台多行输入域保持 class="field" 与 spellcheck="false"', () => {
+  for (const retired of [
+    'views/admin/PromptStudioPage.vue',
+    'views/admin/CouncilPage.vue',
+    'views/admin/EvolutionPage.vue',
+  ]) {
+    assert.equal(existsSync(path.join(SRC, retired)), false, `${retired} 应已在后台 12→6 精简中退役`);
+  }
 
-  const council = readFileSync(path.join(SRC, 'views/admin/CouncilPage.vue'), 'utf8');
+  const agentConsole = readFileSync(path.join(SRC, 'views/admin/AgentConsolePage.vue'), 'utf8');
   assert.match(
-    council,
-    /<textarea[^>]*v-model="selectedRole\.prompt"[^>]*spellcheck="false"/,
-    'CouncilPage 席位提示词编辑框缺少 spellcheck="false"',
-  );
-  assert.match(
-    council,
-    /<textarea[^>]*v-model="importRawJson"[^>]*spellcheck="false"/,
-    'CouncilPage 原始 JSON 导入框缺少 spellcheck="false"',
-  );
-
-  const evolution = readFileSync(path.join(SRC, 'views/admin/EvolutionPage.vue'), 'utf8');
-  assert.match(
-    evolution,
-    /<textarea[^>]*v-model="mod\.content"[^>]*spellcheck="false"/,
-    'EvolutionPage 心法规则编辑框缺少 spellcheck="false"',
+    agentConsole,
+    /<textarea[\s\S]*?spellcheck="false"[\s\S]*?class="field\b/,
+    'AgentConsolePage 对话输入域缺少 spellcheck="false" 或 class="field"',
   );
 });

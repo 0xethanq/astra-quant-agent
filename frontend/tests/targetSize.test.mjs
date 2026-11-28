@@ -31,7 +31,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 const SRC = path.resolve(import.meta.dirname, '..', 'src');
@@ -88,13 +88,12 @@ test('table 排序按钮的命中区不得低于 24px（批 99 修的 16 处）'
   );
 });
 
-test('委员会内联改名输入框的命中区不得低于 24px', () => {
-  const vue = readFileSync(path.join(SRC, 'views/admin/CouncilPage.vue'), 'utf8');
-  const m = /\.cn-name-input\s*\{([^}]*)\}/.exec(vue);
-  assert.ok(m, '找不到 .cn-name-input 规则');
-  const h = heightOf(m[1]);
-  assert.ok(h, '.cn-name-input 没有 height/min-height（实测曾是 22.2px）');
-  assert.ok(h.value !== null && h.value >= MIN_TARGET, `.cn-name-input 高度解析为 ${h.value}，低于 ${MIN_TARGET}px`);
+test('CouncilPage 已随后台 12→6 精简退役（原 .cn-name-input 目标由退役自然消除）', () => {
+  assert.equal(
+    existsSync(path.join(SRC, 'views/admin/CouncilPage.vue')),
+    false,
+    'CouncilPage.vue 应已在 Agent-First 精简中退役移除',
+  );
 });
 
 test('抽屉内日志过滤芯片的命中区不得低于 24px（批 106）', () => {

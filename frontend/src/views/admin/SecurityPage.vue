@@ -41,9 +41,9 @@ import BaseSwitch from '../../components/base/BaseSwitch.vue'
 import BaseDialog from '../../components/base/BaseDialog.vue'
 import BaseEmpty from '../../components/base/BaseEmpty.vue'
 import {
-  Save, RefreshCw, Layers, Trash2, Zap, ShieldCheck, KeyRound,
+  Save, RefreshCw, Layers, Zap, ShieldCheck, KeyRound,
   Wallet, Activity, AlertTriangle, Loader2, Radar, Share2, Copy, Eye,
-  TrendingUp, ArrowRight,
+  TrendingUp, ArrowRight, Bot,
 } from 'lucide-vue-next'
 import BaseLoadingAnnounce from '../../components/base/BaseLoadingAnnounce.vue'
 
@@ -113,7 +113,6 @@ const capitalConfirmOk = computed(() => capitalConfirm.value.trim().toUpperCase(
 // ---- instruments ----
 const instruments = ref<any[]>([])
 const instLimits = ref<any>({ minimum: 1, maximum: 20 })
-const newInstId = ref('')
 
 // ---- positions & close ----
 const snapshot = ref<any>(null)
@@ -308,49 +307,6 @@ async function saveCapital() {
     toast.err(t('admin.security.errUpdateFailed', undefined, { msg: e.message }))
   } finally {
     savingCapital.value = false
-  }
-}
-
-async function addInstrument() {
-  let instId = newInstId.value.trim().toUpperCase()
-  if (/^[A-Z0-9]{2,15}$/.test(instId)) {
-    instId = `${instId}-USDT-SWAP`
-  }
-  if (!/^[A-Z0-9]{2,15}-USDT-SWAP$/.test(instId)) { toast.err(t('admin.security.errInstFormat')); return }
-  try {
-    const res = await api('/api/v1/admin/instruments', { method: 'POST', body: JSON.stringify({ inst_id: instId }) })
-    toast.ok(res.message || t('admin.security.toastInstAdded', undefined, { inst: instId }))
-    newInstId.value = ''
-    await loadAll()
-  } catch (e: any) {
-    toast.err(t('admin.security.errAddFailed', undefined, { msg: e.message }))
-  }
-}
-
-async function removeInstrument(item: any) {
-  if (item.protected) { toast.warn(t('admin.security.warnProtectedInst')); return }
-  if (item.held_live || item.has_tracker) {
-    toast.warn(t('admin.security.warnHeldInst', undefined, { venues: (item.held_venues || []).join('/') || t('admin.security.trackedRecord') }))
-    return
-  }
-  if (item.holdings_unknown) { toast.warn(t('admin.security.warnHoldingsUnknown')); return }
-  const _ok = await ask({
-    title: t('admin.security.confirmRemoveInstTitle'),
-    desc: t('admin.security.confirmRemoveInstDesc', undefined, { inst: item.instId }),
-    danger: true,
-    confirmPhrase: `REMOVE ${item.instId}`,
-    okText: t('common.remove'),
-  })
-  if (!_ok) return
-  try {
-    const res = await api(`/api/v1/admin/instruments/${encodeURIComponent(item.instId)}`, {
-      method: 'DELETE',
-      body: JSON.stringify({ confirmation: `REMOVE ${item.instId}` })
-    })
-    toast.ok(res.message || t('admin.security.toastInstRemoved', undefined, { inst: item.instId }))
-    await loadAll()
-  } catch (e: any) {
-    toast.err(t('admin.security.errDeleteFailed', undefined, { msg: e.message }))
   }
 }
 
@@ -636,7 +592,8 @@ onMounted(() => {
       <p class="state-title">{{ t('common.loadFailed') }}</p>
       <p class="state-desc">{{ loadError }}</p>
       <button type="button" class="btn btn-ghost btn-sm mt-1" :disabled="loading" @click="loadAll">
-        <RefreshCw :size="14" />
+        <Loader2 v-if="loading" :size="14" class="animate-spin shrink-0" />
+        <RefreshCw v-else :size="14" />
         <span>{{ t('common.retry') }}</span>
       </button>
     </div>
@@ -776,7 +733,7 @@ onMounted(() => {
             </div>
             <div class="mt-3 flex items-center justify-between text-xs text-[var(--ink-2)] border-t border-[var(--line-1)] pt-3">
               <span>{{ t('admin.security.scaleOutCurrentPreset') }}: {{ Math.round((config?.editable?.scale_out_ratio || 0.5) * 100) }}% · {{ config?.editable?.scale_out_trigger_atr || 1.2 }}x ATR</span>
-              <RouterLink to="/admin/risk" class="text-[var(--accent)] hover:underline inline-flex items-center gap-1 font-medium">
+              <RouterLink to="/admin/agent" class="text-[var(--accent)] hover:underline inline-flex items-center gap-1 font-medium">
                 <span>{{ t('admin.security.scaleOutCustomizeInRisk') }}</span>
                 <ArrowRight :size="12" />
               </RouterLink>
@@ -1100,18 +1057,13 @@ onMounted(() => {
 
         <SettingsSection :title="t('admin.security.poolTitle')" :icon="Layers">
           <template #actions>
-            <input
-              v-model="newInstId"
-              :aria-label="t('admin.security.instAria')"
-              :placeholder="t('admin.security.instPlaceholder')"
-              class="field mono sc-inst-input"
-              @keyup.enter="addInstrument"
-            />
-            <button type="button" class="btn btn-primary btn-sm" @click="addInstrument">
-              <Layers :size="13" />
-              <span>{{ t('admin.security.addInstrument') }}</span>
-            </button>
+            <RouterLink to="/admin/agent" class="btn btn-ghost btn-sm">
+              <Bot :size="13" />
+              <span>{{ t('admin.security.goToAgent') }}</span>
+            </RouterLink>
           </template>
+
+          <p class="sc-hint pad">{{ t('admin.security.poolReadonlyHint') }}</p>
 
           <BaseEmpty v-if="!instruments.length" :text="t('admin.security.poolEmpty')" />
 
@@ -1141,21 +1093,7 @@ onMounted(() => {
                 >{{ t('admin.security.holdingUnknownBadge') }}</span>
                 <span v-else class="badge">{{ t('admin.security.removableBadge') }}</span>
               </span>
-              <span class="sc-actions">
-                <button
-                  type="button"
-                  :disabled="item.protected || item.has_tracker || item.held_live || item.holdings_unknown"
-                  class="btn btn-quiet btn-icon btn-sm is-danger"
-                  :title="item.held_live
-                    ? t('admin.security.removeBlockedHoldings', undefined, { venues: (item.held_venues || []).join('/') || '—' })
-                    : item.holdings_unknown
-                      ? t('admin.security.removeBlockedUnknown')
-                      : t('admin.security.removeTitle')"
-                  @click="removeInstrument(item)"
-                >
-                  <Trash2 :size="13" />
-                </button>
-              </span>
+              <span />
             </article>
           </div>
 
@@ -1550,10 +1488,6 @@ onMounted(() => {
   .sc-form-2 {
     grid-template-columns: 1fr 1fr;
   }
-}
-
-.sc-inst-input {
-  max-width: 220px;
 }
 
 /* ══ 行式标的与持仓列表 ══ */

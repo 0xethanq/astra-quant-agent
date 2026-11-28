@@ -21,37 +21,30 @@ const routes: RouteRecordRaw[] = [
     component: () => import('../layouts/AdminLayout.vue'),
     meta: { requiresAuth: true, isPublic: false },
     children: [
-      { path: '', redirect: '/admin/overview' },
-      { path: 'overview', name: 'admin-overview', component: () => import('../views/admin/OverviewPage.vue') },
+      { path: '', redirect: '/admin/agent' },
+      { path: 'agent', name: 'admin-agent', component: () => import('../views/admin/AgentConsolePage.vue') },
+      { path: 'overview', redirect: '/admin/agent' },
+      { path: 'council', redirect: '/admin/agent' },
+      { path: 'promptlib', redirect: '/admin/agent' },
+      { path: 'evolution', redirect: '/admin/agent' },
+      { path: 'risk', redirect: '/admin/agent' },
+      { path: 'gateway', redirect: '/admin/agent' },
+      { path: 'agents', redirect: '/admin/agent' },
+      { path: 'decision-plugins', redirect: '/admin/agent' },
+      { path: 'interceptors', redirect: '/admin/agent' },
+      { path: 'plugins', redirect: '/admin/agent' },
       { path: 'security', name: 'admin-security', component: () => import('../views/admin/SecurityPage.vue') },
       { path: 'symbols', redirect: '/admin/security' },
       { path: 'manual-trade', redirect: '/admin/security' },
-      { path: 'backups', redirect: '/admin/backup' },
-      { path: 'council', name: 'admin-council', component: () => import('../views/admin/CouncilPage.vue') },
       { path: 'llm', name: 'admin-llm', component: () => import('../views/admin/LlmPage.vue') },
       { path: 'notify', name: 'admin-notify', component: () => import('../views/admin/NotifyPage.vue') },
-      // ── 网关与调度（宿主：调度与投递 + Worker 运行单元）────────
-      { path: 'gateway', name: 'admin-gateway', component: () => import('../views/admin/GatewayPage.vue') },
-      { path: 'agents', redirect: { path: '/admin/gateway', query: { tab: 'workers' } } },
-      // ── 系统日志（第一公民：运行日志 + 报错排查 + AI 决策 + 操作审计）────────
       { path: 'decisions', name: 'admin-decisions', component: () => import('../views/admin/DecisionsPage.vue') },
       { path: 'logs', redirect: '/admin/decisions' },
-      { path: 'promptlib', name: 'admin-promptlib', component: () => import('../views/admin/PromptStudioPage.vue') },
-      { path: 'evolution', name: 'admin-evolution', component: () => import('../views/admin/EvolutionPage.vue') },
-      // ── 风险管理（风控参数配置与熔断）───────────────────────────────────────
-      { path: 'risk', name: 'admin-risk', component: () => import('../views/admin/RiskPage.vue') },
-      // ── 决策插件工位（2026-10 随策略插件系统整套裁撤）──────────────────────
-      // 页面、导航项与命名路由一并删除；三条历史路径全部重定向到风控页，旧书签不 404。
-      { path: 'decision-plugins', redirect: '/admin/risk' },
-      { path: 'interceptors', redirect: '/admin/risk' },
-      { path: 'plugins', redirect: '/admin/risk' },
-      // ── 操作审计（并入系统日志，旧路径平滑重定向）───────────────────────────
       { path: 'audit', redirect: { path: '/admin/decisions', query: { tab: 'audit' } } },
-      // ── 系统账号（独立一级页面）──────────────────────────────────────────
-      { path: 'adminsys', name: 'admin-adminsys', component: () => import('../views/admin/AdminSysPage.vue') },
-      { path: 'accounts', redirect: '/admin/adminsys' },
-      // ── 系统与灾备（宿主：备份归档 + 策略快照与回滚 + 版本与更新）──────────
       { path: 'backup', name: 'admin-backup', component: () => import('../views/admin/BackupPage.vue') },
+      { path: 'backups', redirect: '/admin/backup' },
+      { path: 'adminsys', redirect: { path: '/admin/backup', query: { tab: 'adminsys' } } },
+      { path: 'accounts', redirect: { path: '/admin/backup', query: { tab: 'adminsys' } } },
       { path: 'policy', redirect: { path: '/admin/backup', query: { tab: 'policy' } } },
       { path: 'about', redirect: { path: '/admin/backup', query: { tab: 'version' } } },
     ],
@@ -121,7 +114,7 @@ router.beforeEach(async (to) => {
   }
   // Redirect logged-in users away from login page
   if (to.name === 'admin-login' && auth.isAuthenticated) {
-    return { name: 'admin-overview' }
+    return { name: 'admin-agent' }
   }
 })
 

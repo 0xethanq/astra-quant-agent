@@ -63,19 +63,12 @@ test('表单控件不能在写死内联 border-color 的同时 outline-none（�
   assert.deepEqual(bad, [], `发现失去焦点反馈的控件：\n  ${bad.join('\n  ')}`);
 });
 
-test('DocsView 弹层与 RiskPage 悬浮保存条必须对齐 z-index 令牌', () => {
+test('DocsView 弹层必须对齐 z-index 令牌', () => {
   const docsText = readFileSync(path.join(SRC, 'views/docs/DocsView.vue'), 'utf8');
   assert.match(
     docsText,
     /z-\[var\(--z-dialog\)\]/,
     'DocsView 图片放大模态弹窗未对齐 --z-dialog (70)'
-  );
-
-  const riskText = readFileSync(path.join(SRC, 'views/admin/RiskPage.vue'), 'utf8');
-  assert.match(
-    riskText,
-    /z-index:\s*var\(--z-float\)/,
-    'RiskPage 悬浮保存条未对齐 --z-float (50)'
   );
 });
 

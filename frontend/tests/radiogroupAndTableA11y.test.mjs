@@ -65,13 +65,6 @@ test('所有包含 radio 的容器必须声明 role="radiogroup" 且 radio input
   assert.deepEqual(badRadios, [], `发现缺陷单选框：\n  ${badRadios.join('\n  ')}`);
 });
 
-test('DataTable 必须声明 :aria-busy 且 loading/empty 单元格具备 role="status"', () => {
-  const text = readFileSync(path.join(SRC, 'components/admin/DataTable.vue'), 'utf8');
-  assert.match(text, /:aria-busy="loading\s*\?\s*'true'\s*:\s*undefined"/, 'DataTable 缺失 :aria-busy 绑定');
-  assert.match(text, /<td[^>]*role="status"[^>]*>[\s\S]*?<slot name="loading"/, 'DataTable 加载格缺失 role="status"');
-  assert.match(text, /<td[^>]*role="status"[^>]*>[\s\S]*?\{\{\s*emptyText/, 'DataTable 空白格缺失 role="status"');
-});
-
 test('BaseStat 提示按钮必须具备键盘焦点可见性', () => {
   const text = readFileSync(path.join(SRC, 'components/base/BaseStat.vue'), 'utf8');
   assert.match(text, /class="[^"]*focus-visible:opacity-100[^"]*"/, 'BaseStat .kpi-hint 缺少 focus-visible:opacity-100 类名');

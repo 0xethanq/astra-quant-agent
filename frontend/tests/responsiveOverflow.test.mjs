@@ -44,28 +44,6 @@ test('全站分段控件 .seg 必须具备自适应窄屏与外语滚动的能�
   assert.match(btnMatch[1], /flex-shrink:\s*0/, '.seg button 缺少 flex-shrink: 0，窄屏下按钮文字会被挤瘪');
 });
 
-test('概览页决策流列表必须声明横向平滑滚动并设定保底宽度', () => {
-  const vue = readFileSync(path.join(SRC, 'views/admin/OverviewPage.vue'), 'utf8');
-  const streamListMatch = vue.match(/\.ov-stream-list\s*\{([^}]+)\}/);
-  assert.ok(streamListMatch, '找不到 .ov-stream-list 规则');
-  assert.match(streamListMatch[1], /overflow-x:\s*auto/, '.ov-stream-list 缺少 overflow-x: auto，移动端右侧时间列会被硬切');
-
-  const streamItemMatch = vue.match(/\.ov-stream-item\s*\{([^}]+)\}/);
-  assert.ok(streamItemMatch, '找不到 .ov-stream-item 规则');
-  assert.match(streamItemMatch[1], /min-width:\s*\d+px/, '.ov-stream-item 缺少保底 min-width');
-});
-
-test('概览页审计详情表格必须声明横向平滑滚动并设定保底宽度', () => {
-  const vue = readFileSync(path.join(SRC, 'views/admin/OverviewPage.vue'), 'utf8');
-  const auditTableMatch = vue.match(/\.ov-audit-table\s*\{([^}]+)\}/);
-  assert.ok(auditTableMatch, '找不到 .ov-audit-table 规则');
-  assert.match(auditTableMatch[1], /overflow-x:\s*auto/, '.ov-audit-table 缺少 overflow-x: auto，移动端详情列会被硬切');
-
-  const auditRowMatch = vue.match(/\.ov-audit-row\s*\{([^}]+)\}/);
-  assert.ok(auditRowMatch, '找不到 .ov-audit-row 规则');
-  assert.match(auditRowMatch[1], /min-width:\s*\d+px/, '.ov-audit-row 缺少保底 min-width');
-});
-
 test('新闻页信源胶囊容器必须限制最大宽度并在内部截断长文本', () => {
   const vue = readFileSync(path.join(SRC, 'views/dashboard/NewsView.vue'), 'utf8');
   // 必须存在 max-w-full min-w-0 组合防 flex 溢出
