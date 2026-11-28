@@ -1,7 +1,7 @@
 /** 系统日志与决策页文案 */
 export const zhAdminDecisions = {
-  title: '系统日志与报错',
-  desc: '统一日志中枢：聚合服务运行日志流、全系统报错大盘与 AI 决策推演',
+  title: '系统日志',
+  desc: '查看服务运行日志、系统报错与 AI 决策记录',
   normalRun: '日常运行',
   latestFirst: '最新在前',
   tabTrader: '交易巡检 (Trader)',
@@ -21,12 +21,12 @@ export const zhAdminDecisions = {
 
   // 统一主维度
   hubTabLogs: '运行日志流',
-  hubTabErrors: '系统报错汇总',
-  hubTabDecisions: 'AI 决策卷宗',
+  hubTabErrors: '系统报错',
+  hubTabDecisions: 'AI 决策记录',
   hubAria: '系统日志主维度切换',
 
-  // 报错大盘
-  errorsTitle: '全系统报错与异常大盘',
+  // 报错汇总
+  errorsTitle: '系统报错汇总',
   errorAll: '全部报错',
   errorTrader: '交易进程 (Trader)',
   errorBackend: '后端服务 (Backend)',

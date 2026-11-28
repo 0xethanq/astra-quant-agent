@@ -1,15 +1,12 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
-import { useRouter } from 'vue-router';
 import {
-  Activity,
   Bot,
   ChevronDown,
   ChevronRight,
   Loader2,
   PanelLeft,
   PanelRight,
-  PauseCircle,
   Plus,
   Send,
   Sparkles,
@@ -38,7 +35,6 @@ import {
   composeStagedMessage,
 } from './agent/agentLogic';
 
-const router = useRouter();
 const { t } = useI18n();
 const auth = useAuthStore();
 const toast = useToast();
@@ -86,18 +82,6 @@ const envBadgeClass = computed(() =>
   stateSummary.value?.environment === 'live' ? 'badge-warn' : 'badge-accent',
 );
 const isTradingPaused = computed(() => Boolean(stateSummary.value?.trading_paused));
-const healthLabel = computed(() => {
-  const h = stateSummary.value?.data_health?.overall;
-  if (h === 'LIVE') return t('admin.agent.healthFresh');
-  if (h === 'STALE') return t('admin.agent.healthStale');
-  return t('admin.agent.healthUnknown');
-});
-const healthBadgeClass = computed(() => {
-  const h = stateSummary.value?.data_health?.overall;
-  if (h === 'LIVE') return 'badge-up';
-  if (h === 'STALE') return 'badge-warn';
-  return '';
-});
 
 const proposalMap = computed(() => {
   const map: Record<string, AgentProposal> = {};
@@ -522,28 +506,8 @@ onBeforeUnmount(() => {
           <span class="badge mono" :class="envBadgeClass">
             {{ String(stateSummary?.environment || 'demo').toUpperCase() }}
           </span>
-          <button
-            type="button"
-            class="badge ag-badge-btn"
-            :class="isTradingPaused ? 'badge-warn' : 'badge-up'"
-            @click="router.push('/admin/strategy?tab=schedule')"
-          >
-            <PauseCircle v-if="isTradingPaused" :size="12" />
-            <Activity v-else :size="12" />
-            <span>{{ isTradingPaused ? t('admin.agent.enginePausedBadge') : t('admin.agent.engineLiveBadge') }}</span>
-          </button>
           <span class="badge mono num">
-            {{ t('admin.agent.stripPositions') }}: {{ stateSummary?.account?.positions_count ?? 0 }}
-          </span>
-          <span class="badge" :class="healthBadgeClass">
-            {{ healthLabel }}
-          </span>
-          <span
-            v-if="insightsPayload"
-            class="badge mono num"
-            :class="insightsPayload.critical_count > 0 ? 'badge-down' : insightsPayload.warning_count > 0 ? 'badge-warn' : 'badge-up'"
-          >
-            {{ t('admin.agent.insightsHealthScore', undefined, { score: insightsPayload.health_score }) }}
+            {{ t('admin.agent.stripPositions') }} {{ stateSummary?.account?.positions_count ?? 0 }}
           </span>
         </div>
       </div>
@@ -850,9 +814,9 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--ds-space-3);
-  padding: var(--ds-space-2) var(--ds-space-5);
-  min-height: 52px;
+  gap: var(--ds-space-2);
+  padding: var(--sp-3) var(--ds-space-4);
+  min-height: 44px;
   border-bottom: 1px solid var(--ds-color-border-subtle);
   background-color: var(--ds-color-bg-surface-1);
   flex-wrap: wrap;
@@ -860,30 +824,27 @@ onBeforeUnmount(() => {
 .ag-topbar-left {
   display: flex;
   align-items: center;
-  gap: var(--ds-space-3);
+  gap: var(--ds-space-2);
   flex-wrap: wrap;
   min-width: 0;
 }
 .ag-strip-metrics {
   display: flex;
   align-items: center;
-  gap: var(--ds-space-2);
+  gap: var(--sp-3);
   flex-wrap: wrap;
-}
-.ag-badge-btn {
-  cursor: pointer;
 }
 .ag-topbar-right {
   display: flex;
   align-items: center;
-  gap: var(--ds-space-2);
+  gap: var(--sp-3);
   flex-wrap: wrap;
 }
 .ag-model-select {
-  min-width: 210px;
-  max-width: 280px;
-  height: var(--h-md);
-  font-size: var(--text-xs);
+  min-width: 170px;
+  max-width: 228px;
+  height: var(--h-sm);
+  font-size: var(--text-4xs);
 }
 .ag-workspace {
   flex: 1;
@@ -899,38 +860,38 @@ onBeforeUnmount(() => {
   flex-direction: column;
 }
 .ag-readonly-banner {
-  margin: var(--ds-space-3) var(--ds-space-5) 0;
-  padding: var(--ds-space-2) var(--ds-space-3);
+  margin: var(--ds-space-2) var(--ds-space-4) 0;
+  padding: var(--sp-3) var(--ds-space-3);
   border: 1px solid var(--warn-line);
   border-radius: var(--r-ctl);
   background-color: var(--warn-bg);
   color: var(--warn);
-  font-size: var(--text-base);
+  font-size: var(--text-xs);
 }
 .ag-stream {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: var(--ds-space-5) var(--ds-space-5) var(--ds-space-4);
+  padding: var(--ds-space-4) var(--ds-space-4) var(--ds-space-3);
 }
 .ag-stream-inner {
-  max-width: 840px;
+  max-width: 820px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: var(--ds-space-5);
+  gap: var(--ds-space-4);
 }
 .ag-empty {
-  margin: var(--ds-space-5) auto;
+  margin: var(--ds-space-4) auto;
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
-  gap: var(--ds-space-3);
+  gap: var(--ds-space-2);
 }
 .ag-empty-icon {
-  width: 48px;
-  height: 48px;
+  width: 40px;
+  height: 40px;
   display: grid;
   place-items: center;
   border-radius: var(--r-card);
@@ -939,14 +900,14 @@ onBeforeUnmount(() => {
 }
 .ag-empty-title {
   margin: 0;
-  font-size: var(--text-xl);
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--ds-color-text-primary);
 }
 .ag-empty-desc {
   margin: 0;
   max-width: 64ch;
-  font-size: var(--text-base);
+  font-size: var(--text-xs);
   line-height: var(--leading-body);
   color: var(--ds-color-text-description);
 }
@@ -965,17 +926,17 @@ onBeforeUnmount(() => {
   gap: var(--ds-space-2);
 }
 .ag-insights-title {
-  font-size: var(--text-base);
+  font-size: var(--text-xs);
   font-weight: 600;
   color: var(--ds-color-text-primary);
 }
 .ag-insights-hint {
-  font-size: var(--text-xs);
+  font-size: var(--text-4xs);
   color: var(--ds-color-text-placeholder);
 }
 .ag-insights-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: var(--ds-space-2);
 }
 .ag-insight-top {
@@ -985,14 +946,14 @@ onBeforeUnmount(() => {
   gap: var(--ds-space-2);
 }
 .ag-insight-name {
-  font-size: var(--text-base);
+  font-size: var(--text-xs);
   font-weight: 600;
   color: var(--ds-color-text-primary);
 }
 .ag-insight-desc {
-  font-size: var(--text-xs);
+  font-size: var(--text-4xs);
   color: var(--ds-color-text-description);
-  line-height: 1.5;
+  line-height: 1.45;
 }
 .ag-starters {
   display: flex;
@@ -1027,12 +988,12 @@ onBeforeUnmount(() => {
   gap: var(--ds-space-2);
 }
 .ag-msg-role {
-  font-size: var(--text-xs);
+  font-size: var(--text-4xs);
   font-weight: 600;
   color: var(--ds-color-text-description);
 }
 .ag-msg-time {
-  font-size: var(--text-xs);
+  font-size: var(--text-4xs);
   color: var(--ds-color-text-placeholder);
 }
 .ag-reasoning-wrap {
@@ -1044,12 +1005,12 @@ onBeforeUnmount(() => {
 .ag-reasoning-box {
   width: 100%;
   margin: 0;
-  padding: var(--ds-space-3);
+  padding: var(--ds-space-2) var(--ds-space-3);
   border-radius: var(--r-ctl);
   border: 1px solid var(--ds-color-border-subtle);
   background-color: var(--ds-color-bg-surface-1);
   color: var(--ds-color-text-description);
-  font-size: var(--text-xs);
+  font-size: var(--text-4xs);
   white-space: pre-wrap;
   max-height: 220px;
   overflow: auto;
@@ -1063,13 +1024,13 @@ onBeforeUnmount(() => {
   align-self: flex-start;
   display: inline-flex;
   align-items: center;
-  gap: var(--ds-space-2);
-  padding: var(--sp-2) var(--ds-space-3);
-  min-height: 30px;
+  gap: var(--sp-3);
+  padding: var(--sp-1) var(--sp-5);
+  min-height: 28px;
   border-radius: var(--r-ctl);
   border: 1px solid var(--ds-color-border-subtle);
   background-color: var(--ds-color-bg-surface-1);
-  font-size: var(--text-xs);
+  font-size: var(--text-4xs);
   color: var(--ds-color-text-description);
   transition: border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
 }
@@ -1096,7 +1057,7 @@ onBeforeUnmount(() => {
   padding: var(--sp-2) var(--ds-space-3);
   border-radius: var(--r-ctl);
   background-color: var(--ds-color-bg-surface-1);
-  font-size: var(--text-xs);
+  font-size: var(--text-4xs);
 }
 .ag-trace-name {
   font-weight: 600;
@@ -1118,7 +1079,7 @@ onBeforeUnmount(() => {
   padding: var(--ds-space-2) var(--ds-space-3);
   border-radius: var(--r-ctl);
   background-color: var(--ds-color-bg-surface-1);
-  font-size: var(--text-xs);
+  font-size: var(--text-4xs);
   color: var(--ds-color-text-description);
   display: flex;
   flex-direction: column;
@@ -1126,30 +1087,39 @@ onBeforeUnmount(() => {
   word-break: break-all;
 }
 .ag-msg-text {
-  font-size: var(--text-md);
-  line-height: 1.65;
+  font-size: var(--text-base);
+  line-height: 1.6;
   color: var(--ds-color-text-primary);
   white-space: pre-wrap;
 }
 .ag-md {
-  font-size: var(--text-md);
-  line-height: 1.7;
+  font-size: var(--text-base);
+  line-height: 1.6;
+  color: var(--ds-color-text-primary);
+}
+.ag-md :deep(h1),
+.ag-md :deep(h2),
+.ag-md :deep(h3),
+.ag-md :deep(h4) {
+  font-size: var(--text-base);
+  font-weight: 600;
+  margin: var(--ds-space-2) 0 var(--sp-2);
   color: var(--ds-color-text-primary);
 }
 .ag-md :deep(p) {
-  margin: 0 0 var(--ds-space-3);
+  margin: 0 0 var(--ds-space-2);
 }
 .ag-md :deep(p:last-child) {
   margin-bottom: 0;
 }
 .ag-md :deep(ul),
 .ag-md :deep(ol) {
-  margin: 0 0 var(--ds-space-3);
-  padding-left: var(--ds-space-5);
+  margin: 0 0 var(--ds-space-2);
+  padding-left: var(--ds-space-4);
 }
 .ag-md :deep(code) {
   font-family: var(--font-mono);
-  font-size: var(--text-xs);
+  font-size: var(--text-4xs);
   background-color: var(--ds-color-bg-surface-inset);
   padding: var(--sp-1) var(--sp-2);
   border-radius: var(--r-ctl);
@@ -1159,32 +1129,33 @@ onBeforeUnmount(() => {
   border-radius: var(--r-ctl);
   background-color: var(--ds-color-bg-surface-inset);
   overflow-x: auto;
+  font-size: var(--text-4xs);
 }
 .ag-md :deep(table) {
   width: 100%;
   border-collapse: collapse;
-  font-size: var(--text-base);
-  margin: var(--ds-space-2) 0 var(--ds-space-3);
+  font-size: var(--text-xs);
+  margin: var(--ds-space-2) 0;
 }
 .ag-md :deep(th),
 .ag-md :deep(td) {
   border: 1px solid var(--ds-color-border-subtle);
-  padding: var(--ds-space-2) var(--ds-space-3);
+  padding: var(--sp-3) var(--ds-space-3);
   text-align: left;
 }
 .ag-msg-proposal {
   margin-top: var(--ds-space-2);
 }
 .ag-composer-deck {
-  padding: 0 var(--ds-space-5) var(--ds-space-4);
+  padding: 0 var(--ds-space-4) var(--ds-space-3);
 }
 .ag-composer {
-  max-width: 840px;
+  max-width: 820px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: var(--ds-space-2);
-  padding: var(--ds-space-3) var(--ds-space-4);
+  gap: var(--sp-3);
+  padding: var(--ds-space-2) var(--ds-space-3);
   border: 1px solid var(--ds-color-border-default);
   border-radius: var(--r-card);
   background-color: var(--ds-color-bg-surface-1);
@@ -1217,13 +1188,13 @@ onBeforeUnmount(() => {
 }
 .ag-staged-preview {
   margin: 0;
-  font-size: var(--text-base);
+  font-size: var(--text-xs);
   color: var(--ds-color-text-primary);
   line-height: 1.5;
 }
 .ag-staged-hint {
   margin: 0;
-  font-size: var(--text-xs);
+  font-size: var(--text-4xs);
   color: var(--ds-color-text-description);
 }
 .ag-input {
@@ -1231,12 +1202,12 @@ onBeforeUnmount(() => {
   height: auto;
   padding: 0;
   resize: vertical;
-  min-height: 52px;
+  min-height: 44px;
   border: 0;
   background: transparent;
   color: var(--ds-color-text-primary);
-  font-size: var(--text-md);
-  line-height: 1.6;
+  font-size: var(--text-base);
+  line-height: 1.55;
   outline: none;
 }
 .ag-input:disabled {
@@ -1251,11 +1222,11 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   gap: var(--ds-space-2);
-  padding-top: var(--ds-space-1);
+  padding-top: var(--sp-2);
   border-top: 1px solid var(--ds-color-border-subtle);
 }
 .ag-composer-hint {
-  font-size: var(--text-xs);
+  font-size: var(--text-4xs);
   color: var(--ds-color-text-placeholder);
 }
 @media (max-width: 1120px) {

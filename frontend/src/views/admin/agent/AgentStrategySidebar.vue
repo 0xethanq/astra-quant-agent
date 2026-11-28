@@ -426,8 +426,8 @@ function isBusy(target: string, itemId?: string): boolean {
 .ag-side {
   display: flex;
   flex-direction: column;
-  flex: 0 0 360px;
-  width: 360px;
+  flex: 0 0 308px;
+  width: 308px;
   min-height: 0;
   border-left: 1px solid var(--ds-color-border-subtle);
   background-color: var(--ds-color-bg-surface-1);
@@ -439,33 +439,33 @@ function isBusy(target: string, itemId?: string): boolean {
   align-items: center;
   justify-content: space-between;
   gap: var(--ds-space-2);
-  padding: var(--ds-space-3) var(--ds-space-4);
-  min-height: 52px;
+  padding: var(--sp-3) var(--ds-space-3);
+  min-height: 44px;
   border-bottom: 1px solid var(--ds-color-border-subtle);
 }
 .ag-side-title {
   margin: 0;
-  font-size: var(--text-md);
+  font-size: var(--text-xs);
   font-weight: 600;
   color: var(--ds-color-text-primary);
 }
 .ag-side-tabs {
-  padding: var(--ds-space-2) var(--ds-space-3);
+  padding: var(--sp-4) var(--ds-space-3);
   border-bottom: 1px solid var(--ds-color-border-subtle);
   overflow-x: auto;
 }
 .ag-side-body {
   display: flex;
   flex-direction: column;
-  gap: var(--ds-space-4);
-  padding: var(--ds-space-4);
+  gap: var(--ds-space-3);
+  padding: var(--ds-space-3);
   overflow-y: auto;
 }
 .ag-sum-block {
   display: flex;
   flex-direction: column;
-  gap: var(--ds-space-3);
-  padding-bottom: var(--ds-space-4);
+  gap: var(--ds-space-2);
+  padding-bottom: var(--ds-space-3);
   border-bottom: 1px solid var(--ds-color-border-subtle);
 }
 .ag-sum-block:last-child {
@@ -481,18 +481,18 @@ function isBusy(target: string, itemId?: string): boolean {
 .ag-sum-label {
   display: inline-flex;
   align-items: center;
-  gap: var(--ds-space-2);
-  font-size: var(--text-base);
+  gap: var(--sp-3);
+  font-size: var(--text-xs);
   font-weight: 600;
   color: var(--ds-color-text-primary);
 }
 .ag-sum-val {
-  font-size: var(--text-base);
+  font-size: var(--text-xs);
   font-weight: 600;
   color: var(--ds-color-text-primary);
 }
 .ag-sum-meta {
-  font-size: var(--text-xs);
+  font-size: var(--text-4xs);
   color: var(--ds-color-text-description);
   line-height: 1.45;
 }
@@ -500,7 +500,7 @@ function isBusy(target: string, itemId?: string): boolean {
   display: inline-flex;
   align-items: center;
   gap: var(--sp-1);
-  font-size: var(--text-xs);
+  font-size: var(--text-4xs);
   font-weight: 500;
   color: var(--ds-color-brand);
   text-decoration: none;
@@ -511,14 +511,14 @@ function isBusy(target: string, itemId?: string): boolean {
 .ag-toggle-stack {
   display: flex;
   flex-direction: column;
-  gap: var(--ds-space-2);
+  gap: var(--sp-3);
 }
 .ag-toggle-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--ds-space-3);
-  padding: var(--ds-space-2) var(--ds-space-3);
+  gap: var(--ds-space-2);
+  padding: var(--sp-3) var(--sp-5);
   border-radius: var(--r-ctl);
   background-color: var(--ds-color-bg-surface-inset);
 }
@@ -529,35 +529,35 @@ function isBusy(target: string, itemId?: string): boolean {
   min-width: 0;
 }
 .ag-toggle-name {
-  font-size: var(--text-base);
+  font-size: var(--text-xs);
   font-weight: 500;
   color: var(--ds-color-text-primary);
 }
 .ag-kv-list {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--ds-space-2);
-  font-size: var(--text-xs);
+  gap: var(--sp-3);
+  font-size: var(--text-4xs);
 }
 .ag-kv-list > div {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--ds-space-2);
-  padding: var(--ds-space-2) var(--ds-space-3);
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-5);
   border-radius: var(--r-ctl);
   background-color: var(--ds-color-bg-surface-inset);
   color: var(--ds-color-text-description);
 }
 .ag-kv-list strong {
-  font-size: var(--text-base);
+  font-size: var(--text-xs);
   color: var(--ds-color-text-primary);
 }
 .ag-issue-list,
 .ag-mod-list {
   display: flex;
   flex-direction: column;
-  gap: var(--ds-space-2);
+  gap: var(--sp-3);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -566,11 +566,11 @@ function isBusy(target: string, itemId?: string): boolean {
 .ag-mod-row {
   display: flex;
   flex-direction: column;
-  gap: var(--ds-space-1);
-  padding: var(--ds-space-2) var(--ds-space-3);
+  gap: var(--sp-1);
+  padding: var(--sp-3) var(--sp-5);
   border-radius: var(--r-ctl);
   background-color: var(--ds-color-bg-surface-inset);
-  font-size: var(--text-xs);
+  font-size: var(--text-4xs);
 }
 .ag-mod-top {
   display: flex;
@@ -579,7 +579,7 @@ function isBusy(target: string, itemId?: string): boolean {
   gap: var(--ds-space-2);
 }
 .ag-mod-name {
-  font-size: var(--text-base);
+  font-size: var(--text-xs);
   font-weight: 600;
   color: var(--ds-color-text-primary);
 }

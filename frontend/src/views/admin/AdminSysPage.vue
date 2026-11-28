@@ -206,7 +206,6 @@ onMounted(load)
   <div class="as">
     <PageHeader :embedded="props.embedded" :title="t('admin.adminsys.title')">
       <template #actions>
-        <span class="badge badge-accent mono">{{ t('admin.adminsys.governanceBadge') }}</span>
         <button type="button" class="btn btn-ghost btn-sm" :disabled="!auth.isSuperadmin" @click="load">
           <RefreshCw :size="14" />
           <span>{{ t('common.refresh') }}</span>

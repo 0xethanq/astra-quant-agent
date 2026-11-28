@@ -346,7 +346,7 @@ watch(() => route.path, () => (drawerOpen.value = false));
   display: none;
   flex-direction: column;
   flex-shrink: 0;
-  width: 248px;
+  width: 216px;
   border-right: 1px solid var(--ds-color-border-default);
   background-color: var(--ds-color-bg-surface-1);
   transition: width var(--dur-base) var(--ease-out);
@@ -364,14 +364,14 @@ watch(() => route.path, () => (drawerOpen.value = false));
   display: flex;
   align-items: center;
   gap: var(--ds-space-2);
-  height: 56px;
+  height: var(--h-topbar);
   padding: 0 var(--ds-space-3);
   border-bottom: 1px solid var(--ds-color-border-subtle);
   flex-shrink: 0;
 }
 .wb-logo {
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   border-radius: var(--r-xs);
   flex-shrink: 0;
 }
@@ -383,7 +383,7 @@ watch(() => route.path, () => (drawerOpen.value = false));
   flex: 1;
 }
 .wb-brand-name {
-  font-size: var(--text-lg);
+  font-size: var(--text-base);
   font-weight: 600;
   letter-spacing: var(--track-title);
   color: var(--ds-color-text-primary);
@@ -415,8 +415,8 @@ watch(() => route.path, () => (drawerOpen.value = false));
   gap: var(--sp-1);
 }
 .wb-group-label {
-  padding: 0 var(--ds-space-3) var(--sp-3);
-  font-size: var(--text-xs);
+  padding: 0 var(--ds-space-3) var(--sp-2);
+  font-size: var(--text-4xs);
   font-weight: 600;
   letter-spacing: var(--track-label);
   color: var(--ds-color-text-placeholder);
@@ -431,16 +431,16 @@ watch(() => route.path, () => (drawerOpen.value = false));
   position: relative;
   display: flex;
   align-items: center;
-  gap: var(--sp-5);
+  gap: var(--sp-4);
   width: 100%;
-  height: 40px;
+  height: var(--h-lg);
   padding: 0 var(--ds-space-3);
   border: 1px solid transparent;
   border-radius: var(--r-ctl);
   background-color: transparent;
   color: var(--ds-color-text-description);
   font-family: inherit;
-  font-size: var(--text-base);
+  font-size: var(--text-xs);
   font-weight: 500;
   text-align: left;
   cursor: pointer;
@@ -517,7 +517,7 @@ watch(() => route.path, () => (drawerOpen.value = false));
   gap: var(--sp-1);
 }
 .wb-user-name {
-  font-size: var(--text-base);
+  font-size: var(--text-xs);
   font-weight: 600;
   color: var(--ds-color-text-primary);
   line-height: 1.2;
@@ -533,8 +533,8 @@ watch(() => route.path, () => (drawerOpen.value = false));
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: var(--h-lg);
-  height: var(--h-lg);
+  width: var(--h-md);
+  height: var(--h-md);
   border: 1px solid transparent;
   border-radius: var(--r-ctl);
   background: transparent;
@@ -562,8 +562,8 @@ watch(() => route.path, () => (drawerOpen.value = false));
 .wb-topbar {
   display: flex;
   align-items: center;
-  gap: var(--ds-space-3);
-  height: 56px;
+  gap: var(--ds-space-2);
+  height: var(--h-topbar);
   padding: 0 var(--ds-space-4);
   border-bottom: 1px solid var(--ds-color-border-default);
   background-color: var(--ds-color-bg-page);
@@ -571,7 +571,7 @@ watch(() => route.path, () => (drawerOpen.value = false));
 }
 @media (min-width: 768px) {
   .wb-topbar {
-    padding: 0 var(--ds-space-5);
+    padding: 0 var(--ds-space-4);
   }
 }
 .wb-burger {
@@ -588,7 +588,7 @@ watch(() => route.path, () => (drawerOpen.value = false));
   align-items: center;
   gap: var(--ds-space-2);
   min-width: 0;
-  font-size: var(--text-base);
+  font-size: var(--text-xs);
 }
 .wb-crumb-root {
   font-weight: 600;
@@ -652,7 +652,7 @@ watch(() => route.path, () => (drawerOpen.value = false));
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: var(--ds-space-5) var(--ds-space-6);
+  padding: var(--ds-space-4) var(--ds-space-5);
 }
 .wb-main.is-immersive {
   overflow: hidden;
@@ -700,7 +700,7 @@ watch(() => route.path, () => (drawerOpen.value = false));
   align-items: center;
   justify-content: space-between;
   gap: var(--ds-space-2);
-  height: 56px;
+  height: var(--h-topbar);
   padding: 0 var(--ds-space-3);
   border-bottom: 1px solid var(--ds-color-border-default);
   flex-shrink: 0;

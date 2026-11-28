@@ -19,12 +19,12 @@ export const zhNav = {
     promptPeek: '决策透视',
   },
   groups: {
-    command: '智能指挥与审计',
-    platform: '平台与系统管理',
+    command: '策略控制',
+    platform: '系统管理',
   },
   admin: {
-    agent: 'AI 指挥台',
-    strategy: '策略与调度',
+    agent: 'AI 助手',
+    strategy: '策略配置',
     decisions: '系统日志',
     security: '账户与应急',
     llm: '模型连接',

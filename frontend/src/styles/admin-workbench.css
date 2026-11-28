@@ -11,77 +11,77 @@
 
 .wb .card-head {
   background-color: transparent;
-  padding: var(--ds-space-4) var(--ds-space-5);
+  padding: var(--ds-space-3) var(--ds-space-4);
   border-bottom: 1px solid var(--ds-color-border-subtle);
-  min-height: 48px;
+  min-height: 44px;
 }
 
 .wb .card-title,
 .wb .section-title {
-  font-size: var(--text-lg);
+  font-size: var(--text-base);
   font-weight: 600;
   letter-spacing: var(--track-title);
 }
 
 .wb .card-sub,
 .wb .panel-desc {
-  font-size: var(--text-xs);
-  line-height: 1.55;
+  font-size: var(--text-4xs);
+  line-height: 1.5;
   color: var(--ds-color-text-description);
 }
 
 .wb .btn {
-  height: var(--h-lg);
-  padding: 0 var(--ds-space-4);
-  font-size: var(--text-base);
-  gap: var(--ds-space-2);
-}
-
-.wb .btn-sm {
   height: var(--h-md);
   padding: 0 var(--sp-6);
   font-size: var(--text-xs);
+  gap: var(--sp-3);
+}
+
+.wb .btn-sm {
+  height: var(--h-sm);
+  padding: 0 var(--sp-5);
+  font-size: var(--text-4xs);
 }
 
 .wb .btn-icon {
-  width: var(--h-lg);
+  width: var(--h-md);
   padding: 0;
 }
 
 .wb .btn-icon.btn-sm {
-  width: var(--h-md);
+  width: var(--h-sm);
   padding: 0;
 }
 
 .wb .field,
 .wb .input,
 .wb select.input {
-  height: var(--h-lg);
-  padding: 0 var(--sp-6);
-  font-size: var(--text-base);
+  height: var(--h-md);
+  padding: 0 var(--sp-5);
+  font-size: var(--text-xs);
 }
 
 .wb textarea.field,
 .wb textarea.input {
   height: auto;
-  padding: var(--sp-5) var(--sp-6);
-  font-size: var(--text-base);
+  padding: var(--sp-4) var(--sp-5);
+  font-size: var(--text-xs);
   line-height: var(--leading-body);
 }
 
 .wb .form-label {
-  font-size: var(--text-xs);
+  font-size: var(--text-4xs);
   font-weight: 500;
   color: var(--ds-color-text-description);
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
   text-transform: none;
 }
 
 .wb .badge,
 .wb .chip {
-  height: var(--sp-9);
-  padding: 0 var(--sp-5);
-  font-size: var(--text-xs);
+  height: var(--sp-8);
+  padding: 0 var(--sp-3);
+  font-size: var(--text-4xs);
 }
 
 .wb .seg {
@@ -89,63 +89,63 @@
 }
 
 .wb .seg button {
-  height: var(--h-md);
-  padding: 0 var(--sp-6);
-  font-size: var(--text-xs);
+  height: var(--h-sm);
+  padding: 0 var(--sp-5);
+  font-size: var(--text-4xs);
 }
 
 .wb .table {
-  font-size: var(--text-base);
+  font-size: var(--text-xs);
 }
 
 .wb .table th {
-  font-size: var(--text-xs);
-  padding: var(--ds-space-3) var(--ds-space-4);
+  font-size: var(--text-4xs);
+  padding: var(--sp-4) var(--ds-space-3);
 }
 
 .wb .table td {
-  height: 46px;
-  padding: var(--sp-4) var(--ds-space-4);
+  height: var(--row-h);
+  padding: var(--sp-3) var(--ds-space-3);
 }
 
 .wb .kv {
-  font-size: var(--text-base);
-  padding: var(--ds-space-2) 0;
+  font-size: var(--text-xs);
+  padding: var(--sp-3) 0;
 }
 
 .wb .log-panel {
-  font-size: var(--text-xs);
-  line-height: 1.65;
+  font-size: var(--text-4xs);
+  line-height: 1.55;
 }
 
 .wb .fact {
-  padding: var(--ds-space-5);
-  gap: var(--sp-3);
+  padding: var(--ds-space-4);
+  gap: var(--sp-2);
 }
 
 .wb .fact-label,
 .wb .fact-foot {
-  font-size: var(--text-xs);
+  font-size: var(--text-4xs);
 }
 
 .wb .fact-value {
-  font-size: var(--text-xl);
+  font-size: var(--text-lg);
   font-weight: 600;
 }
 
 /* 后台标准两栏设置行与内容面板（供多个 Admin 页复用） */
 .wb-panel-body {
-  padding: var(--ds-space-5);
+  padding: var(--ds-space-4);
   display: flex;
   flex-direction: column;
-  gap: var(--ds-space-4);
+  gap: var(--ds-space-3);
 }
 
 .wb-setting-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--ds-space-3);
-  padding: var(--ds-space-4) 0;
+  gap: var(--ds-space-2);
+  padding: var(--ds-space-3) 0;
   border-bottom: 1px solid var(--ds-color-border-subtle);
 }
 
@@ -174,14 +174,14 @@
 }
 
 .wb-setting-title {
-  font-size: var(--text-base);
+  font-size: var(--text-xs);
   font-weight: 600;
   color: var(--ds-color-text-primary);
 }
 
 .wb-setting-desc {
-  font-size: var(--text-xs);
-  line-height: 1.55;
+  font-size: var(--text-4xs);
+  line-height: 1.5;
   color: var(--ds-color-text-description);
 }
 
@@ -229,7 +229,7 @@
 }
 
 .wb [role='tablist']:not(.seg) [role='tab'] {
-  min-height: 40px;
-  padding: var(--ds-space-2) var(--ds-space-3);
-  font-size: var(--text-base);
+  min-height: var(--h-lg);
+  padding: var(--sp-3) var(--ds-space-3);
+  font-size: var(--text-xs);
 }

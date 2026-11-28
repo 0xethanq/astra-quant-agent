@@ -141,7 +141,6 @@ onMounted(load)
   <div class="au">
     <PageHeader :embedded="props.embedded" :title="t('nav.admin.audit')">
       <template #actions>
-        <span class="badge badge-accent mono">{{ t('admin.audit.badge') }}</span>
         <button type="button" class="btn btn-ghost btn-sm" :disabled="loading" @click="load">
           <Loader2 v-if="loading && records.length" :size="14" class="animate-spin shrink-0" />
           <RefreshCw v-else :size="14" />

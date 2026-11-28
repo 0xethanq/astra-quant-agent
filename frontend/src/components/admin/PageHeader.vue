@@ -67,15 +67,15 @@ defineProps<{
   min-width: 0;
 }
 .ph-title {
-  font-size: var(--text-2xl);
+  font-size: var(--text-xl);
   font-weight: 600;
   letter-spacing: var(--track-display);
   color: var(--ds-color-text-primary);
 }
 .ph-desc {
-  margin-top: var(--sp-3);
+  margin-top: var(--sp-2);
   max-width: 80ch;
-  font-size: var(--text-base);
+  font-size: var(--text-xs);
   line-height: var(--leading-body);
   color: var(--ds-color-text-description);
 }
@@ -86,20 +86,20 @@ defineProps<{
   border-bottom: 0;
 }
 .ph.is-embedded .ph-title {
-  font-size: var(--text-lg);
+  font-size: var(--text-base);
   color: var(--ds-color-text-primary);
 }
 
 .ph.is-compact {
   flex-direction: row;
   align-items: center;
-  gap: var(--ds-space-3);
+  gap: var(--ds-space-2);
   padding-bottom: 0;
   border-bottom: 0;
   animation: none;
 }
 .ph.is-compact .ph-title {
-  font-size: var(--text-lg);
+  font-size: var(--text-base);
   letter-spacing: var(--track-title);
 }
 

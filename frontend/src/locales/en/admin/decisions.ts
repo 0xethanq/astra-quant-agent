@@ -1,6 +1,6 @@
 export const enAdminDecisions = {
-  title: 'Logs & errors',
-  desc: 'Unified Log Hub: Live runtime logs, system-wide error center, and AI decision deliberations',
+  title: 'System Logs',
+  desc: 'Runtime logs, system errors, and AI decision records',
   normalRun: 'Normal operation',
   latestFirst: 'Newest first',
   tabTrader: 'Trader patrol (Trader)',
@@ -25,7 +25,7 @@ export const enAdminDecisions = {
   hubAria: 'Log hub category switcher',
 
   // Error Center
-  errorsTitle: 'System Errors & Critical Exceptions',
+  errorsTitle: 'System Errors',
   errorAll: 'All Errors',
   errorTrader: 'Trader (Trader)',
   errorBackend: 'Backend (Backend)',

@@ -101,7 +101,6 @@ onMounted(loadState);
     <PageHeader
       :title="t('admin.strategy.title')"
       :description="t('admin.strategy.desc')"
-      :badge="t('admin.strategy.badge')"
     >
       <template #actions>
         <div class="st-header-actions">
@@ -229,12 +228,12 @@ onMounted(loadState);
 }
 .st-readonly {
   margin: 0;
-  padding: var(--ds-space-3) var(--ds-space-4);
+  padding: var(--sp-4) var(--ds-space-3);
   border: 1px solid var(--warn-line);
   border-radius: var(--r-ctl);
   background-color: var(--warn-bg);
   color: var(--warn);
-  font-size: var(--text-base);
+  font-size: var(--text-xs);
 }
 .st-kpi-strip {
   display: grid;
@@ -243,19 +242,19 @@ onMounted(loadState);
 .st-kpi-cell {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-2);
-  padding: var(--ds-space-4) var(--ds-space-5);
+  gap: var(--sp-1);
+  padding: var(--ds-space-3) var(--ds-space-4);
   border-right: 1px solid var(--ds-color-border-subtle);
 }
 .st-kpi-cell:last-child {
   border-right: 0;
 }
 .st-kpi-label {
-  font-size: var(--text-xs);
+  font-size: var(--text-4xs);
   color: var(--ds-color-text-description);
 }
 .st-kpi-value {
-  font-size: var(--text-lg);
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--ds-color-text-primary);
 }

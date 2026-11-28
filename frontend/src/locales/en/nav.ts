@@ -18,12 +18,12 @@ export const enNav = {
     promptPeek: 'Decision peek',
   },
   groups: {
-    command: 'Command & Audit',
-    platform: 'Platform & System',
+    command: 'Strategy Control',
+    platform: 'System',
   },
   admin: {
-    agent: 'AI Console',
-    strategy: 'Strategy & Jobs',
+    agent: 'AI Assistant',
+    strategy: 'Strategy',
     decisions: 'System Logs',
     security: 'Account & Emergency',
     llm: 'LLM Providers',

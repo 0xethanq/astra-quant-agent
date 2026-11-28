@@ -7,9 +7,9 @@ export const zhAdminShell = {
   unsaved: '未保存',
   roleSuperadmin: 'SUPERADMIN',
   roleAdmin: 'ADMIN',
-  engineRunning: '交易正常',
-  enginePaused: '暂停开新仓',
-  engineStatusTip: '点击前往「策略与调度」切换全局交易开关',
+  engineRunning: '运行中',
+  enginePaused: '已暂停',
+  engineStatusTip: '前往「策略配置」切换全局开仓开关',
   switchLanguage: '切换界面语言',
   saveBar: {
     dirty: '本页有 {n} 处修改尚未保存',

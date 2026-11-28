@@ -103,7 +103,7 @@ onBeforeUnmount(() => {
 .ag-drawer {
   position: relative;
   z-index: 1;
-  width: 320px;
+  width: 280px;
   max-width: 88vw;
   height: 100%;
   display: flex;
@@ -116,12 +116,12 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   gap: var(--ds-space-2);
-  padding: var(--ds-space-3) var(--ds-space-4);
-  min-height: 52px;
+  padding: var(--sp-3) var(--ds-space-4);
+  min-height: 44px;
   border-bottom: 1px solid var(--ds-color-border-subtle);
 }
 .ag-drawer-title {
-  font-size: var(--text-base);
+  font-size: var(--text-xs);
   font-weight: 600;
   color: var(--ds-color-text-primary);
 }
@@ -142,7 +142,7 @@ onBeforeUnmount(() => {
 .ag-drawer-empty {
   padding: var(--ds-space-4);
   margin: 0;
-  font-size: var(--text-base);
+  font-size: var(--text-xs);
   line-height: 1.55;
   color: var(--ds-color-text-muted);
 }
@@ -165,12 +165,12 @@ onBeforeUnmount(() => {
 .ag-drawer-select {
   flex: 1;
   min-width: 0;
-  min-height: 36px;
+  min-height: var(--h-md);
   display: flex;
   align-items: center;
   gap: var(--ds-space-2);
   padding: var(--sp-2) var(--sp-4);
-  font-size: var(--text-base);
+  font-size: var(--text-xs);
   color: var(--ds-color-text-primary);
   text-align: left;
 }

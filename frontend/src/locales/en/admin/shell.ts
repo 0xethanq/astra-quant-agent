@@ -6,9 +6,9 @@ export const enAdminShell = {
   unsaved: 'Unsaved',
   roleSuperadmin: 'SUPERADMIN',
   roleAdmin: 'ADMIN',
-  engineRunning: 'Engine Active',
-  enginePaused: 'Entries Paused',
-  engineStatusTip: 'Open Strategy & Schedule to toggle global trading gate',
+  engineRunning: 'Active',
+  enginePaused: 'Paused',
+  engineStatusTip: 'Open Strategy to toggle global entry gate',
   switchLanguage: 'Switch interface language',
   saveBar: {
     dirty: '{n} unsaved change(s) on this page',

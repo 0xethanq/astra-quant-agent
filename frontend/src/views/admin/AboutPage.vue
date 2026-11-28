@@ -172,7 +172,6 @@ const bandFacts = computed(() => {
   <div class="ab">
     <PageHeader :embedded="props.embedded" :title="t('admin.about.title')">
       <template #actions>
-        <span class="badge badge-accent mono">{{ t('admin.about.badge') }}</span>
         <button type="button" class="btn btn-ghost btn-sm" :disabled="loading" @click="load">
           <Loader2 v-if="loading && loaded" :size="14" class="animate-spin shrink-0" />
           <RefreshCw v-else :size="14" />

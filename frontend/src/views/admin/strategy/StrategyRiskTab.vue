@@ -424,7 +424,7 @@ async function saveRisk() {
 }
 .st-muted {
   margin: 0;
-  font-size: var(--text-xs);
+  font-size: var(--text-4xs);
   line-height: 1.5;
   color: var(--ds-color-text-description);
 }
@@ -438,7 +438,7 @@ async function saveRisk() {
   display: inline-flex;
   align-items: center;
   gap: var(--ds-space-2);
-  font-size: var(--text-base);
+  font-size: var(--text-xs);
 }
 .st-err-line {
   margin: 0;
