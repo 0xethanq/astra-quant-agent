@@ -269,7 +269,8 @@ def run_deterministic_walk_forward(
                         ic_fwds.append((fwd_c - cur_c) / cur_c)
 
                 base = sym.split("-")[0]
-                if base in open_bases or adapter.open_orders(sym):
+                has_pending = hasattr(adapter, "open_orders") and bool(adapter.open_orders(sym))
+                if base in open_bases or has_pending:
                     continue
 
                 atr = float(f["volatility_channel"].get("atr_1h") or 0.0)
