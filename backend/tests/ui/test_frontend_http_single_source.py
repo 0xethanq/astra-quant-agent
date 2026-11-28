@@ -189,7 +189,7 @@ class ErrorContractTest(unittest.TestCase):
 
 
 class ConsumersKeepWorkingTest(unittest.TestCase):
-    """⚠️ 20 个消费方都写 `const { api } = useApi()` —— 这个形状必须保持。"""
+    """⚠️ 消费方（Admin 12→6 精简后为 14 个）都写 `const { api } = useApi()` —— 这个形状必须保持。"""
 
     def test_all_consumers_still_destructure_api(self):
         hits = []
@@ -200,7 +200,7 @@ class ConsumersKeepWorkingTest(unittest.TestCase):
                 continue
             if "useApi()" in _read(p):
                 hits.append(p)
-        self.assertGreaterEqual(len(hits), 15, f"useApi 消费方异常地少: {len(hits)}")
+        self.assertGreaterEqual(len(hits), 12, f"useApi 消费方异常地少: {len(hits)}")
         for p in hits:
             src = _read(p)
             for m in re.finditer(r"const \{([^}]*)\} = useApi\(\)", src):

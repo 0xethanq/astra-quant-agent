@@ -52,7 +52,7 @@ def _build_live_snapshot_market_context() -> tuple[str, Dict[str, Any]]:
         for pos in positions[:8]:
             if isinstance(pos, dict):
                 lines.append(
-                    f"- 标的: {pos.get('instId', '—')} | 方向: {pos.get('posSide', '—')}"
+                    f"- 标的: {pos.get('instId', '—')} | 方向: {pos.get('posSide') or '—'}"
                     f" | 持仓量: {pos.get('pos', '—')} | 未结浮盈: {pos.get('upl', '—')}"
                 )
         if not positions:
