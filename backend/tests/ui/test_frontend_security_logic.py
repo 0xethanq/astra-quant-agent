@@ -59,6 +59,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 MODULE = ROOT / "frontend" / "src" / "views" / "admin" / "securityLogic.ts"
 PAGE = ROOT / "frontend" / "src" / "views" / "admin" / "SecurityPage.vue"
+SECURITY_DIR = ROOT / "frontend" / "src" / "views" / "admin" / "security"
 
 NODE = shutil.which("node")
 
@@ -226,10 +227,17 @@ class WiringTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.page = PAGE.read_text(encoding="utf-8")
+        parts = [PAGE.read_text(encoding="utf-8")]
+        if SECURITY_DIR.is_dir():
+            parts.extend(p.read_text(encoding="utf-8") for p in sorted(SECURITY_DIR.glob("*.ts")))
+            parts.extend(p.read_text(encoding="utf-8") for p in sorted(SECURITY_DIR.glob("*.vue")))
+        cls.page = "\n".join(parts)
 
     def test_page_imports_the_module(self):
-        self.assertIn("from './securityLogic'", self.page)
+        self.assertTrue(
+            "from '../securityLogic'" in self.page or "from './securityLogic'" in self.page,
+            "SecurityPage 或拆分组件未导入 securityLogic",
+        )
 
     def test_page_uses_the_four_surviving_helpers(self):
         for call in ("deriveOkxLinked(", "deriveMxHealthChips(", "okxEnvText", "envBadge("):

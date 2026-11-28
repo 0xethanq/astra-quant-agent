@@ -55,7 +55,7 @@
 ### L2 HTTP 边界 — `routers/`
 
 `auth` / `system` / `exchanges` / `risk` / `strategy` / `llm` / `gateway` /
-`agent` / `dashboard`（含 `plaza` 实盘共享子路由）。**路由层只做参数校验与调用编排，不放业务逻辑。**
+`agent` / `control_plane` / `dashboard`（含 `plaza` 实盘共享子路由）。**路由层只做参数校验与调用编排，不放业务逻辑。**
 路由瘦身的正确做法是把业务下沉到 `exchanges/`、`execution/`、
 `dashboard_payload/`，路由保留薄壳（与 `astra_backend/dashboard_cache.py` 降为纯库同一手法）。
 
@@ -86,7 +86,7 @@ council → policy → prompts；路由表对拍门 `tests/trading/test_strategy
 | 审计与备份 | `audit.py`、`backup_store.py`、`backup_secrets.py`、`file_locks.py` |
 | 组合与账户 | `portfolio_aggregator.py`、`account_baseline.py`、`evolution_config.py`、`plaza_share.py` |
 | 提示词 | `prompt_views.py`、`dashboard_payload/prompts*` |
-| 通用 | `time_utils.py`、`math_utils.py`、`schemas.py`、`schedule_store.py`、`trading_session_store.py`（交易时段配置的读写；判定纯函数在 `scripts/trader/session.py`） |
+| 通用 | `time_utils.py`、`math_utils.py`、`schemas.py`、`schedule_store.py`、`trading_session_store.py`（交易时段配置的读写；判定纯函数在 `scripts/trader/session.py`）、`job_runner.py`（后台控制面受控脚本异步执行器） |
 | 可观测性 | `metrics.py`（Prometheus 文本 exposition 的唯一渲染点；路由薄壳在 `routers/system.py::admin_metrics`） |
 
 ### L4 纯计算/载荷子包（新代码的默认去处）

@@ -182,13 +182,14 @@ def trigger_job_async(
             status = "failed"
             error_msg = str(exc)[:300]
 
-        duration_ms = max(0, int((time.monotonic() - t0) * 1000))
+        elapsed_ms = max(0, int((time.monotonic() - t0) * 1000))
         with _LOCK:
             for entry in _RUNS:
                 if entry["run_id"] == run_id:
                     entry["status"] = status
                     entry["finished_at"] = _now_bj()
-                    entry["duration_ms"] = duration_ms
+                    entry["duration_ms"] = max(0, int((time.monotonic() - t0) * 1000))
+                    elapsed_ms = entry["duration_ms"]
                     entry["returncode"] = rc
                     entry["output_tail"] = output_tail
                     entry["error"] = error_msg
@@ -198,7 +199,7 @@ def trigger_job_async(
             audit_record(
                 f"control_plane.job.{job_id}",
                 status,
-                {"actor": actor, "run_id": run_id, "duration_ms": duration_ms, "returncode": rc},
+                {"actor": actor, "run_id": run_id, "duration_ms": elapsed_ms, "returncode": rc},
             )
         except Exception:
             pass

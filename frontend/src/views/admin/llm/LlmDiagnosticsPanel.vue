@@ -5,7 +5,12 @@ import { useI18n } from '../../../composables/useI18n';
 import { useLlmCtx } from './injection';
 
 const { t } = useI18n();
-const { cacheStatus, cleanupResult, healthWarnings, testAllResult } = useLlmCtx();
+const {
+  cacheStatus,
+  cleanupResult,
+  healthWarnings,
+  testAllResult,
+} = useLlmCtx()
 
 function fmtTokensCompact(val: number | string | null | undefined): string {
   const n = Number(val || 0);

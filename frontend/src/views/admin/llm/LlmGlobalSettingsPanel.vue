@@ -12,7 +12,7 @@ const {
   setPresetTimeout,
   settingsResult,
   thinkingTimeoutInput,
-} = useLlmCtx();
+} = useLlmCtx()
 
 const TIMEOUT_PRESETS = [
   { sec: 30, labelKey: 'admin.llm.presetFast' },
