@@ -135,7 +135,7 @@ const closeReady = computed(() => {
 // ---- 交易环境与健康状态 ----
 const mx = ref<any>(null)
 const okxCredViewLive = ref(false)
-const orderMode = ref<'limit' | 'market'>('market')
+const orderMode = ref<'limit' | 'market' | 'smart'>('smart')
 const savingOrderMode = ref(false)
 const scaleOutEnabled = ref(true)
 const savingScaleOut = ref(false)
@@ -205,9 +205,10 @@ async function loadAll() {
       okxCredViewLive.value = (cfg.editable.okx_environment === 'live')
     }
     if (cfg?.editable?.order_mode) {
-      orderMode.value = (cfg.editable.order_mode === 'limit' ? 'limit' : 'market')
+      const m = String(cfg.editable.order_mode).trim().toLowerCase()
+      orderMode.value = (m === 'limit' || m === 'smart' ? m : 'market')
     } else {
-      orderMode.value = 'market'
+      orderMode.value = 'smart'
     }
     scaleOutEnabled.value = cfg?.editable?.scale_out_enabled !== false
     newCapital.value = String(cfg.editable?.initial_capital ?? '')
@@ -457,8 +458,12 @@ const bandFacts = computed(() => {
     {
       icon: Zap,
       label: t('admin.security.orderModeTitle'),
-      value: orderMode.value === 'market' ? t('admin.security.optMarket') : t('admin.security.optLimit'),
-      foot: orderMode.value === 'market' ? 'Taker · 即时吃单' : 'Maker · 挂单等待',
+      value: orderMode.value === 'smart'
+        ? t('admin.security.optSmart')
+        : orderMode.value === 'market' ? t('admin.security.optMarket') : t('admin.security.optLimit'),
+      foot: orderMode.value === 'smart'
+        ? t('admin.security.orderModeFootSmart')
+        : orderMode.value === 'market' ? t('admin.security.orderModeFootMarket') : t('admin.security.orderModeFootLimit'),
       tone: '',
     },
     {
@@ -570,7 +575,7 @@ onMounted(() => {
           {{ isUnifiedLive ? t('admin.security.envLive') : t('admin.security.optDemo') }}
         </span>
         <span class="badge badge-accent mono">
-          {{ orderMode === 'market' ? t('admin.security.optMarket') : t('admin.security.optLimit') }}
+          {{ orderMode === 'smart' ? t('admin.security.optSmart') : orderMode === 'market' ? t('admin.security.optMarket') : t('admin.security.optLimit') }}
         </span>
         <button type="button" class="btn btn-ghost btn-sm" :disabled="loading" @click="loadAll">
           <Loader2 v-if="loading && config" :size="14" class="animate-spin shrink-0" />
@@ -684,6 +689,14 @@ onMounted(() => {
             <div class="seg seg-compact" role="group" :aria-label="t('admin.security.orderModeTitle')">
               <button
                 type="button"
+                :aria-pressed="orderMode === 'smart'"
+                :class="{ 'seg-on': orderMode === 'smart' }"
+                @click="orderMode = 'smart'"
+              >
+                <span>{{ t('admin.security.optSmart') }}</span>
+              </button>
+              <button
+                type="button"
                 :aria-pressed="orderMode === 'limit'"
                 :class="{ 'seg-on': orderMode === 'limit' }"
                 @click="orderMode = 'limit'"
@@ -700,7 +713,7 @@ onMounted(() => {
               </button>
             </div>
             <p class="sc-hint">
-              {{ orderMode === 'market' ? t('admin.security.orderModeMarketHint') : t('admin.security.orderModeLimitHint') }}
+              {{ orderMode === 'smart' ? t('admin.security.orderModeSmartHint') : orderMode === 'market' ? t('admin.security.orderModeMarketHint') : t('admin.security.orderModeLimitHint') }}
             </p>
           </div>
         </SettingsSection>

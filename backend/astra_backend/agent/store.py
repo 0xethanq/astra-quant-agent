@@ -136,6 +136,7 @@ class AgentStore:
         }
 
     def _row_to_proposal(self, row: sqlite3.Row) -> Dict[str, Any]:
+        applied_res = _json_loads(row["applied_result_json"], {})
         return {
             "id": str(row["id"]),
             "session_id": str(row["session_id"]),
@@ -145,7 +146,8 @@ class AgentStore:
             "items": _json_loads(row["items_json"], []),
             "snapshot_hash": str(row["snapshot_hash"]),
             "pre_state": _json_loads(row["pre_state_json"], {}),
-            "applied_result": _json_loads(row["applied_result_json"], {}),
+            "applied_result": applied_res,
+            "rolled_back": bool(isinstance(applied_res, dict) and applied_res.get("rolled_back", False)),
             "actor": str(row["actor"]),
             "created_at": str(row["created_at"]),
             "resolved_at": str(row["resolved_at"]),

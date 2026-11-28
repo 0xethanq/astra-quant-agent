@@ -621,6 +621,117 @@ class AgentRouterApiTests(_AgentSandboxCase):
         self.assertEqual(apply_res.status_code, 200, apply_res.text)
         self.assertTrue(apply_res.json()["ok"])
 
+        # New endpoints: insights, inspector, and proposal rollback RBAC + execution
+        self.assertEqual(self.client.get("/api/v1/admin/agent/insights").status_code, 401)
+        self.assertEqual(self.client.get("/api/v1/admin/agent/inspector").status_code, 401)
+
+        ins_res = self.client.get("/api/v1/admin/agent/insights", headers=op_hdrs)
+        self.assertEqual(ins_res.status_code, 200, ins_res.text)
+        self.assertIn("health_score", ins_res.json())
+        self.assertIn("insights", ins_res.json())
+
+        insp_res = self.client.get("/api/v1/admin/agent/inspector", headers=op_hdrs)
+        self.assertEqual(insp_res.status_code, 200, insp_res.text)
+        for tab in ("overview", "risk", "prompt", "council", "snapshots"):
+            self.assertIn(tab, insp_res.json())
+
+        self.assertEqual(
+            self.client.post(f"/api/v1/admin/agent/proposals/{prop['id']}/rollback", headers=op_hdrs).status_code,
+            403,
+        )
+        rb_res = self.client.post(f"/api/v1/admin/agent/proposals/{prop['id']}/rollback", headers=su_hdrs)
+        self.assertEqual(rb_res.status_code, 200, rb_res.text)
+        self.assertTrue(rb_res.json()["proposal"]["rolled_back"])
+        # Repeat rollback rejected
+        self.assertEqual(
+            self.client.post(f"/api/v1/admin/agent/proposals/{prop['id']}/rollback", headers=su_hdrs).status_code,
+            400,
+        )
+
+    def test_v910_diagnostics_order_mode_rollback_and_parallel_telemetry(self) -> None:
+        # 1. Four new read diagnostic tools work in sandbox
+        funnel = agent_tools_read.execute_read_tool("diagnose_order_funnel", {"cycles": 10})
+        self.assertIn("omitted_rate_pct", funnel)
+        self.assertIn("gate_and_cancel_counts", funnel)
+
+        conflicts = agent_tools_read.execute_read_tool("audit_strategy_conflicts", {})
+        self.assertIn("conflicts", conflicts)
+        self.assertIn("risk_audit", conflicts)
+
+        debates = agent_tools_read.execute_read_tool("inspect_council_debates", {"cycles": 5})
+        self.assertIn("council_rounds", debates)
+
+        exec_view = agent_tools_read.execute_read_tool("inspect_order_execution_and_cancels", {"lines": 20})
+        self.assertIn("order_mode", exec_view)
+
+        # 2. propose_order_mode_update + apply + rollback
+        store = agent_engine.AgentStore()
+        sess = store.create_session(actor="root", title="v910测试")
+        with patch.dict(os.environ, {"ASTRA_ORDER_MODE": "limit"}):
+            om_item = agent_tools_write.build_proposal_item(
+                "propose_order_mode_update",
+                {"order_mode": "smart", "reason": "启用自适应撮合"},
+            )
+            self.assertEqual(om_item["domain"], "order_mode")
+            prop = store.create_proposal(sess["id"], title="切换 smart", items=[om_item], actor="root")
+            applied = agent_router.apply_proposal(store=store, proposal_id=prop["id"], actor="root")
+            self.assertTrue(applied["ok"])
+            self.assertEqual(os.environ.get("ASTRA_ORDER_MODE"), "smart")
+
+            rolled = agent_router.rollback_proposal(store=store, proposal_id=prop["id"], actor="root")
+            self.assertTrue(rolled["ok"])
+            self.assertTrue(rolled["proposal"]["rolled_back"])
+            self.assertEqual(os.environ.get("ASTRA_ORDER_MODE"), "limit")
+
+        # 3. Parallel read execution & history context retention
+        store.append_message(
+            sess["id"],
+            role="assistant",
+            content="第一轮结论",
+            tool_calls=[{"name": "diagnose_order_funnel", "summary": "遗漏率 0%"}],
+            proposal_ids=[prop["id"]],
+        )
+        msgs_ctx = agent_engine._build_conversation_messages(
+            store.list_messages(sess["id"]),
+            True,
+            proposals_by_id={prop["id"]: rolled["proposal"]},
+        )
+        joined = "\n".join(m["content"] for m in msgs_ctx)
+        self.assertIn("历史工具摘要", joined)
+        self.assertIn("已回滚", joined)
+
+        async def _parallel_stream(runtime, messages, tools, **kwargs):
+            if len(messages) == 2:
+                yield {
+                    "type": "tool_calls",
+                    "calls": [
+                        {"id": "p1", "name": "diagnose_order_funnel", "arguments": {}},
+                        {"id": "p2", "name": "audit_strategy_conflicts", "arguments": {}},
+                    ],
+                }
+            else:
+                yield {"type": "text_delta", "text": "并行诊断完毕。"}
+
+        async def _collect():
+            with patch.object(agent_engine, "resolve_agent_llm_runtime", return_value={"model": "m", "api_format": "openai_chat"}):
+                with patch.object(agent_engine, "stream_llm_turn", side_effect=_parallel_stream):
+                    return [
+                        ev async for ev in agent_engine.run_agent_chat(
+                            store=store,
+                            session_id=sess["id"],
+                            user_message="检查并对比",
+                            actor="root",
+                            is_superadmin=True,
+                        )
+                    ]
+
+        import asyncio
+        evs = asyncio.run(_collect())
+        trs = [e for e in evs if e["type"] == "tool_result"]
+        self.assertEqual([t["id"] for t in trs], ["p1", "p2"])
+        self.assertIn("duration_ms", trs[0])
+        self.assertIn("result_preview", trs[0])
+
 
 if __name__ == "__main__":
     unittest.main()

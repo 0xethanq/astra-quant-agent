@@ -181,6 +181,11 @@ class OrderTypeWordingTest(unittest.TestCase):
         """限价档逐字保持原样（不许顺手改既有文案）。"""
         self.assertIn("AI限价多单已提交待成交", self._msg("limit"))
 
+    def test_smart_mode_says_smart(self):
+        msg = self._msg("smart")
+        self.assertIn("AI智能多单已提交", msg, "智能档必须写「智能」")
+        self.assertNotIn("待成交", msg)
+
     def test_failure_message_follows_the_mode(self):
         with patch.dict(os.environ, {"ASTRA_ORDER_MODE": "market"}):
             self.assertIn("AI市价多单提交失败", notifications.entry_failure_message(

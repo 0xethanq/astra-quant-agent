@@ -206,10 +206,10 @@ SUITES: list[dict[str, Any]] = [
          "ASTRA_MAX_SCALE_IN_COUNT": 0, "ASTRA_MIN_SCALE_IN_PROFIT_RATIO": 0.012, "ASTRA_MIN_SCALE_IN_CONFIDENCE": 85.0,
          "ASTRA_MAX_TOTAL_EXPOSURE_USDT": 600.0,
          "ASTRA_SCALE_OUT_ENABLED": 1, "ASTRA_SCALE_OUT_RATIO": 0.30, "ASTRA_SCALE_OUT_TRIGGER_ATR": 2.20,
-         "ASTRA_MAX_TAKE_PROFIT_ATR": 2.80,
+         "ASTRA_MAX_TAKE_PROFIT_ATR": 4.20,
          "ASTRA_MAX_PORTFOLIO_OPEN_RISK_R": 2.0, "ASTRA_COUNTER_4H_RISK_SCALE": 0.3,
-         "ASTRA_COUNTER_4H_MIN_CONFIDENCE": 85.0, "ASTRA_LIMIT_ORDER_TTL_MINUTES": 45,
-         "ASTRA_LIMIT_ORDER_DRIFT_ATR": 0.6,
+         "ASTRA_COUNTER_4H_MIN_CONFIDENCE": 85.0, "ASTRA_LIMIT_ORDER_TTL_MINUTES": 60,
+         "ASTRA_LIMIT_ORDER_DRIFT_ATR": 1.0,
      }},
     {"id": "balanced", "name": "平衡", "tagline": "出厂默认推荐 · 攻守兼备",
      "desc": "系统出厂推荐基准，适合绝大多数常规趋势行情。杠杆自适应在 2x~5x 之间，单笔仓位上限 20%，"
@@ -217,25 +217,25 @@ SUITES: list[dict[str, Any]] = [
              "当底仓建立可观浮盈后允许顺势追加 1 次，浮盈达 2.0x ATR 时自动平仓 35% 锁定利润并将止损推至成本保本，"
              "日亏 5% 熔断。兼顾收益爆发力与防守底线。",
      "values": {key: DEFAULTS[key] for key in DEFAULTS}},
-    {"id": "aggressive", "name": "激进", "tagline": "大单边高周转 · 经验交易者专用",
+    {"id": "aggressive", "name": "激进", "tagline": "高频活跃大单边 · 经验交易者专用",
      "desc": "专为追求高周转率与大单边行情的资深交易者打造。杠杆区间放宽至 6x~9.9x，单笔仓位上限提升至 40%，"
-             "单笔 1R 风险放大至 4.5%，单币集中度放宽至 48%，盈亏比上限拉伸至 5.0:1，止损冷静期缩短至 15 分钟快速再上车。"
-             "AI 准入门禁 68%，允许顺势金字塔加仓 2 次放大单边赢利，日亏熔断线设为 10%。"
+             "单笔 1R 风险放大至 4.5%，单币集中度放宽至 48%，盈亏比下限放宽至 1.4:1、上限拉伸至 5.0:1，"
+             "止损冷静期缩短至 15 分钟快速再上车。AI 准入门禁 65%，允许顺势金字塔加仓 2 次放大单边赢利，日亏熔断线设为 10%。"
              "在承受合理回撤的前提下最大化波段收益弹性。",
      "values": {
          "ASTRA_PORTFOLIO_RISK_BUDGET_USDT": 0.0,
          "ASTRA_MAX_CONCURRENT_POSITIONS": 0, "ASTRA_MAX_SAME_DIRECTION_POSITIONS": 5,
          "ASTRA_MAX_MARGIN_EQUITY_RATIO": 0.40, "ASTRA_SINGLE_ASSET_EQUITY_RATIO": 0.48,
          "ASTRA_MAX_SINGLE_ASSET_MARGIN_USDT": 0.0, "ASTRA_MIN_LEVERAGE": 6.0, "ASTRA_MAX_LEVERAGE": 9.9,
-         "ASTRA_RISK_PER_TRADE_RATIO": 0.045, "ASTRA_MAX_RISK_PER_TRADE_USDT": 0.0, "ASTRA_MIN_RISK_REWARD": 1.6, "ASTRA_MAX_RISK_REWARD": 5.0,
-         "ASTRA_MIN_ENTRY_CONFIDENCE": 68.0,
-         "ASTRA_STOP_LOSS_ATR_MULT": 2.0,
+         "ASTRA_RISK_PER_TRADE_RATIO": 0.045, "ASTRA_MAX_RISK_PER_TRADE_USDT": 0.0, "ASTRA_MIN_RISK_REWARD": 1.4, "ASTRA_MAX_RISK_REWARD": 5.0,
+         "ASTRA_MIN_ENTRY_CONFIDENCE": 65.0,
+         "ASTRA_STOP_LOSS_ATR_MULT": 1.8,
          "ASTRA_DAILY_LOSS_EQUITY_RATIO": 0.10, "ASTRA_MAX_DAILY_LOSS_USDT": 500.0,
          "ASTRA_TIME_STOP_HOURS": 8.0, "ASTRA_TIME_STOP_ATR_BAND": 0.15, "ASTRA_STOP_COOLDOWN_MINUTES": 15,
-         "ASTRA_MAX_SCALE_IN_COUNT": 2, "ASTRA_MIN_SCALE_IN_PROFIT_RATIO": 0.006, "ASTRA_MIN_SCALE_IN_CONFIDENCE": 68.0,
+         "ASTRA_MAX_SCALE_IN_COUNT": 2, "ASTRA_MIN_SCALE_IN_PROFIT_RATIO": 0.006, "ASTRA_MIN_SCALE_IN_CONFIDENCE": 65.0,
          "ASTRA_MAX_TOTAL_EXPOSURE_USDT": 50000.0,
-         "ASTRA_SCALE_OUT_ENABLED": 1, "ASTRA_SCALE_OUT_RATIO": 0.40, "ASTRA_SCALE_OUT_TRIGGER_ATR": 2.20,
-         "ASTRA_MAX_TAKE_PROFIT_ATR": 4.50,
+         "ASTRA_SCALE_OUT_ENABLED": 1, "ASTRA_SCALE_OUT_RATIO": 0.35, "ASTRA_SCALE_OUT_TRIGGER_ATR": 2.00,
+         "ASTRA_MAX_TAKE_PROFIT_ATR": 4.20,
          "ASTRA_MAX_PORTFOLIO_OPEN_RISK_R": 4.5, "ASTRA_COUNTER_4H_RISK_SCALE": 0.7,
          "ASTRA_COUNTER_4H_MIN_CONFIDENCE": 75.0, "ASTRA_LIMIT_ORDER_TTL_MINUTES": 90,
          "ASTRA_LIMIT_ORDER_DRIFT_ATR": 1.2,
@@ -433,7 +433,7 @@ def effective_engine_values(usdt_available: float | None = None,
         "pool_size_used": pool_size,
         # 2026-10：目标 R:R 的下限由硬编码 2.2 改为跟随可配的硬底线 ——
         # 与下方「目标盈亏比 R:R」文案同源，避免"页面显示 1.6、提示词仍说 ≥2.2"。
-        "target_rr": round(max(1.6, float(MIN_RISK_REWARD_RATIO or 0.0)), 2),
+        "target_rr": round(max(1.4, float(MIN_RISK_REWARD_RATIO or 0.0)), 2),
         "max_risk_reward": float(MAX_RISK_REWARD_RATIO),
         "max_take_profit_atr": float(MAX_TAKE_PROFIT_ATR),
         "stop_loss_atr_mult": float(STOP_LOSS_ATR_MULT),
@@ -503,3 +503,117 @@ def normalize(values: Mapping[str, Any]) -> dict[str, str]:
 
 def reset_keys() -> list[str]:
     return list(RISK_ENV_KEYS)
+
+
+def audit_risk_consistency(values: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    """Check mathematical consistency and execution viability across risk parameters."""
+    vals = dict(values) if values is not None else current_values()
+
+    def _f(key: str, default: float) -> float:
+        try:
+            return float(vals.get(key, default))
+        except (TypeError, ValueError):
+            return float(default)
+
+    def _i(key: str, default: int) -> int:
+        try:
+            return int(round(float(vals.get(key, default))))
+        except (TypeError, ValueError):
+            return int(default)
+
+    sl_atr = _f("ASTRA_STOP_LOSS_ATR_MULT", DEFAULTS["ASTRA_STOP_LOSS_ATR_MULT"])
+    tp_cap_atr = _f("ASTRA_MAX_TAKE_PROFIT_ATR", DEFAULTS["ASTRA_MAX_TAKE_PROFIT_ATR"])
+    min_rr = _f("ASTRA_MIN_RISK_REWARD", DEFAULTS["ASTRA_MIN_RISK_REWARD"])
+    max_rr = _f("ASTRA_MAX_RISK_REWARD", DEFAULTS["ASTRA_MAX_RISK_REWARD"])
+    min_conf = _f("ASTRA_MIN_ENTRY_CONFIDENCE", DEFAULTS["ASTRA_MIN_ENTRY_CONFIDENCE"])
+    counter_conf = _f("ASTRA_COUNTER_4H_MIN_CONFIDENCE", DEFAULTS["ASTRA_COUNTER_4H_MIN_CONFIDENCE"])
+    scale_out_enabled = _i("ASTRA_SCALE_OUT_ENABLED", int(DEFAULTS["ASTRA_SCALE_OUT_ENABLED"]))
+    scale_out_trig = _f("ASTRA_SCALE_OUT_TRIGGER_ATR", DEFAULTS["ASTRA_SCALE_OUT_TRIGGER_ATR"])
+    ttl_minutes = _i("ASTRA_LIMIT_ORDER_TTL_MINUTES", int(DEFAULTS["ASTRA_LIMIT_ORDER_TTL_MINUTES"]))
+    drift_atr = _f("ASTRA_LIMIT_ORDER_DRIFT_ATR", DEFAULTS["ASTRA_LIMIT_ORDER_DRIFT_ATR"])
+
+    theoretical_max_rr = round(tp_cap_atr / sl_atr, 4) if sl_atr > 0 else 0.0
+    issues: list[dict[str, Any]] = []
+
+    if sl_atr > 0 and theoretical_max_rr + 1e-4 < min_rr:
+        issues.append({
+            "code": "SL_TP_RR_DEADLOCK",
+            "severity": "critical",
+            "title": "止盈 ATR 上限与最低盈亏比构成数学死锁",
+            "detail": (
+                f"当前止盈宽度上限 ({tp_cap_atr:g}x ATR) ÷ 止损距离 ({sl_atr:g}x ATR) = "
+                f"理论最大盈亏比 {theoretical_max_rr:.2f}:1，低于最低盈亏比底线 {min_rr:g}:1，导致所有新单在风控门禁被物理拦截。"
+            ),
+            "recommendation": f"将 ASTRA_MAX_TAKE_PROFIT_ATR 提高至 ≥ {round(sl_atr * max(min_rr + 0.3, min_rr), 2):g} 或下调 ASTRA_MIN_RISK_REWARD / ASTRA_STOP_LOSS_ATR_MULT。",
+        })
+    elif sl_atr > 0 and theoretical_max_rr < min_rr + 0.15:
+        issues.append({
+            "code": "SL_TP_RR_TIGHT_MARGIN",
+            "severity": "warning",
+            "title": "理论最大盈亏比余量偏窄",
+            "detail": (
+                f"理论最大盈亏比 {theoretical_max_rr:.2f}:1 仅比最低底线 {min_rr:g}:1 高 "
+                f"{round(theoretical_max_rr - min_rr, 2):.2f}，宽止损结构单极易触顶裁减后被拒绝。"
+            ),
+            "recommendation": "建议适度放宽 ASTRA_MAX_TAKE_PROFIT_ATR 至 ≥ 4.2x ATR。",
+        })
+
+    if min_rr > max_rr:
+        issues.append({
+            "code": "RR_RANGE_INVERTED",
+            "severity": "critical",
+            "title": "盈亏比上下限倒置",
+            "detail": f"最小盈亏比 {min_rr:g} 高于最大盈亏比 {max_rr:g}。",
+            "recommendation": "保持 ASTRA_MIN_RISK_REWARD ≤ ASTRA_MAX_RISK_REWARD。",
+        })
+
+    if scale_out_enabled:
+        if scale_out_trig < sl_atr:
+            issues.append({
+                "code": "SCALE_OUT_BEFORE_SL",
+                "severity": "warning",
+                "title": "分批止盈触发门槛低于止损宽度",
+                "detail": f"分批止盈触发 {scale_out_trig:g}x ATR 小于止损 {sl_atr:g}x ATR，可能形成赢小输大结构。",
+                "recommendation": f"保持 ASTRA_SCALE_OUT_TRIGGER_ATR ≥ {max(1.8, sl_atr):g}。",
+            })
+        if scale_out_trig > tp_cap_atr:
+            issues.append({
+                "code": "SCALE_OUT_ABOVE_TP_CAP",
+                "severity": "warning",
+                "title": "分批止盈门槛高于总止盈宽度上限",
+                "detail": f"分批门槛 {scale_out_trig:g}x ATR 超过最大止盈 {tp_cap_atr:g}x ATR，可能导致分批止盈无法提前触发。",
+                "recommendation": "提高 ASTRA_MAX_TAKE_PROFIT_ATR 或下调分批门槛。",
+            })
+
+    if ttl_minutes < 60 or drift_atr < 0.8:
+        issues.append({
+            "code": "LIMIT_ORDER_STRICT_EXPIRY",
+            "severity": "warning",
+            "title": "限价单过期/漂移撤单偏紧",
+            "detail": f"当前挂单 TTL={ttl_minutes}m、漂移撤单阈值={drift_atr:g}x ATR，趋势微幅拉扯易反复撤单空转。",
+            "recommendation": "建议搭配智能订单模式 (smart)，并将 TTL ≥ 60~90m、漂移阈值 ≥ 1.0~1.2x ATR。",
+        })
+
+    if counter_conf < min_conf:
+        issues.append({
+            "code": "COUNTER_CONF_LOWER_THAN_ENTRY",
+            "severity": "warning",
+            "title": "逆 4H 置信度门槛低于顺势开仓门槛",
+            "detail": f"逆势门槛 {counter_conf:g}% < 常规开仓门槛 {min_conf:g}%。",
+            "recommendation": "确保 ASTRA_COUNTER_4H_MIN_CONFIDENCE ≥ ASTRA_MIN_ENTRY_CONFIDENCE。",
+        })
+
+    critical_count = sum(1 for item in issues if item["severity"] == "critical")
+    warning_count = sum(1 for item in issues if item["severity"] == "warning")
+    status = "critical" if critical_count else ("warning" if warning_count else "healthy")
+    return {
+        "ok": critical_count == 0,
+        "status": status,
+        "critical_count": critical_count,
+        "warning_count": warning_count,
+        "theoretical_max_rr": theoretical_max_rr,
+        "sl_atr_mult": sl_atr,
+        "max_take_profit_atr": tp_cap_atr,
+        "min_risk_reward": min_rr,
+        "issues": issues,
+    }

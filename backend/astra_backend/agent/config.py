@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[2]
 BJ_TZ = timezone(timedelta(hours=8))
 VALID_EFFORTS = {"none", "minimal", "low", "medium", "high"}
 DEFAULT_EFFORT = "medium"
-DEFAULT_MAX_ROUNDS = 8
+DEFAULT_MAX_ROUNDS = 10
 MIN_ROUNDS = 1
 MAX_ROUNDS = 15
 

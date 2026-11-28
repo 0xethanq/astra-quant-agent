@@ -134,6 +134,27 @@ class VerdictTest(unittest.TestCase):
         _b2, cross = self._run(mode="cross_examination")
         self.assertEqual(sorted(cross["cross_examinations"]), ["a", "b"])
 
+    def test_trailing_comma_and_prose_wrapped_cio_json_is_repaired(self):
+        payload = '以下是 CIO 裁决：\n{"macro_assessment": "偏强", "decisions": {"BTC-USDT-SWAP": {"action": "WAIT", "confidence": 60,},},}\n完毕。'
+        brain, _t = self._run(cio_payload=payload)
+        self.assertEqual(brain["decisions"]["BTC-USDT-SWAP"]["action"], "WAIT")
+
+    def test_omitted_symbol_from_advisor_quotes_is_backfilled(self):
+        def _trader_with_quote(key, spec):
+            return {
+                "proposal_id": f"{key}_prop",
+                "role_name": spec.get("name", key),
+                "status": "ok",
+                "content": "分析如下\nBTC-USDT-SWAP | WAIT | - | - | - | - | 52 | 震荡整理\nETH-USDT-SWAP | BUY_LONG | 2500 | 2400 | 2750 | 100 | 76 | 回踩支撑",
+                "weight": 0.5,
+            }
+
+        cio_json = '{"macro_assessment": "稳健", "decisions": {"BTC-USDT-SWAP": {"action": "WAIT", "adopted_role": "REJECT_ALL", "confidence": 52, "reasoning": "观望"}}}'
+        brain, _t = self._run(cio_payload=cio_json, trader=_trader_with_quote)
+        self.assertIn("ETH-USDT-SWAP", brain["decisions"])
+        self.assertEqual(brain["decisions"]["ETH-USDT-SWAP"]["action"], "WAIT")
+        self.assertIn("CIO补录", brain["decisions"]["ETH-USDT-SWAP"]["reasoning"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -70,7 +70,7 @@ class AdminConfigUpdate(BaseModel):
     llm_reasoning_effort: str | None = Field(default=None, pattern=r"^(low|medium|high|minimal|none|auto)$")
     notification_webhook: str | None = None
     manual_close_enabled: bool | None = None
-    order_mode: str | None = Field(default=None, pattern=r"^(limit|market)$")
+    order_mode: str | None = Field(default=None, pattern=r"^(limit|market|smart)$")
     scale_out_enabled: bool | None = None
     scale_out_ratio: float | None = Field(default=None, ge=0.1, le=0.9)
     scale_out_trigger_atr: float | None = Field(default=None, ge=0.5, le=5.0)

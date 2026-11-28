@@ -110,15 +110,15 @@ SCALE_OUT_RATIO = _env_float("ASTRA_SCALE_OUT_RATIO", 0.35)
 #    `tests/trading/test_risk_reward_structure.py` 是本条的常驻护栏。
 SCALE_OUT_TRIGGER_ATR = _env_float("ASTRA_SCALE_OUT_TRIGGER_ATR", 2.00)
 # 单笔最大止盈 ATR 宽度（× 1H ATR，超出此倍数的止盈单会被执行层平滑收窄钳制，防止止盈过远）。
-MAX_TAKE_PROFIT_ATR = _env_float("ASTRA_MAX_TAKE_PROFIT_ATR", 3.50)
+MAX_TAKE_PROFIT_ATR = _env_float("ASTRA_MAX_TAKE_PROFIT_ATR", 4.20)
 # 组合在途净风险上限（单位 1R）：Σ open_risk_R 超过该上限时抑制新开仓，已保本/锁利仓位计 0R。
 MAX_PORTFOLIO_OPEN_RISK_R = _env_float("ASTRA_MAX_PORTFOLIO_OPEN_RISK_R", 3.0)
 # 逆 4H 宏观方向入场的风险缩放倍数与最低置信度门槛。
 COUNTER_4H_RISK_SCALE = _env_float("ASTRA_COUNTER_4H_RISK_SCALE", 0.5)
 COUNTER_4H_MIN_CONFIDENCE = _env_float("ASTRA_COUNTER_4H_MIN_CONFIDENCE", 80.0)
 # 未成交限价单生命周期（分钟）与现价偏离 ATR 阈值（超出即自动撤单释放配额）。
-LIMIT_ORDER_TTL_MINUTES = _env_int("ASTRA_LIMIT_ORDER_TTL_MINUTES", 60)
-LIMIT_ORDER_DRIFT_ATR = _env_float("ASTRA_LIMIT_ORDER_DRIFT_ATR", 0.8)
+LIMIT_ORDER_TTL_MINUTES = _env_int("ASTRA_LIMIT_ORDER_TTL_MINUTES", 90)
+LIMIT_ORDER_DRIFT_ATR = _env_float("ASTRA_LIMIT_ORDER_DRIFT_ATR", 1.2)
 
 # 组合风险总预算（USDT，跨所合算的顶层总闸；0 = 不封顶）。
 # 审计⑫(2026-09-13) 注释正名：旧注释承诺「0=自动按持仓上限×单标的封顶派生」，但执行层
@@ -165,12 +165,12 @@ DEFAULTS = {
     "ASTRA_SCALE_OUT_ENABLED": 1,
     "ASTRA_SCALE_OUT_RATIO": 0.35,
     "ASTRA_SCALE_OUT_TRIGGER_ATR": 2.00,
-    "ASTRA_MAX_TAKE_PROFIT_ATR": 3.50,
+    "ASTRA_MAX_TAKE_PROFIT_ATR": 4.20,
     "ASTRA_MAX_PORTFOLIO_OPEN_RISK_R": 3.0,
     "ASTRA_COUNTER_4H_RISK_SCALE": 0.5,
     "ASTRA_COUNTER_4H_MIN_CONFIDENCE": 80.0,
-    "ASTRA_LIMIT_ORDER_TTL_MINUTES": 60,
-    "ASTRA_LIMIT_ORDER_DRIFT_ATR": 0.8,
+    "ASTRA_LIMIT_ORDER_TTL_MINUTES": 90,
+    "ASTRA_LIMIT_ORDER_DRIFT_ATR": 1.2,
 }
 
 RISK_ENV_KEYS = tuple(DEFAULTS.keys())

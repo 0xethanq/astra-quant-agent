@@ -252,6 +252,7 @@ async function handleLogin() {
   border-radius: var(--r-card);
   background: var(--ds-color-bg-surface-card);
   border: 1px solid var(--ds-color-border-default);
+  border-top: 2px solid var(--ds-color-brand);
   box-shadow: var(--shadow-card);
 }
 
@@ -444,8 +445,8 @@ async function handleLogin() {
   gap: 8px;
   padding: var(--sp-3) var(--sp-7);
   border-radius: var(--r-pill);
-  background: rgba(255, 255, 255, 0.035);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--ds-color-bg-surface-2);
+  border: 1px solid var(--ds-color-border-default);
   font-size: var(--text-4xs);
   letter-spacing: 0.05em;
   color: var(--ds-color-text-description);

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from typing import Any, AsyncIterator, Dict, List, Optional
 
 from astra_backend.agent.config import load_agent_config, resolve_agent_llm_runtime
@@ -22,16 +23,16 @@ def _build_system_prompt(is_superadmin: bool) -> str:
         else "当前操作者为普通只读管理员 (admin)：严禁生成或承诺写操作落地，仅提供只读诊断、复盘归因与预演建议。"
     )
     return (
-        "你是 AstraQuant 量化交易系统的「策略运维 Copilot Agent」，负责协助操盘手完成诊断复盘、参数调优与提示词工程。\n\n"
+        "你是 AstraQuant 量化交易系统的「全能策略运维 Copilot Agent」，负责协助操盘手完成深度诊断复盘、参数死锁排查、开单漏斗调优与提示词工程。\n\n"
         "【核心铁律（必须严格遵守）】\n"
-        "1. **只读优先、数据诚实**：任何分析、归因、修改建议之前，必须先调用只读工具核实真实运行状态（持仓、台账、因子、日志、风控、提示词正文、投委会、快照）；缺失字段必须直说缺失，绝不编造数字。\n"
-        "2. **禁止直接改盘（Proposal-Only）**：你没有任何直接写入配置的权限。所有配置改动（调风控、改提示词、调投委会、增删标的、改交易时段、切模型/思考强度、管心法、策略回滚）都必须调用 `propose_*` 工具生成结构化 Diff 提案卡片，等待用户点击确认后才生效。\n"
+        "1. **只读优先、数据诚实**：任何分析、归因、修改建议之前，必须先调用只读工具核实真实运行状态（总览、台账、因子、日志、风控、提示词正文、投委会、快照，以及深度诊断工具 `diagnose_order_funnel`、`audit_strategy_conflicts`、`inspect_council_debates`、`inspect_order_execution_and_cancels`）；缺失字段必须直说缺失，绝不编造数字。\n"
+        "2. **禁止直接改盘（Proposal-Only）**：你没有任何直接写入配置的权限。所有配置改动或运维触发（调风控、改委托订单模式 `propose_order_mode_update`、运维动作 `propose_ops_action`、改提示词、调投委会、增删标的、改交易时段、切模型/思考强度、管心法、策略回滚）都必须调用 `propose_*` 工具生成结构化 Diff 提案卡片，等待用户点击确认后才生效。\n"
         "3. **提示词编辑准则**：默认通过 `get_prompt_library(include_content=true)` 查看当前激活方案的模块清单与原文，再用 `propose_prompt_edit` 精准修改目标模块。系统只读 JSON 输出契约模块（`READONLY_OUTPUT_SCHEMA`）禁止修改或停用；仅当用户明确要求时才克隆/新建/切换方案。\n"
-        "4. **合理打包提案**：若需要同时联动调整（例如“调严风控 + 微调交易提示词”），在同一轮中依次调用对应的 `propose_*` 工具，系统会自动合并为一张多项目提案卡片。\n"
+        "4. **合理打包提案**：若需要同时联动调整（例如“切换 smart 订单模式 + 校准风控 ATR/RR + 微调提示词”），在同一轮中依次调用对应的 `propose_*` 工具，系统会自动合并为一张多项目提案卡片。\n"
         "5. **善用演练与回测**：用户在纠结改动效果或要求验证时，主动调用 `dry_run_decision_preview`（实景快照预演）或 `backtest_risk_comparison`（历史 K 线回测对比）给出量化依据。\n"
         "6. **安全红线**：绝不尝试读取、输出或修改 OKX/LLM/通知渠道的 API 密钥/Webhook、绝不切换 DEMO/LIVE 环境、绝不手动触发交易或平仓、绝不管理管理员账号密码或全量灾备恢复。\n"
         f"7. **权限状态**：{perm_note}\n"
-        "请用简洁、专业、结构化的中文回答，引用参数或指标时给出准确数值。"
+        "请用简洁、专业、结构化的中文（善用 Markdown 表格与要点）回答，引用参数或指标时给出准确数值。"
     )
 
 
@@ -46,6 +47,14 @@ def _summarize_tool_result(tool_name: str, result: Dict[str, Any]) -> str:
         return f"已读取 {len(result.get('current_values') or {})} 项风控参数"
     if tool_name == "get_prompt_library":
         return f"已读取方案 {result.get('inspected_profile_id', '')}"
+    if tool_name == "diagnose_order_funnel":
+        return f"已统计 {result.get('cycles_analyzed', 0)} 轮漏斗（遗漏率 {result.get('omitted_rate_pct', 0)}%）"
+    if tool_name == "audit_strategy_conflicts":
+        return f"体检完成（状态 {result.get('status', 'ok')}，冲突 {len(result.get('conflicts') or [])} 项）"
+    if tool_name == "inspect_council_debates":
+        return f"已审阅 {len(result.get('council_rounds') or [])} 轮投委会记录"
+    if tool_name == "inspect_order_execution_and_cancels":
+        return f"模式 {result.get('order_mode', 'limit')}，在途意图 {len(result.get('open_order_intents') or [])} 条"
     if tool_name == "backtest_risk_comparison":
         return "已完成历史 K 线回测对比" if result.get("ok") else str(result.get("error") or "回测不可用")
     if tool_name == "dry_run_decision_preview":
@@ -53,13 +62,39 @@ def _summarize_tool_result(tool_name: str, result: Dict[str, Any]) -> str:
     return "已完成"
 
 
-def _build_conversation_messages(history: List[Dict[str, Any]], is_superadmin: bool) -> List[Dict[str, Any]]:
+def _build_conversation_messages(
+    history: List[Dict[str, Any]],
+    is_superadmin: bool,
+    proposals_by_id: Optional[Dict[str, Dict[str, Any]]] = None,
+) -> List[Dict[str, Any]]:
     msgs: List[Dict[str, Any]] = [{"role": "system", "content": _build_system_prompt(is_superadmin)}]
+    prop_map = proposals_by_id or {}
     for row in history[-MAX_HISTORY_MESSAGES:]:
         role = str(row.get("role") or "user")
         if role not in ("user", "assistant"):
             continue
         content = str(row.get("content") or "").strip()
+        if role == "assistant":
+            notes: List[str] = []
+            tcs = row.get("tool_calls") or []
+            if isinstance(tcs, list) and tcs:
+                parts = [f"{tc.get('name', '?')}->{tc.get('summary', tc.get('status', 'ok'))}" for tc in tcs[:6] if isinstance(tc, dict)]
+                if parts:
+                    notes.append("[历史工具摘要: " + "; ".join(parts) + "]")
+            pids = row.get("proposal_ids") or []
+            if isinstance(pids, list) and pids:
+                p_notes = []
+                for pid in pids[:3]:
+                    p = prop_map.get(str(pid))
+                    if p:
+                        rb = "(已回滚)" if p.get("rolled_back") else ""
+                        p_notes.append(f"{pid}:{p.get('title', '')}[{p.get('status', '')}{rb}]")
+                    else:
+                        p_notes.append(str(pid))
+                if p_notes:
+                    notes.append("[历史提案状态: " + "; ".join(p_notes) + "]")
+            if notes:
+                content = f"{content}\n" + "\n".join(notes) if content else "\n".join(notes)
         if not content:
             continue
         msgs.append({"role": role, "content": content})
@@ -93,7 +128,8 @@ async def run_agent_chat(
 
     store.append_message(session_id, role="user", content=clean_msg)
     full_history = store.list_messages(session_id, limit=200)
-    messages = _build_conversation_messages(full_history, is_superadmin)
+    proposals_by_id = {p["id"]: p for p in store.list_proposals(session_id)}
+    messages = _build_conversation_messages(full_history, is_superadmin, proposals_by_id=proposals_by_id)
 
     agent_cfg = load_agent_config()
     eff_override = (model_override or "").strip() or (
@@ -169,16 +205,47 @@ async def run_agent_chat(
             cid = str(call.get("id") or "")
             cname = str(call.get("name") or "")
             cargs = call.get("arguments") if isinstance(call.get("arguments"), dict) else {}
-
             yield {"type": "tool_start", "id": cid, "name": cname, "arguments": cargs}
-            status = "ok"
+
+        async def _run_read_or_verify(call_item: Dict[str, Any]) -> tuple[str, Dict[str, Any], int]:
+            cname = str(call_item.get("name") or "")
+            cargs = call_item.get("arguments") if isinstance(call_item.get("arguments"), dict) else {}
+            t0 = time.perf_counter()
             try:
-                if is_write_proposal_tool(cname):
+                if cname in {"dry_run_decision_preview", "backtest_risk_comparison"}:
+                    res = await asyncio.to_thread(execute_verify_tool, cname, cargs)
+                else:
+                    res = await asyncio.to_thread(execute_read_tool, cname, cargs)
+                return "ok", res, int((time.perf_counter() - t0) * 1000)
+            except Exception as exc:
+                return "error", {"ok": False, "error": str(exc)}, int((time.perf_counter() - t0) * 1000)
+
+        read_indices = [
+            idx for idx, c in enumerate(round_calls)
+            if not is_write_proposal_tool(str(c.get("name") or ""))
+        ]
+        read_outcomes: Dict[int, tuple[str, Dict[str, Any], int]] = {}
+        if read_indices:
+            gathered = await asyncio.gather(*(_run_read_or_verify(round_calls[i]) for i in read_indices))
+            for idx, outcome in zip(read_indices, gathered):
+                read_outcomes[idx] = outcome
+
+        for idx, call in enumerate(round_calls):
+            cid = str(call.get("id") or "")
+            cname = str(call.get("name") or "")
+            cargs = call.get("arguments") if isinstance(call.get("arguments"), dict) else {}
+
+            if idx in read_outcomes:
+                status, result_obj, duration_ms = read_outcomes[idx]
+            else:
+                t0 = time.perf_counter()
+                status = "ok"
+                try:
                     if not is_superadmin:
                         raise PermissionError("仅超级管理员 (superadmin) 允许发起策略变更提案")
                     item = await asyncio.to_thread(build_proposal_item, cname, cargs)
                     pending_items.append(item)
-                    result_obj: Dict[str, Any] = {
+                    result_obj = {
                         "ok": True,
                         "proposal_item_created": item["id"],
                         "title": item["title"],
@@ -186,25 +253,33 @@ async def run_agent_chat(
                         "required_phrase": item["required_phrase"],
                         "diff": item["diff"],
                     }
-                elif cname in {"dry_run_decision_preview", "backtest_risk_comparison"}:
-                    result_obj = await asyncio.to_thread(execute_verify_tool, cname, cargs)
-                else:
-                    result_obj = await asyncio.to_thread(execute_read_tool, cname, cargs)
-            except Exception as exc:
-                status = "error"
-                result_obj = {"ok": False, "error": str(exc)}
+                except Exception as exc:
+                    status = "error"
+                    result_obj = {"ok": False, "error": str(exc)}
+                duration_ms = int((time.perf_counter() - t0) * 1000)
 
             summary = _summarize_tool_result(cname, result_obj)
+            serialized = json.dumps(result_obj, ensure_ascii=False, default=str)
+            preview = serialized[:300] + ("..." if len(serialized) > 300 else "")
             tool_trace.append({
                 "id": cid,
                 "name": cname,
                 "arguments": cargs,
                 "status": status,
                 "summary": summary,
+                "duration_ms": duration_ms,
+                "result_preview": preview,
             })
-            yield {"type": "tool_result", "id": cid, "name": cname, "status": status, "summary": summary}
+            yield {
+                "type": "tool_result",
+                "id": cid,
+                "name": cname,
+                "status": status,
+                "summary": summary,
+                "duration_ms": duration_ms,
+                "result_preview": preview,
+            }
 
-            serialized = json.dumps(result_obj, ensure_ascii=False, default=str)
             if len(serialized) > 24000:
                 serialized = serialized[:24000] + "...(truncated)"
             messages.append({

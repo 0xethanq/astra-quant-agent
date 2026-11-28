@@ -270,5 +270,26 @@ class NormalizeTests(unittest.TestCase):
         self.assertIn("同向持仓上限", str(ctx.exception))
 
 
+class AuditRiskConsistencyTests(unittest.TestCase):
+    def test_all_shipped_suites_pass_consistency_audit(self):
+        for suite in RC.SUITES:
+            report = RC.audit_risk_consistency(suite["values"])
+            self.assertTrue(report["ok"], f"Suite {suite['id']} failed audit: {report['issues']}")
+            self.assertGreater(report["theoretical_max_rr"], suite["values"]["ASTRA_MIN_RISK_REWARD"])
+
+    def test_deadlock_configuration_reports_critical_conflict(self):
+        deadlock_vals = dict(RC.suite_values("balanced"))
+        deadlock_vals.update({
+            "ASTRA_STOP_LOSS_ATR_MULT": 2.0,
+            "ASTRA_MAX_TAKE_PROFIT_ATR": 3.5,
+            "ASTRA_MIN_RISK_REWARD": 2.0,
+        })
+        report = RC.audit_risk_consistency(deadlock_vals)
+        self.assertFalse(report["ok"])
+        self.assertEqual(report["status"], "critical")
+        codes = {item["code"] for item in report["issues"]}
+        self.assertIn("SL_TP_RR_DEADLOCK", codes)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -60,15 +60,17 @@ import os
 
 
 def _order_word() -> str:
-    """当前委托单型的展示字：`市价` / `限价`（见模块 docstring 的 2026-09 说明）。
+    """当前委托单型的展示字：`市价` / `智能` / `限价`（见模块 docstring 的 2026-09 说明）。
 
     语义与下单路径（`order_submit.py`）**同源**：
-    `ASTRA_ORDER_MODE` 只在取值恰为 `market` 时算市价，读不到/拼错一律退回 `限价`
-    —— 与真实发单的兜底完全一致，故不会出现"文案说市价、实际发限价"。
+    `ASTRA_ORDER_MODE` 取 `market` 时算市价、`smart` 时算智能，其余回退 `限价`。
     """
-    return ("市价"
-            if str(os.getenv("ASTRA_ORDER_MODE", "limit")).strip().lower() == "market"
-            else "限价")
+    mode = str(os.getenv("ASTRA_ORDER_MODE", "limit")).strip().lower()
+    if mode == "market":
+        return "市价"
+    if mode == "smart":
+        return "智能"
+    return "限价"
 
 
 def money_size_text(*, margin_usdt=None, leverage=None, notional_usdt=None,

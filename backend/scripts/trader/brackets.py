@@ -214,3 +214,42 @@ def reanchor_brackets_to_market(*, entry, tp, sl, market, is_long, prec=4):
             new_tp = round(new_entry * 0.96, prec)
 
     return new_entry, new_tp, new_sl
+
+
+def resolve_effective_order_mode(
+    configured_mode: str,
+    *,
+    planned_px: float,
+    market_px: float,
+    is_long: bool,
+    confidence: float = 0.0,
+    smart_market_dist_pct: float = 0.0035,
+    smart_market_confidence: float = 78.0,
+) -> str:
+    """Resolve configured entry mode ('limit' | 'market' | 'smart') to concrete 'limit' or 'market'.
+
+    In 'smart' mode:
+    - Crossing quotes (BUY >= market or SELL <= market) or near-market quotes (<= 0.35%)
+      or high-confidence signals (>= 78%) within 1.2% execute immediately as 'market'
+      (and re-anchor TP/SL to live fill price).
+    - Deeper pullback quotes fall back to 'limit' maker orders.
+    - Missing/invalid live market price fails closed to 'limit'.
+    """
+    mode = str(configured_mode or "limit").strip().lower()
+    if mode == "market":
+        return "market"
+    if mode == "smart":
+        try:
+            p_px = float(planned_px or 0.0)
+            m_px = float(market_px or 0.0)
+            conf = float(confidence or 0.0)
+        except (TypeError, ValueError):
+            return "limit"
+        if m_px <= 0 or p_px <= 0:
+            return "limit"
+        dist = abs(p_px - m_px) / m_px
+        is_crossing = (is_long and p_px >= m_px) or (not is_long and p_px <= m_px)
+        if is_crossing or dist <= smart_market_dist_pct or (conf >= smart_market_confidence and dist <= 0.012):
+            return "market"
+        return "limit"
+    return "limit"

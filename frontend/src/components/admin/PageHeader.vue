@@ -14,6 +14,7 @@
 defineProps<{
   title: string
   description?: string
+  badge?: string
   stacked?: boolean
   embedded?: boolean
 }>()
@@ -22,7 +23,10 @@ defineProps<{
 <template>
   <header class="ph" :class="{ 'is-stacked': stacked, 'is-embedded': embedded }">
     <div class="ph-main">
-      <component :is="embedded ? 'h2' : 'h1'" class="ph-title">{{ title }}</component>
+      <div class="ph-title-row">
+        <component :is="embedded ? 'h2' : 'h1'" class="ph-title">{{ title }}</component>
+        <span v-if="badge" class="badge badge-accent mono ph-badge">{{ badge }}</span>
+      </div>
       <p v-if="description && !embedded" class="ph-desc">{{ description }}</p>
     </div>
     <div v-if="$slots.actions" class="ph-actions">
@@ -36,7 +40,18 @@ defineProps<{
   display: flex;
   flex-direction: column;
   gap: var(--ds-space-3);
+  padding-bottom: var(--ds-space-3);
+  border-bottom: 1px solid var(--ds-color-border-subtle);
   animation: astra-enter var(--dur-slow) var(--ease-out) backwards;
+}
+.ph-title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  flex-wrap: wrap;
+}
+.ph-badge {
+  font-size: var(--text-4xs);
 }
 @media (min-width: 640px) {
   .ph:not(.is-stacked) {

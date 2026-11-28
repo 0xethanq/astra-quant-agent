@@ -202,6 +202,8 @@ def build_state_summary() -> Dict[str, Any]:
         },
         "risk": {
             "active_suite_id": matched_suite,
+            "order_mode": (os.getenv("ASTRA_ORDER_MODE") or getattr(settings, "order_mode", "limit") or "limit").strip().lower(),
+            "risk_audit": risk_config.audit_risk_consistency(r_values),
             "drift_count": int(drift.get("count", 0)),
             "max_positions": r_values.get("ASTRA_MAX_CONCURRENT_POSITIONS"),
             "max_same_direction": r_values.get("ASTRA_MAX_SAME_DIRECTION_POSITIONS"),
@@ -659,6 +661,437 @@ def _tool_diff_policy_snapshot(args: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _parse_cycles_arg(args: Dict[str, Any], default: int = 48, upper: int = 200) -> int:
+    try:
+        return max(1, min(int(args.get("cycles") or default), upper))
+    except (TypeError, ValueError):
+        return default
+
+
+def _extract_history_entries() -> List[Dict[str, Any]]:
+    raw = _read_data_json("ai_brain_history.json", [])
+    if isinstance(raw, list):
+        return [r for r in raw if isinstance(r, dict)]
+    if isinstance(raw, dict):
+        items = raw.get("history") or raw.get("records") or raw.get("items") or []
+        if isinstance(items, list):
+            return [r for r in items if isinstance(r, dict)]
+    return []
+
+
+def _tool_diagnose_order_funnel(args: Dict[str, Any]) -> Dict[str, Any]:
+    from collections import Counter
+    from datetime import datetime
+
+    cycles = _parse_cycles_arg(args, default=48, upper=200)
+    history = _extract_history_entries()[-cycles:]
+
+    action_counts: Counter[str] = Counter()
+    adopted_role_counts: Counter[str] = Counter()
+    advisor_quote_counts: Counter[str] = Counter()
+    rejection_reasons: Counter[str] = Counter()
+    omitted_count = 0
+    total_slots = 0
+
+    for cyc in history:
+        decs = cyc.get("decisions")
+        dec_list: List[Dict[str, Any]] = []
+        if isinstance(decs, dict):
+            dec_list = [v for v in decs.values() if isinstance(v, dict)]
+        elif isinstance(decs, list):
+            dec_list = [v for v in decs if isinstance(v, dict)]
+
+        for item in dec_list:
+            total_slots += 1
+            act = str(item.get("action") or "WAIT").upper()
+            action_counts[act] += 1
+            role = str(item.get("adopted_role") or "NONE")
+            adopted_role_counts[role] += 1
+            reason_txt = str(item.get("reasoning") or item.get("summary_reason") or item.get("reason") or "")
+            if item.get("decision_source") == "omitted" or "全市场矩阵综合评估中" in reason_txt:
+                omitted_count += 1
+            elif act == "WAIT" and reason_txt:
+                rejection_reasons[reason_txt[:60]] += 1
+
+        ct = cyc.get("council_transcript") if isinstance(cyc.get("council_transcript"), dict) else {}
+        cm = ct.get("consensus_metrics") if isinstance(ct.get("consensus_metrics"), dict) else {}
+        by_sym = cm.get("by_symbol") if isinstance(cm.get("by_symbol"), dict) else {}
+        for sym_data in by_sym.values():
+            if not isinstance(sym_data, dict):
+                continue
+            for detail in sym_data.get("seat_details") or []:
+                if isinstance(detail, dict):
+                    advisor_quote_counts[str(detail.get("action") or "WAIT").upper()] += 1
+
+    ledger = _read_data_json("trading_ledger.json", [])
+    rows = ledger if isinstance(ledger, list) else (ledger.get("trades") or ledger.get("records") or [] if isinstance(ledger, dict) else [])
+    closed_rows = [r for r in rows if isinstance(r, dict) and str(r.get("status") or "").lower() == "closed"]
+    latest_trade_ts = ""
+    hours_since_last_trade = None
+    if closed_rows:
+        last = closed_rows[-1]
+        latest_trade_ts = str(last.get("exit_time") or last.get("closed_at") or last.get("entry_time") or last.get("timestamp") or "")
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M"):
+            if not latest_trade_ts:
+                break
+            try:
+                dt = datetime.strptime(latest_trade_ts[:19], fmt)
+                hours_since_last_trade = round(max(0.0, (datetime.now() - dt).total_seconds() / 3600.0), 2)
+                break
+            except ValueError:
+                continue
+
+    intents_raw = _read_data_json("open_order_intents.json", [])
+    intents = intents_raw if isinstance(intents_raw, list) else []
+
+    log_path = _logs_root() / "ai_factor_trader.log"
+    cancel_samples: List[str] = []
+    gate_blocks = {"ttl_cancel": 0, "drift_cancel": 0, "rr_block": 0, "conf_block": 0, "other_reject": 0}
+    if log_path.is_file():
+        lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()[-600:]
+        for ln in lines:
+            low = ln.lower()
+            if any(k in low for k in ("ttl", "过期", "超期")) and any(k in low for k in ("cancel", "撤")):
+                gate_blocks["ttl_cancel"] += 1
+                cancel_samples.append(_redact_text(ln))
+            elif any(k in low for k in ("drift", "偏离")) and any(k in low for k in ("cancel", "撤")):
+                gate_blocks["drift_cancel"] += 1
+                cancel_samples.append(_redact_text(ln))
+            elif "r:r" in low or "盈亏比" in low:
+                gate_blocks["rr_block"] += 1
+                if any(k in low for k in ("拒绝", "拦截", "reject", "skip")):
+                    cancel_samples.append(_redact_text(ln))
+            elif ("置信度" in low or "confidence" in low) and any(k in low for k in ("拒绝", "拦截", "低于", "skip")):
+                gate_blocks["conf_block"] += 1
+                cancel_samples.append(_redact_text(ln))
+            elif any(k in low for k in ("cancel", "撤单", "风控拦截", "下单失败")):
+                gate_blocks["other_reject"] += 1
+                cancel_samples.append(_redact_text(ln))
+
+    omitted_rate = round((omitted_count / total_slots) * 100.0, 2) if total_slots > 0 else 0.0
+    return {
+        "cycles_analyzed": len(history),
+        "total_decision_slots": total_slots,
+        "action_counts": dict(action_counts),
+        "adopted_role_counts": dict(adopted_role_counts),
+        "advisor_quote_counts": dict(advisor_quote_counts),
+        "omitted_decisions_count": omitted_count,
+        "omitted_rate_pct": omitted_rate,
+        "top_wait_reasons": [{"reason": k, "count": v} for k, v in rejection_reasons.most_common(6)],
+        "closed_trades_total": len(closed_rows),
+        "latest_trade_time": latest_trade_ts,
+        "hours_since_last_trade": hours_since_last_trade,
+        "open_intents_count": len(intents),
+        "gate_and_cancel_counts": gate_blocks,
+        "recent_cancel_or_block_logs": cancel_samples[-12:],
+    }
+
+
+def _tool_audit_strategy_conflicts(_args: Dict[str, Any]) -> Dict[str, Any]:
+    from astra_backend import risk_config
+    from astra_backend.council.roster import seat_model_health
+    from astra_backend.council_manager import load_council_config
+    from scripts.prompt_library import active_profile
+
+    r_values = risk_config.current_values()
+    risk_audit = risk_config.audit_risk_consistency(r_values)
+    conflicts: List[Dict[str, Any]] = [
+        {
+            "category": "risk",
+            "code": item["code"],
+            "severity": item["severity"],
+            "title": item["title"],
+            "detail": item["detail"],
+            "recommendation": item["recommendation"],
+        }
+        for item in (risk_audit.get("issues") or [])
+    ]
+
+    order_mode = (os.getenv("ASTRA_ORDER_MODE") or getattr(settings, "order_mode", "limit") or "limit").strip().lower()
+    ttl = float(r_values.get("ASTRA_LIMIT_ORDER_TTL_MINUTES", 90))
+    drift = float(r_values.get("ASTRA_LIMIT_ORDER_DRIFT_ATR", 1.2))
+    if order_mode == "limit" and (ttl <= 60 or drift <= 0.8):
+        conflicts.append({
+            "category": "execution",
+            "code": "PURE_LIMIT_HIGH_CANCEL_RISK",
+            "severity": "warning",
+            "title": "纯限价模式与严格超时阈值易导致踏空撤单",
+            "detail": f"当前订单模式为 limit 且 TTL={ttl:g}m / 漂移阈值={drift:g}x ATR，顺势启动时挂单难以成交。",
+            "recommendation": "建议切换为 smart（智能自适应）订单模式，近盘抓机遇、深回踩挂限价。",
+        })
+
+    try:
+        prof = active_profile()
+        sys_txt = str(prof.get("trading_system") or "")
+        min_conf = float(r_values.get("ASTRA_MIN_ENTRY_CONFIDENCE", 72.0))
+        if min_conf < 72.0 and "confidence < 72" in sys_txt:
+            conflicts.append({
+                "category": "prompt",
+                "code": "PROMPT_CONFIDENCE_STALE",
+                "severity": "warning",
+                "title": "提示词内残留硬编码 72% 置信度门槛",
+                "detail": f"当前风控开仓门禁已设为核心 {min_conf:g}%，但提示词正文仍要求 confidence < 72 直接 WAIT。",
+                "recommendation": "同步激活提示词方案以引用【本周期风险预算】动态门禁。",
+            })
+        if "不接受 BEAR_EXHAUSTING" in sys_txt or "BULL_EXHAUSTING ＋ alpha ≤ 0 ⇒ WAIT" in sys_txt:
+            conflicts.append({
+                "category": "prompt",
+                "code": "PROMPT_BAN_A_OVERCONSTRAINED",
+                "severity": "info",
+                "title": "提示词包含较严格的动能衰竭一刀切禁令",
+                "detail": "当行情处于趋势中继小幅减速回踩（EXHAUSTING）时，旧版禁令 A 与做空规则会全量拦截潜在回踩/反弹结构单。",
+                "recommendation": "若目标为高频活跃风格，可升级为结构位豁免版提示词模块。",
+            })
+    except Exception:
+        pass
+
+    try:
+        c_cfg = load_council_config()
+        if c_cfg.get("enabled", False):
+            roles = c_cfg.get("roles") or {}
+            health_rows = seat_model_health(roles)
+            unbound = [r["role_id"] for r in health_rows if r.get("enabled", True) and not r.get("registered", True)]
+            if unbound:
+                conflicts.append({
+                    "category": "council",
+                    "code": "COUNCIL_UNREGISTERED_MODEL",
+                    "severity": "warning",
+                    "title": "投委会部分启用席位未绑定有效模型",
+                    "detail": f"席位 {', '.join(unbound)} 当前绑定模型未在 LLM 管理中登记，运行时将被主脑代答或降质。",
+                    "recommendation": "为对应席位分配已验证模型或暂禁非必要席位。",
+                })
+            if str(c_cfg.get("consensus_mode") or "standard") != "standard" and float(c_cfg.get("timeout_seconds") or 240) < 120:
+                conflicts.append({
+                    "category": "council",
+                    "code": "COUNCIL_TIMEOUT_TIGHT",
+                    "severity": "warning",
+                    "title": "多轮投委会超时预算过紧",
+                    "detail": "开启交叉质询/红蓝对抗模式下，总超时 < 120s 易导致 CIO 裁决阶段超时降级。",
+                    "recommendation": "建议将 timeout_seconds 提升至 ≥ 240s 或切回 standard 单轮合议。",
+                })
+    except Exception:
+        pass
+
+    critical = sum(1 for c in conflicts if c["severity"] == "critical")
+    warnings = sum(1 for c in conflicts if c["severity"] == "warning")
+    return {
+        "ok": critical == 0,
+        "status": "critical" if critical else ("warning" if warnings else "healthy"),
+        "critical_count": critical,
+        "warning_count": warnings,
+        "order_mode": order_mode,
+        "risk_audit": risk_audit,
+        "conflicts": conflicts,
+    }
+
+
+def _tool_inspect_council_debates(args: Dict[str, Any]) -> Dict[str, Any]:
+    cycles = _parse_cycles_arg(args, default=12, upper=50)
+    history = _extract_history_entries()[-cycles:]
+    rounds: List[Dict[str, Any]] = []
+    for cyc in reversed(history):
+        ct = cyc.get("council_transcript") if isinstance(cyc.get("council_transcript"), dict) else {}
+        if not ct:
+            continue
+        arb = ct.get("arbitrator") if isinstance(ct.get("arbitrator"), dict) else {}
+        advisors = ct.get("advisors") if isinstance(ct.get("advisors"), dict) else {}
+        advisor_brief = []
+        for rk, rv in advisors.items():
+            if isinstance(rv, dict):
+                advisor_brief.append({
+                    "role_id": rk,
+                    "role_name": rv.get("role_name") or rk,
+                    "status": rv.get("status"),
+                    "model_used": rv.get("model_used"),
+                    "latency_ms": rv.get("latency_ms"),
+                    "weight": rv.get("weight"),
+                })
+        cm = ct.get("consensus_metrics") if isinstance(ct.get("consensus_metrics"), dict) else {}
+        decs = cyc.get("decisions") if isinstance(cyc.get("decisions"), dict) else {}
+        adopted_summary: Dict[str, Any] = {}
+        for sym, d in (decs.items() if isinstance(decs, dict) else []):
+            if isinstance(d, dict):
+                adopted_summary[sym] = {
+                    "action": d.get("action"),
+                    "adopted_role": d.get("adopted_role"),
+                    "confidence": d.get("confidence"),
+                }
+        rounds.append({
+            "timestamp": cyc.get("timestamp") or cyc.get("time_str") or "",
+            "consensus_mode": ct.get("consensus_mode"),
+            "total_duration_ms": ct.get("total_duration_ms"),
+            "arbitrator_model": arb.get("model_used"),
+            "arbitrator_latency_ms": arb.get("latency_ms"),
+            "advisors": advisor_brief,
+            "strong_consensus_symbols": cm.get("strong_consensus_symbols") or [],
+            "disputed_symbols": cm.get("disputed_symbols") or [],
+            "decisions_summary": adopted_summary,
+        })
+    return {
+        "cycles_scanned": len(history),
+        "council_rounds": rounds,
+    }
+
+
+def _tool_inspect_order_execution_and_cancels(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        lines_n = max(10, min(int(args.get("lines") or 50), 120))
+    except (TypeError, ValueError):
+        lines_n = 50
+    intents = _read_data_json("open_order_intents.json", [])
+    trackers = _read_data_json("position_trackers.json", {})
+    pending_orders: List[Dict[str, Any]] = []
+    try:
+        import astra_backend.dashboard_cache as dash_cache
+        cache = getattr(dash_cache, "CACHE_DATA", None)
+        if isinstance(cache, dict) and isinstance(cache.get("pending_orders"), list):
+            pending_orders = list(cache["pending_orders"])
+    except Exception:
+        pass
+
+    log_path = _logs_root() / "ai_factor_trader.log"
+    events: List[str] = []
+    if log_path.is_file():
+        raw = log_path.read_text(encoding="utf-8", errors="replace").splitlines()[-500:]
+        for ln in raw:
+            low = ln.lower()
+            if any(k in low for k in ("order", "下单", "挂单", "撤单", "cancel", "市价", "智能", "limit", "oco", "拦截")):
+                events.append(_redact_text(ln))
+
+    return {
+        "order_mode": (os.getenv("ASTRA_ORDER_MODE") or getattr(settings, "order_mode", "limit") or "limit").strip().lower(),
+        "open_order_intents": intents if isinstance(intents, list) else [],
+        "active_trackers": trackers if isinstance(trackers, dict) else {},
+        "pending_orders_live": pending_orders,
+        "execution_log_events": events[-lines_n:],
+    }
+
+
+def build_proactive_insights() -> Dict[str, Any]:
+    """生成后台指挥台主动诊断洞见卡与策略健康分。"""
+    from datetime import datetime, timedelta, timezone
+
+    conflicts_res = _tool_audit_strategy_conflicts({})
+    funnel_res = _tool_diagnose_order_funnel({"cycles": 48})
+    summary = build_state_summary()
+
+    insights: List[Dict[str, Any]] = []
+    for idx, c in enumerate(conflicts_res.get("conflicts") or []):
+        cat = c.get("category") or "risk"
+        prompt = "请帮我检查当前风控与策略冲突并给出最稳妥的修复方案" if cat == "risk" else (
+            "请检查当前委托订单模式与提示词/投委会配置冲突并生成调整提案"
+        )
+        insights.append({
+            "id": f"conflict_{c.get('code', idx)}",
+            "severity": c.get("severity") or "warning",
+            "category": cat,
+            "title": c.get("title") or "策略参数冲突",
+            "detail": f"{c.get('detail', '')} 建议：{c.get('recommendation', '')}".strip(),
+            "metric": f"{conflicts_res.get('order_mode', 'limit')} · {summary.get('risk', {}).get('active_suite_id', 'custom')}",
+            "suggested_prompt": prompt,
+        })
+
+    total_slots = int(funnel_res.get("total_decision_slots") or 0)
+    action_counts = funnel_res.get("action_counts") or {}
+    opened_signals = int(action_counts.get("BUY_LONG") or 0) + int(action_counts.get("SELL_SHORT") or 0)
+    omitted_pct = float(funnel_res.get("omitted_rate_pct") or 0.0)
+
+    if omitted_pct >= 10.0 and total_slots > 0:
+        insights.append({
+            "id": "funnel_omitted_degradation",
+            "severity": "warning",
+            "category": "council",
+            "title": f"决策遗漏降级偏高（{omitted_pct:g}%）",
+            "detail": f"最近 {funnel_res.get('cycles_analyzed', 0)} 个周期中 {funnel_res.get('omitted_decisions_count', 0)} 个标的槽位被降级为占位 WAIT，建议检查 CIO 输出与超时预算。",
+            "metric": f"{omitted_pct:g}% omitted",
+            "suggested_prompt": "请调用 inspect_council_debates 与 diagnose_order_funnel 排查为何 CIO 漏答部分标的",
+        })
+
+    if total_slots >= 12 and opened_signals == 0:
+        hrs = funnel_res.get("hours_since_last_trade")
+        hrs_txt = f"距上一笔已平仓交易约 {hrs} 小时，" if hrs is not None else ""
+        insights.append({
+            "id": "funnel_zero_entry_drought",
+            "severity": "warning",
+            "category": "funnel",
+            "title": "近期决策漏斗零开仓信号",
+            "detail": f"{hrs_txt}最近 {funnel_res.get('cycles_analyzed', 0)} 轮共 {total_slots} 个决策槽位全部输出 WAIT。",
+            "metric": f"0/{total_slots} entries",
+            "suggested_prompt": "系统近期很难开单，请诊断开单漏斗与取消原因，并帮我优化为高频活跃策略配置",
+        })
+
+    if summary.get("data_health", {}).get("overall") != "LIVE":
+        insights.append({
+            "id": "data_health_stale",
+            "severity": "info",
+            "category": "health",
+            "title": "部分本地缓存或行情快照非最新",
+            "detail": "后台缓存或因子文件时间戳偏旧，确认交易守护进程与调度器正常运转。",
+            "metric": str(summary.get("data_health", {}).get("overall") or "STALE"),
+            "suggested_prompt": "请检查系统运行健康与最新 trader/gateway 日志",
+        })
+
+    crit_n = sum(1 for i in insights if i["severity"] == "critical")
+    warn_n = sum(1 for i in insights if i["severity"] == "warning")
+    health_score = max(0, min(100, 100 - min(60, crit_n * 25) - min(35, warn_n * 10)))
+    bj_now = datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%d %H:%M:%S")
+    return {
+        "health_score": health_score,
+        "critical_count": crit_n,
+        "warning_count": warn_n,
+        "insights": insights,
+        "funnel_snapshot": {
+            "cycles_analyzed": funnel_res.get("cycles_analyzed", 0),
+            "opened_signals": opened_signals,
+            "total_slots": total_slots,
+            "omitted_rate_pct": omitted_pct,
+            "hours_since_last_trade": funnel_res.get("hours_since_last_trade"),
+        },
+        "generated_at": bj_now,
+    }
+
+
+def build_inspector_payload() -> Dict[str, Any]:
+    """返回右侧 5-Tab 策略透视面板所需的全量只读结构化数据。"""
+    overview = build_state_summary()
+    risk_data = _tool_get_risk_config({})
+    risk_data["order_mode"] = overview.get("risk", {}).get("order_mode", "limit")
+    risk_data["risk_audit"] = overview.get("risk", {}).get("risk_audit", {})
+
+    prompt_raw = _tool_get_prompt_library({"include_content": True})
+    compact_pipes: Dict[str, List[Dict[str, Any]]] = {}
+    for pk, mods in (prompt_raw.get("pipelines") or {}).items():
+        compact_pipes[pk] = [
+            {
+                "id": m.get("id"),
+                "title": m.get("title"),
+                "enabled": m.get("enabled", True),
+                "locked": m.get("locked", False),
+                "char_count": m.get("char_count", 0),
+                "preview": str(m.get("content") or "")[:240],
+            }
+            for m in (mods or [])
+            if isinstance(m, dict)
+        ]
+    prompt_data = {
+        "active_profile_id": prompt_raw.get("active_profile_id"),
+        "inspected_profile_id": prompt_raw.get("inspected_profile_id"),
+        "inspected_profile_name": prompt_raw.get("inspected_profile_name"),
+        "profiles": prompt_raw.get("profiles") or [],
+        "pipelines": compact_pipes,
+    }
+
+    council_data = _tool_get_council_config({})
+    snapshots_data = _tool_list_policy_snapshots({"limit": 12})
+    return {
+        "overview": overview,
+        "risk": risk_data,
+        "prompt": prompt_data,
+        "council": council_data,
+        "snapshots": snapshots_data,
+    }
+
+
 READ_TOOL_SCHEMAS: List[Dict[str, Any]] = [
     {
         "name": "get_system_overview",
@@ -757,6 +1190,41 @@ READ_TOOL_SCHEMAS: List[Dict[str, Any]] = [
             "properties": {"target_hash": {"type": "string", "description": "目标快照的 policy_hash 或 package_hash"}},
         },
     },
+    {
+        "name": "diagnose_order_funnel",
+        "description": "深度诊断近期开单漏斗（决策动作分布、CIO采纳归属、遗漏降级率、距上次成交小时数、TTL/偏离撤单与R:R拦截统计）。",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "cycles": {"type": "integer", "description": "统计最近多少轮决策历史（1~200，默认48）"},
+            },
+        },
+    },
+    {
+        "name": "audit_strategy_conflicts",
+        "description": "全面体检风控参数数学死锁（SL/TP/RR）、委托订单模式与超时配置兼容性、提示词正文与投委会席位冲突。",
+        "parameters": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "inspect_council_debates",
+        "description": "透视最近 N 轮多模型投委会辩论详情（模式、总耗时、CIO与各参谋席位响应/耗时/权重、共识矩阵与裁决归属）。",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "cycles": {"type": "integer", "description": "查看最近几轮委员会裁决（1~50，默认12）"},
+            },
+        },
+    },
+    {
+        "name": "inspect_order_execution_and_cancels",
+        "description": "查看委托订单模式、本地开仓意图队列、在途活动挂单以及近期撮合下单/撤单/拦截日志（自动脱敏）。",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "lines": {"type": "integer", "description": "返回日志行数（10~120，默认50）"},
+            },
+        },
+    },
 ]
 
 _READ_HANDLERS = {
@@ -771,6 +1239,10 @@ _READ_HANDLERS = {
     "get_strategy_extras": _tool_get_strategy_extras,
     "list_policy_snapshots": _tool_list_policy_snapshots,
     "diff_policy_snapshot": _tool_diff_policy_snapshot,
+    "diagnose_order_funnel": _tool_diagnose_order_funnel,
+    "audit_strategy_conflicts": _tool_audit_strategy_conflicts,
+    "inspect_council_debates": _tool_inspect_council_debates,
+    "inspect_order_execution_and_cancels": _tool_inspect_order_execution_and_cancels,
 }
 
 

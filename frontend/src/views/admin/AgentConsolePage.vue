@@ -23,9 +23,13 @@ import { useI18n } from '../../composables/useI18n';
 import { useToast } from '../../composables/useToast';
 import AgentProposalCard from './agent/AgentProposalCard.vue';
 import AgentStrategySidebar from './agent/AgentStrategySidebar.vue';
+import { renderSafeMarkdown } from '../../utils/markdown';
 import {
+  type AgentInsightsPayload,
+  type AgentInspectorPayload,
   type AgentMessageItem,
   type AgentProposal,
+  INSIGHT_CARD_CLASS,
   STARTER_PROMPTS,
 } from './agent/agentLogic';
 
@@ -42,6 +46,8 @@ const showSummaryPanel = ref(true);
 
 const agentConfig = ref<any>(null);
 const stateSummary = ref<any>(null);
+const insightsPayload = ref<AgentInsightsPayload | null>(null);
+const inspectorPayload = ref<AgentInspectorPayload | null>(null);
 const sessions = ref<any[]>([]);
 const activeSessionId = ref('');
 const messages = ref<AgentMessageItem[]>([]);
@@ -53,6 +59,7 @@ const streamAbort = ref<AbortController | null>(null);
 const applyingProposalId = ref('');
 const savingModel = ref(false);
 const expandedReasoning = ref<Record<string, boolean>>({});
+const expandedTools = ref<Record<string, boolean>>({});
 const chatScrollRef = ref<HTMLElement | null>(null);
 
 const selectedModelId = computed(() => String(agentConfig.value?.model_id || 'auto'));
@@ -95,7 +102,14 @@ function scrollToBottom() {
 async function loadStateSummary() {
   summaryLoading.value = true;
   try {
-    stateSummary.value = await get('/api/v1/admin/agent/state-summary');
+    const [sum, ins, insp] = await Promise.all([
+      get('/api/v1/admin/agent/state-summary'),
+      get('/api/v1/admin/agent/insights').catch(() => null),
+      get('/api/v1/admin/agent/inspector').catch(() => null),
+    ]);
+    stateSummary.value = sum;
+    if (ins) insightsPayload.value = ins;
+    if (insp) inspectorPayload.value = insp;
   } catch {
     /* keep existing summary on refresh failure */
   } finally {
@@ -166,13 +180,17 @@ async function bootstrap() {
   loading.value = true;
   loadError.value = '';
   try {
-    const [cfg, sum, listRes] = await Promise.all([
+    const [cfg, sum, listRes, ins, insp] = await Promise.all([
       get('/api/v1/admin/agent/config'),
       get('/api/v1/admin/agent/state-summary'),
       get('/api/v1/admin/agent/sessions'),
+      get('/api/v1/admin/agent/insights').catch(() => null),
+      get('/api/v1/admin/agent/inspector').catch(() => null),
     ]);
     agentConfig.value = cfg;
     stateSummary.value = sum;
+    insightsPayload.value = ins;
+    inspectorPayload.value = insp;
     sessions.value = Array.isArray(listRes?.sessions) ? listRes.sessions : [];
     if (sessions.value.length) {
       await openSession(sessions.value[0].id);
@@ -261,6 +279,8 @@ async function sendMessage(overrideText?: string) {
           if (hit) {
             hit.status = ev.status === 'error' ? 'error' : 'ok';
             hit.summary = String(ev.summary || '');
+            if (typeof ev.duration_ms === 'number') hit.duration_ms = ev.duration_ms;
+            if (typeof ev.result_preview === 'string') hit.result_preview = ev.result_preview;
           }
           cur.tool_calls = traces;
           scrollToBottom();
@@ -326,6 +346,7 @@ async function handleProposalApply(payload: {
     if (res?.state_summary) {
       stateSummary.value = res.state_summary;
     }
+    loadStateSummary();
     if (res?.ok) {
       toast.ok(t('admin.agent.proposalAppliedToast'));
     } else {
@@ -334,6 +355,32 @@ async function handleProposalApply(payload: {
     }
   } catch (e: any) {
     toast.err(t('admin.agent.proposalApplyFailed', undefined, { msg: e.message || 'error' }));
+  } finally {
+    applyingProposalId.value = '';
+  }
+}
+
+async function handleProposalRollback(payload: { proposalId: string }) {
+  const ok = await ask({
+    title: t('admin.agent.proposalRollbackConfirmTitle'),
+    desc: t('admin.agent.proposalRollbackConfirmDesc'),
+    danger: true,
+    okText: t('admin.agent.proposalRollback'),
+  });
+  if (!ok) return;
+  applyingProposalId.value = payload.proposalId;
+  try {
+    const res = await post(`/api/v1/admin/agent/proposals/${encodeURIComponent(payload.proposalId)}/rollback`, {});
+    if (res?.proposal?.id) {
+      proposals.value = proposals.value.map((p) => (p.id === res.proposal.id ? res.proposal : p));
+    }
+    if (res?.state_summary) {
+      stateSummary.value = res.state_summary;
+    }
+    loadStateSummary();
+    toast.ok(t('admin.agent.proposalRolledBackToast'));
+  } catch (e: any) {
+    toast.err(t('admin.agent.proposalRollbackFailed', undefined, { msg: e.message || 'error' }));
   } finally {
     applyingProposalId.value = '';
   }
@@ -358,6 +405,10 @@ async function handleProposalReject(payload: { proposalId: string }) {
 
 function toggleReasoning(msgId: string) {
   expandedReasoning.value[msgId] = !expandedReasoning.value[msgId];
+}
+
+function toggleToolDetail(toolId: string) {
+  expandedTools.value[toolId] = !expandedTools.value[toolId];
 }
 
 function onComposerKeydown(ev: KeyboardEvent) {
@@ -415,6 +466,13 @@ onMounted(bootstrap);
         </span>
         <span v-if="stateSummary?.version" class="ag-strip-pill mono">
           {{ t('admin.agent.stripVersion') }}: {{ stateSummary.version }}
+        </span>
+        <span
+          v-if="insightsPayload"
+          class="badge mono num"
+          :class="insightsPayload.critical_count > 0 ? 'badge-down' : insightsPayload.warning_count > 0 ? 'badge-warn' : 'badge-up'"
+        >
+          {{ t('admin.agent.insightsHealthScore', undefined, { score: insightsPayload.health_score }) }}
         </span>
       </div>
 
@@ -486,6 +544,30 @@ onMounted(bootstrap);
             <span class="ag-empty-icon"><Bot :size="20" /></span>
             <h2 class="ag-empty-title">{{ t('admin.agent.emptyWelcomeTitle') }}</h2>
             <p class="ag-empty-desc">{{ t('admin.agent.emptyWelcomeDesc') }}</p>
+
+            <div v-if="(insightsPayload?.insights || []).length" class="ag-insights-panel" :aria-label="t('admin.agent.insightsTitle')">
+              <div class="ag-insights-head">
+                <span class="ag-insights-title">{{ t('admin.agent.insightsTitle') }}</span>
+                <span class="ag-insights-hint">{{ t('admin.agent.insightsClickToAsk') }}</span>
+              </div>
+              <div class="ag-insights-grid">
+                <button
+                  v-for="ins in insightsPayload?.insights"
+                  :key="ins.id"
+                  type="button"
+                  class="insight-card"
+                  :class="INSIGHT_CARD_CLASS[ins.severity] || 'insight-card--info'"
+                  @click="sendMessage(ins.suggested_prompt)"
+                >
+                  <div class="ag-insight-top">
+                    <span class="ag-insight-name">{{ ins.title }}</span>
+                    <span v-if="ins.metric" class="badge mono">{{ ins.metric }}</span>
+                  </div>
+                  <span class="ag-insight-desc">{{ ins.detail }}</span>
+                </button>
+              </div>
+            </div>
+
             <div class="ag-starters" role="group" :aria-label="t('admin.agent.startersLabel')">
               <button
                 v-for="sp in STARTER_PROMPTS"
@@ -534,20 +616,48 @@ onMounted(bootstrap);
             </div>
 
             <div v-if="(msg.tool_calls || []).length" class="ag-traces" :aria-label="t('admin.agent.toolsTitle')">
-              <div v-for="tc in msg.tool_calls" :key="tc.id" class="ag-trace-row">
-                <Wrench :size="12" class="shrink-0" />
-                <span class="mono ag-trace-name">{{ tc.name }}</span>
-                <span
-                  class="badge mono"
-                  :class="tc.status === 'error' ? 'badge-down' : tc.status === 'ok' ? 'badge-up' : 'badge-accent'"
-                >
-                  {{ tc.status === 'error' ? t('admin.agent.toolError') : tc.status === 'ok' ? t('admin.agent.toolDone') : t('admin.agent.toolRunning') }}
-                </span>
-                <span v-if="tc.summary" class="ag-trace-summary truncate">{{ tc.summary }}</span>
+              <div v-for="tc in msg.tool_calls" :key="tc.id" class="ag-trace-wrap">
+                <div class="ag-trace-row">
+                  <Wrench :size="12" class="shrink-0" />
+                  <span class="mono ag-trace-name">{{ tc.name }}</span>
+                  <span
+                    class="badge mono"
+                    :class="tc.status === 'error' ? 'badge-down' : tc.status === 'ok' ? 'badge-up' : 'badge-accent'"
+                  >
+                    {{ tc.status === 'error' ? t('admin.agent.toolError') : tc.status === 'ok' ? t('admin.agent.toolDone') : t('admin.agent.toolRunning') }}
+                  </span>
+                  <span v-if="typeof tc.duration_ms === 'number'" class="ag-trace-ms mono num">
+                    {{ t('admin.agent.toolDurationMs', undefined, { ms: tc.duration_ms }) }}
+                  </span>
+                  <span v-if="tc.summary" class="ag-trace-summary truncate">{{ tc.summary }}</span>
+                  <button
+                    v-if="tc.result_preview || (tc.arguments && Object.keys(tc.arguments).length)"
+                    type="button"
+                    class="btn btn-quiet btn-sm ag-trace-toggle"
+                    :aria-expanded="!!expandedTools[tc.id]"
+                    :aria-controls="expandedTools[tc.id] ? `ag-tool-det-${tc.id}` : undefined"
+                    @click="toggleToolDetail(tc.id)"
+                  >
+                    <span>{{ expandedTools[tc.id] ? t('admin.agent.toolCollapseDetails') : t('admin.agent.toolExpandDetails') }}</span>
+                  </button>
+                </div>
+                <div v-if="expandedTools[tc.id]" :id="`ag-tool-det-${tc.id}`" class="ag-trace-detail mono">
+                  <div v-if="tc.arguments && Object.keys(tc.arguments).length">
+                    <strong>{{ t('admin.agent.toolArgsLabel') }}:</strong> {{ JSON.stringify(tc.arguments) }}
+                  </div>
+                  <div v-if="tc.result_preview">
+                    <strong>{{ t('admin.agent.toolResultPreviewLabel') }}:</strong> {{ tc.result_preview }}
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div v-if="msg.content" class="ag-msg-text">{{ msg.content }}</div>
+            <div
+              v-if="msg.content && msg.role === 'assistant'"
+              class="ag-md"
+              v-html="renderSafeMarkdown(msg.content)"
+            />
+            <div v-else-if="msg.content" class="ag-msg-text">{{ msg.content }}</div>
 
             <div v-for="pid in (msg.proposal_ids || [])" :key="pid" class="ag-msg-proposal">
               <AgentProposalCard
@@ -556,6 +666,7 @@ onMounted(bootstrap);
                 :busy="applyingProposalId === pid"
                 @apply="handleProposalApply"
                 @reject="handleProposalReject"
+                @rollback="handleProposalRollback"
               />
             </div>
           </article>
@@ -602,6 +713,7 @@ onMounted(bootstrap);
         v-if="showSummaryPanel"
         id="ag-summary-panel"
         :summary="stateSummary"
+        :inspector="inspectorPayload"
         :loading="summaryLoading"
         @refresh="loadStateSummary"
         @ask="sendMessage"
@@ -614,7 +726,52 @@ onMounted(bootstrap);
 .ag-page {
   display: flex;
   flex-direction: column;
-  gap: var(--ds-space-4);
+  gap: var(--ds-space-3);
+  height: 100%;
+  min-height: 0;
+}
+.ag-insights-panel {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  text-align: left;
+}
+.ag-insights-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ds-space-2);
+}
+.ag-insights-title {
+  font-size: var(--text-3xs);
+  font-weight: 600;
+  color: var(--ds-color-text-primary);
+}
+.ag-insights-hint {
+  font-size: var(--text-4xs);
+  color: var(--ds-color-text-placeholder);
+}
+.ag-insights-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--ds-space-2);
+}
+.ag-insight-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ds-space-2);
+}
+.ag-insight-name {
+  font-size: var(--text-3xs);
+  font-weight: 600;
+  color: var(--ds-color-text-primary);
+}
+.ag-insight-desc {
+  font-size: var(--text-4xs);
+  color: var(--ds-color-text-description);
+  line-height: 1.45;
 }
 .ag-header-controls {
   display: flex;
@@ -662,9 +819,11 @@ onMounted(bootstrap);
 }
 .ag-workspace {
   display: grid;
-  grid-template-columns: 240px minmax(0, 1fr) 280px;
+  grid-template-columns: 240px minmax(0, 1fr) 310px;
   gap: var(--ds-space-4);
-  align-items: start;
+  align-items: stretch;
+  flex: 1;
+  min-height: 0;
 }
 .ag-sessions {
   display: flex;
@@ -719,7 +878,9 @@ onMounted(bootstrap);
 .ag-chat {
   display: flex;
   flex-direction: column;
-  min-height: 580px;
+  min-height: 460px;
+  height: 100%;
+  overflow: hidden;
 }
 .ag-stream {
   display: flex;
@@ -727,7 +888,7 @@ onMounted(bootstrap);
   gap: var(--ds-space-4);
   padding: var(--ds-space-4);
   flex: 1;
-  max-height: 620px;
+  min-height: 0;
   overflow-y: auto;
 }
 .ag-empty {
@@ -820,6 +981,11 @@ onMounted(bootstrap);
   flex-direction: column;
   gap: var(--ds-space-1);
 }
+.ag-trace-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+}
 .ag-trace-row {
   display: flex;
   align-items: center;
@@ -832,6 +998,23 @@ onMounted(bootstrap);
 .ag-trace-name {
   color: var(--ds-color-text-primary);
   font-weight: 600;
+}
+.ag-trace-ms {
+  color: var(--ds-color-text-placeholder);
+  flex-shrink: 0;
+}
+.ag-trace-toggle {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.ag-trace-detail {
+  padding: var(--ds-space-2);
+  border-radius: var(--r-ctl);
+  border: 1px solid var(--ds-color-border-subtle);
+  background-color: var(--ds-color-bg-page);
+  font-size: var(--text-4xs);
+  color: var(--ds-color-text-secondary);
+  word-break: break-all;
 }
 .ag-trace-summary {
   color: var(--ds-color-text-description);

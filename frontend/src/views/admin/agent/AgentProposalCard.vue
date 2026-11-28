@@ -1,15 +1,17 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue';
-import { Check, CheckCircle2, FileDiff, Loader2, ShieldAlert, XCircle } from 'lucide-vue-next';
+import { Check, CheckCircle2, FileDiff, Loader2, RotateCcw, ShieldAlert, XCircle } from 'lucide-vue-next';
 import CopyButton from '../../../components/base/CopyButton.vue';
 import { useI18n } from '../../../composables/useI18n';
 import { useAuthStore } from '../../../stores/auth';
 import {
   type AgentProposal,
+  DIFF_LINE_CLASS,
   collectRequiredPhrases,
   formatDiffValue,
   itemIdOf,
   missingConfirmations,
+  parseUnifiedDiff,
 } from './agentLogic';
 
 const props = defineProps<{
@@ -24,6 +26,7 @@ const emit = defineEmits<{
     confirmations: Record<string, string>;
   }): void;
   (e: 'reject', payload: { proposalId: string }): void;
+  (e: 'rollback', payload: { proposalId: string }): void;
 }>();
 
 const { t } = useI18n();
@@ -41,8 +44,16 @@ watch(
 );
 
 const isPending = computed(() => props.proposal.status === 'pending');
+const isRolledBack = computed(() => !!(props.proposal.rolled_back || props.proposal.applied_result?.rolled_back));
+const canRollback = computed(() =>
+  auth.isSuperadmin
+  && !props.busy
+  && !isRolledBack.value
+  && (props.proposal.status === 'applied' || props.proposal.status === 'partially_applied'),
+);
 
 const statusLabel = computed(() => {
+  if (isRolledBack.value) return t('admin.agent.proposalRolledBackBadge');
   const s = props.proposal.status;
   if (s === 'applied') return t('admin.agent.proposalStatusApplied');
   if (s === 'partially_applied') return t('admin.agent.proposalStatusPartial');
@@ -51,6 +62,7 @@ const statusLabel = computed(() => {
 });
 
 const statusBadgeClass = computed(() => {
+  if (isRolledBack.value) return 'badge-warn';
   const s = props.proposal.status;
   if (s === 'applied') return 'badge-up';
   if (s === 'partially_applied') return 'badge-warn';
@@ -110,6 +122,11 @@ function submitApply() {
 function submitReject() {
   if (!auth.isSuperadmin || !isPending.value || props.busy) return;
   emit('reject', { proposalId: props.proposal.id });
+}
+
+function submitRollback() {
+  if (!canRollback.value) return;
+  emit('rollback', { proposalId: props.proposal.id });
 }
 
 function resultForItem(itemId: string) {
@@ -188,12 +205,18 @@ function isPhraseInvalid(phrase: string): boolean {
           <li v-for="(w, wi) in item.warnings" :key="wi">{{ w }}</li>
         </ul>
 
-        <pre
+        <div
           v-if="item.diff_type === 'text' && typeof item.diff === 'string'"
-          class="ap-unified mono"
+          class="diff-view"
           tabindex="0"
-          spellcheck="false"
-        >{{ item.diff }}</pre>
+        >
+          <span
+            v-for="(dline, dIdx) in parseUnifiedDiff(item.diff)"
+            :key="dIdx"
+            class="diff-line"
+            :class="DIFF_LINE_CLASS[dline.kind]"
+          >{{ dline.text || ' ' }}</span>
+        </div>
 
         <div
           v-else-if="Array.isArray(item.diff) && item.diff.length"
@@ -259,6 +282,18 @@ function isPhraseInvalid(phrase: string): boolean {
         </button>
       </template>
       <p v-else class="ap-readonly">{{ t('admin.agent.proposalReadonlyHint') }}</p>
+    </footer>
+    <footer v-else-if="canRollback" class="ap-foot">
+      <button
+        type="button"
+        class="btn btn-ghost btn-sm"
+        :disabled="props.busy"
+        @click="submitRollback"
+      >
+        <Loader2 v-if="props.busy" :size="13" class="animate-spin shrink-0" />
+        <RotateCcw v-else :size="13" />
+        <span>{{ props.busy ? t('admin.agent.proposalRollingBack') : t('admin.agent.proposalRollback') }}</span>
+      </button>
     </footer>
   </article>
 </template>
@@ -360,18 +395,6 @@ function isPhraseInvalid(phrase: string): boolean {
   color: var(--warn);
   font-size: var(--text-4xs);
   list-style: none;
-}
-.ap-unified {
-  margin: 0;
-  padding: var(--ds-space-3);
-  border: 1px solid var(--ds-color-border-default);
-  border-radius: var(--r-ctl);
-  background-color: var(--ds-color-bg-surface);
-  font-size: var(--text-4xs);
-  line-height: var(--leading-body);
-  overflow-x: auto;
-  white-space: pre-wrap;
-  word-break: break-word;
 }
 .ap-kv-table {
   display: flex;

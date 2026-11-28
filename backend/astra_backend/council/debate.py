@@ -10,6 +10,7 @@ from __future__ import annotations
 import concurrent.futures
 import json
 import os
+import re
 import time
 from typing import Any, Callable, Dict, Optional, Tuple
 
@@ -91,7 +92,7 @@ def _call_single_trader(resolve_seat: Callable[..., Any],
         f"   - 对在途持仓逐一给出管理建议：HOLD（波段完好继续持有）、CLOSE_MARKET（结构破位斩仓）或 UPDATE_SL（浮盈锁定移动止损）；\n"
         f"   - 对在途未成交限价挂单逐一给出建议：CANCEL（偏离盘口或动能失效立即撤单）或 KEEP（继续保留）；\n"
         f"2. 标的池全标的新开/加仓作战提案（以行情矩阵清单为准，逐标的）：\n"
-        f"   - 针对各标的输出明确方案：倾向（BUY_LONG / SELL_SHORT / WAIT）、入场限价、1.8~2.2x 1H ATR 分层止损、≥2.0R 止盈、拟投入保证金与置信度；\n"
+        f"   - 针对各标的输出明确方案：倾向（BUY_LONG / SELL_SHORT / WAIT）、结构入场参考价、1.8~2.2x 1H ATR 分层止损（结合【本周期风险预算】stop_loss_atr_mult）、满足【本周期风险预算】盈亏比底线的结构可达止盈、拟投入保证金与置信度；\n"
         f"3. 质询与风控：简要指出其他交易员方案可能带来的资金过载或流动性风险（60字内/标的）。\n\n"
         f"【提案输出格式（强制）】正文分析之后，必须以标准报价单块收尾（每标的一行，无明确结论的标的也必须列 WAIT 行），供 CIO 与执行层逐项横向对比：\n"
         f"标的 | 倾向 | 限价 | 止损 | 止盈 | 拟用保证金(USDT) | 置信度(0-100) | 一句话依据\n"
@@ -273,6 +274,38 @@ def _call_single_trader_critique(resolve_seat: Callable[..., Any],
         }
 
 
+def _parse_cio_json_object(raw_content: str) -> Dict[str, Any]:
+    """Parse CIO JSON response, tolerating markdown fences and trailing commas."""
+    clean = str(raw_content or "").strip()
+    if clean.startswith("```json"):
+        clean = clean[7:]
+    if clean.startswith("```"):
+        clean = clean[3:]
+    if clean.endswith("```"):
+        clean = clean[:-3]
+    clean = clean.strip()
+
+    try:
+        parsed = json.loads(clean)
+    except json.JSONDecodeError:
+        first_brace = clean.find("{")
+        last_brace = clean.rfind("}")
+        if first_brace != -1 and last_brace > first_brace:
+            sliced = clean[first_brace : last_brace + 1]
+            repaired = re.sub(r",(\s*[}\]])", r"\1", sliced)
+            parsed = json.loads(repaired)
+        else:
+            first_brack = clean.find("[")
+            last_brack = clean.rfind("]")
+            if first_brack != -1 and last_brack > first_brack:
+                parsed = json.loads(clean[first_brack : last_brack + 1])
+            else:
+                raise
+    if not isinstance(parsed, dict):
+        raise ValueError("CIO output root must be a JSON object")
+    return parsed
+
+
 def execute_council_debate(load_config: Callable[[], Dict[str, Any]], resolve_seat: Callable[..., Any], call_trader: Callable[..., Any], call_critique: Callable[..., Any], 
     market_prompt: str,
     original_system_prompt: str,
@@ -296,19 +329,41 @@ def execute_council_debate(load_config: Callable[[], Dict[str, Any]], resolve_se
     """
     from astra_backend.llm_manager import execute_llm_request, get_active_llm_runtime, load_llm_config
 
-    # 杠杆契约与后台风控页联动（避免委员会路径被静态"2~5"钉死；2026-09-10 补下限）
+    # 杠杆及盈亏比契约与后台风控页联动（避免委员会路径被静态数字钉死）
     try:
-        from risk_constants import MAX_LEVERAGE as _ASTRA_MAX_LEVERAGE, MIN_LEVERAGE as _ASTRA_MIN_LEVERAGE
+        from risk_constants import (
+            MAX_LEVERAGE as _ASTRA_MAX_LEVERAGE,
+            MIN_LEVERAGE as _ASTRA_MIN_LEVERAGE,
+            MIN_RISK_REWARD_RATIO as _ASTRA_MIN_RR,
+            MAX_RISK_REWARD_RATIO as _ASTRA_MAX_RR,
+            STOP_LOSS_ATR_MULT as _ASTRA_SL_ATR,
+            MAX_TAKE_PROFIT_ATR as _ASTRA_MAX_TP_ATR,
+        )
     except Exception:
         try:
-            from scripts.risk_constants import MAX_LEVERAGE as _ASTRA_MAX_LEVERAGE, MIN_LEVERAGE as _ASTRA_MIN_LEVERAGE
+            from scripts.risk_constants import (
+                MAX_LEVERAGE as _ASTRA_MAX_LEVERAGE,
+                MIN_LEVERAGE as _ASTRA_MIN_LEVERAGE,
+                MIN_RISK_REWARD_RATIO as _ASTRA_MIN_RR,
+                MAX_RISK_REWARD_RATIO as _ASTRA_MAX_RR,
+                STOP_LOSS_ATR_MULT as _ASTRA_SL_ATR,
+                MAX_TAKE_PROFIT_ATR as _ASTRA_MAX_TP_ATR,
+            )
         except Exception:
             _ASTRA_MAX_LEVERAGE = 5.0
             _ASTRA_MIN_LEVERAGE = 2.0
+            _ASTRA_MIN_RR = 1.6
+            _ASTRA_MAX_RR = 5.0
+            _ASTRA_SL_ATR = 1.8
+            _ASTRA_MAX_TP_ATR = 4.2
     _ASTRA_MAX_LEVERAGE = float(os.getenv("ASTRA_MAX_LEVERAGE", "") or _ASTRA_MAX_LEVERAGE or 5.0)
     _ASTRA_MIN_LEVERAGE = float(os.getenv("ASTRA_MIN_LEVERAGE", "") or _ASTRA_MIN_LEVERAGE or 2.0)
     if _ASTRA_MIN_LEVERAGE > _ASTRA_MAX_LEVERAGE:
         _ASTRA_MIN_LEVERAGE = _ASTRA_MAX_LEVERAGE
+    _ASTRA_MIN_RR = float(os.getenv("ASTRA_MIN_RISK_REWARD", "") or _ASTRA_MIN_RR or 1.6)
+    _ASTRA_MAX_RR = max(_ASTRA_MIN_RR, float(os.getenv("ASTRA_MAX_RISK_REWARD", "") or _ASTRA_MAX_RR or 5.0))
+    _ASTRA_SL_ATR = float(os.getenv("ASTRA_STOP_LOSS_ATR_MULT", "") or _ASTRA_SL_ATR or 1.8)
+    _ASTRA_MAX_TP_ATR = float(os.getenv("ASTRA_MAX_TAKE_PROFIT_ATR", "") or _ASTRA_MAX_TP_ATR or 4.2)
 
     config = load_config()
     roles = config.get("roles", {})
@@ -680,7 +735,8 @@ def execute_council_debate(load_config: Callable[[], Dict[str, Any]], resolve_se
         f"   - 参考【量化共识度矩阵】：对方向共识度 ≥80% 且高置信度的标的优先批准，除非有重大系统性破位风险；对多空严重撕裂的标的审慎决策或观望；\n"
         f"   - 各席提案末尾附有标准报价单（标的|倾向|限价|止损|止盈|保证金|置信度|依据），请逐项横向对比后再裁决；"
         f"你批复的点位若与被采纳参谋报价单明显偏离，必须在 reasoning 中说明调整原因；\n"
-        "   - decisions 必须是标的字典（如 \"BTC-USDT-SWAP\"），每个标的必须包含 \"adopted_role\" 字段：\n"
+        f"   - 积极裁决原则：只要某席位提交的提案通过价格几何、R:R 硬底线（当前 {_ASTRA_MIN_RR:g}）与【本周期风险预算】核验且结构清晰，优先批准并填写 adopted_role；仅在明确触发硬风控违例或严重证据冲突时才判 WAIT / REJECT_ALL，严禁默认全员驳回消极避战；\n"
+        "   - decisions 必须是标的字典（如 \"BTC-USDT-SWAP\"），且必须完整覆盖标的池全部标的，每个标的必须包含 \"adopted_role\" 字段：\n"
         "     * 采纳某位交易员方案时填写其 role_id（例如 \"trader_trend\"、\"trader_momentum\"、\"trader_quant\"）；\n"
         "     * 全员驳回或无人被采纳时填写 \"REJECT_ALL\" 或 null；\n"
         "   - 在 reasoning 中明确写出你的仲裁依据（如「【CIO批复】采纳交易员 A 对 BTC 稳健回踩买多方案，驳回交易员 B 的追多」或「【CIO批复】驳回全员方案，市场震荡全员空仓 WAIT」）；\n"
@@ -689,11 +745,11 @@ def execute_council_debate(load_config: Callable[[], Dict[str, Any]], resolve_se
         '       "action": "BUY_LONG" 或 "SELL_SHORT",\n'
         '       "adopted_role": "trader_trend",  // 明确采纳的交易员 ID（如 trader_trend / trader_momentum / trader_quant），若无则填写 null\n'
         '       "confidence": 82,  // 最终核定置信度整数 0~100\n'
-        '       "entry_price": 78250.0,  // 挂单入场限价（数字），严禁市价追高\n'
+        '       "entry_price": 78250.0,  // 入场参考价（数字）；近盘/高置信机会可贴盘取值，回踩单挂结构位\n'
         '       "limit_price": 78250.0,  // 入场限价同义兼容\n'
-        '       "stop_loss": 76500.0,  // 严格基于 1.8~2.2x 1H ATR 设置的防插针止损价（数字）\n'
+        f'       "stop_loss": 76500.0,  // 基于 {_ASTRA_SL_ATR:g}x 1H ATR 设置的结构失效防插针止损价（数字）\n'
         '       "stop_loss_price": 76500.0,  // 止损价同义兼容\n'
-        '       "take_profit": 81750.0,  // 目标盈亏比 2.0~3.5R 的合理波段止盈价（数字），严禁超远天际线挂单\n'
+        f'       "take_profit": 81750.0,  // 满足 {_ASTRA_MIN_RR:g}~{_ASTRA_MAX_RR:g}R（且不超过 {_ASTRA_MAX_TP_ATR:g}x ATR 上限）的可达结构止盈价（数字）\n'
         '       "take_profit_price": 81750.0,  // 止盈价同义兼容\n'
         f'       "leverage": {int(max(_ASTRA_MIN_LEVERAGE, min(_ASTRA_MAX_LEVERAGE, (_ASTRA_MIN_LEVERAGE + _ASTRA_MAX_LEVERAGE) / 2)))},  // 杠杆整数：必须落在 [{_ASTRA_MIN_LEVERAGE:g}~{_ASTRA_MAX_LEVERAGE:g}] 区间按信心自主裁决，严禁照抄模板占位值\n'
         '       "margin_usdt": 150.0,  // 拟投入保证金（须在可用余额安全范围内）\n'
@@ -733,22 +789,27 @@ def execute_council_debate(load_config: Callable[[], Dict[str, Any]], resolve_se
         allow_fallback=False,  # CIO 终审同理由登记模型作答；整链失败由上层降级单模型决策
     )
 
-    clean_content = content.strip()
-    if clean_content.startswith("```json"):
-        clean_content = clean_content[7:]
-    if clean_content.startswith("```"):
-        clean_content = clean_content[3:]
-    if clean_content.endswith("```"):
-        clean_content = clean_content[:-3]
-    clean_content = clean_content.strip()
-
-    brain_output = json.loads(clean_content)
-    if not isinstance(brain_output, dict):
-        raise ValueError("CIO output root must be a JSON object")
+    brain_output = _parse_cio_json_object(content)
 
     # Post-process & normalize adopted_role in decisions for traceability
     # （阶段 4·B3 第二十八刀：迁至 council/role_normalizer.py）
     _normalize_cio_adopted_roles(brain_output, roles, trader_keys)
+
+    # 若 CIO 返回字典形态 decisions 但遗漏了卷宗内已评估的标的，则按参谋共识摘要兜底补录，避免下游出现"全市场矩阵综合评估中"占位降级
+    decisions_obj = brain_output.get("decisions")
+    by_sym = consensus_data.get("by_symbol") if isinstance(consensus_data, dict) else {}
+    if isinstance(decisions_obj, dict) and isinstance(by_sym, dict):
+        for sym, sym_meta in by_sym.items():
+            if sym not in decisions_obj and isinstance(sym_meta, dict):
+                dom_act = sym_meta.get("dominant_action") or "WAIT"
+                dist_sum = sym_meta.get("distribution_summary") or "无参谋详情"
+                w_conf = int(sym_meta.get("weighted_confidence") or 50)
+                decisions_obj[sym] = {
+                    "action": "WAIT",
+                    "adopted_role": "REJECT_ALL",
+                    "confidence": w_conf,
+                    "reasoning": f"【CIO补录】CIO 本轮未对该标的显式作答；参谋共识倾向={dom_act}（{dist_sum}），按安全优先兜底 WAIT。",
+                }
 
     council_transcript = {
         "council_mode": True,

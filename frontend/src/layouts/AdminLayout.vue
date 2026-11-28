@@ -49,6 +49,7 @@ const collapsed = useLocalStorage('astra_admin_sidebar', false);
 const drawerOpen = ref(false);
 
 const currentKey = computed(() => (route.name as string) || 'admin-agent');
+const isImmersiveAgent = computed(() => route.path === '/admin/agent');
 const currentMeta = computed(() => {
   for (const g of adminGroups) {
     const hit = g.items.find((i) => i.key === currentKey.value);
@@ -204,7 +205,7 @@ watch(() => route.path, () => (drawerOpen.value = false));
       </header>
 
       <!-- 内容区 -->
-      <main id="main-content" tabindex="-1" class="wb-main scroll-area outline-none">
+      <main id="main-content" tabindex="-1" class="wb-main scroll-area outline-none" :class="{ 'is-immersive': isImmersiveAgent }">
         <div class="wb-content">
           <router-view />
         </div>
@@ -533,11 +534,12 @@ watch(() => route.path, () => (drawerOpen.value = false));
   min-height: 0;
   display: flex;
   flex-direction: column;
-  /* 批 33：此前移动端 16px、≥768px 24px，而前台壳层（DashboardLayout）
-     在 ≥640px 就是 16px + 底部 24px —— 同一套外壳两个内缩值，前后台来回切
-     页面整体会横移 8px。统一到前台的 16/16/24/16。 */
   padding: var(--ds-space-4);
   padding-bottom: var(--ds-space-5);
+}
+.wb-main.is-immersive {
+  overflow: hidden;
+  padding: var(--ds-space-3) var(--ds-space-4);
 }
 .wb-content {
   flex: 1;
@@ -548,6 +550,9 @@ watch(() => route.path, () => (drawerOpen.value = false));
   display: flex;
   flex-direction: column;
   gap: var(--ds-space-4);
+}
+.wb-main.is-immersive .wb-content {
+  max-width: 1760px;
 }
 
 /* ══ 移动端抽屉 ══ */

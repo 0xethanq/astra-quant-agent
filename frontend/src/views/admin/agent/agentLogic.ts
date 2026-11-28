@@ -46,7 +46,12 @@ export interface AgentProposal {
     applied_count?: number;
     failed_count?: number;
     rejected_reason?: string;
+    rolled_back?: boolean;
+    rolled_back_at?: string;
+    rolled_back_by?: string;
+    rollback_details?: string[];
   } | null;
+  rolled_back?: boolean;
   created_at?: string;
   applied_at?: string | null;
   applied_by?: string | null;
@@ -58,6 +63,78 @@ export interface AgentToolTrace {
   arguments?: Record<string, any>;
   status?: 'running' | 'ok' | 'error' | string;
   summary?: string;
+  duration_ms?: number;
+  result_preview?: string;
+}
+
+export interface AgentInsightItem {
+  id: string;
+  severity: 'critical' | 'warning' | 'info' | string;
+  category: string;
+  title: string;
+  detail: string;
+  metric?: string;
+  suggested_prompt: string;
+}
+
+export interface AgentInsightsPayload {
+  health_score: number;
+  critical_count: number;
+  warning_count: number;
+  insights: AgentInsightItem[];
+  funnel_snapshot?: {
+    cycles_analyzed?: number;
+    opened_signals?: number;
+    total_slots?: number;
+    omitted_rate_pct?: number;
+    hours_since_last_trade?: number | null;
+  };
+  generated_at?: string;
+}
+
+export interface AgentInspectorPayload {
+  overview: Record<string, any>;
+  risk: Record<string, any>;
+  prompt: Record<string, any>;
+  council: Record<string, any>;
+  snapshots: Record<string, any>;
+}
+
+export interface UnifiedDiffLine {
+  kind: 'add' | 'del' | 'hunk' | 'ctx';
+  text: string;
+}
+
+export const DIFF_LINE_CLASS: Record<UnifiedDiffLine['kind'], string> = {
+  add: 'diff-line--add',
+  del: 'diff-line--del',
+  hunk: 'diff-line--hunk',
+  ctx: 'diff-line--ctx',
+};
+
+export const INSIGHT_CARD_CLASS: Record<string, string> = {
+  critical: 'insight-card--critical',
+  warning: 'insight-card--warning',
+  info: 'insight-card--info',
+};
+
+/**
+ * Classify unified diff text lines into typed syntax tokens for UI rendering.
+ */
+export function parseUnifiedDiff(diffText: string): UnifiedDiffLine[] {
+  const lines = String(diffText || '').replace(/\r\n/g, '\n').split('\n');
+  return lines.map((line) => {
+    if (line.startsWith('@@') || line.startsWith('---') || line.startsWith('+++')) {
+      return { kind: 'hunk', text: line };
+    }
+    if (line.startsWith('+')) {
+      return { kind: 'add', text: line };
+    }
+    if (line.startsWith('-')) {
+      return { kind: 'del', text: line };
+    }
+    return { kind: 'ctx', text: line };
+  });
 }
 
 export interface AgentMessageItem {

@@ -15,6 +15,9 @@ const SRC = path.join(ROOT, 'src');
 const logic = await import(
   pathToFileURL(path.join(SRC, 'views', 'admin', 'agent', 'agentLogic.ts')).href
 );
+const md = await import(
+  pathToFileURL(path.join(SRC, 'utils', 'markdown.ts')).href
+);
 
 test('parseSseBuffer parses complete multi-line SSE frames and keeps trailing partial buffer', () => {
   const chunk1 = 'data: {"type":"text_delta","text":"Hel"}\r\n\r\ndata: {"type":"tool_start","id":"t1"';
@@ -71,4 +74,44 @@ test('AgentConsolePage binds SSE stream, model selector, session controls, and z
     /[\u4e00-\u9fff]+/,
     'No hardcoded CJK allowed outside comments',
   );
+});
+
+test('renderSafeMarkdown sanitizes XSS and renders GFM tables, lists and code blocks', () => {
+  const malicious = '<script>alert(1)</script> [bad](javascript:alert(2)) [good](https://astraquant.top)';
+  const safeHtml = md.renderSafeMarkdown(malicious);
+  assert.doesNotMatch(safeHtml, /<script/i);
+  assert.doesNotMatch(safeHtml, /javascript:/i);
+  assert.match(safeHtml, /&lt;script&gt;/);
+  assert.match(safeHtml, /href="https:\/\/astraquant\.top"/);
+
+  const tableMd = [
+    '## Funnel Summary',
+    '| Metric | Value |',
+    '| --- | --- |',
+    '| Order Mode | **smart** |',
+    '',
+    '```json',
+    '{"ok": true}',
+    '```',
+  ].join('\n');
+  const rendered = md.renderSafeMarkdown(tableMd);
+  assert.match(rendered, /<h3>Funnel Summary<\/h3>/);
+  assert.match(rendered, /<table><thead><tr><th>Metric<\/th>/);
+  assert.match(rendered, /<td><strong>smart<\/strong><\/td>/);
+  assert.match(rendered, /<pre><code class="language-json">/);
+});
+
+test('parseUnifiedDiff classifies hunk, add, del and context lines', () => {
+  const diff = [
+    '--- a/prompt.txt',
+    '+++ b/prompt.txt',
+    '@@ -1,3 +1,3 @@',
+    ' context',
+    '-old rule',
+    '+new rule',
+  ].join('\n');
+  const parsed = logic.parseUnifiedDiff(diff);
+  assert.deepEqual(parsed.map((l) => l.kind), ['hunk', 'hunk', 'hunk', 'ctx', 'del', 'add']);
+  assert.equal(parsed[4].text, '-old rule');
+  assert.equal(parsed[5].text, '+new rule');
 });

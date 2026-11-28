@@ -10,9 +10,9 @@ from fastapi.responses import StreamingResponse
 
 from astra_backend.agent.config import load_agent_config, save_agent_config
 from astra_backend.agent.engine import run_agent_chat
-from astra_backend.agent.proposals import apply_proposal, reject_proposal
+from astra_backend.agent.proposals import apply_proposal, reject_proposal, rollback_proposal
 from astra_backend.agent.store import AgentStore
-from astra_backend.agent.tools_read import build_state_summary
+from astra_backend.agent.tools_read import build_inspector_payload, build_proactive_insights, build_state_summary
 from astra_backend.audit import record as audit_record
 from astra_backend.config import refresh_settings
 from astra_backend.dependencies import require_admin_header, require_superadmin
@@ -78,6 +78,26 @@ def get_agent_state_summary(
     refresh_settings()
     require_admin_header(x_astra_admin_token, x_astra_session)
     return build_state_summary()
+
+
+@router.get("/api/v1/admin/agent/insights")
+def get_agent_insights(
+    x_astra_session: str | None = Header(default=None, alias="X-Astra-Session"),
+    x_astra_admin_token: str | None = Header(default=None),
+) -> dict[str, Any]:
+    refresh_settings()
+    require_admin_header(x_astra_admin_token, x_astra_session)
+    return build_proactive_insights()
+
+
+@router.get("/api/v1/admin/agent/inspector")
+def get_agent_inspector(
+    x_astra_session: str | None = Header(default=None, alias="X-Astra-Session"),
+    x_astra_admin_token: str | None = Header(default=None),
+) -> dict[str, Any]:
+    refresh_settings()
+    require_admin_header(x_astra_admin_token, x_astra_session)
+    return build_inspector_payload()
 
 
 @router.get("/api/v1/admin/agent/sessions")
@@ -216,6 +236,28 @@ def apply_agent_proposal(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/api/v1/admin/agent/proposals/{proposal_id}/rollback")
+def rollback_agent_proposal(
+    proposal_id: str,
+    x_astra_session: str | None = Header(default=None, alias="X-Astra-Session"),
+) -> dict[str, Any]:
+    refresh_settings()
+    actor = require_superadmin(x_astra_session)
+    _validate_proposal_id(proposal_id)
+    try:
+        return rollback_proposal(
+            store=_STORE,
+            proposal_id=proposal_id,
+            actor=str(actor.get("username") or "admin"),
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"提案回滚失败：{exc}") from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"提案应用失败：{exc}") from exc
 
@@ -240,3 +282,25 @@ def reject_agent_proposal(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/api/v1/admin/agent/proposals/{proposal_id}/rollback")
+def rollback_agent_proposal(
+    proposal_id: str,
+    x_astra_session: str | None = Header(default=None, alias="X-Astra-Session"),
+) -> dict[str, Any]:
+    refresh_settings()
+    actor = require_superadmin(x_astra_session)
+    _validate_proposal_id(proposal_id)
+    try:
+        return rollback_proposal(
+            store=_STORE,
+            proposal_id=proposal_id,
+            actor=str(actor.get("username") or "admin"),
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"提案回滚失败：{exc}") from exc

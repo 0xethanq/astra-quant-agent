@@ -68,10 +68,10 @@ def validate_quote_geometry_and_rr(
     ABS_MIN_RR = 1.2
     effective_floor = max(ABS_MIN_RR, float(min_rr_floor or 0.0))
 
-    if rr < MIN_RISK_REWARD_RATIO:
+    if rr + 1e-4 < MIN_RISK_REWARD_RATIO:
         conf_val = float(confidence or 0.0)
         # 高置信度动态正期望放行：置信度 >= 80% 且期望收益率 E = P*RR - (1-P)*1.0 >= +0.30R，且必须满足绝对安全底线 (>= 1.2R)
-        if conf_val >= 80.0 and rr >= effective_floor:
+        if conf_val >= 80.0 and rr + 1e-4 >= effective_floor:
             p_win = conf_val / 100.0
             expected_val = p_win * rr - (1.0 - p_win) * 1.0
             if expected_val >= 0.30:

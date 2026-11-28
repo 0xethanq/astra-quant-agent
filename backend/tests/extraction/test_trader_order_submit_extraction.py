@@ -36,11 +36,12 @@ BODY_DELTAS: list = [
     ("except Exception:\n        pass",
      "except Exception as _rsc_exc:\n"
      "        print(f'[demo rescale] warn {inst_id} 沙盒报价重算失败，按当前值提交: {_rsc_exc}')"),
-    # ---- 后台「委托订单模式」：限价单 / 市价单（2026-09）----
-    # 需求：操盘手可在后台切换入场单为**市价**（见 `astra_backend/routers/system.py`
+    # ---- 后台「委托订单模式」：限价单 / 市价单 / 智能自适应（2026-09 → 2026-11）----
+    # 需求：操盘手可在后台切换入场单为**市价 / 限价 / 智能自适应**（见 `astra_backend/routers/system.py`
     # 写 `ASTRA_ORDER_MODE`）。落点必然在这条唯一落单的主路径上 —— 原先 `ord_type`
     # 与 `px` 都是字面量（恒限价），要按模式分支就只能改这里。
     # 语义：market ⇒ `ord_type='market'` 且 `px=None`（市价单不带价），
+    # smart ⇒ 近盘/高置信度转 market、深回踩转 limit（`resolve_effective_order_mode`），
     # 限价 ⇒ 原样传 `effective_px`。`os.getenv` 的兜底仍是 `'limit'`，
     # 即读到空/拼错的值一律退回限价（失败取保守侧）。
     ("try:\n    rows = okx_rest.place_order(inst_id, side, f'{size:g}', pos_side=pos_side, "
@@ -64,7 +65,11 @@ BODY_DELTAS: list = [
     ("print(f'[demo rescale] warn {inst_id} 沙盒报价重算失败，按当前值提交: {_rsc_exc}')"
      "\nfrom scripts.order_risk import validate_quote_geometry_and_rr",
      "print(f'[demo rescale] warn {inst_id} 沙盒报价重算失败，按当前值提交: {_rsc_exc}')"
-     "\norder_mode = str(os.getenv('ASTRA_ORDER_MODE', 'limit')).strip().lower()"
+     "\nraw_order_mode = str(os.getenv('ASTRA_ORDER_MODE', 'limit')).strip().lower()"
+     "\nfrom scripts.trader.brackets import resolve_effective_order_mode"
+     "\n_smart_conf = float(venue_ctx.get('confidence', 0.0) or 0.0) if isinstance(venue_ctx, dict) else 0.0"
+     "\norder_mode = resolve_effective_order_mode(raw_order_mode, planned_px=effective_px,"
+     " market_px=_anchor_last, is_long=pos_side == 'long', confidence=_smart_conf)"
      "\nif order_mode == 'market':"
      "\n    from scripts.trader.brackets import reanchor_brackets_to_market"
      "\n    _mk_prec = len(str(_tick_last_raw).split('.')[1]) if '.' in str(_tick_last_raw) else 4"
@@ -84,6 +89,7 @@ BODY_DELTAS: list = [
      "\n    venue_ctx['submitted_px'] = effective_px"
      "\n    venue_ctx['submitted_tp'] = effective_tp"
      "\n    venue_ctx['submitted_sl'] = effective_sl"
+     "\n    venue_ctx['submitted_ord_type'] = order_mode"
      "\nfrom scripts.order_risk import validate_quote_geometry_and_rr"),
 ]
 

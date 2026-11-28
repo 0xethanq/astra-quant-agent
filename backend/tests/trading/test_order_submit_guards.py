@@ -283,6 +283,64 @@ class OkxDirectTest(unittest.TestCase):
         self.assertNotEqual(ctx["submitted_tp"], 105000.0, "回写的仍是计划值 = 缺陷未修")
         self.assertNotEqual(ctx["submitted_sl"], 95000.0, "回写的仍是计划值 = 缺陷未修")
 
+    def test_smart_mode_near_market_submits_market_and_reanchors(self):
+        """smart 模式：贴近现价（<= 0.35%）时即时走市价并重锚保护价。"""
+        okx = _Okx()
+        rig = Rig(okx=okx, price=99800.0, tp=104800.0, sl=94800.0, ticker="100000")
+        ctx = {"notional_usdt": 1, "margin_usdt": 1, "confidence": 72.0}
+        with patch.dict(os.environ, {"ASTRA_ORDER_MODE": "smart"}):
+            with patch("scripts.order_risk.validate_quote_geometry_and_rr",
+                       return_value=(True, "", 1.0)):
+                ok, why = rig.run(venue_ctx=ctx)
+        self.assertTrue(ok, why)
+        _, _, _, kw = okx.orders[0]
+        self.assertEqual(kw["ord_type"], "market")
+        self.assertIsNone(kw["px"])
+        self.assertEqual(ctx["submitted_ord_type"], "market")
+
+    def test_smart_mode_high_confidence_within_1_2_pct_submits_market(self):
+        """smart 模式：高置信度（>= 78%）且距离 <= 1.2% 时即时走市价。"""
+        okx = _Okx()
+        rig = Rig(okx=okx, price=99100.0, tp=104100.0, sl=94100.0, ticker="100000")
+        ctx = {"notional_usdt": 1, "margin_usdt": 1, "confidence": 82.0}
+        with patch.dict(os.environ, {"ASTRA_ORDER_MODE": "smart"}):
+            with patch("scripts.order_risk.validate_quote_geometry_and_rr",
+                       return_value=(True, "", 1.0)):
+                ok, why = rig.run(venue_ctx=ctx)
+        self.assertTrue(ok, why)
+        _, _, _, kw = okx.orders[0]
+        self.assertEqual(kw["ord_type"], "market")
+        self.assertEqual(ctx["submitted_ord_type"], "market")
+
+    def test_smart_mode_deep_pullback_places_limit_order(self):
+        """smart 模式：深回踩（> 1.2%）挂 Maker 限价单等待打折成交。"""
+        okx = _Okx()
+        rig = Rig(okx=okx, price=97000.0, tp=102000.0, sl=92000.0, ticker="100000")
+        ctx = {"notional_usdt": 1, "margin_usdt": 1, "confidence": 85.0}
+        with patch.dict(os.environ, {"ASTRA_ORDER_MODE": "smart"}):
+            with patch("scripts.order_risk.validate_quote_geometry_and_rr",
+                       return_value=(True, "", 1.0)):
+                ok, why = rig.run(venue_ctx=ctx)
+        self.assertTrue(ok, why)
+        _, _, _, kw = okx.orders[0]
+        self.assertEqual(kw["ord_type"], "limit")
+        self.assertEqual(kw["px"], 97000.0)
+        self.assertEqual(ctx["submitted_ord_type"], "limit")
+
+    def test_smart_mode_missing_market_price_falls_back_to_limit(self):
+        """smart 模式：现价不可用时 fail-closed 回退限价单（不走市价锚定拒单）。"""
+        okx = _Okx()
+        rig = Rig(okx=okx, price=99800.0, tp=104800.0, sl=94800.0, ticker="")
+        ctx = {"notional_usdt": 1, "margin_usdt": 1, "confidence": 85.0}
+        with patch.dict(os.environ, {"ASTRA_ORDER_MODE": "smart"}):
+            with patch("scripts.order_risk.validate_quote_geometry_and_rr",
+                       return_value=(True, "", 1.0)):
+                ok, why = rig.run(venue_ctx=ctx)
+        self.assertTrue(ok, why)
+        _, _, _, kw = okx.orders[0]
+        self.assertEqual(kw["ord_type"], "limit")
+        self.assertEqual(kw["px"], 99800.0)
+
     def test_market_order_without_live_price_is_refused(self):
         """现价读不到 ⇒ 拒单（fail-closed）。退回计划价下单正是要消除的反挂形态。"""
         okx = _Okx()

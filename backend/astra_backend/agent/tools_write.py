@@ -765,6 +765,89 @@ def _propose_policy_restore(args: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _propose_order_mode_update(args: Dict[str, Any]) -> Dict[str, Any]:
+    import os
+    from astra_backend.config import settings
+
+    target = str(args.get("order_mode") or "").strip().lower()
+    if target not in {"limit", "market", "smart"}:
+        raise ValueError(f"不支持的委托订单模式：{target}（允许 limit / market / smart）")
+    current = (os.getenv("ASTRA_ORDER_MODE") or getattr(settings, "order_mode", "limit") or "limit").strip().lower()
+    if current == target:
+        raise ValueError(f"当前委托订单模式已为 {current}，无需重复修改")
+    labels = {
+        "limit": "限价单 (limit)",
+        "market": "市价单 (market)",
+        "smart": "智能自适应 (smart)",
+    }
+    return {
+        "id": _item_id(),
+        "domain": "order_mode",
+        "action": "update",
+        "title": f"切换委托订单模式为 {labels[target]}",
+        "reason": str(args.get("reason") or "").strip(),
+        "payload": {"order_mode": target},
+        "diff_type": "kv",
+        "diff": [
+            {"field": "ASTRA_ORDER_MODE", "label": "委托订单模式", "before": labels.get(current, current), "after": labels[target]},
+        ],
+        "warnings": ["smart 模式在近盘/高置信度机会下自动采用市价极速吃单并重锚保护腿，深回踩位仍挂限价单"] if target == "smart" else [],
+        "high_risk": False,
+        "required_phrase": "",
+        "required_phrase_reason": "",
+    }
+
+
+def _propose_ops_action(args: Dict[str, Any]) -> Dict[str, Any]:
+    action = str(args.get("action") or "").strip().lower()
+    reason = str(args.get("reason") or "").strip()
+    meta = {
+        "run_dry_run": {
+            "title": "执行一轮实时决策快照预演 (Dry-Run)",
+            "after": "立即基于最新行情与策略触发只读预演",
+            "warnings": ["仅执行推演诊断，不产生实际委托单"],
+            "high_risk": False,
+            "phrase": "",
+            "phrase_reason": "",
+        },
+        "trigger_evolution_review": {
+            "title": "触发一次自进化认知复盘 (Evolution Review)",
+            "after": "拉起 self_improvement_engine 执行一次只读账本复盘",
+            "warnings": ["仅触发复盘分析与记忆评估，不改变实盘头寸"],
+            "high_risk": False,
+            "phrase": "",
+            "phrase_reason": "",
+        },
+        "cancel_stale_limit_orders": {
+            "title": "清理超期或失效限价挂单意图",
+            "after": "清理超过 TTL 的过期挂单意图记录（不强制平已有持仓）",
+            "warnings": ["请核对在途挂单情况；执行后将清除过期挂单意图等待下一轮重评估"],
+            "high_risk": True,
+            "phrase": "CANCEL STALE ORDERS",
+            "phrase_reason": "清理过期或失效的限价挂单意图",
+        },
+    }
+    if action not in meta:
+        raise ValueError(f"不支持的运维动作：{action}")
+    spec = meta[action]
+    return {
+        "id": _item_id(),
+        "domain": "ops_action",
+        "action": action,
+        "title": spec["title"],
+        "reason": reason,
+        "payload": {"action": action},
+        "diff_type": "kv",
+        "diff": [
+            {"field": "ops_action", "label": "运维执行动作", "before": "待审批触发", "after": spec["after"]},
+        ],
+        "warnings": list(spec["warnings"]),
+        "high_risk": bool(spec["high_risk"]),
+        "required_phrase": spec["phrase"],
+        "required_phrase_reason": spec["phrase_reason"],
+    }
+
+
 WRITE_TOOL_SCHEMAS: List[Dict[str, Any]] = [
     {
         "name": "propose_risk_update",
@@ -904,6 +987,30 @@ WRITE_TOOL_SCHEMAS: List[Dict[str, Any]] = [
             },
         },
     },
+    {
+        "name": "propose_order_mode_update",
+        "description": "生成「切换委托订单执行模式 (limit / market / smart)」提案卡片，不直接落盘。",
+        "parameters": {
+            "type": "object",
+            "required": ["order_mode"],
+            "properties": {
+                "order_mode": {"type": "string", "enum": ["limit", "market", "smart"], "description": "目标委托执行模式"},
+                "reason": {"type": "string", "description": "变更原因"},
+            },
+        },
+    },
+    {
+        "name": "propose_ops_action",
+        "description": "生成可控运维触发提案卡片（执行实景预演 run_dry_run、触发自进化复盘 trigger_evolution_review、或清理过期挂单 cancel_stale_limit_orders）。",
+        "parameters": {
+            "type": "object",
+            "required": ["action"],
+            "properties": {
+                "action": {"type": "string", "enum": ["run_dry_run", "trigger_evolution_review", "cancel_stale_limit_orders"]},
+                "reason": {"type": "string", "description": "触发原因"},
+            },
+        },
+    },
 ]
 
 _WRITE_BUILDERS = {
@@ -917,6 +1024,8 @@ _WRITE_BUILDERS = {
     "propose_evolution_config_update": _propose_evolution_config_update,
     "propose_memory_mutation": _propose_memory_mutation,
     "propose_policy_restore": _propose_policy_restore,
+    "propose_order_mode_update": _propose_order_mode_update,
+    "propose_ops_action": _propose_ops_action,
 }
 
 

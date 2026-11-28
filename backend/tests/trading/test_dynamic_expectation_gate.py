@@ -67,6 +67,14 @@ class DynamicExpectationGateTests(unittest.TestCase):
         self.assertFalse(ok)
         self.assertIn("有限数值", reason)
 
+    def test_exact_rr_boundary_tolerates_ieee754_rounding(self):
+        # 1.4 / 0.7 == 1.9999999999999998 in IEEE-754 binary64
+        ok, reason, rr = validate_quote_geometry_and_rr(
+            "BUY_LONG", 100.0, 101.4, 99.3, confidence=70.0
+        )
+        self.assertTrue(ok, f"Boundary R:R=2.0 should pass despite float precision, got: {reason}")
+        self.assertAlmostEqual(rr, 2.0, places=6)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -2,6 +2,10 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import json
+import os
+from pathlib import Path
+import time
 from typing import Any, Dict, List, Optional
 
 from astra_backend.agent.store import AgentStore
@@ -41,6 +45,11 @@ def _capture_extra_pre_state() -> Dict[str, Any]:
         out["evolution_config"] = load_evolution_config()
     except Exception:
         out["evolution_config"] = {}
+    try:
+        from astra_backend.config import settings
+        out["order_mode"] = (os.getenv("ASTRA_ORDER_MODE") or getattr(settings, "order_mode", "limit") or "limit").strip().lower()
+    except Exception:
+        out["order_mode"] = "limit"
     return out
 
 
@@ -235,6 +244,72 @@ def _apply_single_item(item: Dict[str, Any], actor: str) -> Dict[str, Any]:
         audit_record("policy.restore", "success", {"actor": actor, "via": "agent", "policy_hash": p_hash})
         return {"ok": True, "detail": f"已回滚策略至快照 {p_hash}"}
 
+    if domain == "order_mode":
+        from astra_backend.config import refresh_settings
+        from astra_backend.settings_store import update_env
+
+        mode = str(payload.get("order_mode") or "").strip().lower()
+        if mode not in {"limit", "market", "smart"}:
+            raise ValueError(f"不支持的委托订单模式：{mode}")
+        update_env({"ASTRA_ORDER_MODE": mode})
+        refresh_settings()
+        audit_record("system.order_mode.update", "success", {"actor": actor, "via": "agent", "order_mode": mode})
+        return {"ok": True, "detail": f"已切换委托订单模式为 {mode}（下一决策周期立即生效）"}
+
+    if domain == "ops_action":
+        act = str(payload.get("action") or action or "").strip().lower()
+        if act == "run_dry_run":
+            from astra_backend.agent.tools_verify import execute_verify_tool
+
+            res = execute_verify_tool("dry_run_decision_preview", {"mode": "single"})
+            audit_record("agent.ops.dry_run", "success" if res.get("ok") else "failed", {"actor": actor, "via": "agent"})
+            if not res.get("ok"):
+                raise ValueError(str(res.get("error") or "预演失败"))
+            return {"ok": True, "detail": "已完成实景快照只读预演"}
+
+        if act == "trigger_evolution_review":
+            from astra_backend import dependencies as deps
+            from astra_backend.spawn import run_script
+
+            script_path = deps.ROOT / "scripts" / "self_improvement_engine.py"
+            if not script_path.is_file():
+                raise ValueError("未找到 self_improvement_engine.py")
+            cp = run_script(script_path, timeout=90, label="agent-evolution", env=dict(os.environ))
+            audit_record("agent.ops.evolution", "success" if cp.returncode == 0 else "failed", {"actor": actor, "via": "agent", "rc": cp.returncode})
+            if cp.returncode != 0:
+                raise ValueError(f"自进化复盘退出码 {cp.returncode}")
+            return {"ok": True, "detail": "已完成一轮自进化认知复盘"}
+
+        if act == "cancel_stale_limit_orders":
+            from astra_backend import dependencies as deps
+            from astra_backend.file_locks import file_lock
+            from scripts.risk_constants import LIMIT_ORDER_TTL_MINUTES
+
+            override_dir = os.environ.get("ASTRA_DATA_DIR", "").strip()
+            base_dir = Path(override_dir) if (override_dir and deps.DATA_DIR == deps.ROOT / "data") else deps.DATA_DIR
+            intents_file = base_dir / "open_order_intents.json"
+            removed = 0
+            kept = 0
+            if intents_file.is_file():
+                with file_lock(intents_file):
+                    try:
+                        raw = json.loads(intents_file.read_text(encoding="utf-8"))
+                    except (OSError, json.JSONDecodeError):
+                        raw = []
+                    if isinstance(raw, list):
+                        cutoff_ms = int(time.time() * 1000) - int(float(LIMIT_ORDER_TTL_MINUTES or 90) * 60_000)
+                        fresh: List[Dict[str, Any]] = []
+                        for entry in raw:
+                            ts_val = int(entry.get("ts") or 0) if isinstance(entry, dict) else 0
+                            if ts_val and ts_val < cutoff_ms:
+                                removed += 1
+                            else:
+                                fresh.append(entry)
+                        kept = len(fresh)
+                        intents_file.write_text(json.dumps(fresh, ensure_ascii=False, indent=2), encoding="utf-8")
+            audit_record("agent.ops.cancel_stale", "success", {"actor": actor, "via": "agent", "removed": removed, "kept": kept})
+            return {"ok": True, "detail": f"已清理 {removed} 条超期挂单意图（保留 {kept} 条在途）"}
+
     raise ValueError(f"不支持的变更域或动作：{domain}/{action}")
 
 
@@ -362,3 +437,104 @@ def reject_proposal(store: AgentStore, proposal_id: str, actor: str, reason: str
         {"actor": actor, "via": "agent", "session_id": proposal["session_id"], "proposal_id": proposal_id},
     )
     return {"ok": True, "proposal": updated}
+
+
+def rollback_proposal(store: AgentStore, proposal_id: str, actor: str) -> Dict[str, Any]:
+    """一键回滚已应用的 Agent 提案，尽量恢复到变更前自动捕获的策略快照与运行状态。"""
+    proposal = store.get_proposal(proposal_id)
+    if not proposal:
+        raise KeyError(f"未找到变更提案：{proposal_id}")
+    if proposal["status"] not in ("applied", "partially_applied"):
+        raise ValueError(f"提案当前状态为 {proposal['status']}，仅支持回滚已应用提案")
+    if proposal.get("rolled_back"):
+        raise ValueError("该提案已完成回滚，不可重复回滚")
+
+    details: List[str] = []
+    snap_hash = str(proposal.get("snapshot_hash") or "").strip()
+    if snap_hash:
+        try:
+            from astra_backend.policy_snapshot import restore_archived_policy
+
+            restore_archived_policy(policy_hash=snap_hash)
+            details.append(f"已恢复前置策略快照 {snap_hash}")
+        except Exception as exc:
+            details.append(f"前置策略快照恢复警告：{exc}")
+
+    pre = proposal.get("pre_state") if isinstance(proposal.get("pre_state"), dict) else {}
+    prev_order_mode = str(pre.get("order_mode") or "").strip().lower()
+    if prev_order_mode in {"limit", "market", "smart"}:
+        from astra_backend.config import refresh_settings
+        from astra_backend.settings_store import update_env
+
+        update_env({"ASTRA_ORDER_MODE": prev_order_mode})
+        refresh_settings()
+        details.append(f"已恢复委托订单模式为 {prev_order_mode}")
+
+    if isinstance(pre.get("trading_session"), dict) and pre["trading_session"]:
+        try:
+            from astra_backend.trading_session_store import save_trading_session
+            from scripts.trader.session import normalize_session
+
+            norm_sess, errs = normalize_session(pre["trading_session"])
+            if not errs:
+                save_trading_session(norm_sess)
+                details.append("已恢复交易时段配置")
+        except Exception:
+            pass
+
+    if isinstance(pre.get("llm_settings"), dict) and pre["llm_settings"].get("active_model_id"):
+        try:
+            from astra_backend.llm_manager import update_llm_settings
+
+            ls = pre["llm_settings"]
+            update_llm_settings(
+                active_model_id=ls.get("active_model_id"),
+                reasoning_effort=ls.get("active_reasoning_effort"),
+                thinking_timeout=ls.get("thinking_timeout"),
+                request_attempts=ls.get("request_attempts"),
+                fallback_model_ids=ls.get("fallback_model_ids"),
+            )
+            details.append("已恢复 LLM 全局设置")
+        except Exception:
+            pass
+
+    if isinstance(pre.get("evolution_config"), dict) and pre["evolution_config"]:
+        try:
+            from astra_backend.evolution_config import save_evolution_config
+
+            save_evolution_config(pre["evolution_config"])
+            details.append("已恢复自进化引擎配置")
+        except Exception:
+            pass
+
+    old_res = dict(proposal.get("applied_result") or {})
+    old_res.update({
+        "rolled_back": True,
+        "rolled_back_at": datetime.now(BJ_TZ).strftime("%Y-%m-%d %H:%M:%S"),
+        "rolled_back_by": actor,
+        "rollback_details": details,
+    })
+    updated = store.update_proposal(
+        proposal_id,
+        proposal["status"],
+        applied_result=old_res,
+        actor=actor,
+    )
+    audit_record(
+        "agent.proposal.rollback",
+        "success",
+        {
+            "actor": actor,
+            "via": "agent",
+            "session_id": proposal["session_id"],
+            "proposal_id": proposal_id,
+            "snapshot_hash": snap_hash,
+            "details": details,
+        },
+    )
+    return {
+        "ok": True,
+        "proposal": updated,
+        "details": details,
+        "state_summary": build_state_summary(),
+    }

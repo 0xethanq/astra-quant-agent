@@ -245,9 +245,18 @@ def submit_protected_limit_order(inst_id: str, side: str, pos_side: str, size: f
             # （仍按原价/已算出的值提交、仍不阻断），但必须出声。
             print(f"[demo rescale] warn {inst_id} 沙盒报价重算失败，按当前值提交: {_rsc_exc}")
 
-    # 委托订单模式（限价 / 市价）。**在此处读**而不是发单前才读：市价单必须先在
+    # 委托订单模式（限价 / 市价 / 智能自适应）。**在此处读**而不是发单前才读：市价单必须先在
     # 这里按现价重锚保护价，才能进下面的几何复验与穿价闸。
-    order_mode = str(os.getenv("ASTRA_ORDER_MODE", "limit")).strip().lower()
+    raw_order_mode = str(os.getenv("ASTRA_ORDER_MODE", "limit")).strip().lower()
+    from scripts.trader.brackets import resolve_effective_order_mode
+    _smart_conf = float(venue_ctx.get("confidence", 0.0) or 0.0) if isinstance(venue_ctx, dict) else 0.0
+    order_mode = resolve_effective_order_mode(
+        raw_order_mode,
+        planned_px=effective_px,
+        market_px=_anchor_last,
+        is_long=(pos_side == "long"),
+        confidence=_smart_conf,
+    )
 
     # 市价单：真实成交价 = 下单一刻的现价，而 `effective_px/tp/sl` 是按**限价挂单
     # 计划**算的。若计划是回踩挂单位（做多、计划价明显低于现价），市价单会在现价
@@ -314,6 +323,7 @@ def submit_protected_limit_order(inst_id: str, side: str, pos_side: str, size: f
         venue_ctx["submitted_px"] = effective_px
         venue_ctx["submitted_tp"] = effective_tp
         venue_ctx["submitted_sl"] = effective_sl
+        venue_ctx["submitted_ord_type"] = order_mode
 
     # Final Non-Bypassable Verification: verify actual effective price, tp and sl
     from scripts.order_risk import validate_quote_geometry_and_rr
